@@ -31,6 +31,14 @@ export async function middleware(request: NextRequest) {
   const isProtected = path.startsWith('/dashboard');
   const isAuthPage = ['/login', '/signup'].some((p) => path === p);
 
+  // Root: anonymous visitors see the marketing landing page (static HTML in /public);
+  // authenticated hosts fall through to app/page.tsx, which redirects to /dashboard.
+  if (path === '/' && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/landing.html';
+    return NextResponse.rewrite(url);
+  }
+
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -51,6 +59,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Run on everything except static assets + the guest portal (which manages its own access).
-    '/((?!_next/static|_next/image|favicon.ico|p/|api/guest|api/stripe/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|landing.html|assets/|p/|api/guest|api/stripe/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|ico|woff|woff2|ttf)$).*)',
   ],
 };

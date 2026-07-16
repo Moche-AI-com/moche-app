@@ -1,12 +1,23 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useFormState } from 'react-dom';
 import { signupAction, type FormState } from '../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const [state, formAction] = useFormState<FormState, FormData>(signupAction, {});
+  const prefillEmail = useSearchParams().get('email') ?? '';
   return (
     <>
       <h1 style={{ fontSize: '1.6rem', marginBottom: '.4rem' }}>Create your host account</h1>
@@ -23,7 +34,7 @@ export default function SignupPage() {
         </div>
         <div className="field">
           <label className="label" htmlFor="email">Email</label>
-          <input className="input" id="email" name="email" type="email" autoComplete="email" required />
+          <input className="input" id="email" name="email" type="email" autoComplete="email" defaultValue={prefillEmail} required />
         </div>
         <div className="field">
           <label className="label" htmlFor="password">Password <span className="faint">(min 10 characters)</span></label>

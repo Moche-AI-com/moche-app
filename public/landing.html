@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moche.AI — The Smart Dome for Every Stay</title>
+<meta name="description" content="Moche.AI gives every short-term rental its own AI concierge — an intelligent dome trained on your property that answers guest questions instantly, protects your reviews, and hands you back your time.">
+<meta property="og:title" content="Moche.AI — The Smart Dome for Every Stay">
+<meta property="og:description" content="An AI concierge for every vacation rental. Guests scan, ask, and get instant answers — so hosts don't have to.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a href="#top" class="brand" aria-label="Moche.AI home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none">
+          <defs>
+            <linearGradient id="domeGrad" x1="6" y1="10" x2="42" y2="40" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#33E6D4"/><stop offset="1" stop-color="#7C8CFF"/>
+            </linearGradient>
+          </defs>
+          <!-- base line -->
+          <path d="M5 34h38" stroke="url(#domeGrad)" stroke-width="2.4" stroke-linecap="round"/>
+          <!-- dome shell -->
+          <path d="M8 34a16 16 0 0 1 32 0" stroke="url(#domeGrad)" stroke-width="2.4" fill="none"/>
+          <!-- inner arc rings (igloo blocks) -->
+          <path d="M13 34a11 11 0 0 1 22 0" stroke="url(#domeGrad)" stroke-width="1.7" opacity="0.7" fill="none"/>
+          <path d="M18.5 34a5.5 5.5 0 0 1 11 0" stroke="url(#domeGrad)" stroke-width="1.7" opacity="0.55" fill="none"/>
+          <!-- vertical igloo seams -->
+          <path d="M24 18v16M15.5 26.5l3-2.2M32.5 26.5l-3-2.2" stroke="url(#domeGrad)" stroke-width="1.5" opacity="0.5" stroke-linecap="round"/>
+          <!-- doorway (the 'stay') -->
+          <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill="#33E6D4" opacity="0.9"/>
+          <!-- signal spark -->
+          <circle cx="24" cy="12" r="2.4" fill="#FF8A5C"/>
+          <path d="M24 12v-4" stroke="#FF8A5C" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="brand-word">Moche<span class="brand-ai">.AI</span></span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#features">Platform</a>
+      <a href="#proof">Why hosts trust it</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" data-theme-toggle aria-label="Switch to light mode"></button>
+      <a href="/login" class="btn btn-ghost btn-sm">Sign in</a>
+        <a href="/signup" class="btn btn-primary btn-sm">Join the beta</a>
+    </div>
+    <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+  <div class="mobile-drawer" id="drawer">
+    <a href="#how">How it works</a>
+    <a href="#features">Platform</a>
+    <a href="#proof">Why hosts trust it</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/signup" class="btn btn-primary">Join the beta</a>
+  </div>
+</header>
+
+<span id="top"></span>
+<main id="main">
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="hero-media" aria-hidden="true">
+    <img src="assets/img/hero.webp" alt="" class="hero-img" fetchpriority="high" width="1600" height="900">
+    <div class="hero-veil"></div>
+  </div>
+  <div class="wrap hero-content">
+    <div class="pill reveal" data-reveal>
+      <span class="pill-dot"></span> Now onboarding founding hosts
+    </div>
+    <h1 class="hero-title reveal" data-reveal>
+      Give every stay<br><span class="grad-text">its own smart dome.</span>
+    </h1>
+    <p class="hero-sub reveal" data-reveal>
+      Moche.AI wraps each of your rentals in an intelligent concierge — trained on your property, always awake. Guests scan, ask anything in any language, and get instant answers. You get your evenings back.
+    </p>
+    <div class="hero-cta reveal" data-reveal>
+      <a href="/signup" class="btn btn-primary btn-lg">Build my Property Dome</a>
+      <a href="#how" class="btn btn-ghost btn-lg">See how it works
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+    <ul class="hero-trust reveal" data-reveal role="list">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> No app to download</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> No platform login</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Live before your next guest</li>
+    </ul>
+  </div>
+
+  <!-- floating portal card -->
+  <div class="float-card portal-card" data-float aria-hidden="true">
+    <div class="pc-head">
+      <span class="pc-dot"></span> Seabreeze Loft · Guest Portal
+    </div>
+    <div class="pc-body">
+      <div class="bubble guest">How do I work the espresso machine?</div>
+      <div class="bubble ai">Fill the tank, power on, wait for the green light, drop in a pod and press the double-shot button. Enjoy. ☕</div>
+      <div class="bubble guest">Late checkout possible?</div>
+      <div class="bubble ai typing"><span></span><span></span><span></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MARQUEE / CONTEXT ============ -->
+<section class="strip">
+  <div class="wrap strip-inner">
+    <p class="strip-label">Built for the operators shaping 2026's sorting year</p>
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>Solo hosts</span><span class="sep">◦</span>
+        <span>Superhosts</span><span class="sep">◦</span>
+        <span>Boutique portfolios</span><span class="sep">◦</span>
+        <span>Co-hosts</span><span class="sep">◦</span>
+        <span>Cabin operators</span><span class="sep">◦</span>
+        <span>Beach villas</span><span class="sep">◦</span>
+        <span>Solo hosts</span><span class="sep">◦</span>
+        <span>Superhosts</span><span class="sep">◦</span>
+        <span>Boutique portfolios</span><span class="sep">◦</span>
+        <span>Co-hosts</span><span class="sep">◦</span>
+        <span>Cabin operators</span><span class="sep">◦</span>
+        <span>Beach villas</span><span class="sep">◦</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROBLEM / VALUE ============ -->
+<section class="section value">
+  <div class="wrap value-grid">
+    <div class="value-copy">
+      <p class="eyebrow reveal" data-reveal>The in-stay layer</p>
+      <h2 class="reveal" data-reveal>Your guests don't need another chatbot in a booking thread.</h2>
+      <p class="lead reveal" data-reveal>
+        They need answers <em>inside the property</em> — at 11pm, when the thermostat won't cooperate and you're already asleep. Moche.AI is the layer that activates the moment a guest walks through the door.
+      </p>
+      <div class="value-points reveal" data-reveal>
+        <div class="vp">
+          <h3>It lives in the home, not the platform</h3>
+          <p>A QR code on the counter, a link in the welcome note. No Airbnb login, no PMS, no dependency you can lose.</p>
+        </div>
+        <div class="vp">
+          <h3>It answers from your property — not the internet</h3>
+          <p>Retrieval-grounded on your own manuals, house rules, and notes. It cites its source or escalates. It never invents.</p>
+        </div>
+        <div class="vp">
+          <h3>It only pings you when it truly matters</h3>
+          <p>Routine questions vanish. Real issues arrive as a text with the exact question and a one-tap reply.</p>
+        </div>
+      </div>
+    </div>
+    <figure class="value-visual reveal" data-reveal>
+      <img src="assets/img/qr-scene.webp" alt="A guest scanning a QR code stand in a sunlit vacation rental kitchen to open their property portal" width="1200" height="900" loading="lazy" decoding="async">
+      <figcaption>Scan on arrival — the dome is already awake.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section how" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-reveal>How it works</p>
+      <h2 class="reveal" data-reveal>Three steps to a property that answers for itself.</h2>
+    </div>
+    <ol class="steps" role="list">
+      <li class="step reveal" data-reveal>
+        <span class="step-num">01</span>
+        <h3>Talk your property into a Dome</h3>
+        <p>The AI interviews you like a thoughtful co-host — WiFi, parking, appliances, quirks. Upload PDFs or paste an Amazon link and it ingests the manual automatically.</p>
+        <span class="step-tag">~15 minutes</span>
+      </li>
+      <li class="step reveal" data-reveal>
+        <span class="step-num">02</span>
+        <h3>Guests scan &amp; ask, in any language</h3>
+        <p>They open a mobile-first mini-site and ask in their own words. Spanish in, Spanish out. No download, no account, no friction.</p>
+        <span class="step-tag">90+ languages</span>
+      </li>
+      <li class="step reveal" data-reveal>
+        <span class="step-num">03</span>
+        <h3>You only hear what matters</h3>
+        <p>The Dome handles the routine. When it can't, you get a text with the guest's exact question — and reply in one tap without opening an app.</p>
+        <span class="step-tag">Reviews protected</span>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ METRICS ============ -->
+<section class="section metrics" id="metrics">
+  <img src="assets/img/aurora-bg.webp" alt="" class="metrics-bg" aria-hidden="true" loading="lazy" decoding="async" width="1600" height="900">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow reveal" data-reveal>The math of a quieter inbox</p>
+      <h2 class="reveal light" data-reveal>Automation pays for itself before your first review lands.</h2>
+    </div>
+    <div class="metric-grid">
+      <div class="metric reveal" data-reveal>
+        <span class="metric-num" data-count="70" data-suffix="%">0</span>
+        <p>of routine guest questions answered without you lifting a finger.</p>
+      </div>
+      <div class="metric reveal" data-reveal>
+        <span class="metric-num" data-count="24" data-suffix="/7">0</span>
+        <p>always-on concierge — even at 2am, even mid-turnover, even off-grid.</p>
+      </div>
+      <div class="metric reveal" data-reveal>
+        <span class="metric-num" data-count="65" data-suffix="%">0</span>
+        <p>review-request conversion using each guest's real stay context.</p>
+      </div>
+      <div class="metric reveal" data-reveal>
+        <span class="metric-num" data-prefix="$" data-count="15" data-suffix="/mo">0</span>
+        <p>per property — less than one cleaning fee, working every night.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES BENTO ============ -->
+<section class="section features" id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-reveal>The platform</p>
+      <h2 class="reveal" data-reveal>Everything a modern stay needs, under one dome.</h2>
+    </div>
+    <div class="bento">
+      <article class="cell cell-hero reveal" data-reveal>
+        <div class="cell-body">
+          <span class="cell-kicker">Property Brain · RAG</span>
+          <h3>A brain that knows your home, not the whole internet.</h3>
+          <p>Trained on your actual documents — appliance manuals, house rules, local picks. Every answer can cite the exact source it came from, or escalate rather than guess.</p>
+        </div>
+        <div class="cell-demo">
+          <div class="bubble guest">How does the thermostat work?</div>
+          <div class="bubble ai">Set it to 72°F and press <strong>Hold</strong>.<span class="cite">source · Nest_Manual.pdf</span></div>
+        </div>
+      </article>
+
+      <article class="cell reveal" data-reveal>
+        <span class="cell-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+        </span>
+        <h3>Speaks every guest's language</h3>
+        <p>You onboard in English. Guests ask in French, Japanese, Portuguese — the Dome detects and replies natively.</p>
+      </article>
+
+      <article class="cell reveal" data-reveal>
+        <span class="cell-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>
+        </span>
+        <h3>Ingests a manual from a link</h3>
+        <p>Paste an Amazon or manufacturer URL. Moche pulls specs, descriptions and the PDF into the Dome automatically.</p>
+      </article>
+
+      <article class="cell reveal" data-reveal>
+        <span class="cell-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        </span>
+        <h3>Escalation that respects your time</h3>
+        <p>Low-confidence answers route to your phone. Guests see "your host has been notified" — never a dead end.</p>
+      </article>
+
+      <article class="cell cell-wide reveal" data-reveal>
+        <div class="cell-body">
+          <span class="cell-kicker">Maintenance flags · Review nudge</span>
+          <h3>Turns problems into signals and stays into 5-star reviews.</h3>
+          <p>Broken-appliance reports get urgency-tagged and routed to your maintenance contact. After checkout, guests receive a personalized review prompt built from what they actually asked about — converting far higher than a generic "please review."</p>
+        </div>
+        <div class="cell-body-visual">
+          <div class="flag"><span class="flag-dot"></span> Maintenance · AC not cooling · Unit 2</div>
+          <div class="flag ok"><span class="flag-dot"></span> Review sent · referenced the sunset deck</div>
+        </div>
+      </article>
+
+      <article class="cell reveal" data-reveal>
+        <span class="cell-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg>
+        </span>
+        <h3>Your data, white-labeled</h3>
+        <p>Own your Brain, export anytime. Upgrade to drop the Moche badge and dress the portal in your own colors.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROOF / TRUST ============ -->
+<section class="section proof" id="proof">
+  <div class="wrap proof-grid">
+    <figure class="proof-visual reveal" data-reveal>
+      <img src="assets/img/interior.webp" alt="A warm, beautifully styled coastal vacation rental living room at dusk with an arched doorway and ocean view" width="1200" height="900" loading="lazy" decoding="async">
+      <div class="proof-badge">
+        <strong>4.9★</strong>
+        <span>average rating hosts protect with an always-on concierge</span>
+      </div>
+    </figure>
+    <div class="proof-copy">
+      <p class="eyebrow reveal" data-reveal>Why hosts trust it</p>
+      <h2 class="reveal" data-reveal>Grounded answers. Zero platform risk. A moat that compounds.</h2>
+      <div class="trust-list reveal" data-reveal>
+        <div class="tl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+          <div><h3>It won't hallucinate your house</h3><p>Retrieval-augmented and source-cited. If confidence is low, it escalates to you instead of guessing.</p></div>
+        </div>
+        <div class="tl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div><h3>No platform can switch it off</h3><p>Runs on its own infrastructure. No API approval risk, no terms-of-service exposure, no lock-in you don't control.</p></div>
+        </div>
+        <div class="tl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg>
+          <div><h3>It gets smarter the longer you host</h3><p>Every unanswered question becomes a prompt to fill a gap. Your Dome — and your switching cost — deepen with every stay.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section class="section pricing" id="pricing">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow reveal" data-reveal>Pricing</p>
+      <h2 class="reveal" data-reveal>Per property. No channel commissions. Cancel your data out anytime.</h2>
+    </div>
+    <div class="price-grid">
+      <article class="plan reveal" data-reveal>
+        <h3>Starter</h3>
+        <div class="price"><span class="amt">$17</span><span class="per">/mo · per property</span></div>
+        <p class="plan-desc">Your first Dome, fully loaded.</p>
+        <ul role="list">
+          <li>Full AI guest portal + chat</li>
+          <li>QR code + shareable link</li>
+          <li>Document &amp; URL ingestion</li>
+          <li>90+ language support</li>
+          <li>Email escalation</li>
+        </ul>
+        <a href="/signup" class="btn btn-outline">Join the beta</a>
+      </article>
+      <article class="plan plan-feat reveal" data-reveal>
+        <span class="plan-badge">Most popular</span>
+        <h3>Growth</h3>
+        <div class="price"><span class="amt">$40</span><span class="per">/mo · up to 3</span></div>
+        <p class="plan-desc">For hosts scaling past their first door.</p>
+        <ul role="list">
+          <li>Everything in Starter</li>
+          <li>Property cloning</li>
+          <li>Co-host mode</li>
+          <li>SMS escalation</li>
+          <li>Brain Health analytics</li>
+          <li>Maintenance flag routing</li>
+        </ul>
+        <a href="/signup" class="btn btn-primary">Join the beta</a>
+      </article>
+      <article class="plan reveal" data-reveal>
+        <h3>Portfolio</h3>
+        <div class="price"><span class="amt">$59</span><span class="per">/mo · up to 5</span></div>
+        <p class="plan-desc">Boutique operators, best value.</p>
+        <ul role="list">
+          <li>Everything in Growth</li>
+          <li>White-label branding</li>
+          <li>Post-stay review nudge</li>
+          <li>Priority support</li>
+          <li>Annual prepay — 2 months free</li>
+        </ul>
+        <a href="/signup" class="btn btn-outline">Join the beta</a>
+      </article>
+    </div>
+    <p class="price-note reveal" data-reveal>One-time Property Dome Activation: <strong>$25–49</strong> per property, credited toward your first month.</p>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="section faq" id="faq">
+  <div class="wrap faq-wrap">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-reveal>Questions</p>
+      <h2 class="reveal" data-reveal>The things hosts ask before they build a Dome.</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item reveal" data-reveal open>
+        <summary>Do I have to connect my Airbnb account?<span class="chev" aria-hidden="true"></span></summary>
+        <div class="faq-a"><p>No. Moche.AI is completely platform-agnostic. Guests reach the portal by QR code or link during the stay — no Airbnb login, no Vrbo connection, no PMS integration. Your property data belongs to you, not to a platform's API.</p></div>
+      </details>
+      <details class="faq-item reveal" data-reveal>
+        <summary>What if the AI gives a wrong answer?<span class="chev" aria-hidden="true"></span></summary>
+        <div class="faq-a"><p>The Dome uses retrieval-augmented generation — it answers only from your uploaded documents, and can cite the source. When confidence is low, it escalates to you rather than inventing anything. Its instruction is simple: inform, never invent.</p></div>
+      </details>
+      <details class="faq-item reveal" data-reveal>
+        <summary>How long does setup take?<span class="chev" aria-hidden="true"></span></summary>
+        <div class="faq-a"><p>Most hosts finish conversational onboarding in 15–20 minutes, and the portal can be live before the next check-in. A Brain Health score tracks completeness and the AI proactively suggests gaps to fill based on common guest questions.</p></div>
+      </details>
+      <details class="faq-item reveal" data-reveal>
+        <summary>Can I run it alongside Hospitable or HostBuddy?<span class="chev" aria-hidden="true"></span></summary>
+        <div class="faq-a"><p>Yes — they're complementary. Keep your pre-arrival messaging tool for booking confirmations and check-in reminders. Moche is the in-stay layer for the WiFi, appliance and local questions that come up once guests are physically inside your property.</p></div>
+      </details>
+      <details class="faq-item reveal" data-reveal>
+        <summary>What happens if I cancel?<span class="chev" aria-hidden="true"></span></summary>
+        <div class="faq-a"><p>You own your data. Export your Property Brain documents and structured profile at any time. Because the Brain is built on your unique property details, the value compounds the longer you host — but you're never locked in.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA / SIGNUP ============ -->
+<section class="section cta" id="signup">
+  <div class="cta-glow" aria-hidden="true"></div>
+  <div class="wrap cta-inner">
+    <div class="cta-copy">
+      <h2 class="reveal" data-reveal>Stop answering the same three questions. Build the dome that does it for you.</h2>
+      <p class="reveal" data-reveal>Founding hosts get free onboarding, priority roadmap input, and locked-in beta pricing. Limited spots.</p>
+      <ul class="cta-checks reveal" data-reveal role="list">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Free for the first 30 days</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> No credit card required</li>
+      </ul>
+    </div>
+    <form class="signup reveal" data-reveal id="signupForm" novalidate>
+      <div class="form-msg" id="formMsg" role="status"></div>
+      <div class="field">
+        <label for="email">Email address</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="properties">How many properties do you host?</label>
+        <select id="properties" name="properties" required>
+          <option value="" disabled selected>Select one</option>
+          <option value="1">1 property</option>
+          <option value="2-3">2–3 properties</option>
+          <option value="4-5">4–5 properties</option>
+          <option value="6+">6 or more</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pain">What's your biggest guest-communication headache?</label>
+        <textarea id="pain" name="pain" placeholder="e.g. the same WiFi and checkout questions, every single stay…"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="submitBtn">Claim my founding-host spot</button>
+      <p class="form-note">We'll only email you about the beta. Unsubscribe anytime.</p>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <a href="#top" class="brand" aria-label="Moche.AI home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none">
+            <path d="M5 34h38" stroke="url(#domeGrad)" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M8 34a16 16 0 0 1 32 0" stroke="url(#domeGrad)" stroke-width="2.4" fill="none"/>
+            <path d="M13 34a11 11 0 0 1 22 0" stroke="url(#domeGrad)" stroke-width="1.7" opacity="0.7" fill="none"/>
+            <path d="M18.5 34a5.5 5.5 0 0 1 11 0" stroke="url(#domeGrad)" stroke-width="1.7" opacity="0.55" fill="none"/>
+            <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill="#33E6D4" opacity="0.9"/>
+            <circle cx="24" cy="12" r="2.4" fill="#FF8A5C"/><path d="M24 12v-4" stroke="#FF8A5C" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="brand-word">Moche<span class="brand-ai">.AI</span></span>
+      </a>
+      <p>The intelligent in-stay layer for short-term rentals. An AI concierge for every property — awake when you're not.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Platform</h4>
+      <ul role="list">
+        <li><a href="#features">Property Brain</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#signup">Beta program</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <ul role="list">
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#signup">Setup checklist</a></li>
+        <li><a href="#proof">Why hosts trust it</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <ul role="list">
+        <li><a href="mailto:hello@moche.ai">Contact</a></li>
+        <li><a href="#signup">Join the beta</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="wrap footer-bottom">
+    <span>© 2026 Moche.AI · Built in Waltham, MA</span>
+    <span class="footer-tag">Your property, awake 24/7 — even when you're not.</span>
+  </div>
+</footer>
+
+<script src="assets/app.js" defer></script>
+<script data-pplx-inline-edit>
+(function () {
+  if (window === window.top) return;
+
+  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
+  const MAX_FONT_BYTES = 500 * 1024;
+  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
+  let scrollForwarding = false;
+  let scrollRaf = 0;
+  let trustedTopOrigin = null;
+
+  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
+  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
+  // across multiple labels.
+  function matchesAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (const entry of allowedParentOrigins) {
+      if (!entry.includes("*")) {
+        if (entry === origin) return true;
+        continue;
+      }
+      const pattern = new RegExp(
+        "^" +
+          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
+          "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+    return false;
+  }
+
+  // Trust decision: when the sender is same-origin-visible (event.origin is a
+  // real origin like https://www.perplexity.ai) we trust event.origin directly.
+  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
+  // broker's stamped `parentOrigin` to identify the top window. The fallback
+  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
+  // on the response path (see postToTrustedTop) to ensure replies can't be
+  // delivered to anyone but the actual top window of that claimed origin.
+  function getTrustedParentOrigin(event) {
+    const forwardedParentOrigin =
+      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
+    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
+    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
+  }
+
+  // All responses go to window.top with targetOrigin = the allowlisted origin.
+  // An attacker that iframes us inside their own null-origin broker can claim
+  // any parentOrigin they like, but the browser will drop the reply whenever
+  // the real top's origin doesn't match — so the screenshot never leaves.
+  function postToTrustedTop(message) {
+    if (!trustedTopOrigin) return;
+    try {
+      window.top.postMessage(message, trustedTopOrigin);
+    } catch (_error) {}
+  }
+
+  function inlineAll(original, clone) {
+    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
+
+    try {
+      const computedStyle = getComputedStyle(original);
+      // cssText on a computed style is the serialized declaration in modern
+      // Chromium/Safari — a single read beats enumerating ~400 longhand
+      // properties. Firefox returns "" here, so we fall back on empty.
+      const serialized = computedStyle.cssText;
+      if (serialized) {
+        clone.style.cssText = serialized;
+      } else {
+        const parts = new Array(computedStyle.length);
+        for (let index = 0; index < computedStyle.length; index += 1) {
+          const property = computedStyle[index];
+          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
+        }
+        clone.style.cssText = parts.join("");
+      }
+    } catch (_error) {}
+
+    const originalChildren = original.children;
+    const clonedChildren = clone.children;
+    for (
+      let index = 0;
+      index < originalChildren.length && index < clonedChildren.length;
+      index += 1
+    ) {
+      inlineAll(originalChildren[index], clonedChildren[index]);
+    }
+  }
+
+  function extractFontUrl(srcValue) {
+    const matches = [
+      ...srcValue.matchAll(
+        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
+      ),
+    ];
+    if (matches.length === 0) return null;
+    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
+    if (woff2) return woff2[1];
+    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
+    if (woff) return woff[1];
+    return matches[0][1];
+  }
+
+  // Cache resolved font URL -> data URI across captures. Fonts on a page
+  // essentially never change, and a batch run emits multiple captures back to
+  // back — without this we'd refetch + re-base64 every time.
+  const fontDataUriCache = new Map();
+  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
+
+  async function fetchAsDataUri(url) {
+    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
+    let dataUri = null;
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size <= MAX_FONT_BYTES) {
+          dataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    } catch (_error) {
+      dataUri = null;
+    }
+    fontDataUriCache.set(url, dataUri);
+    return dataUri;
+  }
+
+  function collectFontFaceRuleTexts() {
+    const rules = [];
+    for (const sheet of document.styleSheets) {
+      let cssRules;
+      try {
+        cssRules = sheet.cssRules;
+      } catch (_error) {
+        continue;
+      }
+      if (!cssRules) continue;
+      for (const rule of cssRules) {
+        const cssText = rule.cssText || "";
+        if (cssText.startsWith("@font-face")) rules.push(cssText);
+      }
+    }
+    return rules;
+  }
+
+  async function buildInlinedFontCss() {
+    const ruleTexts = collectFontFaceRuleTexts();
+    if (ruleTexts.length === 0) return null;
+
+    const resolved = ruleTexts.map((cssText) => {
+      if (!SRC_DECLARATION_RE.test(cssText)) return null;
+      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
+      if (!srcMatch) return null;
+      const url = extractFontUrl(srcMatch[1]);
+      if (!url) return null;
+      try {
+        return { cssText, url: new URL(url, document.baseURI).href };
+      } catch (_error) {
+        return null;
+      }
+    });
+
+    const dataUris = await Promise.all(
+      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
+    );
+
+    const inlined = [];
+    let totalBytes = 0;
+    for (let index = 0; index < resolved.length; index += 1) {
+      const entry = resolved[index];
+      const dataUri = dataUris[index];
+      if (!entry || !dataUri) continue;
+      const approxBytes = dataUri.length * 0.75;
+      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
+      totalBytes += approxBytes;
+      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
+    }
+    return inlined.length > 0 ? inlined.join("\n") : null;
+  }
+
+  function stripExternal(clone) {
+    const images = clone.querySelectorAll("img");
+    for (let index = 0; index < images.length; index += 1) {
+      const src = images[index].getAttribute("src");
+      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
+    }
+
+    const elements = clone.querySelectorAll("*");
+    for (let index = 0; index < elements.length; index += 1) {
+      const style = elements[index].style.cssText;
+      if (style && style.includes("url(")) {
+        elements[index].style.cssText = style.replace(
+          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
+          "none",
+        );
+      }
+    }
+  }
+
+  function emitScroll() {
+    scrollRaf = 0;
+    if (!scrollForwarding) return;
+    postToTrustedTop({
+      type: "INLINE_EDIT_SCROLL",
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    });
+  }
+
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (!scrollForwarding || scrollRaf) return;
+      scrollRaf = requestAnimationFrame(emitScroll);
+    },
+    { passive: true, capture: true },
+  );
+
+  async function handleCaptureRequest(event) {
+    const requestId = event.data.requestId;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    function postResult(dataUrl) {
+      postToTrustedTop({
+        type: "INLINE_EDIT_SCREENSHOT_RESULT",
+        requestId,
+        dataUrl,
+        scrollX,
+        scrollY,
+      });
+    }
+
+    try {
+      // Wait for any pending web fonts to resolve so both inline metrics and
+      // the @font-face inlining below see the same loaded faces.
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_error) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      inlineAll(document.documentElement, clone);
+
+      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
+      for (let index = 0; index < removedNodes.length; index += 1) {
+        removedNodes[index].remove();
+      }
+
+      stripExternal(clone);
+
+      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
+      // can resolve them — external font URLs aren't fetched during
+      // foreignObject rendering, which would otherwise force a fallback face
+      // and change text metrics.
+      const inlinedFontCss = await buildInlinedFontCss();
+      if (inlinedFontCss) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = inlinedFontCss;
+        const head = clone.querySelector("head");
+        if (head) head.appendChild(styleEl);
+        else clone.insertBefore(styleEl, clone.firstChild);
+      }
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        '<foreignObject width="100%" height="100%">' +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
+        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
+        html +
+        "</div></div></foreignObject></svg>";
+      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = new Image();
+      image.onload = function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        postResult(canvas.toDataURL("image/png"));
+      };
+      image.onerror = function () {
+        postResult(null);
+      };
+      image.src = svgUrl;
+    } catch (_error) {
+      postResult(null);
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data) return;
+    // Only accept messages from the direct parent frame. Blocks sibling /
+    // unrelated-window postMessage senders that could otherwise reach us.
+    if (event.source !== window.parent) return;
+
+    const trustedParentOrigin = getTrustedParentOrigin(event);
+    if (!trustedParentOrigin) return;
+    trustedTopOrigin = trustedParentOrigin;
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
+      scrollForwarding = true;
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
+      scrollForwarding = false;
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      return;
+    }
+
+    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
+
+    handleCaptureRequest(event);
+  });
+})();
+
+
+</script></body>
+</html>
