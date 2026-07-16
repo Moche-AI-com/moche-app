@@ -1,0 +1,136 @@
+import 'server-only';
+import { redirect } from 'next/navigation';
+import { cache } from 'react';
+import type { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
+import type { Database } from '@/lib/database.types';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
+type HostAccount = Database['public']['Tables']['host_accounts']['Row'];
+type Property = Database['public']['Tables']['properties']['Row'];
+type PropertyMember = Database['public']['Tables']['property_members']['Row'];
+
+export const getUser = cache(async (): Promise<User | null> => {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
+
+export interface SessionContext {
+  user: User;
+  profile: Profile;
+  account: HostAccount;
+}
+
+// Loads the signed-in user, their profile, and the host account they own.
+// The handle_new_user trigger guarantees these exist after signup.
+export const getSessionContext = cache(async (): Promise<SessionContext | null> => {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+  if (!profile) return null;
+
+  // Owned account first; fall back to any account membership.
+  const { data: account } = await supabase
+    .from('host_accounts')
+    .select('*')
+    .eq('owner_id', user.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (!account) {
+    const { data: viaMember } = await supabase
+      .from('host_accounts')
+      .select('*')
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle();
+    if (!viaMember) return null;
+    return { user, profile, account: viaMember };
+  }
+
+  return { user, profile, account };
+});
+
+export async function requireSession(): Promise<SessionContext> {
+  const ctx = await getSessionContext();
+  if (!ctx) redirect('/login');
+  return ctx;
+}
+
+export interface PropertyAccess {
+  property: Property;
+  member: PropertyMember | null; // null when the user is the account owner (implicit full access)
+  isOwner: boolean;
+  can: {
+    editBrain: boolean;
+    replyGuests: boolean;
+    receiveEscalations: boolean;
+    resolveMaintenance: boolean;
+    viewAnalytics: boolean;
+    editProperty: boolean;
+    manageBilling: boolean;
+    manageCoHosts: boolean;
+  };
+}
+
+// Loads a property the user can access (RLS enforces this) plus their effective permissions.
+// Returns null if the property is not visible to the user.
+export async function getPropertyAccess(propertyId: string): Promise<PropertyAccess | null> {
+  const ctx = await getSessionContext();
+  if (!ctx) return null;
+  const supabase = createClient();
+
+  const { data: property } = await supabase
+    .from('properties')
+    .select('*')
+    .eq('id', propertyId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!property) return null;
+
+  const isOwner = property.host_account_id === ctx.account.id && ctx.account.owner_id === ctx.user.id;
+
+  const { data: member } = await supabase
+    .from('property_members')
+    .select('*')
+    .eq('property_id', propertyId)
+    .eq('profile_id', ctx.user.id)
+    .maybeSingle();
+
+  const can = isOwner
+    ? {
+        editBrain: true,
+        replyGuests: true,
+        receiveEscalations: true,
+        resolveMaintenance: true,
+        viewAnalytics: true,
+        editProperty: true,
+        manageBilling: true,
+        manageCoHosts: true,
+      }
+    : {
+        editBrain: !!member?.can_edit_brain,
+        replyGuests: !!member?.can_reply_guests,
+        receiveEscalations: !!member?.can_receive_escalations,
+        resolveMaintenance: !!member?.can_resolve_maintenance,
+        viewAnalytics: !!member?.can_view_analytics,
+        editProperty: false, // co-hosts cannot edit core property settings
+        manageBilling: false,
+        manageCoHosts: false,
+      };
+
+  return { property, member: member ?? null, isOwner, can };
+}
+
+export async function requirePropertyAccess(propertyId: string): Promise<PropertyAccess> {
+  const access = await getPropertyAccess(propertyId);
+  if (!access) redirect('/dashboard');
+  return access;
+}
