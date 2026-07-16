@@ -1,0 +1,43 @@
+import { notFound } from 'next/navigation';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getGuestSession } from '@/lib/guest/session';
+import { publicEnv } from '@/lib/env';
+import { GuestPortal } from './GuestPortal';
+
+export const dynamic = 'force-dynamic';
+
+// Never cache guest portal responses (per-guest, per-stay data).
+export const fetchCache = 'force-no-store';
+
+export default async function GuestPortalPage({ params }: { params: { slug: string } }) {
+  const admin = createAdminClient();
+
+  // Only live properties expose a portal. Fetch public-safe branding only.
+  const { data: property } = await admin
+    .from('properties')
+    .select('id, display_name, slug, status, brand_primary, brand_accent, logo_url, cover_image_url, city, region, country')
+    .eq('slug', params.slug)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (!property || property.status !== 'live') notFound();
+
+  // If already verified for THIS property, start in the concierge view.
+  const session = await getGuestSession();
+  const verified = !!session && session.propertyId === property.id;
+
+  return (
+    <GuestPortal
+      slug={property.slug}
+      propertyName={property.display_name}
+      location={[property.city, property.region, property.country].filter(Boolean).join(', ')}
+      brandPrimary={property.brand_primary}
+      brandAccent={property.brand_accent}
+      logoUrl={property.logo_url}
+      coverImageUrl={property.cover_image_url}
+      turnstileSiteKey={publicEnv.turnstileSiteKey}
+      initialVerified={verified}
+      guestName={verified ? session!.guestDisplayName : null}
+    />
+  );
+}
