@@ -13,7 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.5.2",
+    "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.45.4",
     "next": "14.2.15",
     "qrcode": "^1.5.4",

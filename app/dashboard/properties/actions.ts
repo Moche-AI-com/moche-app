@@ -10,6 +10,7 @@ import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
 import { audit } from '@/lib/audit';
 import { DEFAULT_MODULES } from '@/lib/constants';
+import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
 
 export interface PropertyFormState {
@@ -59,7 +60,7 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
   }
 
   // Seed default settings so the concierge + portal have a config row to read.
-  await supabase.from('property_settings').insert({ property_id: property.id, modules: DEFAULT_MODULES });
+  await supabase.from('property_settings').insert({ property_id: property.id, modules: DEFAULT_MODULES as unknown as Json });
 
   await audit(supabase, {
     action: 'property.created',
@@ -229,7 +230,7 @@ export async function clonePropertyAction(formData: FormData): Promise<void> {
   const { data: srcSettings } = await supabase.from('property_settings').select('*').eq('property_id', sourceId).maybeSingle();
   await supabase.from('property_settings').insert({
     property_id: created.id,
-    modules: srcSettings?.modules ?? DEFAULT_MODULES,
+    modules: (srcSettings?.modules ?? DEFAULT_MODULES) as unknown as Json,
     concierge_tone: srcSettings?.concierge_tone ?? undefined,
     confidence_threshold: srcSettings?.confidence_threshold ?? undefined,
     grace_period_hours: srcSettings?.grace_period_hours ?? undefined,
