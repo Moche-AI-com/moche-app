@@ -30,6 +30,7 @@ export const serverEnv = {
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',
   firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev',
+    resendApiKey: process.env.RESEND_API_KEY ?? '', // Server-only. Email delivery via Resend.
 
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? '',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
