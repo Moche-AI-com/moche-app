@@ -460,7 +460,7 @@ body {
 <body>
 <a href="#main" class="skip-link">Skip to content</a>
 
-  .plan-feat{position:relative;padding-top:28px}.plan-badge{display:inline-flex;align-items:center;align-self:flex-start;margin-bottom:14px;padding:7px 12px;border-radius:999px;background:rgba(51,230,212,0.12);border:1px solid rgba(51,230,212,0.18);color:#bafaf1;font-size:.78rem;font-weight:600;letter-spacing:.02em;line-height:1;white-space:nowrap}
+  <style>.plan-feat{padding-top:8px}.plan-badge{display:inline-flex;align-items:center;align-self:flex-start;margin-top:12px;margin-bottom:16px;padding:7px 12px;border-radius:999px;background:rgba(51,230,212,0.12);border:1px solid rgba(51,230,212,0.18);color:#bafaf1;font-size:.78rem;font-weight:600;letter-spacing:.02em;line-height:1;white-space:nowrap}</style>;padding-top:28px}.plan-badge{display:inline-flex;align-items:center;align-self:flex-start;margin-bottom:14px;padding:7px 12px;border-radius:999px;background:rgba(51,230,212,0.12);border:1px solid rgba(51,230,212,0.18);color:#bafaf1;font-size:.78rem;font-weight:600;letter-spacing:.02em;line-height:1;white-space:nowrap}
 <!-- ============ NAV ============ -->
 <header class="nav" id="nav">
   <div class="wrap nav-inner">
@@ -1027,6 +1027,7 @@ body {
   let lastY = window.scrollY;
   let ticking = false;
     const mobileCta = document.querySelector('.mobile-cta-bar');
+      const stickyDemo = document.querySelector('.sticky-demo');
 
   staggerGroups.forEach((group) => {
     Array.from(group.children).forEach((child, index) => {
@@ -1087,7 +1088,28 @@ body {
         mobileCta.classList.toggle('is-hidden', r.top < window.innerHeight * 0.9 && r.bottom > 0);
       }
     }
+        if (stickyDemo) {
+      const rect = stickyDemo.getBoundingClientRect();
+      const raw = -rect.top / (rect.height - window.innerHeight);
+      const progress = Math.max(0, Math.min(1, raw));
+      updateDemoProgress(progress);
+    }
     ticking = false;
+  }
+
+    function updateDemoProgress(progress) {
+    const steps = document.querySelectorAll('.demo-step');
+    const screens = document.querySelectorAll('.demo-screen');
+    if (!steps.length) return;
+    const activeIndex = Math.min(Math.floor(progress * steps.length), steps.length - 1);
+    steps.forEach(function(step, i) {
+      step.classList.toggle('is-active', i === activeIndex);
+    });
+    screens.forEach(function(screen, i) {
+      const isActive = i === activeIndex;
+      screen.style.opacity = isActive ? '1' : '0';
+      screen.style.transform = isActive ? 'translate3d(0,0,0) scale(1)' : 'translate3d(0,42px,0) scale(0.965)';
+    });
   }
 
 window.addEventListener('scroll', function () {
