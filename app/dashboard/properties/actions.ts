@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
+import { requireSession, requirePropertyAccess, getSessionContext } from '@/lib/auth/guards';
 import { propertyCreateSchema, propertyUpdateSchema } from '@/lib/validation';
 import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
 import { computeBrainHealth } from '@/lib/brain/health';
@@ -12,6 +12,7 @@ import { audit } from '@/lib/audit';
 import { DEFAULT_MODULES } from '@/lib/constants';
 import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 export interface PropertyFormState {
   error?: string;
@@ -70,6 +71,10 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
     targetType: 'property',
     targetId: property.id,
   });
+
+  const posthog = getPostHogClient();
+  posthog.capture({ distinctId: ctx.user.id, event: 'property_created', properties: { property_id: property.id, timezone: d.timezone, locale: d.locale } });
+  await posthog.flush();
 
   redirect(`/dashboard/properties/${property.id}`);
 }
@@ -164,6 +169,17 @@ async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft'
   if (error) return { error: 'Could not update the property status.' };
 
   await audit(supabase, { action: `property.${status}`, propertyId, targetType: 'property', targetId: propertyId });
+
+  if (status === 'live' || status === 'archived') {
+    const actorCtx = await getSessionContext();
+    if (actorCtx) {
+      const posthog = getPostHogClient();
+      const eventName = status === 'live' ? 'property_published' : 'property_archived';
+      posthog.capture({ distinctId: actorCtx.user.id, event: eventName, properties: { property_id: propertyId } });
+      await posthog.flush();
+    }
+  }
+
   revalidatePath(`/dashboard/properties/${propertyId}`);
   revalidatePath('/dashboard/properties');
   return { success: `Property ${status === 'live' ? 'published' : status}.` };
@@ -189,6 +205,12 @@ export async function deletePropertyAction(formData: FormData): Promise<void> {
     .update({ deleted_at: new Date().toISOString(), status: 'archived' })
     .eq('id', propertyId);
   await audit(supabase, { action: 'property.deleted', propertyId, targetType: 'property', targetId: propertyId });
+  const delCtx = await getSessionContext();
+  if (delCtx) {
+    const posthogDel = getPostHogClient();
+    posthogDel.capture({ distinctId: delCtx.user.id, event: 'property_deleted', properties: { property_id: propertyId } });
+    await posthogDel.flush();
+  }
   revalidatePath('/dashboard/properties');
   redirect('/dashboard/properties');
 }
@@ -275,6 +297,10 @@ export async function clonePropertyAction(formData: FormData): Promise<void> {
     targetType: 'property',
     targetId: sourceId,
   });
+
+  const posthogClone = getPostHogClient();
+  posthogClone.capture({ distinctId: ctx.user.id, event: 'property_cloned', properties: { source_property_id: sourceId, property_id: created.id } });
+  await posthogClone.flush();
 
   redirect(`/dashboard/properties/${created.id}`);
 }

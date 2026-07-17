@@ -6,6 +6,7 @@ import { ingestText } from '@/lib/ingest/pipeline';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import type { Database } from '@/lib/database.types';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -113,6 +114,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       targetType: 'document',
       targetId: documentId,
     });
+    if (ctx?.user.id) {
+      const posthog = getPostHogClient();
+      posthog.capture({ distinctId: ctx.user.id, event: 'document_ingested', properties: { property_id: params.id, category, mime_type: mime, chunk_count: result.chunks } });
+      await posthog.flush();
+    }
     return NextResponse.json({ ok: true, title: result.title, chunks: result.chunks });
   } catch (e) {
     await supabase.from('documents').update({ status: 'failed', error_detail: 'ingest_failed' } as never).eq('id', documentId);

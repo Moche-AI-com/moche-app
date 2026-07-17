@@ -7,6 +7,7 @@ import { requireSession } from '@/lib/auth/guards';
 import { profileUpdateSchema } from '@/lib/validation';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 export interface ProfileFormState {
   error?: string;
@@ -80,6 +81,10 @@ export async function requestAccountDeletionAction(_prev: ProfileFormState, form
     targetType: 'host_account',
     targetId: ctx.account.id,
   });
+
+  const posthog = getPostHogClient();
+  posthog.capture({ distinctId: ctx.user.id, event: 'account_deletion_requested' });
+  await posthog.flush();
 
   await supabase.auth.signOut();
   redirect('/login?deleted=1');

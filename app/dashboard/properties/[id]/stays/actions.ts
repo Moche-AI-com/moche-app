@@ -7,6 +7,7 @@ import { stayCreateSchema } from '@/lib/validation';
 import { hashContact } from '@/lib/crypto';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 export interface StayActionState {
   error?: string;
@@ -83,6 +84,12 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
     targetType: 'stay',
     targetId: (stay as { id: string }).id,
   });
+
+  const durationDays = Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+  const posthog = getPostHogClient();
+  posthog.capture({ distinctId: ctx.user.id, event: 'stay_created', properties: { property_id: propertyId, guest_count: d.guestCount, duration_days: durationDays } });
+  await posthog.flush();
+
   revalidatePath(`/dashboard/properties/${propertyId}/stays`);
   return { ok: true };
 }

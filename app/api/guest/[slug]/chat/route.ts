@@ -6,6 +6,7 @@ import { answerGuestQuestion } from '@/lib/guest/concierge';
 import { notify } from '@/lib/notify';
 import type { ChatMessage } from '@/lib/ai';
 import { log } from '@/lib/log';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -106,6 +107,14 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     }
     log.info('guest_escalation_created', { escalationId: (esc as { id: string } | null)?.id, confidence: answer.confidence });
   }
+
+  const posthog = getPostHogClient();
+  const guestDistinctId = `guest_stay_${session.stayId}`;
+  posthog.capture({ distinctId: guestDistinctId, event: 'guest_message_sent', properties: { property_id: session.propertyId, confidence: Number(answer.confidence.toFixed(2)), escalated: answer.shouldEscalate, is_emergency: answer.isEmergency } });
+  if (answer.shouldEscalate) {
+    posthog.capture({ distinctId: guestDistinctId, event: 'guest_message_escalated', properties: { property_id: session.propertyId, confidence: Number(answer.confidence.toFixed(2)) } });
+  }
+  await posthog.flush();
 
   return NextResponse.json({
     ok: true,

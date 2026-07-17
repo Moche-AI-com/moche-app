@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { signupSchema, loginSchema, resetRequestSchema, resetUpdateSchema } from '@/lib/validation';
 import { publicEnv } from '@/lib/env';
 import { log } from '@/lib/log';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 export interface FormState {
   error?: string;
@@ -24,7 +25,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   }
   const { email, password, fullName, accountName } = parsed.data;
   const supabase = createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data: signUpData, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -37,6 +38,11 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     log.warn('signup_failed', { reason: error.message });
     return { error: error.message };
   }
+  const posthog = getPostHogClient();
+  const newUserId = signUpData.user?.id ?? email;
+  posthog.identify({ distinctId: newUserId, properties: { name: fullName } });
+  posthog.capture({ distinctId: newUserId, event: 'user_signed_up', properties: { has_account_name: !!accountName } });
+  await posthog.flush();
   redirect('/verify-email');
 }
 
@@ -48,9 +54,15 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   if (!parsed.success) return { error: 'Enter a valid email and password.' };
 
   const supabase = createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data: signInData, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
     return { error: 'Invalid email or password.' };
+  }
+  const posthog = getPostHogClient();
+  const userId = signInData.user?.id;
+  if (userId) {
+    posthog.capture({ distinctId: userId, event: 'user_logged_in', properties: { source: 'password' } });
+    await posthog.flush();
   }
   const next = (formData.get('next') as string) || '/dashboard';
   redirect(next.startsWith('/') ? next : '/dashboard');

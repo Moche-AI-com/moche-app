@@ -7,6 +7,7 @@ import { brainItemSchema } from '@/lib/validation';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import { getAIProvider } from '@/lib/ai';
+import { getPostHogClient } from '@/lib/posthog-server';
 import { chunkText } from '@/lib/ingest/chunk';
 
 export interface BrainActionState {
@@ -88,6 +89,10 @@ export async function saveBrainItemAction(
     targetType: 'brain_item',
     targetId: savedId,
   });
+
+  const posthog = getPostHogClient();
+  posthog.capture({ distinctId: ctx.user.id, event: 'brain_item_saved', properties: { property_id: propertyId, category: d.category, is_update: !!itemId } });
+  await posthog.flush();
 
   revalidatePath(`/dashboard/properties/${propertyId}/brain`);
   return { ok: true };
