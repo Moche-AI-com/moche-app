@@ -488,6 +488,7 @@ body {
       <a href="#features">Platform</a>
       <a href="#proof">Why hosts trust it</a>
       <a href="#pricing">Pricing</a>
+                <a href="#memory">Demo</a>
     </nav>
     <div class="nav-actions">
       <button class="icon-btn" data-theme-toggle aria-label="Switch to light mode"></button>
@@ -1007,6 +1008,7 @@ body {
   const revealElements = document.querySelectorAll('[data-reveal]');
   let lastY = window.scrollY;
   let ticking = false;
+    const mobileCta = document.querySelector('.mobile-cta-bar');
 
   staggerGroups.forEach((group) => {
     Array.from(group.children).forEach((child, index) => {
@@ -1062,6 +1064,7 @@ body {
     ticking = false;
   }
 
+      if (mobileCta) { const signup = document.getElementById('signupForm'); if (signup) { const r = signup.getBoundingClientRect(); mobileCta.classList.toggle('is-hidden', r.top < window.innerHeight * 0.9 && r.bottom > 0); } }
   window.addEventListener('scroll', function () {
     if (!ticking) {
       window.requestAnimationFrame(updateScrollEffects);
