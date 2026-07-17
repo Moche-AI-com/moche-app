@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Moche.AI — The Smart Dome for Every Stay</title>
-<meta name="description" content="Moche.AI gives every short-term rental its own AI concierge — an intelligent dome trained on your property that answers guest questions instantly, protects your reviews, and hands you back your time.">
+<meta name="description" content="Moche.AI turns your property knowledge into an intelligent guest concierge, maintenance signal layer, review optimization engine, and owner insight system for every short-term rental.">
 <meta property="og:title" content="Moche.AI — The Smart Dome for Every Stay">
-<meta property="og:description" content="An AI concierge for every vacation rental. Guests scan, ask, and get instant answers — so hosts don't have to.">
+<meta property="og:description" content="A property intelligence platform for vacation rentals — guest concierge, maintenance intelligence, review optimization, and owner insight in one system.">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,6 +14,448 @@
 <link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/styles.css">
+
+<style>
+:root {
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-fast: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-med: 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-slow: 800ms cubic-bezier(0.16, 1, 0.3, 1);
+  --founder-surface: rgba(13, 18, 31, 0.42);
+  --founder-border: rgba(255, 255, 255, 0.1);
+  --founder-glow: rgba(51, 230, 212, 0.18);
+  --memory-surface: linear-gradient(180deg, rgba(19,24,38,.95), rgba(13,17,28,.92));
+  --memory-border: rgba(124, 140, 255, 0.24);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.nav {
+  transition:
+    transform 320ms var(--motion-ease),
+    background-color 240ms var(--motion-ease),
+    box-shadow 240ms var(--motion-ease),
+    backdrop-filter 240ms var(--motion-ease);
+}
+
+.nav.is-scrolled {
+  background: color-mix(in srgb, rgba(10, 14, 25, 0.92) 88%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.nav.nav-hidden {
+  transform: translateY(-100%);
+}
+
+.hero {
+  position: relative;
+  overflow: clip;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -12% -10%;
+  height: 28%;
+  background: radial-gradient(circle at center, rgba(51, 230, 212, 0.16), transparent 68%);
+  filter: blur(28px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+}
+
+.pill {
+  max-width: max-content;
+}
+
+.hero-founders {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0 18px;
+}
+
+.founder-stat {
+  padding: 14px 16px;
+  border: 1px solid var(--founder-border);
+  border-radius: 18px;
+  background: var(--founder-surface);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.founder-stat strong {
+  display: block;
+  font-size: 1.08rem;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.founder-stat span {
+  display: block;
+  color: rgba(255,255,255,.78);
+  font-size: .92rem;
+  line-height: 1.45;
+}
+
+.hero-trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.hero-trust li {
+  position: relative;
+}
+
+.hero-trust li svg,
+.cta-checks li svg {
+  flex: 0 0 auto;
+}
+
+.hero-cta .btn,
+.cta .btn,
+.nav-actions .btn,
+.mobile-drawer .btn {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform var(--motion-fast),
+    box-shadow var(--motion-fast),
+    background-color var(--motion-fast),
+    border-color var(--motion-fast);
+}
+
+.hero-cta .btn:hover,
+.cta .btn:hover,
+.nav-actions .btn:hover,
+.mobile-drawer .btn:hover {
+  transform: translateY(-2px);
+}
+
+.hero-cta .btn::after,
+.cta .btn::after,
+.nav-actions .btn::after,
+.mobile-drawer .btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.16) 48%, transparent 100%);
+  transform: translateX(-120%);
+  transition: transform .9s var(--motion-ease);
+  pointer-events: none;
+}
+
+.hero-cta .btn:hover::after,
+.cta .btn:hover::after,
+.nav-actions .btn:hover::after,
+.mobile-drawer .btn:hover::after {
+  transform: translateX(120%);
+}
+
+.portal-card {
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.metrics-bg {
+  will-change: transform;
+}
+
+.section-transition {
+  position: relative;
+}
+
+.section-transition::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(124, 140, 255, 0.35), transparent);
+  opacity: .7;
+}
+
+.value-points,
+.wow-list {
+  display: grid;
+  gap: 18px;
+}
+
+.wow-feature {
+  position: relative;
+}
+
+.wow-grid {
+  display: grid;
+  grid-template-columns: 1.08fr .92fr;
+  gap: clamp(24px, 4vw, 56px);
+  align-items: center;
+}
+
+.wow-panel {
+  position: relative;
+}
+
+.memory-card {
+  position: relative;
+  padding: 24px;
+  border-radius: 24px;
+  background: var(--memory-surface);
+  border: 1px solid var(--memory-border);
+  box-shadow: 0 24px 60px rgba(0,0,0,.28);
+  overflow: hidden;
+}
+
+.memory-card::before {
+  content: "";
+  position: absolute;
+  inset: -24% auto auto -10%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, var(--founder-glow), transparent 70%);
+  pointer-events: none;
+}
+
+.memory-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -28% auto;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(124, 140, 255, 0.18), transparent 72%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+.memory-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(124, 140, 255, 0.14);
+  color: #cfd6ff;
+  font-size: .82rem;
+  letter-spacing: .02em;
+  margin-bottom: 16px;
+}
+
+.memory-kicker::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #33E6D4;
+  box-shadow: 0 0 0 6px rgba(51,230,212,.12);
+}
+
+.memory-quote {
+  font-size: 1.2rem;
+  line-height: 1.55;
+  margin-bottom: 18px;
+  max-width: 28ch;
+}
+
+.memory-actions {
+  display: grid;
+  gap: 14px;
+}
+
+.memory-prompt,
+.memory-message {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.045);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.memory-prompt {
+  font-weight: 600;
+}
+
+.memory-message strong {
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.value-visual,
+.proof-visual,
+.memory-card,
+.plan,
+.cell,
+.step,
+.metric,
+.tl,
+.faq-item {
+  transition:
+    transform .35s var(--motion-ease),
+    box-shadow .35s var(--motion-ease),
+    border-color .35s var(--motion-ease);
+}
+
+.plan:hover,
+.cell:hover,
+.step:hover,
+.tl:hover {
+  transform: translateY(-4px);
+}
+
+.cell-wide .flag,
+.cell-demo .bubble,
+.proof-badge {
+  transition:
+    transform .35s var(--motion-ease),
+    background-color .35s var(--motion-ease),
+    border-color .35s var(--motion-ease);
+}
+
+.cell-wide:hover .flag,
+.cell-hero:hover .bubble,
+.proof-visual:hover .proof-badge {
+  transform: translateY(-2px);
+}
+
+.reveal {
+  opacity: 0;
+  filter: blur(8px);
+  clip-path: inset(0 0 14% 0);
+  transition:
+    opacity .65s var(--motion-ease),
+    filter .65s var(--motion-ease),
+    clip-path .85s var(--motion-ease);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  filter: blur(0);
+  clip-path: inset(0 0 0 0);
+}
+
+.stagger-parent > * {
+  transition-delay: 0ms;
+}
+
+.cta-copy h2,
+.section-head h2,
+.proof-copy h2,
+.value-copy h2 {
+  text-wrap: balance;
+}
+
+#signupForm {
+  scroll-margin-top: 120px;
+}
+
+.founder-anchor {
+  position: relative;
+}
+
+.founder-anchor::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -10px 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(51,230,212,.45), transparent);
+}
+
+@media (max-width: 1024px) {
+  .hero-founders {
+    grid-template-columns: 1fr;
+  }
+
+  .wow-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .memory-quote {
+    max-width: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero-founders {
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .founder-stat {
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+
+  .memory-card {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .hero-trust {
+    gap: 10px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .nav,
+  .hero-cta .btn,
+  .cta .btn,
+  .nav-actions .btn,
+  .mobile-drawer .btn,
+  .value-visual,
+  .proof-visual,
+  .memory-card,
+  .plan,
+  .cell,
+  .step,
+  .metric,
+  .tl,
+  .faq-item {
+    transition: none !important;
+  }
+
+  .hero::after,
+  .memory-card::before,
+  .memory-card::after,
+  .hero-cta .btn::after,
+  .cta .btn::after,
+  .nav-actions .btn::after,
+  .mobile-drawer .btn::after {
+    display: none !important;
+  }
+
+  .reveal,
+  .reveal.is-visible {
+    opacity: 1 !important;
+    filter: none !important;
+    clip-path: none !important;
+  }
+
+  .plan:hover,
+  .cell:hover,
+  .step:hover,
+  .tl:hover,
+  .hero-cta .btn:hover,
+  .cta .btn:hover,
+  .nav-actions .btn:hover,
+  .mobile-drawer .btn:hover {
+    transform: none !important;
+  }
+}
+</style>
 </head>
 <body>
 <a href="#main" class="skip-link">Skip to content</a>
@@ -29,18 +471,12 @@
               <stop stop-color="#33E6D4"/><stop offset="1" stop-color="#7C8CFF"/>
             </linearGradient>
           </defs>
-          <!-- base line -->
           <path d="M5 34h38" stroke="url(#domeGrad)" stroke-width="2.4" stroke-linecap="round"/>
-          <!-- dome shell -->
           <path d="M8 34a16 16 0 0 1 32 0" stroke="url(#domeGrad)" stroke-width="2.4" fill="none"/>
-          <!-- inner arc rings (igloo blocks) -->
           <path d="M13 34a11 11 0 0 1 22 0" stroke="url(#domeGrad)" stroke-width="1.7" opacity="0.7" fill="none"/>
           <path d="M18.5 34a5.5 5.5 0 0 1 11 0" stroke="url(#domeGrad)" stroke-width="1.7" opacity="0.55" fill="none"/>
-          <!-- vertical igloo seams -->
           <path d="M24 18v16M15.5 26.5l3-2.2M32.5 26.5l-3-2.2" stroke="url(#domeGrad)" stroke-width="1.5" opacity="0.5" stroke-linecap="round"/>
-          <!-- doorway (the 'stay') -->
           <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill="#33E6D4" opacity="0.9"/>
-          <!-- signal spark -->
           <circle cx="24" cy="12" r="2.4" fill="#FF8A5C"/>
           <path d="M24 12v-4" stroke="#FF8A5C" stroke-width="1.6" stroke-linecap="round"/>
         </svg>
@@ -56,7 +492,7 @@
     <div class="nav-actions">
       <button class="icon-btn" data-theme-toggle aria-label="Switch to light mode"></button>
       <a href="/login" class="btn btn-ghost btn-sm">Sign in</a>
-        <a href="/signup" class="btn btn-primary btn-sm">Join the beta</a>
+      <a href="/signup" class="btn btn-primary btn-sm">Join the beta</a>
     </div>
     <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -75,35 +511,51 @@
 <main id="main">
 
 <!-- ============ HERO ============ -->
-<section class="hero">
+<section class="hero founder-anchor">
   <div class="hero-media" aria-hidden="true">
     <img src="assets/img/hero.webp" alt="" class="hero-img" fetchpriority="high" width="1600" height="900">
     <div class="hero-veil"></div>
   </div>
   <div class="wrap hero-content">
     <div class="pill reveal" data-reveal>
-      <span class="pill-dot"></span> Now onboarding founding hosts
+      <span class="pill-dot"></span> Founding Host Program · Join 50+ vacation operators and hosts testing the future of guest experience
     </div>
     <h1 class="hero-title reveal" data-reveal>
-      Give every stay<br><span class="grad-text">its own smart concierge agent.</span>
+      Turn every stay into<br><span class="grad-text">a smarter guest experience engine.</span>
     </h1>
     <p class="hero-sub reveal" data-reveal>
-      Moche-AI wraps each of your rentals in an intelligent concierge — trained on your property, always awake. Guests enter a login code, ask anything in any language, and get instant answers. You get your evenings back.
+      Moche-AI turns your property knowledge into an intelligent guest concierge, maintenance signal layer, review optimization engine, and owner insight system. The chat is just the interface — the real product is the property brain behind every answer, escalation, and post-stay revenue opportunity.
     </p>
     <div class="hero-cta reveal" data-reveal>
-      <a href="/signup" class="btn btn-primary btn-lg">Build my Property Dome</a>
-      <a href="#how" class="btn btn-ghost btn-lg">See how it works
+      <a href="/signup" class="btn btn-primary btn-lg">Claim founder pricing</a>
+      <a href="#features" class="btn btn-ghost btn-lg">Explore the platform
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>
     </div>
+
+    <div class="hero-founders reveal stagger-parent" data-reveal>
+      <div class="founder-stat">
+        <strong>50+</strong>
+        <span>operators and hosts already testing the future of in-stay guest experience</span>
+      </div>
+      <div class="founder-stat">
+        <strong>Free setup</strong>
+        <span>white-glove onboarding while the founder cohort is still intentionally small</span>
+      </div>
+      <div class="founder-stat">
+        <strong>Direct support</strong>
+        <span>work directly with the team and influence the roadmap as the product evolves</span>
+      </div>
+    </div>
+
     <ul class="hero-trust reveal" data-reveal role="list">
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> No app to download</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> No platform login</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Founder pricing locked in</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Free setup for founding hosts</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Direct founder support</li>
       <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Live before your next guest</li>
     </ul>
   </div>
 
-  <!-- floating portal card -->
   <div class="float-card portal-card" data-float aria-hidden="true">
     <div class="pc-head">
       <span class="pc-dot"></span> Beach House · Guest Portal
@@ -120,7 +572,7 @@
 <!-- ============ MARQUEE / CONTEXT ============ -->
 <section class="strip">
   <div class="wrap strip-inner">
-    <p class="strip-label">Built for the operators shaping 2026's sorting year</p>
+    <p class="strip-label">Built for operators turning early adoption into an advantage</p>
     <div class="marquee" aria-hidden="true">
       <div class="marquee-track">
         <span>Solo hosts</span><span class="sep">◦</span>
@@ -144,23 +596,23 @@
 <section class="section value">
   <div class="wrap value-grid">
     <div class="value-copy">
-      <p class="eyebrow reveal" data-reveal>The in-stay layer</p>
-      <h2 class="reveal" data-reveal>Your guests don't need another chatbot in a booking thread.</h2>
+      <p class="eyebrow reveal" data-reveal>The real product</p>
+      <h2 class="reveal" data-reveal>The chat window is not the product. Your property intelligence is.</h2>
       <p class="lead reveal" data-reveal>
-        They need a full concierge experience <em>without the hassle</em> — at 11pm, when the thermostat won't cooperate and you're already asleep. Moche-AI is the layer that activates the moment a guest needs help.
+        Moche-AI uses conversational UI as the delivery layer, but the value comes from a living property knowledgebase that powers guest support, maintenance intelligence, review optimization, and owner insight. That makes the system useful before, during, and after each stay.
       </p>
-      <div class="value-points reveal" data-reveal>
+      <div class="value-points reveal stagger-parent" data-reveal>
         <div class="vp">
-          <h3>It lives in the home, not just the platform</h3>
-          <p>A QR code on the counter, a link in the welcome note. No Airbnb login, no PMS, no dependency you can lose.</p>
+          <h3>Property knowledgebase</h3>
+          <p>Every manual, rule, local recommendation, appliance workflow, and host preference becomes structured operating knowledge your team can actually use.</p>
         </div>
         <div class="vp">
-          <h3>It answers from your property — not just the internet</h3>
-          <p>Retrieval-grounded on your own manuals, rental policies, house rules, and notes. It escalates when needed and never provides outputs that aren't in it's source.</p>
+          <h3>Intelligent guest concierge</h3>
+          <p>Guests get instant, grounded answers in natural language, without needing a platform login, app download, or human handoff for common questions.</p>
         </div>
         <div class="vp">
-          <h3>It only pings you when it truly matters</h3>
-          <p>Routine questions vanish. Real issues arrive as a text with the exact question and a one-tap reply.</p>
+          <h3>Maintenance and owner intelligence</h3>
+          <p>Repeated guest questions and issue flags become signals: what is broken, what is confusing, what drives delight, and where revenue or review lift is hiding.</p>
         </div>
       </div>
     </div>
@@ -172,29 +624,29 @@
 </section>
 
 <!-- ============ HOW IT WORKS ============ -->
-<section class="section how" id="how">
+<section class="section how section-transition" id="how">
   <div class="wrap">
     <div class="section-head">
       <p class="eyebrow reveal" data-reveal>How it works</p>
-      <h2 class="reveal" data-reveal>Three steps to a property that answers for itself.</h2>
+      <h2 class="reveal" data-reveal>Three steps to a property that answers, learns, and converts.</h2>
     </div>
-    <ol class="steps" role="list">
+    <ol class="steps stagger-parent" role="list">
       <li class="step reveal" data-reveal>
         <span class="step-num">01</span>
         <h3>Talk your property into an intelligent concierge agent</h3>
-        <p>An AI onboarding interview to collect knowledge and build its brain — WiFi, parking, appliances, quirks. Upload PDFs or paste in a product link, and it ingests the data and all manual automatically.</p>
+        <p>An AI onboarding interview builds the brain behind the experience — WiFi, parking, appliances, quirks, policies, and local knowledge. Upload PDFs or paste a product link, and Moche-AI ingests the useful context automatically.</p>
         <span class="step-tag">~15 minutes</span>
       </li>
       <li class="step reveal" data-reveal>
         <span class="step-num">02</span>
         <h3>Guests scan &amp; ask, in 50+ languages</h3>
-        <p>They open a mobile-first mini-site, enter their generated guest code, and ask in their own words. Spanish in, Spanish out. No download, no account, no friction.</p>
+        <p>They open a mobile-first mini-site, enter their generated guest code, and ask in their own words. The concierge replies in their language with answers grounded in your property’s real information.</p>
         <span class="step-tag">50+ languages</span>
       </li>
       <li class="step reveal" data-reveal>
         <span class="step-num">03</span>
-        <h3>You only hear what matters</h3>
-        <p>The intelligent concierge handles the routine. When it can't, you get a text with the guest's exact needs — and call or reply in one tap.</p>
+        <h3>You only hear what matters — and learn from what happened</h3>
+        <p>Routine questions disappear. Real issues escalate with context, and each stay creates data you can use to improve reviews, maintenance, and repeatable operations.</p>
         <span class="step-tag">Reviews protected</span>
       </li>
     </ol>
@@ -209,7 +661,7 @@
       <p class="eyebrow reveal" data-reveal>The math of a quieter inbox</p>
       <h2 class="reveal light" data-reveal>Automation pays for itself before your first review lands.</h2>
     </div>
-    <div class="metric-grid">
+    <div class="metric-grid stagger-parent">
       <div class="metric reveal" data-reveal>
         <span class="metric-num" data-count="70" data-suffix="%">0</span>
         <p>of routine guest questions answered without you lifting a finger.</p>
@@ -231,18 +683,18 @@
 </section>
 
 <!-- ============ FEATURES BENTO ============ -->
-<section class="section features" id="features">
+<section class="section features section-transition" id="features">
   <div class="wrap">
     <div class="section-head">
       <p class="eyebrow reveal" data-reveal>The platform</p>
-      <h2 class="reveal" data-reveal>Everything a modern stay needs, under one platform.</h2>
+      <h2 class="reveal" data-reveal>More than an AI chatbot: a full property intelligence layer.</h2>
     </div>
-    <div class="bento">
+    <div class="bento stagger-parent">
       <article class="cell cell-hero reveal" data-reveal>
         <div class="cell-body">
-          <span class="cell-kicker">Intelligent Concierge· RAG</span>
-          <h3>A brain that knows your home as you do.</h3>
-          <p>Trained on your provided documents — appliance manuals, rental policies, house rules, local picks. Every answer can cite the exact source it came from, or escalate back to you rather than guess.</p>
+          <span class="cell-kicker">Property Brain · RAG</span>
+          <h3>A brain that knows your home the way your best host does.</h3>
+          <p>Trained on your documents, manuals, rental policies, house rules, local recommendations, and operator context. Every answer can cite the exact source it came from, or escalate back to you rather than guess.</p>
         </div>
         <div class="cell-demo">
           <div class="bubble guest">I want to have a fire outback. Do you have any firewood?</div>
@@ -254,8 +706,8 @@
         <span class="cell-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
         </span>
-        <h3>Speaks 50+ guest's language</h3>
-        <p>You onboard in English. Guests ask in French, Japanese, Portuguese — the concierge agent detects and replies natively.</p>
+        <h3>Speaks 50+ guest languages</h3>
+        <p>You onboard in English. Guests ask in French, Japanese, Portuguese, and more — the concierge detects intent and replies naturally.</p>
       </article>
 
       <article class="cell reveal" data-reveal>
@@ -263,7 +715,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>
         </span>
         <h3>Ingests a manual from a link</h3>
-        <p>Paste an Amazon or manufacturer URL. Moche-AI pulls specs, descriptions, and available PDFs into the brain automatically.</p>
+        <p>Paste an Amazon or manufacturer URL. Moche-AI pulls useful specs, descriptions, and available PDFs into the property brain automatically.</p>
       </article>
 
       <article class="cell reveal" data-reveal>
@@ -271,14 +723,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         </span>
         <h3>Escalation that respects your time</h3>
-        <p>Low-confidence answers route to your phone. Guests see "your host has been notified and will get back to you soon" — never a dead end.</p>
+        <p>Low-confidence answers route to your phone with context. Guests see “your host has been notified and will get back to you soon” — never a dead end.</p>
       </article>
 
       <article class="cell cell-wide reveal" data-reveal>
         <div class="cell-body">
-          <span class="cell-kicker">Maintenance flags · Review nudge</span>
-          <h3>Turns problems into signals and stays into 5-star reviews.</h3>
-          <p>Broken-appliance reports get urgency-tagged and routed to your maintenance contact and build you a maintenance report. After checkout, guests receive a personalized review prompt built from what they actually asked about — converting far higher than a generic "please review."</p>
+          <span class="cell-kicker">Maintenance signals · Review optimization</span>
+          <h3>Turns problems into operating insight and stays into better reviews.</h3>
+          <p>Broken-appliance reports get urgency-tagged and routed to the right contact. After checkout, guests can receive a personalized review prompt built from what they actually cared about — converting better than a generic follow-up.</p>
         </div>
         <div class="cell-body-visual">
           <div class="flag"><span class="flag-dot"></span> Maintenance · AC not cooling · Unit 2</div>
@@ -291,14 +743,49 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg>
         </span>
         <h3>Your data, white-labeled</h3>
-        <p>Own your Brain, export anytime. Upgrade to drop the Moche-AI badge and dress the portal in your own colors.</p>
+        <p>Own your Brain, export anytime, and eventually dress the portal in your own brand so the experience compounds as an asset you control.</p>
       </article>
     </div>
   </div>
 </section>
 
+<!-- ============ WOW FEATURE ============ -->
+<section class="section wow-feature" id="memory">
+  <div class="wrap wow-grid">
+    <div class="wow-copy">
+      <p class="eyebrow reveal" data-reveal>Moche-AI guest memory + stay intelligence</p>
+      <h2 class="reveal" data-reveal>Turn every guest conversation into smarter follow-up and more revenue.</h2>
+      <p class="lead reveal" data-reveal>
+        After checkout, Moche-AI can summarize what mattered during the stay, identify delight signals, and tee up a personalized review request or follow-up message. That means better reviews, better repeat stays, and less generic outreach.
+      </p>
+      <div class="wow-list reveal stagger-parent" data-reveal>
+        <div class="vp">
+          <h3>Detects what guests actually cared about</h3>
+          <p>Pool questions, restaurant asks, parking confusion, maintenance friction, favorite amenities — the system turns conversations into reusable knowledge.</p>
+        </div>
+        <div class="vp">
+          <h3>Writes personalized review nudges</h3>
+          <p>Instead of “please leave a review,” you send a message grounded in the stay they just had, with context that feels human and memorable.</p>
+        </div>
+      </div>
+    </div>
+    <div class="wow-panel reveal" data-reveal>
+      <div class="memory-card">
+        <span class="memory-kicker">After checkout summary</span>
+        <p class="memory-quote">Guests loved the outdoor pool and asked about bars around the area.</p>
+        <div class="memory-actions">
+          <div class="memory-prompt">Would you like to send a personalized review request?</div>
+          <div class="memory-message">
+            <strong>Draft:</strong> Thanks for staying at our beach house Sam. We hope you enjoyed the pool and had a great time exploring some of the bars nearby. We’d love your feedback.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ PROOF / TRUST ============ -->
-<section class="section proof" id="proof">
+<section class="section proof section-transition" id="proof">
   <div class="wrap proof-grid">
     <figure class="proof-visual reveal" data-reveal>
       <img src="assets/img/interior.webp" alt="A warm, beautifully styled coastal vacation rental living room at dusk with an arched doorway and ocean view" width="1200" height="900" loading="lazy" decoding="async">
@@ -309,19 +796,19 @@
     </figure>
     <div class="proof-copy">
       <p class="eyebrow reveal" data-reveal>Why hosts trust it</p>
-      <h2 class="reveal" data-reveal>Grounded answers. Zero platform risk. A moat that compounds.</h2>
-      <div class="trust-list reveal" data-reveal>
+      <h2 class="reveal" data-reveal>Built for early operators who want an unfair advantage before everyone else catches up.</h2>
+      <div class="trust-list reveal stagger-parent" data-reveal>
         <div class="tl">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
-          <div><h3>It won't hallucinate your house</h3><p>Retrieval-augmented and source-cited. If confidence is low, it escalates to you instead of guessing.</p></div>
+          <div><h3>It won’t hallucinate your house</h3><p>Retrieval-augmented and source-cited. If confidence is low, it escalates to you instead of guessing.</p></div>
         </div>
         <div class="tl">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <div><h3>No platform can switch it off</h3><p>Runs on its own infrastructure. No API approval risk, no terms-of-service exposure, no lock-in you don't control.</p></div>
+          <div><h3>No platform can switch it off</h3><p>Runs on its own infrastructure. No API approval risk, no terms-of-service exposure, and no lock-in you don’t control.</p></div>
         </div>
         <div class="tl">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg>
-          <div><h3>It gets smarter the longer you host</h3><p>Every unanswered question becomes a prompt to fill a gap. Your own in-house intelligent concierge — and your switching cost — deepen with every stay.</p></div>
+          <div><h3>It gets smarter the longer you host</h3><p>Every unanswered question becomes a prompt to fill a gap. Your in-house concierge intelligence — and your switching cost — deepen with every stay.</p></div>
         </div>
       </div>
     </div>
@@ -329,45 +816,45 @@
 </section>
 
 <!-- ============ PRICING ============ -->
-<section class="section pricing" id="pricing">
+<section class="section pricing section-transition" id="pricing">
   <div class="wrap">
     <div class="section-head center">
       <p class="eyebrow reveal" data-reveal>Pricing</p>
-      <h2 class="reveal" data-reveal>Per property. No channel commissions. Cancel or remove your data anytime.</h2>
+      <h2 class="reveal" data-reveal>Simple founder pricing while the cohort is still small, with setup support and direct access to the team.</h2>
     </div>
-    <div class="price-grid">
+    <div class="price-grid stagger-parent">
       <article class="plan reveal" data-reveal>
-        <h3>Starter</h3>
-        <div class="price"><span class="amt">$17</span><span class="per">/mo · per property</span></div>
-        <p class="plan-desc">Your first intelligent concierge, fully loaded.</p>
+        <h3>Founder</h3>
+        <div class="price"><span class="amt">$15</span><span class="per">/mo · per property</span></div>
+        <p class="plan-desc">Founder pricing with free setup and direct support.</p>
         <ul role="list">
           <li>Full AI guest portal + chat</li>
-          <li>QR code + shareable link+ Generated Guests Codes</li>
-          <li>Document &amp; URL ingestion</li>
+          <li>Property knowledgebase setup included</li>
+          <li>QR code + shareable link + guest codes</li>
           <li>50+ language support</li>
-          <li>Email and SMS escalation</li>
+          <li>Founder support and roadmap access</li>
         </ul>
-        <a href="/signup" class="btn btn-outline">Join the beta</a>
+        <a href="/signup" class="btn btn-outline">Claim founder pricing</a>
       </article>
       <article class="plan plan-feat reveal" data-reveal>
-        <span class="plan-badge">Most popular</span>
+        <span class="plan-badge">Best for scaling hosts</span>
         <h3>Growth</h3>
         <div class="price"><span class="amt">$40</span><span class="per">/mo · up to 3</span></div>
-        <p class="plan-desc">For hosts scaling past their first door.</p>
+        <p class="plan-desc">For hosts scaling beyond the first door and standardizing operations.</p>
         <ul role="list">
-          <li>Everything in Starter</li>
+          <li>Everything in Founder</li>
           <li>Property cloning</li>
           <li>Co-host mode</li>
           <li>SMS escalation</li>
           <li>Brain Health analytics</li>
           <li>Maintenance flag routing</li>
         </ul>
-        <a href="/signup" class="btn btn-primary">Join the beta</a>
+        <a href="/signup" class="btn btn-primary">Join the Founding Host Program</a>
       </article>
       <article class="plan reveal" data-reveal>
         <h3>Portfolio</h3>
         <div class="price"><span class="amt">$59</span><span class="per">/mo · up to 5</span></div>
-        <p class="plan-desc">Boutique operators, best value.</p>
+        <p class="plan-desc">Boutique operators who want branded guest experience and richer operating insight.</p>
         <ul role="list">
           <li>Everything in Growth</li>
           <li>White-label branding</li>
@@ -375,10 +862,10 @@
           <li>Priority support</li>
           <li>Annual prepay — 2 months free</li>
         </ul>
-        <a href="/signup" class="btn btn-outline">Join the beta</a>
+        <a href="/signup" class="btn btn-outline">Talk to us</a>
       </article>
     </div>
-    <p class="price-note reveal" data-reveal>One-time Property Dome Activation: <strong>$25–49</strong> per property, credited toward your first month.</p>
+    <p class="price-note reveal" data-reveal>Founding hosts also get free setup, direct founder support, and locked pricing before public rollout.</p>
   </div>
 </section>
 
@@ -403,8 +890,12 @@
         <div class="faq-a"><p>Most hosts finish conversational onboarding in 15–20 minutes, and the portal can be live before the next check-in. A Brain Health score tracks completeness and the AI proactively suggests gaps to fill based on common guest questions.</p></div>
       </details>
       <details class="faq-item reveal" data-reveal>
+        <summary>Is this just an AI chatbot for STRs?<span class="chev" aria-hidden="true"></span></summary>
+        <div class="faq-a"><p>No. The chat is only the interface layer. The real product is the property knowledgebase plus the concierge, maintenance intelligence, review optimization, and owner insight workflows that run behind it.</p></div>
+      </details>
+      <details class="faq-item reveal" data-reveal>
         <summary>Can I run it alongside Hospitable or HostBuddy?<span class="chev" aria-hidden="true"></span></summary>
-        <div class="faq-a"><p>Yes — they're complementary. Keep your pre-arrival messaging tool for booking confirmations and check-in reminders. Moche is the in-stay layer for the WiFi, appliance and local questions that come up once guests are physically inside your property.</p></div>
+        <div class="faq-a"><p>Yes — they're complementary. Keep your pre-arrival messaging tool for booking confirmations and check-in reminders. Moche is the in-stay layer for the WiFi, appliance, and local questions that come up once guests are physically inside your property.</p></div>
       </details>
       <details class="faq-item reveal" data-reveal>
         <summary>What happens if I cancel?<span class="chev" aria-hidden="true"></span></summary>
@@ -419,11 +910,11 @@
   <div class="cta-glow" aria-hidden="true"></div>
   <div class="wrap cta-inner">
     <div class="cta-copy">
-      <h2 class="reveal" data-reveal>Stop answering the same questions. Build the agent that does it for you.</h2>
-      <p class="reveal" data-reveal>Founding hosts get free onboarding, priority roadmap input, and locked-in beta pricing. Limited spots.</p>
+      <h2 class="reveal" data-reveal>Join the Founding Host Program and turn early-stage access into an operating edge.</h2>
+      <p class="reveal" data-reveal>Founding hosts get founder pricing, free setup, direct support, and a faster path to better reviews, stronger maintenance workflows, and clearer owner insight.</p>
       <ul class="cta-checks reveal" data-reveal role="list">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Free for the first 30 days</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> No credit card required</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Free setup for founding hosts</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Founder pricing locked before public launch</li>
       </ul>
     </div>
     <form class="signup reveal" data-reveal id="signupForm" novalidate>
@@ -446,7 +937,7 @@
         <label for="pain">What's your biggest guest-communication headache?</label>
         <textarea id="pain" name="pain" placeholder="e.g. the same WiFi and checkout questions, every single stay…"></textarea>
       </div>
-      <button type="submit" class="btn btn-primary btn-block" id="submitBtn">Claim my founding-host spot</button>
+      <button type="submit" class="btn btn-primary btn-block" id="submitBtn">Apply for the Founding Host Program</button>
       <p class="form-note">We'll only email you about the beta. Unsubscribe anytime.</p>
     </form>
   </div>
@@ -471,7 +962,7 @@
         </span>
         <span class="brand-word">Moche<span class="brand-ai">.AI</span></span>
       </a>
-      <p>The intelligent in-stay layer for short-term rentals. An AI concierge for every property — awake when you're not.</p>
+      <p>The intelligent in-stay layer for short-term rentals. A property brain, concierge layer, and review engine for every stay.</p>
     </div>
     <div class="footer-col">
       <h4>Platform</h4>
@@ -479,14 +970,14 @@
         <li><a href="#features">Property Brain</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#signup">Beta program</a></li>
+        <li><a href="#signup">Founding Host Program</a></li>
       </ul>
     </div>
     <div class="footer-col">
       <h4>Resources</h4>
       <ul role="list">
         <li><a href="#faq">FAQ</a></li>
-        <li><a href="#signup">Setup checklist</a></li>
+        <li><a href="#memory">Guest Memory + Stay Intelligence</a></li>
         <li><a href="#proof">Why hosts trust it</a></li>
       </ul>
     </div>
@@ -499,12 +990,89 @@
     </div>
   </div>
   <div class="wrap footer-bottom">
-    <span>© 2026 Moche.AI · Built in Somerville, MA · Samehhh </span>
-    <span class="footer-tag">Your property, awake 24/7 — even when you're not.</span>
+    <span>© 2026 Moche.AI · Built in Somerville, MA</span>
+    <span class="footer-tag">Your property, awake 24/7 — and smarter after every stay.</span>
   </div>
 </footer>
 
 <script src="assets/app.js" defer></script>
+
+<script>
+(function () {
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const nav = document.getElementById('nav');
+  const portalCard = document.querySelector('.portal-card');
+  const metricsBg = document.querySelector('.metrics-bg');
+  const staggerGroups = document.querySelectorAll('.stagger-parent');
+  const revealElements = document.querySelectorAll('[data-reveal]');
+  let lastY = window.scrollY;
+  let ticking = false;
+
+  staggerGroups.forEach((group) => {
+    Array.from(group.children).forEach((child, index) => {
+      child.style.setProperty('--stagger-index', index);
+    });
+  });
+
+  if (!prefersReducedMotion.matches && 'IntersectionObserver' in window) {
+    const revealObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const parent = entry.target.closest('.stagger-parent');
+        if (parent) {
+          const children = Array.from(parent.children);
+          const index = children.indexOf(entry.target);
+          entry.target.style.transitionDelay = `${Math.min(index * 60, 240)}ms`;
+        }
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, {
+      threshold: 0.18,
+      rootMargin: '0px 0px -8% 0px'
+    });
+
+    revealElements.forEach((el) => revealObserver.observe(el));
+  } else {
+    revealElements.forEach((el) => el.classList.add('is-visible'));
+  }
+
+  function updateScrollEffects() {
+    const y = window.scrollY;
+
+    if (nav) {
+      nav.classList.toggle('is-scrolled', y > 18);
+      if (y > lastY && y > 180) {
+        nav.classList.add('nav-hidden');
+      } else {
+        nav.classList.remove('nav-hidden');
+      }
+    }
+
+    if (!prefersReducedMotion.matches && portalCard) {
+      const offset = Math.max(-18, Math.min(18, y * 0.015));
+      portalCard.style.transform = `translate3d(0, ${offset}px, 0) rotateX(${offset * -0.15}deg)`;
+    }
+
+    if (!prefersReducedMotion.matches && metricsBg) {
+      metricsBg.style.transform = `translate3d(0, ${y * 0.06}px, 0)`;
+    }
+
+    lastY = y;
+    ticking = false;
+  }
+
+  window.addEventListener('scroll', function () {
+    if (!ticking) {
+      window.requestAnimationFrame(updateScrollEffects);
+      ticking = true;
+    }
+  }, { passive: true });
+
+  updateScrollEffects();
+})();
+</script>
+
 <script data-pplx-inline-edit>
 (function () {
   if (window === window.top) return;
@@ -516,9 +1084,6 @@
   let scrollRaf = 0;
   let trustedTopOrigin = null;
 
-  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
-  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
-  // across multiple labels.
   function matchesAllowedOrigin(origin) {
     if (!origin) return false;
     for (const entry of allowedParentOrigins) {
@@ -536,13 +1101,6 @@
     return false;
   }
 
-  // Trust decision: when the sender is same-origin-visible (event.origin is a
-  // real origin like https://www.perplexity.ai) we trust event.origin directly.
-  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
-  // broker's stamped `parentOrigin` to identify the top window. The fallback
-  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
-  // on the response path (see postToTrustedTop) to ensure replies can't be
-  // delivered to anyone but the actual top window of that claimed origin.
   function getTrustedParentOrigin(event) {
     const forwardedParentOrigin =
       typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
@@ -550,10 +1108,6 @@
     return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
   }
 
-  // All responses go to window.top with targetOrigin = the allowlisted origin.
-  // An attacker that iframes us inside their own null-origin broker can claim
-  // any parentOrigin they like, but the browser will drop the reply whenever
-  // the real top's origin doesn't match — so the screenshot never leaves.
   function postToTrustedTop(message) {
     if (!trustedTopOrigin) return;
     try {
@@ -566,9 +1120,6 @@
 
     try {
       const computedStyle = getComputedStyle(original);
-      // cssText on a computed style is the serialized declaration in modern
-      // Chromium/Safari — a single read beats enumerating ~400 longhand
-      // properties. Firefox returns "" here, so we fall back on empty.
       const serialized = computedStyle.cssText;
       if (serialized) {
         clone.style.cssText = serialized;
@@ -607,9 +1158,6 @@
     return matches[0][1];
   }
 
-  // Cache resolved font URL -> data URI across captures. Fonts on a page
-  // essentially never change, and a batch run emits multiple captures back to
-  // back — without this we'd refetch + re-base64 every time.
   const fontDataUriCache = new Map();
   const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
 
@@ -746,8 +1294,6 @@
     }
 
     try {
-      // Wait for any pending web fonts to resolve so both inline metrics and
-      // the @font-face inlining below see the same loaded faces.
       if (document.fonts && document.fonts.ready) {
         try {
           await document.fonts.ready;
@@ -764,10 +1310,6 @@
 
       stripExternal(clone);
 
-      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
-      // can resolve them — external font URLs aren't fetched during
-      // foreignObject rendering, which would otherwise force a fallback face
-      // and change text metrics.
       const inlinedFontCss = await buildInlinedFontCss();
       if (inlinedFontCss) {
         const styleEl = document.createElement("style");
@@ -805,8 +1347,6 @@
 
   window.addEventListener("message", function (event) {
     if (!event.data) return;
-    // Only accept messages from the direct parent frame. Blocks sibling /
-    // unrelated-window postMessage senders that could otherwise reach us.
     if (event.source !== window.parent) return;
 
     const trustedParentOrigin = getTrustedParentOrigin(event);
@@ -831,7 +1371,6 @@
     handleCaptureRequest(event);
   });
 })();
-
-
-</script></body>
+</script>
+</body>
 </html>
