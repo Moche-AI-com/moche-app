@@ -46,7 +46,24 @@ export async function notifyGuestOtp(p: { contact: string; code: string; devFall
     console.info(`[dev-fallback] Guest OTP for ${p.contact.slice(0, 2)}***: ${p.code}`);
     return;
   }
-  // TODO(prod): send via Resend (email) or Twilio (SMS). Do not log the code.
-  // Placeholder no-op keeps the boundary explicit; configure a provider to enable delivery.
-  log.info('guest_otp_dispatch', { channel: p.contact.includes('@') ? 'email' : 'sms' });
+    if (p.contact.includes('@')) {
+    // Email path — deliver via Resend. Key read server-side only; never exposed to client.
+    const { Resend } = await import('resend');
+    const { serverEnv } = await import('@/lib/env');
+    const resend = new Resend(serverEnv.resendApiKey);
+    const { error } = await resend.emails.send({
+      from: 'Moche.AI <noreply@moche-ai.com>',
+      to: p.contact,
+      subject: 'Your Moche.AI verification code',
+      text: `Your verification code is: ${p.code}\n\nThis code expires in 10 minutes. Do not share it with anyone.`,
+    });
+    if (error) {
+      log.error('guest_otp_email_failed', { error: error.message });
+      throw new Error('Email delivery failed');
+    }
+    log.info('guest_otp_email_sent', { channel: 'email' });
+  } else {
+    // SMS path — Twilio integration is a future phase. Log dispatch intent only.
+    log.info('guest_otp_dispatch', { channel: 'sms' });
+  }
 }
