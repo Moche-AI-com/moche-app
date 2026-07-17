@@ -30,7 +30,13 @@ export const serverEnv = {
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',
   firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev',
-    resendApiKey: process.env.RESEND_API_KEY ?? '', // Server-only. Email delivery via Resend.
+
+  resendApiKey: process.env.RESEND_API_KEY ?? '', // Server-only. Email delivery via Resend.
+
+  // Twilio — SMS delivery. SERVER ONLY. Never prefix with NEXT_PUBLIC_.
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? '',
+  twilioFromNumber: process.env.TWILIO_FROM_NUMBER ?? '',
 
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? '',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',

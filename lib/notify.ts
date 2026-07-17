@@ -36,18 +36,23 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
   }
 }
 
-// Delivers a guest OTP out-of-band (email/SMS). This is an integration boundary:
-// wire Resend (email) / Twilio (SMS) here in production. The full code is NEVER logged.
-// In dev fallback, the code is written to the SERVER console only so a developer can
-// test end-to-end without a live delivery provider — it is never returned to the client.
+// Delivers a guest OTP out-of-band (email/SMS).
+// Security contract:
+//   - The full OTP code is NEVER logged (only masked hints in dev fallback).
+//   - Twilio credentials are read exclusively from serverEnv (process.env) — never
+//     from client-accessible paths, query params, request bodies, or headers.
+//   - Uses the Twilio Messages REST API directly via native fetch to avoid bundling
+//     the full Twilio SDK and to minimise attack surface.
 export async function notifyGuestOtp(p: { contact: string; code: string; devFallback: boolean }): Promise<void> {
   if (p.devFallback) {
+    // Dev only: write a masked hint to SERVER console. Code is never returned to the client.
     // eslint-disable-next-line no-console
     console.info(`[dev-fallback] Guest OTP for ${p.contact.slice(0, 2)}***: ${p.code}`);
     return;
   }
-    if (p.contact.includes('@')) {
-    // Email path — deliver via Resend. Key read server-side only; never exposed to client.
+
+  if (p.contact.includes('@')) {
+    // ── Email path ── deliver via Resend (server-side only) ──────────────────────
     const { Resend } = await import('resend');
     const { serverEnv } = await import('@/lib/env');
     const resend = new Resend(serverEnv.resendApiKey);
@@ -63,7 +68,45 @@ export async function notifyGuestOtp(p: { contact: string; code: string; devFall
     }
     log.info('guest_otp_email_sent', { channel: 'email' });
   } else {
-    // SMS path — Twilio integration is a future phase. Log dispatch intent only.
-    log.info('guest_otp_dispatch', { channel: 'sms' });
+    // ── SMS path ── deliver via Twilio (server-side only) ────────────────────────
+    // Credentials are read from serverEnv which proxies process.env.
+    // They are never interpolated into the URL — only sent as a Basic-auth header
+    // on the server-to-Twilio request, which travels over TLS.
+    const { serverEnv } = await import('@/lib/env');
+    const { twilioAccountSid, twilioAuthToken, twilioFromNumber } = serverEnv;
+
+    if (!twilioAccountSid || !twilioAuthToken || !twilioFromNumber) {
+      log.error('guest_otp_sms_config_missing', { channel: 'sms' });
+      throw new Error('SMS delivery not configured');
+    }
+
+    // Basic auth: base64(accountSid:authToken) — computed at runtime, not stored anywhere.
+    const credentials = Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64');
+
+    const body = new URLSearchParams({
+      To: p.contact,
+      From: twilioFromNumber,
+      Body: `Your Moche.AI verification code is: ${p.code}\n\nExpires in 10 minutes. Never share this code.`,
+    });
+
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      }
+    );
+
+    if (!res.ok) {
+      // Log HTTP status only — never log the response body (may contain PII or token hints).
+      log.error('guest_otp_sms_failed', { status: res.status, channel: 'sms' });
+      throw new Error(`SMS delivery failed (HTTP ${res.status})`);
+    }
+
+    log.info('guest_otp_sms_sent', { channel: 'sms' });
   }
 }
