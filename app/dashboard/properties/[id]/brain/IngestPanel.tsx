@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 export function IngestPanel({ propertyId }: { propertyId: string }) {
   const router = useRouter();
-  const [tab, setTab] = useState<'doc' | 'url'>('doc');
+  const [tab, setTab] = useState<'doc' | 'url' | 'paste'>('doc');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -53,12 +53,37 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
     }
   }
 
+  async function ingestPaste(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const body = Object.fromEntries(new FormData(form).entries());
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/ingest/text`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not save that text');
+      setMsg({ kind: 'ok', text: `Cleaned & indexed "${json.title}" into ${json.chunks} chunk(s).` });
+      form.reset();
+      router.refresh();
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Could not save that text' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="card" style={{ padding: '1.25rem' }}>
       <h3 style={{ fontSize: '1rem', marginBottom: '.75rem' }}>Import knowledge</h3>
       <div style={{ display: 'flex', gap: '.4rem', marginBottom: '.9rem' }}>
         <button className={`btn btn-sm ${tab === 'doc' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('doc')}>Document</button>
         <button className={`btn btn-sm ${tab === 'url' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('url')}>URL</button>
+        <button className={`btn btn-sm ${tab === 'paste' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('paste')}>Paste</button>
       </div>
 
       {msg && <div className={`alert ${msg.kind === 'ok' ? 'alert-success' : 'alert-error'}`} style={{ fontSize: '.8rem', marginBottom: '.75rem' }}>{msg.text}</div>}
@@ -80,7 +105,7 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
           <button className="btn btn-primary btn-block btn-sm" disabled={busy}>{busy ? 'Uploading…' : 'Upload & index'}</button>
           <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>PDF, TXT, MD, or DOCX. Max 25 MB.</p>
         </form>
-      ) : (
+      ) : tab === 'url' ? (
         <form onSubmit={ingestUrl}>
           <div className="field">
             <input className="input" type="url" name="url" placeholder="https://…" required data-testid="input-url" />
@@ -97,7 +122,28 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
             </select>
           </div>
           <button className="btn btn-primary btn-block btn-sm" disabled={busy}>{busy ? 'Fetching…' : 'Fetch & index'}</button>
-          <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>We fetch page text server-side and treat it as reference data only.</p>
+          <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>We fetch page text server-side and clean it into a structured summary. Some sites (e.g. Zillow) block automated fetches — use Paste if a URL fails.</p>
+        </form>
+      ) : (
+        <form onSubmit={ingestPaste}>
+          <div className="field">
+            <textarea className="input" name="text" rows={7} required minLength={20} maxLength={50000} placeholder="Paste the listing details, house manual, or any notes here. We'll clean and organize it automatically." data-testid="input-paste" style={{ resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div className="field">
+            <input className="input" name="title" placeholder="Title (optional)" maxLength={200} />
+          </div>
+          <div className="field">
+            <select className="select" name="category" defaultValue="core">
+              <option value="core">Core</option>
+              <option value="local_recommendations">Local Recommendations</option>
+              <option value="house_rules">House Rules</option>
+              <option value="appliances">Appliances</option>
+              <option value="checkin_checkout">Check-in / Check-out</option>
+              <option value="documents">Reference</option>
+            </select>
+          </div>
+          <button className="btn btn-primary btn-block btn-sm" disabled={busy}>{busy ? 'Cleaning…' : 'Clean & index'}</button>
+          <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>Best for blocked sites like Zillow: open the listing, copy the details, paste here. We structure it into a clean summary before indexing.</p>
         </form>
       )}
     </div>

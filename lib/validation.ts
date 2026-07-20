@@ -104,6 +104,16 @@ export const ingestUrlSchema = z.object({
   visibility: brainVisibilityEnum.default('guest'),
 });
 
+// Pasted / typed text ingestion. Useful when a URL is blocked (e.g. Zillow) and
+// the host copies the listing details in directly. Standardized before embedding.
+export const ingestTextSchema = z.object({
+  text: z.string().trim().min(20, 'Paste at least a sentence or two.').max(50000),
+  title: z.string().trim().max(200).optional(),
+  category: brainCategoryEnum.default('documents'),
+  visibility: brainVisibilityEnum.default('guest'),
+  standardize: z.boolean().default(true),
+});
+
 export const coHostInviteSchema = z.object({
   email: emailSchema,
   canEditBrain: z.boolean().default(false),
