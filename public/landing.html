@@ -327,20 +327,11 @@ body {
   transform: translateY(-2px);
 }
 
-.reveal {
-  opacity: 0;
-  filter: blur(8px);
-  clip-path: inset(0 0 14% 0);
-  transition:
-    opacity .65s var(--motion-ease),
-    filter .65s var(--motion-ease),
-    clip-path .85s var(--motion-ease);
-}
-
+/* .reveal styling is defined in styles.css (v3 richer reveal). Keep .is-visible as an alias of .in. */
 .reveal.is-visible {
   opacity: 1;
+  transform: none;
   filter: blur(0);
-  clip-path: inset(0 0 0 0);
 }
 
 .stagger-parent > * {
@@ -459,6 +450,9 @@ body {
 </head>
 <body>
 <a href="#main" class="skip-link">Skip to content</a>
+<div id="progress" aria-hidden="true"></div>
+<div class="mouse-glow" aria-hidden="true"></div>
+<canvas id="net-canvas" aria-hidden="true"></canvas>
 
       <style>.plan-feat{padding-top:8px}.plan-badge{display:inline-flex;align-items:center;align-self:flex-start;margin-top:12px;margin-bottom:16px;padding:7px 12px;border-radius:999px;background:rgba(51,230,212,0.12);border:1px solid rgba(51,230,212,0.18);color:#bafaf1;font-size:.78rem;font-weight:600;letter-spacing:.02em;line-height:1;white-space:nowrap}</style>
 <!-- ============ NAV ============ -->
@@ -514,56 +508,86 @@ body {
     <img src="assets/img/hero.webp" alt="" class="hero-img" fetchpriority="high" width="1600" height="900">
     <div class="hero-veil"></div>
   </div>
-  <div class="wrap hero-content">
-    <div class="pill reveal" data-reveal>
-      <span class="pill-dot"></span> Founding Host Program · Join 50+ vacation operators and hosts testing the future of guest experience
-    </div>
-    <h1 class="hero-title reveal" data-reveal>
-      Turn every stay into<br><span class="grad-text">a smarter guest experience engine.</span>
-    </h1>
-    <p class="hero-sub reveal" data-reveal>
-      Moche-AI turns your property knowledge into an intelligent guest concierge, maintenance signal layer, review optimization engine, and owner insight system. The chat is just the interface — the real product is the property brain behind every answer, escalation, and post-stay revenue opportunity.
-    </p>
-    <div class="hero-cta reveal" data-reveal>
-      <a href="/signup" class="btn btn-primary btn-lg">Apply for Founding Host access</a>
-      <a href="#features" class="btn btn-ghost btn-lg">See how the property brain works
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-      </a>
-    </div>
-
-    <div class="hero-founders reveal stagger-parent" data-reveal>
-      <div class="founder-stat">
-        <strong>50+</strong>
-        <span>operators and hosts already testing the future of in-stay guest experience</span>
-      </div>
-      <div class="founder-stat">
-        <strong>Free setup</strong>
-        <span>white-glove onboarding while the founder cohort is still intentionally small</span>
-      </div>
-      <div class="founder-stat">
-        <strong>Direct support</strong>
-        <span>work directly with the team and influence the roadmap as the product evolves</span>
-      </div>
-    </div>
-
-    <ul class="hero-trust reveal" data-reveal role="list">
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Founder pricing locked in</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Free setup for founding hosts</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Direct founder support</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Live before your next guest</li>
-    </ul>
+  <div class="aurora" aria-hidden="true">
+    <span class="aurora-blob a1"></span>
+    <span class="aurora-blob a2"></span>
+    <span class="aurora-blob a3"></span>
   </div>
+  <div class="wrap hero-grid">
+    <div class="hero-content">
+      <div class="pill reveal" data-reveal>
+        <span class="pill-dot"></span> Founding Host Program · 50+ operators testing the future of guest experience
+      </div>
+      <h1 class="hero-title reveal" data-reveal>
+        Turn every stay into<br><span class="grad-text">a smarter guest experience engine.</span>
+      </h1>
+      <p class="hero-sub reveal" data-reveal>
+        Moche-AI turns your property knowledge into an intelligent guest concierge, maintenance signal layer, review optimization engine, and owner insight system. The chat is just the interface — the real product is the property brain behind every answer, escalation, and post-stay revenue opportunity.
+      </p>
+      <div class="hero-cta reveal" data-reveal>
+        <a href="/signup" class="btn btn-primary btn-lg">Apply for Founding Host access</a>
+        <a href="#features" class="btn btn-ghost btn-lg">See how the property brain works
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
 
-  <div class="float-card portal-card" data-float aria-hidden="true">
-    <div class="pc-head">
-      <span class="pc-dot"></span> Beach House · Guest Portal
+      <ul class="hero-trust reveal" data-reveal role="list">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Founder pricing locked in</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Free setup for founding hosts</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Direct founder support</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Live before your next guest</li>
+      </ul>
     </div>
-    <div class="pc-body">
-      <div class="bubble guest">How do I work the espresso machine?</div>
-      <div class="bubble ai"> To use the espresso machine, please fill the tank, power on the machine, wait for the green light, drop in a flavor pod stored in the cabinet above the sink, and press the double-shot button. Enjoy! ☕</div>
-      <div class="bubble guest"> I have a long night ahead of me. Is a late checkout possible for tomorrow?</div>
-      <div class="bubble ai typing"><span></span><span></span><span></span></div>
+
+    <!-- Animated glassmorphism product dashboard -->
+    <div class="hero-stage reveal" data-reveal aria-hidden="true">
+      <div class="hero-dash" data-hero-dash>
+        <div class="dash-layer" data-depth="0.35">
+          <div class="dash-head">
+            <div class="dash-title">
+              <span class="dash-dot"></span>
+              <div>
+                <strong>Beach House</strong>
+                <span class="dash-sub">Guest #4821 · Active Stay</span>
+              </div>
+            </div>
+            <span class="dash-badge">Live</span>
+          </div>
+          <div class="dash-rows">
+            <div class="dash-row ok"><span class="dr-ico">✓</span> WiFi question answered<span class="dr-time">4s</span></div>
+            <div class="dash-row ok"><span class="dr-ico">✓</span> Late checkout request handled<span class="dr-time">1m</span></div>
+            <div class="dash-row warn"><span class="dr-ico">!</span> AC issue detected<span class="dr-time">now</span></div>
+            <div class="dash-row star"><span class="dr-ico">★</span> Review request ready<span class="dr-time">queued</span></div>
+          </div>
+          <div class="dash-stats">
+            <div class="dash-stat"><span class="ds-num">92%</span><span class="ds-lbl">Occupancy</span></div>
+            <div class="dash-stat"><span class="ds-num teal">Positive</span><span class="ds-lbl">Guest sentiment</span></div>
+            <div class="dash-stat"><span class="ds-num">1</span><span class="ds-lbl">Open tasks</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="float-note fn-1" data-depth="0.7"><span class="fn-ico star">★</span><div><strong>Review drafted</strong><span>personalized from this stay</span></div></div>
+      <div class="float-note fn-2" data-depth="1.1"><span class="fn-ico globe">🌍</span><div><strong>Bonjour!</strong><span>Guest language: French</span></div></div>
+      <div class="float-note fn-3" data-depth="0.9"><span class="fn-ico warn">!</span><div><strong>Water leak detected</strong><span>Maintenance task created</span></div></div>
+      <div class="float-note fn-4" data-depth="1.3"><span class="fn-ico ok">✓</span><div><strong>WiFi response sent</strong><span>Avg response time: 4 sec</span></div></div>
+      <div class="float-note fn-5" data-depth="0.55"><span class="fn-ico teal">📈</span><div><strong>Revenue insight</strong><span>Weekend demand trending up</span></div></div>
     </div>
+  </div>
+</section>
+
+<!-- ============ TRUST / COMPATIBILITY STRIP ============ -->
+<section class="section compat" aria-label="Compatibility">
+  <div class="wrap">
+    <p class="compat-head reveal" data-reveal>Designed to work alongside your hosting stack</p>
+    <ul class="compat-logos reveal stagger-parent" data-reveal role="list">
+      <li>Airbnb</li>
+      <li>VRBO</li>
+      <li>Booking.com</li>
+      <li>Hostfully</li>
+      <li>Hospitable</li>
+    </ul>
+    <p class="compat-note reveal" data-reveal>Built for hosts using the platforms they already rely on — Moche.AI works alongside your existing stack. No integrations required, no platform lock-in.</p>
   </div>
 </section>
 
@@ -614,10 +638,41 @@ body {
         </div>
       </div>
     </div>
-    <figure class="value-visual reveal" data-reveal>
-      <img src="assets/img/qr-scene.webp" alt="A guest scanning a QR code stand in a sunlit vacation rental kitchen to open their property portal" width="1200" height="900" loading="lazy" decoding="async">
-      <figcaption>Scan and enter your guest code on arrival — the concierge is ready to serve your needs</figcaption>
-    </figure>
+    <div class="value-visual reveal phone-scene" data-reveal>
+      <div class="phone" data-phone aria-hidden="true">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-top">
+            <span class="phone-dot"></span>
+            <span class="phone-title">Beach House · Guest Portal</span>
+          </div>
+          <div class="phone-states">
+            <div class="phone-state is-active" data-phone-state>
+              <div class="pmsg guest">What is the WiFi password?</div>
+              <div class="pmsg ai">The WiFi network is <strong>BeachHouse_5G</strong> and the password is on the fridge magnet by the door.</div>
+            </div>
+            <div class="phone-state" data-phone-state>
+              <div class="pmsg guest">Is the pool heated?</div>
+              <div class="pmsg ai">Yes — the pool is heated daily from 8 AM to 10 PM. Enjoy your swim!</div>
+            </div>
+            <div class="phone-state" data-phone-state>
+              <div class="pmsg guest">The AC isn't cooling the bedroom.</div>
+              <div class="pmsg alert"><span class="pmsg-ico">!</span> AC issue detected · task assigned to maintenance. Your host has been notified.</div>
+            </div>
+            <div class="phone-state" data-phone-state>
+              <div class="pmsg ai">Your stay is almost complete — would you like to leave a review? ⭐</div>
+              <div class="pmsg guest">Sure, we loved it!</div>
+            </div>
+          </div>
+          <div class="phone-bar"><span class="phone-dots"><i class="type-dot"></i><i class="type-dot"></i><i class="type-dot"></i></span> Ask anything about your stay…</div>
+        </div>
+      </div>
+      <div class="qr-chip qr-ring" aria-hidden="true">
+        <svg viewBox="0 0 40 40" width="40" height="40" fill="currentColor"><path d="M4 4h12v12H4V4zm3 3v6h6V7H7zm17-3h12v12H24V4zm3 3v6h6V7h-6zM4 24h12v12H4V24zm3 3v6h6v-6H7zm19-3h4v4h-4v-4zm6 0h4v4h-4v-4zm-6 6h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>
+        <span>Scan to open</span>
+      </div>
+      <p class="phone-cap">Scan and enter your guest code on arrival — the concierge is ready before you unpack.</p>
+    </div>
   </div>
 </section>
 
@@ -660,16 +715,16 @@ body {
       <h2 class="reveal light" data-reveal>Automation pays for itself before your first review lands.</h2>
     </div>
     <div class="metric-grid stagger-parent">
-      <div class="metric reveal" data-reveal>
-        <span class="metric-num" data-count="70" data-suffix="%">0</span>
+      <div class="metric reveal has-ring" data-reveal>
+        <div class="ring" data-ring="70" aria-hidden="true"><span class="metric-num" data-count="70" data-suffix="%">0</span></div>
         <p>of routine guest questions answered without you lifting a finger.</p>
       </div>
       <div class="metric reveal" data-reveal>
         <span class="metric-num" data-count="24" data-suffix="/7">0</span>
         <p>always-on concierge — even at 2am, even mid-turnover, even off-grid.</p>
       </div>
-      <div class="metric reveal" data-reveal>
-        <span class="metric-num" data-count="65" data-suffix="%">0</span>
+      <div class="metric reveal has-ring" data-reveal>
+        <div class="ring" data-ring="65" aria-hidden="true"><span class="metric-num" data-count="65" data-suffix="%">0</span></div>
         <p>review-request conversion using each guest's real stay context.</p>
       </div>
       <div class="metric reveal" data-reveal>
@@ -813,11 +868,31 @@ body {
   </div>
 </section>
 
+<!-- ============ DEMO SCROLL-SCRUB (own sibling section) ============ -->
+<section class="section sticky-demo section-transition" id="demo" aria-label="How the property intelligence layer works">
+  <div class="wrap sticky-demo-grid">
+    <div class="sticky-demo-copy">
+      <p class="eyebrow reveal" data-reveal>The property intelligence layer</p>
+      <h2 class="reveal" data-reveal>Four layers of intelligence,<br>one scroll away.</h2>
+      <div class="demo-steps" role="list">
+        <div class="demo-step is-active reveal" data-reveal data-demo-step="brain" role="listitem"><div class="demo-step-num">01</div><div class="demo-step-title">Property knowledgebase</div><div class="demo-step-body">Policies, manuals, house rules, local recommendations, and appliance guides become one grounded property brain your concierge draws from — with citations.</div></div>
+        <div class="demo-step reveal" data-reveal data-demo-step="concierge" role="listitem"><div class="demo-step-num">02</div><div class="demo-step-title">Intelligent guest concierge</div><div class="demo-step-body">Guests ask naturally from a mobile-first portal in their own language and get instant, source-grounded answers. No app download, no platform login.</div></div>
+        <div class="demo-step reveal" data-reveal data-demo-step="inbox" role="listitem"><div class="demo-step-num">03</div><div class="demo-step-title">Escalation that respects your time</div><div class="demo-step-body">Only the edge cases reach you — with the guest's exact question and full context attached. Low-confidence answers route to you instead of guessing.</div></div>
+        <div class="demo-step reveal" data-reveal data-demo-step="reviews" role="listitem"><div class="demo-step-num">04</div><div class="demo-step-title">Post-stay review intelligence</div><div class="demo-step-body">After checkout, Moche-AI identifies what guests cared about and drafts a personalized follow-up that converts far better than a generic ask.</div></div>
+      </div>
+    </div>
+    <div class="demo-dashboard" data-demo-dashboard aria-live="polite" aria-label="Demo interface">
+      <div class="demo-screen" data-demo-screen="brain"><div class="screen-pill">Property Brain &middot; RAG</div><div class="screen-label">Property knowledgebase</div><div class="memory-prompt">How do I work the espresso machine?</div><div class="memory-message" style="margin-top:12px"><strong>Moche-AI:</strong> Fill the water tank, power on, wait for the green light, drop a pod from the cabinet above the sink, and press double-shot. ☕<span style="display:block;font-size:.76rem;opacity:.55;margin-top:6px">source &middot; HostProvided_Document_Appliances.pdf</span></div></div>
+      <div class="demo-screen" data-demo-screen="concierge"><div class="screen-pill">Guest Concierge &middot; 50+ languages</div><div class="screen-label">Live guest session</div><div class="memory-prompt">Is there parking nearby? We have two cars.</div><div class="memory-message" style="margin-top:12px"><strong>Moche-AI:</strong> The property includes one reserved spot in the driveway. Additional street parking is free on Oak Street — no permit needed after 6 PM.</div></div>
+      <div class="demo-screen" data-demo-screen="inbox"><div class="screen-pill">Escalation &middot; Context-attached</div><div class="screen-label">Host inbox</div><div class="memory-prompt" style="background:rgba(255,180,50,.07);border-color:rgba(255,180,50,.22)">Maintenance &middot; AC not cooling &middot; Unit 2</div><div class="memory-message" style="margin-top:12px"><strong>Guest asked:</strong> &ldquo;The AC in the bedroom isn't cooling — it's been 45 minutes.&rdquo;<span style="display:block;font-size:.76rem;opacity:.55;margin-top:6px">Escalated because: low confidence on resolution &middot; urgency: high</span></div></div>
+      <div class="demo-screen" data-demo-screen="reviews"><div class="screen-pill">Stay Intelligence &middot; Post-checkout</div><div class="screen-label">After-stay summary</div><div class="memory-prompt">Guests loved the outdoor pool and asked about bars around the area.</div><div class="memory-message" style="margin-top:12px"><strong>Draft review nudge:</strong> &ldquo;Thanks for staying, Sam. We hope you enjoyed the pool and found some great spots nearby. We&rsquo;d love to hear about your stay.&rdquo;</div></div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ PRICING ============ -->
 <section class="section pricing section-transition" id="pricing">
   <div class="wrap">
-
-    <!-- ============ DEMO SCROLL-SCRUB ============ --><section class="section sticky-demo section-transition" id="demo" aria-label="How the property intelligence layer works"><div class="wrap sticky-demo-grid"><div class="sticky-demo-copy"><p class="eyebrow reveal" data-reveal>The property intelligence layer</p><h2 class="reveal" data-reveal>Four layers of intelligence,<br>one scroll away.</h2><div class="demo-steps" role="list"><div class="demo-step is-active reveal" data-reveal data-demo-step="brain" role="listitem"><div class="demo-step-num">01</div><div class="demo-step-title">Property knowledgebase</div><div class="demo-step-body">Policies, manuals, house rules, local recommendations, and appliance guides become one grounded property brain your concierge draws from — with citations.</div></div><div class="demo-step reveal" data-reveal data-demo-step="concierge" role="listitem"><div class="demo-step-num">02</div><div class="demo-step-title">Intelligent guest concierge</div><div class="demo-step-body">Guests ask naturally from a mobile-first portal in their own language and get instant, source-grounded answers. No app download, no platform login.</div></div><div class="demo-step reveal" data-reveal data-demo-step="inbox" role="listitem"><div class="demo-step-num">03</div><div class="demo-step-title">Escalation that respects your time</div><div class="demo-step-body">Only the edge cases reach you — with the guest's exact question and full context attached. Low-confidence answers route to you instead of guessing.</div></div><div class="demo-step reveal" data-reveal data-demo-step="reviews" role="listitem"><div class="demo-step-num">04</div><div class="demo-step-title">Post-stay review intelligence</div><div class="demo-step-body">After checkout, Moche-AI identifies what guests cared about and drafts a personalized follow-up that converts far better than a generic ask.</div></div></div></div><div class="demo-dashboard{"><div class="demo-dashboard" data-demo-dashboard aria-live="polite" aria-label="Demo interface"><div class="demo-screen" data-demo-screen="brain"><div class="screen-pill">Property Brain &middot; RAG</div><div class="screen-label">Property knowledgebase</div><div class="memory-prompt">How do I work the espresso machine?</div><div class="memory-message" style="margin-top:12px"><strong>Moche-AI:</strong> Fill the water tank, power on, wait for the green light, drop a pod from the cabinet above the sink, and press double-shot. ☕<span style="display:block;font-size:.76rem;opacity:.55;margin-top:6px">source &middot; HostProvided_Document_Appliances.pdf</span></div></div><div class="demo-screen" data-demo-screen="concierge"><div class="screen-pill">Guest Concierge &middot; 50+ languages</div><div class="screen-label">Live guest session</div><div class="memory-prompt">Is there parking nearby? We have two cars.</div><div class="memory-message" style="margin-top:12px"><strong>Moche-AI:</strong> The property includes one reserved spot in the driveway. Additional street parking is free on Oak Street — no permit needed after 6 PM.</div></div><div class="demo-screen" data-demo-screen="inbox"><div class="screen-pill">Escalation &middot; Context-attached</div><div class="screen-label">Host inbox</div><div class="memory-prompt" style="background:rgba(255,180,50,.07);border-color:rgba(255,180,50,.22)">Maintenance &middot; AC not cooling &middot; Unit 2</div><div class="memory-message" style="margin-top:12px"><strong>Guest asked:</strong> &ldquo;The AC in the bedroom isn't cooling — it's been 45 minutes.&rdquo;<span style="display:block;font-size:.76rem;opacity:.55;margin-top:6px">Escalated because: low confidence on resolution &middot; urgency: high</span></div></div><div class="demo-screen" data-demo-screen="reviews"><div class="screen-pill">Stay Intelligence &middot; Post-checkout</div><div class="screen-label">After-stay summary</div><div class="memory-prompt">Guests loved the outdoor pool and asked about bars around the area.</div><div class="memory-message" style="margin-top:12px"><strong>Draft review nudge:</strong> &ldquo;Thanks for staying, Sam. We hope you enjoyed the pool and found some great spots nearby. We&rsquo;d love to hear about your stay.&rdquo;</div></div></div></div></div></section>
     <div class="section-head center">
       <p class="eyebrow reveal" data-reveal>Pricing</p>
       <h2 class="reveal" data-reveal>Simple founder pricing while the cohort is still small, with setup support and direct access to the team.</h2>
@@ -923,10 +998,12 @@ body {
 <!-- ============ CTA / SIGNUP ============ -->
 <section class="section cta" id="signup">
   <div class="cta-glow" aria-hidden="true"></div>
+  <div class="aurora cta-aurora" aria-hidden="true"><span class="aurora-blob a1"></span><span class="aurora-blob a2"></span></div>
   <div class="wrap cta-inner">
     <div class="cta-copy">
-      <h2 class="reveal" data-reveal>Join the Founding Host Program and turn early-stage access into an operating edge.</h2>
-      <p class="reveal" data-reveal>Founding hosts get founder pricing, free setup, direct support, and a faster path to better reviews, stronger maintenance workflows, and clearer owner insight.</p>
+      <p class="eyebrow reveal" data-reveal>Founding Host Program</p>
+      <h2 class="reveal" data-reveal>Ready to build your property's AI brain?</h2>
+      <p class="reveal" data-reveal>Early access for forward-thinking hospitality operators. 50+ operators are already testing the platform — founding hosts get founder pricing, free setup, direct support, and a faster path to better reviews, stronger maintenance workflows, and clearer owner insight.</p>
       <ul class="cta-checks reveal" data-reveal role="list">
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Free setup for founding hosts</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg> Founder pricing locked before public launch</li>
@@ -1016,7 +1093,7 @@ body {
 (function () {
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const nav = document.getElementById('nav');
-  const portalCard = document.querySelector('.portal-card');
+  const portalCard = document.querySelector('.hero-dash');
   const metricsBg = document.querySelector('.metrics-bg');
   const staggerGroups = document.querySelectorAll('.stagger-parent');
   const revealElements = document.querySelectorAll('[data-reveal]');
@@ -1068,8 +1145,8 @@ body {
     }
 
     if (!prefersReducedMotion.matches && portalCard) {
-      const offset = Math.max(-18, Math.min(18, y * 0.015));
-      portalCard.style.transform = `translate3d(0, ${offset}px, 0) rotateX(${offset * -0.15}deg)`;
+      const offset = Math.max(-14, Math.min(14, y * 0.012));
+      portalCard.style.setProperty('--scroll-y', offset + 'px');
     }
 
     if (!prefersReducedMotion.matches && metricsBg) {
