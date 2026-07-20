@@ -1421,6 +1421,43 @@ window.addEventListener('scroll', function () {
     handleCaptureRequest(event);
   });
 })();
+  (function () {
+  var form = document.getElementById('signupForm');
+  if (!form) return;
+  var btn = form.querySelector('[type="submit"]');
+  var originalBtnText = btn ? btn.textContent : '';
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = (form.querySelector('#email') || {}).value || '';
+    var properties = (form.querySelector('#properties') || {}).value || '';
+    var pain = (form.querySelector('#pain') || form.querySelector('textarea') || {}).value || '';
+
+    if (!email) return;
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+    }
+
+    fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, properties: properties, pain_point: pain }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.ok) {
+          form.innerHTML = '<div class="form-success" style="text-align:center;padding:2rem 0;"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#33E6D4" stroke-width="2" style="display:block;margin:0 auto 1rem"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><h3 style="font-size:1.3rem;font-weight:700;margin-bottom:.5rem;">You\'re on the list!</h3><p style="color:rgba(255,255,255,.7);max-width:30ch;margin:0 auto;">We\'ll be in touch soon with next steps for founding hosts.</p></div>';
+        } else {
+          window.location.href = '/signup?email=' + encodeURIComponent(email);
+        }
+      })
+      .catch(function () {
+        window.location.href = '/signup?email=' + encodeURIComponent(email);
+      });
+  });
+})();
 </script>
 <div id="mobile-cta-bar" aria-label="Mobile signup CTA" class="mobile-cta-bar" aria-hidden="true"><a href="#signup" class="btn-primary">Apply for Founding Host access</a></div></body>
 </html>
