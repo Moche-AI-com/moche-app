@@ -348,4 +348,75 @@ h2.light{color:#fff}
 /* ---------- SCROLL REVEAL ---------- */
 .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s var(--ease-out),transform .7s var(--ease-out)}
 .reveal.in{opacity:1;transform:none}
+
+/* ---------- IMAGE EFFECTS & ANIMATIONS (v2 upgrade) ---------- */
+
+/* Section visual wrapper */
+.section-visual{position:relative;border-radius:var(--radius-xl);overflow:clip;box-shadow:var(--shadow-lg)}
+.section-visual img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .8s var(--ease-out)}
+.section-visual:hover img{transform:scale(1.03)}
+
+/* Photo reveal — opacity fade on scroll */
+.reveal-photo{opacity:0;transform:translateY(18px);transition:opacity .75s var(--ease-out),transform .75s var(--ease-out)}
+.reveal-photo.in{opacity:1;transform:none}
+
+/* Mask reveal — clip-path wipe for hero/divider images */
+.image-mask-reveal{opacity:0;clip-path:inset(0 0 100% 0);transition:opacity .6s var(--ease-out),clip-path 1s var(--ease-out)}
+.image-mask-reveal.in{opacity:1;clip-path:inset(0 0 0% 0)}
+
+/* Idle float — gentle vertical bob for phone/UI overlays */
+@keyframes floatIdle{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.float-idle{animation:floatIdle 5.5s ease-in-out infinite}
+
+/* Value UI overlay (glass panel layered on photo) */
+.value-ui-overlay{position:absolute;right:1rem;bottom:1rem;max-width:18rem;padding:1rem 1.1rem;border-radius:var(--radius-md);backdrop-filter:blur(16px);background:rgba(7,12,20,0.68);border:1px solid rgba(51,230,212,0.22);box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:3}
+.value-ui-overlay p{font-size:var(--text-xs);color:var(--text-muted);margin-bottom:.35rem}
+.value-ui-overlay strong{font-size:var(--text-sm);color:var(--teal);display:block;margin-bottom:.2rem}
+
+/* Step images inside How It Works cards */
+.step-img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--radius-md);margin-bottom:1rem;display:block;transition:transform .5s var(--ease-out)}
+.step:hover .step-img{transform:scale(1.025)}
+
+/* Full-bleed divider image between sections */
+.divider-scene{position:relative;height:clamp(220px,30vw,420px);overflow:hidden}
+.divider-scene img{width:100%;height:100%;object-fit:cover;object-position:center 40%;will-change:transform}
+.divider-scene::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,var(--bg) 0%,transparent 18%,transparent 82%,var(--bg) 100%);pointer-events:none}
+.divider-scene .divider-caption{position:absolute;bottom:1.5rem;left:50%;transform:translateX(-50%);text-align:center;z-index:2;color:#fff;font-size:var(--text-sm);font-weight:500;opacity:.85;white-space:nowrap;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+
+/* Proof badge animate-in */
+.proof-badge{animation:badgeIn .7s var(--ease-out) both}
+@keyframes badgeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* QR scan ring pulse */
+@keyframes scanRing{0%{box-shadow:0 0 0 0 rgba(51,230,212,.45)}70%{box-shadow:0 0 0 14px rgba(51,230,212,0)}100%{box-shadow:0 0 0 0 rgba(51,230,212,0)}}
+.qr-ring{animation:scanRing 2.2s infinite}
+
+/* Typing dots for answer-state micro-animation */
+@keyframes typeDot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}
+.type-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;animation:typeDot 1.3s infinite}
+.type-dot:nth-child(2){animation-delay:.15s}.type-dot:nth-child(3){animation-delay:.3s}
+
+/* CTA glow pulse on primary button */
+@keyframes glowPulse{0%,100%{box-shadow:0 6px 22px -6px var(--glow-teal)}50%{box-shadow:0 10px 36px -4px var(--glow-teal)}}
+.btn-primary{animation:glowPulse 3.5s ease-in-out infinite}
+.btn-primary:hover{animation:none}
+
+/* Hover scale on card images only */
+a .section-visual img,a .step-img{transition:transform .5s var(--ease-out)}
+a:hover .section-visual img,a:hover .step-img{transform:scale(1.015)}
+
+/* Parallax image (hero slow drift) — controlled via JS */
+.parallax-img{will-change:transform}
+
+/* Host-relief / CTA image side panel */
+.cta-img-panel{position:relative;border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-lg)}
+.cta-img-panel img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.cta-img-panel::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,12,20,.35) 0%,transparent 60%)}
+
+/* Reduced-motion overrides for all new effects */
+@media(prefers-reduced-motion:reduce){
+  .reveal-photo,.image-mask-reveal{opacity:1;transform:none;clip-path:none;transition:none}
+  .float-idle,.qr-ring,.type-dot,.btn-primary{animation:none}
+  .section-visual:hover img,.step:hover .step-img,a:hover .section-visual img,a:hover .step-img{transform:none}
+}
 @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
