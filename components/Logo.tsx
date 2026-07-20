@@ -1,37 +1,96 @@
 import Link from 'next/link';
 
-// Moche.AI smart-dome / igloo mark (from the landing design system).
-export function DomeMark({ size = 38 }: { size?: number }) {
-  const gid = 'domeGrad';
+/**
+ * Moche.AI dome / igloo mark — single source of truth.
+ *
+ * Design: one clean dome silhouette with a clear arched doorway (welcome / access)
+ * and a single soft "intelligence" spark above the entrance. No brick clutter,
+ * no snowflake lines, no antenna. Legible at 16/24/32px.
+ *
+ * variant:
+ *  - 'gradient' (default): teal→iris gradient fill, subtle glow. For dark UI.
+ *  - 'mono': uses currentColor so it inherits text color (favicons, print, footers).
+ */
+export function DomeMark({
+  size = 38,
+  variant = 'gradient',
+}: {
+  size?: number;
+  variant?: 'gradient' | 'mono';
+}) {
+  const gid = 'mocheDomeGrad';
+  const stroke = variant === 'mono' ? 'currentColor' : `url(#${gid})`;
+  const spark = variant === 'mono' ? 'currentColor' : '#FF8A5C';
   return (
     <span
       aria-hidden="true"
-      style={{ width: size, height: size, display: 'grid', placeItems: 'center', filter: 'drop-shadow(0 0 10px var(--glow-teal))' }}
+      style={{
+        width: size,
+        height: size,
+        display: 'grid',
+        placeItems: 'center',
+        filter: variant === 'gradient' ? 'drop-shadow(0 0 8px var(--glow-teal, rgba(51,230,212,.35)))' : 'none',
+      }}
     >
-      <svg viewBox="0 0 48 48" fill="none" width={size} height={size}>
+      <svg viewBox="0 0 48 48" fill="none" width={size} height={size} role="img">
         <defs>
-          <linearGradient id={gid} x1="6" y1="10" x2="42" y2="40" gradientUnits="userSpaceOnUse">
+          <linearGradient id={gid} x1="8" y1="10" x2="40" y2="40" gradientUnits="userSpaceOnUse">
             <stop stopColor="#33E6D4" />
             <stop offset="1" stopColor="#7C8CFF" />
           </linearGradient>
         </defs>
-        <path d="M5 34h38" stroke={`url(#${gid})`} strokeWidth="2.4" strokeLinecap="round" />
-        <path d="M8 34a16 16 0 0 1 32 0" stroke={`url(#${gid})`} strokeWidth="2.4" fill="none" />
-        <path d="M13 34a11 11 0 0 1 22 0" stroke={`url(#${gid})`} strokeWidth="1.7" opacity="0.7" fill="none" />
-        <path d="M18.5 34a5.5 5.5 0 0 1 11 0" stroke={`url(#${gid})`} strokeWidth="1.7" opacity="0.55" fill="none" />
-        <path d="M24 18v16M15.5 26.5l3-2.2M32.5 26.5l-3-2.2" stroke={`url(#${gid})`} strokeWidth="1.5" opacity="0.5" strokeLinecap="round" />
-        <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill="#33E6D4" opacity="0.9" />
-        <circle cx="24" cy="12" r="2.4" fill="#FF8A5C" />
-        <path d="M24 12v-4" stroke="#FF8A5C" strokeWidth="1.6" strokeLinecap="round" />
+        {/* dome silhouette */}
+        <path
+          d="M6 37V24a18 18 0 0 1 36 0v13"
+          stroke={stroke}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        {/* ground line */}
+        <path d="M5 37h38" stroke={stroke} strokeWidth="3" strokeLinecap="round" />
+        {/* arched doorway (entrance) */}
+        <path
+          d="M19 37V29a5 5 0 0 1 10 0v8"
+          stroke={stroke}
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        {/* intelligence spark above the entrance */}
+        <circle cx="24" cy="17.5" r="2.4" fill={spark} />
       </svg>
     </span>
   );
 }
 
-export function Logo({ href = '/', size = 38 }: { href?: string; size?: number }) {
+export function Logo({
+  href = '/',
+  size = 38,
+  variant = 'gradient',
+}: {
+  href?: string;
+  size?: number;
+  variant?: 'gradient' | 'mono';
+}) {
   return (
-    <Link href={href} className="brand" aria-label="Moche.AI home" style={{ display: 'inline-flex', alignItems: 'center', gap: '.6rem', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1.3rem', letterSpacing: '-.02em' }}>
-      <DomeMark size={size} />
+    <Link
+      href={href}
+      className="brand"
+      aria-label="Moche.AI home"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '.6rem',
+        fontFamily: 'var(--font-display)',
+        fontWeight: 600,
+        fontSize: '1.3rem',
+        letterSpacing: '-.02em',
+      }}
+    >
+      <DomeMark size={size} variant={variant} />
       <span>
         Moche<span className="gradient-text">.AI</span>
       </span>

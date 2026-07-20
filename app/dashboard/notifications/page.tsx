@@ -1,0 +1,80 @@
+import Link from 'next/link';
+import { requireSession } from '@/lib/auth/guards';
+import { createClient } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
+
+const KIND_BADGE: Record<string, string> = {
+  escalation: 'badge-coral',
+  service_request: 'badge-coral',
+  system: '',
+};
+
+function timeAgo(iso: string): string {
+  const d = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(d / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+export default async function NotificationsPage() {
+  const ctx = await requireSession();
+  const supabase = createClient();
+  const { data: items } = await supabase
+    .from('notifications')
+    .select('id, kind, title, body, link, read_at, created_at')
+    .eq('host_account_id', ctx.account.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  const list = items ?? [];
+
+  return (
+    <div>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.8rem' }}>Notifications</h1>
+        <p className="muted" style={{ fontSize: '.9rem' }}>Escalations, service requests, and account activity.</p>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+          <p className="muted">You&rsquo;re all caught up. New guest escalations and service requests will show up here.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+          {list.map((n) => {
+            const inner = (
+              <div
+                className="card"
+                style={{
+                  padding: '1rem 1.15rem',
+                  display: 'flex',
+                  gap: '.9rem',
+                  alignItems: 'flex-start',
+                  borderLeft: n.read_at ? '3px solid transparent' : '3px solid var(--teal)',
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.6rem', marginBottom: '.25rem' }}>
+                    <strong style={{ fontSize: '.95rem' }}>{n.title}</strong>
+                    <span className={`badge ${KIND_BADGE[n.kind] ?? ''}`} style={{ flexShrink: 0 }}>{n.kind}</span>
+                  </div>
+                  {n.body ? <p className="muted" style={{ fontSize: '.85rem', margin: 0 }}>{n.body}</p> : null}
+                  <p className="faint" style={{ fontSize: '.75rem', marginTop: '.35rem', marginBottom: 0 }}>{timeAgo(n.created_at)}</p>
+                </div>
+              </div>
+            );
+            return n.link ? (
+              <Link key={n.id} href={n.link} style={{ display: 'block' }}>{inner}</Link>
+            ) : (
+              <div key={n.id}>{inner}</div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
