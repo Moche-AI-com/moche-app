@@ -88,21 +88,76 @@ function VerifyGate({ slug, turnstileSiteKey, onVerified }: { slug: string; turn
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [widgetReady, setWidgetReady] = useState(false);
   const turnstileToken = useRef<string>('');
+  const widgetContainer = useRef<HTMLDivElement>(null);
+  const widgetId = useRef<string | null>(null);
 
-  // Load Turnstile widget if configured.
+  // Load Turnstile via EXPLICIT rendering. Implicit auto-render is unreliable when the
+  // script is injected after React mounts the container (the widget iframe silently fails
+  // to appear). Explicit render() guarantees the widget mounts and the token callback wires.
   useEffect(() => {
     if (!turnstileSiteKey) return;
-    const s = document.createElement('script');
-    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-    s.async = true;
-    document.body.appendChild(s);
-    (window as unknown as { onTurnstile?: (t: string) => void }).onTurnstile = (t: string) => { turnstileToken.current = t; };
-    return () => { s.remove(); };
+    let cancelled = false;
+
+    type TS = {
+      render: (el: HTMLElement, opts: Record<string, unknown>) => string;
+      remove: (id: string) => void;
+      reset: (id: string) => void;
+    };
+    const getTS = () => (window as unknown as { turnstile?: TS }).turnstile;
+
+    function renderWidget() {
+      const ts = getTS();
+      if (cancelled || !ts || !widgetContainer.current || widgetId.current) return;
+      try {
+        widgetId.current = ts.render(widgetContainer.current, {
+          sitekey: turnstileSiteKey,
+          callback: (t: string) => { turnstileToken.current = t; },
+          'expired-callback': () => { turnstileToken.current = ''; },
+          'error-callback': () => { turnstileToken.current = ''; },
+        });
+        setWidgetReady(true);
+      } catch {
+        /* render will be retried by the load handler */
+      }
+    }
+
+    // If the script is already present/loaded, render immediately; otherwise inject it.
+    const existing = document.querySelector<HTMLScriptElement>('script[data-turnstile]');
+    if (getTS()) {
+      renderWidget();
+    } else if (existing) {
+      existing.addEventListener('load', renderWidget, { once: true });
+    } else {
+      const s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      s.async = true;
+      s.defer = true;
+      s.setAttribute('data-turnstile', '1');
+      s.addEventListener('load', renderWidget, { once: true });
+      document.head.appendChild(s);
+    }
+    // Safety poll in case the load event fired before the listener attached.
+    const poll = setInterval(() => { if (getTS()) { renderWidget(); if (widgetId.current) clearInterval(poll); } }, 300);
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      const ts = getTS();
+      if (ts && widgetId.current) { try { ts.remove(widgetId.current); } catch { /* noop */ } }
+      widgetId.current = null;
+    };
   }, [turnstileSiteKey]);
 
   async function start(e: React.FormEvent) {
     e.preventDefault();
+    // If Turnstile is configured but hasn't produced a token yet, guide the guest
+    // instead of firing a request the server will reject with the generic bot error.
+    if (turnstileSiteKey && !turnstileToken.current) {
+      setErr('Please complete the verification checkbox above, then tap Send code.');
+      return;
+    }
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await fetch(`/api/guest/${slug}/verify/start`, {
@@ -153,8 +208,8 @@ function VerifyGate({ slug, turnstileSiteKey, onVerified }: { slug: string; turn
           />
           {turnstileSiteKey && (
             <>
-              <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstile" style={{ margin: '1rem 0' }} />
-              <p style={{ opacity: 0.6, fontSize: '.75rem', marginBottom: '.75rem' }}>Please verify you&apos;re not a robot to continue.</p>
+              <div ref={widgetContainer} style={{ margin: '1rem 0', minHeight: 65 }} data-testid="turnstile-widget" />
+              {!widgetReady && <p style={{ opacity: 0.6, fontSize: '.75rem', marginBottom: '.75rem' }}>Loading verification…</p>}
             </>
           )}
           <button type="submit" style={btnStyle} disabled={busy} data-testid="button-send-code">{busy ? 'Sending…' : 'Send code'}</button>
