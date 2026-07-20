@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import { getAIProvider } from '@/lib/ai';
 import { chunkText } from '@/lib/ingest/chunk';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { log } from '@/lib/log';
 
 type Client = SupabaseClient<Database>;
@@ -90,7 +91,13 @@ export async function ingestText(client: Client, input: IngestInput): Promise<In
       category: input.category,
       visibility: input.visibility,
     }));
-    const { error: chunkErr } = await client.from('document_chunks').insert(rows as never);
+    // document_chunks has no host-side INSERT RLS policy (embeddings are a
+    // server-controlled artifact, never written directly by the browser). Use the
+    // service-role client for this trusted write — property isolation is already
+    // enforced upstream by the route's getPropertyAccess guard and every row is
+    // stamped with property_id. Retrieval still only happens via match_property_chunks.
+    const admin = createAdminClient();
+    const { error: chunkErr } = await admin.from('document_chunks').insert(rows as never);
     if (chunkErr) throw new Error(chunkErr.message);
 
     // 5. Mark ready.

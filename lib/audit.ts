@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@/lib/database.types';
+import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
 import { log } from '@/lib/log';
 
 type Client = SupabaseClient<Database>;
@@ -18,9 +19,13 @@ interface AuditParams {
 }
 
 // Best-effort audit logging of sensitive actions. Never throws into the caller path.
+// audit_logs is append-only with no host-side INSERT RLS policy, so writes go through
+// the service-role client. The passed-in client is accepted for backwards compatibility
+// but the trusted admin client is preferred when the service-role key is available.
 export async function audit(client: Client, p: AuditParams): Promise<void> {
   try {
-    await client.from('audit_logs').insert({
+    const writer = hasServiceRole() ? createAdminClient() : client;
+    await writer.from('audit_logs').insert({
       action: p.action,
       actor_type: p.actorType ?? 'host',
       actor_profile_id: p.actorProfileId ?? null,

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
 import { brainItemSchema } from '@/lib/validation';
 import { audit } from '@/lib/audit';
@@ -107,7 +108,9 @@ export async function deleteBrainItemAction(formData: FormData): Promise<void> {
     .update({ deleted_at: new Date().toISOString(), status: 'stale' })
     .eq('id', itemId)
     .eq('property_id', propertyId);
-  await supabase.from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
+  // document_chunks is a server-controlled artifact with no host-side RLS write policy;
+  // use the service-role client (property scoping is enforced by the guard above + filters).
+  await createAdminClient().from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
 
   await audit(supabase, {
     action: 'brain.item.deleted',
@@ -132,10 +135,13 @@ export async function reindexBrainItem(
   category: string,
 ): Promise<void> {
   const supabase = createClient();
+  const admin = createAdminClient();
   const provider = getAIProvider();
 
-  // Clear existing chunks for this item.
-  await supabase.from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
+  // Clear existing chunks for this item. document_chunks writes go through the
+  // service-role client (no host-side RLS write policy); property_id is stamped on
+  // every row and callers are already property-access guarded.
+  await admin.from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
 
   const full = `${title}\n\n${body}`.trim();
   const chunks = chunkText(full);
@@ -162,7 +168,7 @@ export async function reindexBrainItem(
     visibility,
   }));
 
-  const { error } = await supabase.from('document_chunks').insert(rows as never);
+  const { error } = await admin.from('document_chunks').insert(rows as never);
   if (error) {
     log.warn('chunk_insert_failed', { itemId, error: error.message });
     await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId);
