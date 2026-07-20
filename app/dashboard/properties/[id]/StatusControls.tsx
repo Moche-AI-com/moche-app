@@ -8,11 +8,15 @@ export function PropertyStatusControls({
   propertyId,
   status,
   canGoLive,
+  brainRequired = false,
 }: {
   propertyId: string;
   status: string;
   canGoLive: boolean;
+  brainRequired?: boolean;
 }) {
+  // When Brain isn't required to publish, always show the clean "Go live" label.
+  const goLiveLabel = !brainRequired || canGoLive ? 'Go live' : 'Go live (needs core info)';
   const [pubState, publish] = useFormState<PropertyFormState, FormData>(publishPropertyAction, {});
   const [, pause] = useFormState<PropertyFormState, FormData>(pausePropertyAction, {});
   const [, archive] = useFormState<PropertyFormState, FormData>(archivePropertyAction, {});
@@ -23,7 +27,7 @@ export function PropertyStatusControls({
         <form action={publish}>
           <input type="hidden" name="propertyId" value={propertyId} />
           <SubmitButton className="btn btn-primary btn-sm">
-            {canGoLive ? 'Go live' : 'Go live (needs core info)'}
+            {goLiveLabel}
           </SubmitButton>
         </form>
       )}

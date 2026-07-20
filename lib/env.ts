@@ -49,6 +49,12 @@ export const serverEnv = {
   // Host SMS fan-out master switch (default OFF — see notify() consent TODO before enabling in prod).
   notifySmsEnabled: bool(process.env.NOTIFY_SMS_ENABLED, false),
 
+  // Publish gates. Default OFF so a property with required fields alone can go live —
+  // this makes demoing/testing frictionless (Brain/knowledge can be added later).
+  // Set both to true in production billing mode to require a paid plan + core Brain before publishing.
+  requirePlanToPublish: bool(process.env.REQUIRE_PLAN_TO_PUBLISH, false),
+  requireBrainToPublish: bool(process.env.REQUIRE_BRAIN_TO_PUBLISH, false),
+
   // Observability (server-only secrets).
   sentryDsn: process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN ?? '',
   sentryAuthToken: process.env.SENTRY_AUTH_TOKEN ?? '',

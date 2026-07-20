@@ -15,23 +15,23 @@ export function PropertyCreateForm() {
     <form action={formAction} className="card" style={{ padding: '1.5rem', maxWidth: 560 }}>
       <FormMessage error={state.error} />
       <div className="field">
-        <label className="label" htmlFor="displayName">Property name</label>
+        <label className="label" htmlFor="displayName">Property name *</label>
         <input className="input" id="displayName" name="displayName" maxLength={120} required placeholder="Beachside Cottage" />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
-          <label className="label" htmlFor="city">City</label>
-          <input className="input" id="city" name="city" maxLength={120} placeholder="Barcelona" />
+          <label className="label" htmlFor="city">City *</label>
+          <input className="input" id="city" name="city" maxLength={120} required placeholder="Barcelona" />
         </div>
         <div className="field">
           <label className="label" htmlFor="region">Region / State</label>
           <input className="input" id="region" name="region" maxLength={120} placeholder="Catalonia" />
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
-          <label className="label" htmlFor="country">Country</label>
-          <input className="input" id="country" name="country" maxLength={120} placeholder="Spain" />
+          <label className="label" htmlFor="country">Country *</label>
+          <input className="input" id="country" name="country" maxLength={120} required placeholder="Spain" />
         </div>
         <div className="field">
           <label className="label" htmlFor="timezone">Timezone</label>
@@ -53,7 +53,8 @@ export function PropertyCreateForm() {
       </div>
       <SubmitButton>Create property</SubmitButton>
       <p className="faint" style={{ fontSize: '.75rem', marginTop: '.75rem' }}>
-        You can add branding, the Brain knowledge base, and go live after creating it.
+        That&apos;s all you need to launch a guest portal — you can add branding, the Brain
+        knowledge base, and more after creating it. Fields marked * are required.
       </p>
     </form>
   );

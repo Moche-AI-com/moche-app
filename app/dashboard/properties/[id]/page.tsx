@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, gapPrompts } from '@/lib/brain/health';
-import { publicEnv } from '@/lib/env';
+import { publicEnv, serverEnv } from '@/lib/env';
 import { PropertyStatusControls } from './StatusControls';
 
 export const dynamic = 'force-dynamic';
@@ -39,7 +39,12 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
           </p>
         </div>
         {can.editProperty && (
-          <PropertyStatusControls propertyId={property.id} status={property.status} canGoLive={health.canGoLive} />
+          <PropertyStatusControls
+            propertyId={property.id}
+            status={property.status}
+            canGoLive={health.canGoLive}
+            brainRequired={serverEnv.requireBrainToPublish}
+          />
         )}
       </div>
 
@@ -88,7 +93,15 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
         <div className="card-2" style={{ padding: '.6rem .8rem', fontFamily: 'monospace', fontSize: '.82rem', wordBreak: 'break-all' }}>{portalUrl}</div>
         {property.status !== 'live' && (
           <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
-            The portal is only reachable once the property is live.
+            The portal is only reachable once the property is live. You can go live now — the
+            Brain and branding can be added anytime.
+          </p>
+        )}
+        {property.status === 'live' && (stayCount ?? 0) === 0 && (
+          <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
+            To test as a guest, add a stay with your own email under{' '}
+            <Link href={`/dashboard/properties/${property.id}/stays`} className="gradient-text" style={{ fontWeight: 600 }}>Stays</Link>{' '}
+            — guests verify with the contact on their booking before entering.
           </p>
         )}
       </div>

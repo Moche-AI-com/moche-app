@@ -178,4 +178,6 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   .btn-lg { padding: .85rem 1.3rem; font-size: 1rem; }
   /* Full-width primary CTAs read better on narrow phones */
   .auth-actions .btn, .stack-mobile .btn { width: 100%; }
+  /* Two-column form rows collapse to a single column on small phones */
+  .grid-2 { grid-template-columns: 1fr !important; }
 }

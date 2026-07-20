@@ -13,6 +13,7 @@ import { DEFAULT_MODULES } from '@/lib/constants';
 import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
 import { capture } from '@/lib/posthog-server';
+import { serverEnv } from '@/lib/env';
 
 export interface PropertyFormState {
   error?: string;
@@ -143,17 +144,25 @@ async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft'
   const supabase = createClient();
 
   if (status === 'live') {
-    const ent = await getEntitlements(supabase, access.property.host_account_id);
-    if (!ent.active) {
-      return { error: 'Choose a plan to publish your property.' };
+    // Publish gates are configurable (see lib/env.ts). Defaults are OFF so a property with
+    // required fields alone can go live for demos/testing; the concierge gracefully handles an
+    // empty Brain by telling guests it will pass questions to the host. Flip the env flags on
+    // for production billing to require a paid plan + core Brain before publishing.
+    if (serverEnv.requirePlanToPublish) {
+      const ent = await getEntitlements(supabase, access.property.host_account_id);
+      if (!ent.active) {
+        return { error: 'Choose a plan to publish your property.' };
+      }
     }
-    const { data: items } = await supabase
-      .from('brain_items')
-      .select('category, status, deleted_at, visibility')
-      .eq('property_id', propertyId);
-    const health = computeBrainHealth(items ?? []);
-    if (!health.canGoLive) {
-      return { error: 'Add core info (essentials, check-in/out, house rules) before going live.' };
+    if (serverEnv.requireBrainToPublish) {
+      const { data: items } = await supabase
+        .from('brain_items')
+        .select('category, status, deleted_at, visibility')
+        .eq('property_id', propertyId);
+      const health = computeBrainHealth(items ?? []);
+      if (!health.canGoLive) {
+        return { error: 'Add core info (essentials, check-in/out, house rules) before going live.' };
+      }
     }
   }
 

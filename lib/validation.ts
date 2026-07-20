@@ -28,10 +28,12 @@ export const profileUpdateSchema = z.object({
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a hex color like #33E6D4');
 
 export const propertyCreateSchema = z.object({
-  displayName: z.string().trim().min(1).max(120),
-  city: z.string().trim().max(120).optional().or(z.literal('')),
+  displayName: z.string().trim().min(1, 'Property name is required.').max(120),
+  // City + country are required so every portal has real location context for the
+  // concierge and upcoming local-area discovery. Region stays optional.
+  city: z.string().trim().min(1, 'City is required.').max(120),
   region: z.string().trim().max(120).optional().or(z.literal('')),
-  country: z.string().trim().max(120).optional().or(z.literal('')),
+  country: z.string().trim().min(1, 'Country is required.').max(120),
   timezone: z.string().trim().max(64).default('UTC'),
   locale: z.string().trim().max(12).default('en'),
 });
