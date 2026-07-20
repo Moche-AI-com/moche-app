@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -18,4 +20,18 @@ const nextConfig = {
     ];
   },
 };
-export default nextConfig;
+
+// Source maps are uploaded to Sentry only when an auth token is present (CI/deploy).
+// Without it, the build proceeds normally and no upload is attempted.
+const sentryBuildOptions = {
+  silent: true,
+  // Only enable the upload plugin when credentials exist; otherwise it stays inert.
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  disableSourceMapUpload: !process.env.SENTRY_AUTH_TOKEN,
+  // Route browser Sentry requests through a Next rewrite to dodge ad-blockers.
+  tunnelRoute: '/monitoring',
+};
+
+export default withSentryConfig(nextConfig, sentryBuildOptions);

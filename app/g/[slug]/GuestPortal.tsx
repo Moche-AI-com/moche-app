@@ -151,7 +151,12 @@ function VerifyGate({ slug, turnstileSiteKey, onVerified }: { slug: string; turn
             style={inputStyle} value={contact} onChange={(e) => setContact(e.target.value)}
             placeholder="you@email.com or +1 555 000 0000" autoComplete="off" required data-testid="input-guest-contact"
           />
-          {turnstileSiteKey && <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstile" style={{ margin: '1rem 0' }} />}
+          {turnstileSiteKey && (
+            <>
+              <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstile" style={{ margin: '1rem 0' }} />
+              <p style={{ opacity: 0.6, fontSize: '.75rem', marginBottom: '.75rem' }}>Please verify you&apos;re not a robot to continue.</p>
+            </>
+          )}
           <button type="submit" style={btnStyle} disabled={busy} data-testid="button-send-code">{busy ? 'Sending…' : 'Send code'}</button>
         </form>
       ) : (

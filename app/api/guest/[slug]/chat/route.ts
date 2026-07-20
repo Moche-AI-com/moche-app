@@ -4,6 +4,7 @@ import { getGuestSession } from '@/lib/guest/session';
 import { guestChatSchema } from '@/lib/validation';
 import { answerGuestQuestion } from '@/lib/guest/concierge';
 import { notify } from '@/lib/notify';
+import { capture } from '@/lib/posthog-server';
 import type { ChatMessage } from '@/lib/ai';
 import { log } from '@/lib/log';
 
@@ -105,6 +106,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
       });
     }
     log.info('guest_escalation_created', { escalationId: (esc as { id: string } | null)?.id, confidence: answer.confidence });
+    // Server-safe analytics: property-scoped id only, no guest PII.
+    await capture('escalation_created', session.propertyId, { property_id: session.propertyId });
   }
 
   return NextResponse.json({

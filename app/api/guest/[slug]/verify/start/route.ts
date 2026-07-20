@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { guestVerifyStartSchema } from '@/lib/validation';
-import { hashContact, hashIp, generateOtp, hashOtp } from '@/lib/crypto';
+import { hashContact, generateOtp, hashOtp } from '@/lib/crypto';
 import { verifyTurnstile } from '@/lib/guest/turnstile';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { serverEnv } from '@/lib/env';
 import { OTP_TTL_MINUTES, OTP_MAX_ATTEMPTS, VERIFY_MAX_PER_CONTACT_PER_HOUR, VERIFY_MAX_PER_IP_PER_HOUR } from '@/lib/constants';
 import { log } from '@/lib/log';
@@ -36,9 +37,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   const { contact, turnstileToken } = parsed.data;
   const ip = clientIp(req);
 
-  // Bot protection (dev fallback aware).
+  // Bot protection (dev/preview skip aware, fail-safe in production).
   const human = await verifyTurnstile(turnstileToken, ip);
-  if (!human) return NextResponse.json({ error: 'Verification challenge failed. Please retry.' }, { status: 400 });
+  if (!human) return NextResponse.json({ error: "Please verify you're not a robot." }, { status: 400 });
 
   const admin = createAdminClient();
 
@@ -55,10 +56,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   }
 
   const { contactHash } = hashContact(contact);
-  const ipHash = hashIp(ip);
   const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-  // --- Rate limiting: per-contact (guest_verifications) and per-IP (audit_logs). ---
+  // --- Rate limiting: per-contact (guest_verifications) and per-IP (shared helper). ---
   const { count: byContact } = await admin
     .from('guest_verifications').select('id', { count: 'exact', head: true })
     .eq('property_id', property.id).eq('contact_hash', contactHash).gte('created_at', sinceIso);
@@ -66,17 +66,17 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     log.warn('guest_verify_rate_contact', { propertyId: property.id });
     return NextResponse.json(GENERIC_OK); // still generic — no signal
   }
-  // Coarse per-IP cap using a lightweight counter table via audit_logs.
-  const { count: ipAttempts } = await admin
-    .from('audit_logs').select('id', { count: 'exact', head: true })
-    .eq('action', 'guest.verify.start').eq('ip_hash', ipHash).gte('created_at', sinceIso);
-  if ((ipAttempts ?? 0) >= VERIFY_MAX_PER_IP_PER_HOUR) {
+  // Per-IP cap via the Supabase-backed rate-limit helper (hashes the IP, records the attempt).
+  const ipLimit = await checkRateLimit(admin, {
+    key: ip,
+    limit: VERIFY_MAX_PER_IP_PER_HOUR,
+    windowSeconds: 60 * 60,
+    action: 'guest.verify.start',
+  });
+  if (!ipLimit.allowed) {
     log.warn('guest_verify_rate_ip', {});
     return NextResponse.json(GENERIC_OK);
   }
-
-  // Record the attempt for IP rate limiting (hashed IP only).
-  await admin.from('audit_logs').insert({ action: 'guest.verify.start', property_id: property.id, ip_hash: ipHash } as never);
 
   // Look for a matching active/upcoming stay. If none, return generic OK (no signal).
   const { data: stay } = await admin

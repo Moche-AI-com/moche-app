@@ -12,6 +12,7 @@ import { audit } from '@/lib/audit';
 import { DEFAULT_MODULES } from '@/lib/constants';
 import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
+import { capture } from '@/lib/posthog-server';
 
 export interface PropertyFormState {
   error?: string;
@@ -70,6 +71,9 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
     targetType: 'property',
     targetId: property.id,
   });
+
+  // Server-safe analytics: identified by host user id, no property PII beyond its id.
+  await capture('property_created', ctx.user.id, { property_id: property.id });
 
   redirect(`/dashboard/properties/${property.id}`);
 }

@@ -61,6 +61,12 @@ export function hashIp(ip: string): string {
   return sha256(`${serverEnv.guestContactSalt}:ip:${ip}`);
 }
 
+// Salted hash for arbitrary rate-limit keys (IPs, session tokens, property ids…).
+// Uses the same namespace as hashIp so existing IP-keyed counters stay continuous.
+export function hashRateKey(key: string): string {
+  return sha256(`${serverEnv.guestContactSalt}:ip:${key}`);
+}
+
 // --- Constant-time compare ----------------------------------------------
 
 export function safeEqualHex(a: string, b: string): boolean {
