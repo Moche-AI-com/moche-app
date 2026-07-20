@@ -19,29 +19,38 @@ export function DashboardNav({ unread }: { unread: number }) {
   const pathname = usePathname();
   return (
     <header style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 50 }}>
-      <div className="wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64, gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+      <div className="wrap dash-nav-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64, gap: '1rem' }}>
+        <div className="dash-nav-brandrow" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Logo href="/dashboard" size={32} />
-          <nav style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap' }}>
-            {LINKS.map((l) => {
-              const active = l.href === '/dashboard' ? pathname === l.href : pathname.startsWith(l.href);
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  style={{
-                    padding: '.4rem .75rem', borderRadius: 'var(--radius-md)', fontSize: '.9rem', fontWeight: 600,
-                    color: active ? 'var(--teal)' : 'var(--text-muted)',
-                    background: active ? 'var(--surface-2)' : 'transparent',
-                  }}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="dash-nav-controls-mobile" style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+            <Link href="/dashboard/notifications" className="badge" title="Notifications">
+              🔔 {unread > 0 ? <strong style={{ color: 'var(--coral)' }}>{unread}</strong> : '0'}
+            </Link>
+            <ThemeToggle />
+            <form action={logoutAction}>
+              <button className="btn btn-ghost btn-sm" type="submit">Sign out</button>
+            </form>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+        <nav className="dash-nav-links" style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap' }}>
+          {LINKS.map((l) => {
+            const active = l.href === '/dashboard' ? pathname === l.href : pathname.startsWith(l.href);
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                style={{
+                  padding: '.4rem .75rem', borderRadius: 'var(--radius-md)', fontSize: '.9rem', fontWeight: 600,
+                  color: active ? 'var(--teal)' : 'var(--text-muted)',
+                  background: active ? 'var(--surface-2)' : 'transparent',
+                }}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="dash-nav-controls-desktop" style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
           <Link href="/dashboard/notifications" className="badge" title="Notifications">
             🔔 {unread > 0 ? <strong style={{ color: 'var(--coral)' }}>{unread}</strong> : '0'}
           </Link>

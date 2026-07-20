@@ -138,4 +138,44 @@
   .alert-error { background: rgba(255,138,92,.1); border-color: var(--coral); color: var(--coral-soft); }
   .alert-success { background: rgba(51,230,212,.1); border-color: var(--teal); color: var(--teal); }
   .alert-info { background: var(--surface-2); color: var(--text-muted); }
+
+  /* Dashboard top nav: horizontal-scroll link rail so it never overflows on phones */
+  .dash-nav-links {
+    display: flex; gap: .25rem; flex-wrap: nowrap; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .dash-nav-links::-webkit-scrollbar { display: none; }
+  .dash-nav-links > a { white-space: nowrap; flex: 0 0 auto; }
+
+  /* Duplicate control clusters: show desktop set, hide mobile set by default */
+  .dash-nav-controls-mobile { display: none !important; }
+}
+
+/* ============================================================
+   Responsive — global guardrails + mobile layout adjustments
+   ============================================================ */
+
+/* Never allow horizontal page overflow on any route */
+html, body { max-width: 100%; overflow-x: hidden; }
+img, video, canvas, svg { max-width: 100%; height: auto; }
+
+@media (max-width: 720px) {
+  .wrap { padding-left: 1.1rem; padding-right: 1.1rem; }
+
+  /* Dashboard header: stack brand row above the scrolling link rail */
+  .dash-nav-inner { flex-wrap: wrap; height: auto !important; padding-top: .6rem; padding-bottom: .6rem; row-gap: .5rem; }
+  .dash-nav-brandrow { width: 100%; justify-content: space-between; }
+  .dash-nav-links { width: 100%; order: 3; padding-bottom: .15rem; }
+  /* On mobile show the controls nested in the brand row; hide the desktop-only sibling */
+  .dash-nav-controls-mobile { display: flex !important; }
+  .dash-nav-controls-desktop { display: none !important; }
+
+  /* Cards get tighter internal padding on small screens */
+  .card { border-radius: var(--radius-md); }
+}
+
+@media (max-width: 480px) {
+  .btn-lg { padding: .85rem 1.3rem; font-size: 1rem; }
+  /* Full-width primary CTAs read better on narrow phones */
+  .auth-actions .btn, .stack-mobile .btn { width: 100%; }
 }
