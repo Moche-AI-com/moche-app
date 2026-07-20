@@ -1,6 +1,6 @@
 /* ============================================================
    MOCHE.AI — Design System
-   Concept: an intelligent "smart dome" over every stay.
+   Concept: an intelligent concierge for every home.
    Palette: glacier navy + aurora teal, warm coral hospitality accent.
    ============================================================ */
 
@@ -578,11 +578,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
 .section-transition::after{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);width:min(560px,70%);height:120px;background:radial-gradient(60% 100% at 50% 0%,rgba(51,230,212,.06),transparent 70%);pointer-events:none;z-index:0}
 
 /* ---------- DEMO SECTION (now standalone sibling) ---------- */
-.sticky-demo .demo-dashboard{min-height:clamp(420px,40vw,520px)}
-.sticky-demo .demo-screen{border-radius:var(--radius-lg)}
-[data-theme="light"] .sticky-demo .demo-screen{background:rgba(255,255,255,.9);border-color:var(--border-strong)}
-[data-theme="light"] .demo-step-body{color:var(--text-muted)}
-[data-theme="light"] .demo-step-num{color:var(--teal-deep)}
+
 
 /* ---------- CTA AURORA ---------- */
 .cta-aurora{z-index:0;opacity:.9}
