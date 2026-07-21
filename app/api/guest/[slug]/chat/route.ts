@@ -94,6 +94,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
       question,
       status: 'open',
     } as never).select('id').single();
+    const escId = (esc as { id: string } | null)?.id;
 
     const { data: prop } = await admin.from('properties').select('host_account_id').eq('id', session.propertyId).maybeSingle();
     if (prop) {
@@ -103,7 +104,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
         title: 'A guest question needs your input',
         body: question.slice(0, 200),
         propertyId: session.propertyId,
-        link: `/dashboard/escalations`,
+        // Deep-link straight to the answer form (in-app + email fan-out use this).
+        link: escId ? `/dashboard/escalations/${escId}` : '/dashboard/escalations',
       });
     }
     log.info('guest_escalation_created', { escalationId: (esc as { id: string } | null)?.id, confidence: answer.confidence });

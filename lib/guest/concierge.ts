@@ -5,6 +5,7 @@ import { getAIProvider, type ChatMessage } from '@/lib/ai';
 import { DEFAULT_CONFIDENCE_THRESHOLD } from '@/lib/constants';
 import { log } from '@/lib/log';
 import { logAiUsage } from '@/lib/ai/usage';
+import { normalizeQuestion, getBrainVersion, lookupCachedAnswer, cacheAnswer } from '@/lib/brain/cache';
 
 type Admin = SupabaseClient<Database>;
 type IntentType = Database['public']['Enums']['intent_type'];
@@ -116,6 +117,34 @@ export async function answerGuestQuestion(
   const startedAt = Date.now();
   const usageSink = { embedModel: provider.embedModel, embedTokens: 0 };
 
+  // Exact-match answer cache: on a repeat of a previously high-confidence question
+  // (same property, same normalized text, same Brain version) return instantly and
+  // skip the embed + LLM calls entirely. Emergencies always take the live path.
+  const questionNorm = normalizeQuestion(opts.question);
+  const brainVersion = await getBrainVersion(admin, opts.propertyId);
+  if (!isEmergency && questionNorm.length > 0) {
+    const cached = await lookupCachedAnswer(admin, opts.propertyId, questionNorm, brainVersion);
+    if (cached) {
+      void logAiUsage(admin, {
+        propertyId: opts.propertyId,
+        kind: 'chat',
+        model: 'cache',
+        cacheHit: true,
+        latencyMs: Date.now() - startedAt,
+        source: opts.source ?? 'guest_chat',
+      });
+      return {
+        text: cached.answer,
+        confidence: cached.confidence,
+        intent: 'information',
+        model: 'cache',
+        sources: [],
+        shouldEscalate: false,
+        isEmergency,
+      };
+    }
+  }
+
   const chunks = await retrieveGuestChunks(admin, opts.propertyId, opts.question, usageSink);
   const context = chunks.map((c, i) => `[${i + 1}] (${c.category}) ${c.content}`).join('\n\n');
 
@@ -173,6 +202,18 @@ export async function answerGuestQuestion(
     latencyMs: Date.now() - startedAt,
     source: opts.source ?? 'guest_chat',
   });
+
+  // Cache write: only confident, non-emergency, non-escalated answers, keyed to the
+  // current Brain version so a later bump silently invalidates it. Fire-and-forget.
+  if (!isEmergency && !shouldEscalate && confidence >= threshold && questionNorm.length > 0) {
+    void cacheAnswer(admin, {
+      propertyId: opts.propertyId,
+      questionNorm,
+      answer: text,
+      confidence,
+      brainVersion,
+    });
+  }
 
   return {
     text,

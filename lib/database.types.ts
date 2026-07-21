@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      answer_cache: {
+        Row: {
+          answer: string
+          brain_version: number
+          confidence: number
+          created_at: string
+          id: string
+          property_id: string
+          question_norm: string
+        }
+        Insert: {
+          answer: string
+          brain_version?: number
+          confidence?: number
+          created_at?: string
+          id?: string
+          property_id: string
+          question_norm: string
+        }
+        Update: {
+          answer?: string
+          brain_version?: number
+          confidence?: number
+          created_at?: string
+          id?: string
+          property_id?: string
+          question_norm?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "answer_cache_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage: {
         Row: {
           cache_hit: boolean
@@ -1296,6 +1334,32 @@ export type Database = {
           },
         ]
       }
+      property_brain_versions: {
+        Row: {
+          property_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          property_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          property_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_brain_versions_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: true
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recommendations: {
         Row: {
           address: string | null
@@ -1587,6 +1651,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bump_brain_version: { Args: { p_property_id: string }; Returns: number }
       can_access_property: { Args: { prop: string }; Returns: boolean }
       can_edit_property: { Args: { prop: string }; Returns: boolean }
       is_account_member: { Args: { acc: string }; Returns: boolean }

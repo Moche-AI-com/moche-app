@@ -9,6 +9,7 @@ import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import { getAIProvider } from '@/lib/ai';
 import { chunkText } from '@/lib/ingest/chunk';
+import { bumpBrainVersion } from '@/lib/brain/cache';
 
 export interface BrainActionState {
   error?: string;
@@ -110,7 +111,10 @@ export async function deleteBrainItemAction(formData: FormData): Promise<void> {
     .eq('property_id', propertyId);
   // document_chunks is a server-controlled artifact with no host-side RLS write policy;
   // use the service-role client (property scoping is enforced by the guard above + filters).
-  await createAdminClient().from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
+  const admin = createAdminClient();
+  await admin.from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
+  // Removing knowledge changes retrieval — invalidate the property's answer cache.
+  await bumpBrainVersion(admin, propertyId);
 
   await audit(supabase, {
     action: 'brain.item.deleted',
@@ -142,6 +146,10 @@ export async function reindexBrainItem(
   // service-role client (no host-side RLS write policy); property_id is stamped on
   // every row and callers are already property-access guarded.
   await admin.from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
+
+  // The Brain content just changed — invalidate the answer cache for this property.
+  // Done here so it covers every reindex path (manual save, escalation answer, ingest).
+  await bumpBrainVersion(admin, propertyId);
 
   const full = `${title}\n\n${body}`.trim();
   const chunks = chunkText(full);

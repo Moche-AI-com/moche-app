@@ -72,7 +72,7 @@ export default async function EscalationsPage() {
                   {e.host_response}
                 </p>
               ) : (
-                <Link href={`/dashboard/properties/${e.property_id}/brain`} className="btn btn-sm btn-primary" style={{ marginTop: '.25rem' }}>
+                <Link href={`/dashboard/escalations/${e.id}`} className="btn btn-sm btn-primary" style={{ marginTop: '.25rem' }}>
                   Answer &amp; teach the Brain
                 </Link>
               )}
