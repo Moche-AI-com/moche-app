@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage: {
+        Row: {
+          cache_hit: boolean
+          completion_tokens: number
+          created_at: string
+          embed_tokens: number
+          est_cost_usd: number
+          id: string
+          kind: string
+          latency_ms: number | null
+          model: string
+          prompt_tokens: number
+          property_id: string | null
+          source: string | null
+          total_tokens: number | null
+        }
+        Insert: {
+          cache_hit?: boolean
+          completion_tokens?: number
+          created_at?: string
+          embed_tokens?: number
+          est_cost_usd?: number
+          id?: string
+          kind: string
+          latency_ms?: number | null
+          model: string
+          prompt_tokens?: number
+          property_id?: string | null
+          source?: string | null
+          total_tokens?: number | null
+        }
+        Update: {
+          cache_hit?: boolean
+          completion_tokens?: number
+          created_at?: string
+          embed_tokens?: number
+          est_cost_usd?: number
+          id?: string
+          kind?: string
+          latency_ms?: number | null
+          model?: string
+          prompt_tokens?: number
+          property_id?: string | null
+          source?: string | null
+          total_tokens?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       answer_cache: {
         Row: {
           answer: string
@@ -45,60 +101,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "answer_cache_property_id_fkey"
-            columns: ["property_id"]
-            isOneToOne: false
-            referencedRelation: "properties"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ai_usage: {
-        Row: {
-          cache_hit: boolean
-          completion_tokens: number
-          created_at: string
-          embed_tokens: number
-          est_cost_usd: number
-          id: string
-          kind: string
-          latency_ms: number | null
-          model: string
-          prompt_tokens: number
-          property_id: string | null
-          source: string | null
-          total_tokens: number
-        }
-        Insert: {
-          cache_hit?: boolean
-          completion_tokens?: number
-          created_at?: string
-          embed_tokens?: number
-          est_cost_usd?: number
-          id?: string
-          kind: string
-          latency_ms?: number | null
-          model: string
-          prompt_tokens?: number
-          property_id?: string | null
-          source?: string | null
-        }
-        Update: {
-          cache_hit?: boolean
-          completion_tokens?: number
-          created_at?: string
-          embed_tokens?: number
-          est_cost_usd?: number
-          id?: string
-          kind?: string
-          latency_ms?: number | null
-          model?: string
-          prompt_tokens?: number
-          property_id?: string | null
-          source?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ai_usage_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
@@ -582,6 +584,13 @@ export type Database = {
           token_hash?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "guest_access_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "guest_access_links_property_id_fkey"
             columns: ["property_id"]
@@ -1189,6 +1198,32 @@ export type Database = {
           },
         ]
       }
+      property_brain_versions: {
+        Row: {
+          property_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          property_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          property_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_brain_versions_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: true
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       property_contacts: {
         Row: {
           contact_type: string
@@ -1334,68 +1369,69 @@ export type Database = {
           },
         ]
       }
-      property_brain_versions: {
-        Row: {
-          property_id: string
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          property_id: string
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          property_id?: string
-          updated_at?: string
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "property_brain_versions_property_id_fkey"
-            columns: ["property_id"]
-            isOneToOne: true
-            referencedRelation: "properties"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       recommendations: {
         Row: {
           address: string | null
+          ai_source: string | null
+          ai_source_rating: number | null
+          approved: boolean
           category: string | null
           created_at: string
           deleted_at: string | null
           description: string | null
           distance_note: string | null
+          hidden: boolean
+          host_note: string | null
+          host_preference: Database["public"]["Enums"]["host_preference"]
           id: string
+          lat: number | null
+          lng: number | null
           name: string
+          priority_weight: number
           property_id: string
           url: string | null
           visibility: Database["public"]["Enums"]["brain_visibility"]
         }
         Insert: {
           address?: string | null
+          ai_source?: string | null
+          ai_source_rating?: number | null
+          approved?: boolean
           category?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
           distance_note?: string | null
+          hidden?: boolean
+          host_note?: string | null
+          host_preference?: Database["public"]["Enums"]["host_preference"]
           id?: string
+          lat?: number | null
+          lng?: number | null
           name: string
+          priority_weight?: number
           property_id: string
           url?: string | null
           visibility?: Database["public"]["Enums"]["brain_visibility"]
         }
         Update: {
           address?: string | null
+          ai_source?: string | null
+          ai_source_rating?: number | null
+          approved?: boolean
           category?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
           distance_note?: string | null
+          hidden?: boolean
+          host_note?: string | null
+          host_preference?: Database["public"]["Enums"]["host_preference"]
           id?: string
+          lat?: number | null
+          lng?: number | null
           name?: string
+          priority_weight?: number
           property_id?: string
           url?: string | null
           visibility?: Database["public"]["Enums"]["brain_visibility"]
@@ -1694,6 +1730,7 @@ export type Database = {
       conversation_role: "guest" | "assistant" | "host" | "system"
       escalation_status: "open" | "answered" | "resolved" | "dismissed"
       feedback_value: "helpful" | "not_helpful"
+      host_preference: "loved" | "neutral" | "disliked"
       ingestion_kind: "document" | "url"
       intent_type:
         | "information"
@@ -1892,6 +1929,7 @@ export const Constants = {
       conversation_role: ["guest", "assistant", "host", "system"],
       escalation_status: ["open", "answered", "resolved", "dismissed"],
       feedback_value: ["helpful", "not_helpful"],
+      host_preference: ["loved", "neutral", "disliked"],
       ingestion_kind: ["document", "url"],
       intent_type: [
         "information",

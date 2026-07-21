@@ -7,6 +7,7 @@ import type { BrainCategory } from '@/lib/constants';
 import { BrainManager } from './BrainManager';
 import { BrainCards } from './BrainCards';
 import { IngestPanel } from './IngestPanel';
+import { AppliancePanel } from './AppliancePanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +99,17 @@ export default async function BrainPage({
           />
         </div>
         <div style={{ position: 'sticky', top: '1rem' }}>
+          {access.can.editBrain && (
+            <Link href={`/dashboard/properties/${params.id}/recommendations`} className="btn btn-sm btn-ghost btn-block" style={{ marginBottom: '1rem' }}>
+              Manage local recommendations →
+            </Link>
+          )}
           {access.can.editBrain && <IngestPanel propertyId={params.id} />}
+          {access.can.editBrain && (
+            <div style={{ marginTop: '1rem' }}>
+              <AppliancePanel propertyId={params.id} />
+            </div>
+          )}
           <div className="card" style={{ padding: '1.25rem', marginTop: access.can.editBrain ? '1rem' : 0 }}>
             <h3 style={{ fontSize: '1rem', marginBottom: '.75rem' }}>Coverage</h3>
             {health.categories.map((c) => (
