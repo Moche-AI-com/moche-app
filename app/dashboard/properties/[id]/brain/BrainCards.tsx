@@ -81,6 +81,8 @@ const BUILDER_CARD_CSS = `
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  min-height: 2.1rem;
+  line-height: 1.05rem;
 }
 .bc-footer { margin-top: auto; }
 .bc-checklist-btn {
