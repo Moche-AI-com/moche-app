@@ -151,7 +151,7 @@ function BrandingForm({ property }: { property: Property }) {
 
       <div className="field">
         <label className="label" htmlFor="coverImageUrl">Cover image URL</label>
-        <input className="input" id="coverImageUrl" name="coverImageUrl" maxLength={2000} defaultValue={property.cover_image_url ?? ''} placeholder="https://\u2026 (optional hero image for the portal)" />
+        <input className="input" id="coverImageUrl" name="coverImageUrl" maxLength={2000} defaultValue={property.cover_image_url ?? ''} placeholder="https://… (optional hero image for the portal)" />
       </div>
 
       <div style={{ marginTop: '.5rem' }}>
@@ -182,7 +182,7 @@ function ConciergeForm({ propertyId, settings }: { propertyId: string; settings:
           maxLength={2000}
           rows={4}
           defaultValue={settings.concierge_tone ?? ''}
-          placeholder="Describe how the concierge should sound. e.g. Warm, concise, and local \u2014 like a thoughtful host who knows the neighborhood."
+          placeholder="Describe how the concierge should sound. e.g. Warm, concise, and local — like a thoughtful host who knows the neighborhood."
         />
         <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
           {TONE_PRESETS.map((p) => (
@@ -197,7 +197,7 @@ function ConciergeForm({ propertyId, settings }: { propertyId: string; settings:
           ))}
         </div>
         <p className="faint" style={{ fontSize: '.72rem', marginTop: '.4rem' }}>
-          Style guidance only \u2014 it never changes the facts, only the delivery. The concierge still answers strictly from your Brain.
+          Style guidance only — it never changes the facts, only the delivery. The concierge still answers strictly from your Brain.
         </p>
       </div>
 
