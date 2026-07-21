@@ -9,6 +9,93 @@ function scoreColor(pct: number): string {
   return pct >= 80 ? 'var(--teal)' : pct >= 50 ? 'var(--iris)' : 'var(--coral)';
 }
 
+const CARD_IMAGES: Record<string, string> = {
+  core: '/brain-cards/core.webp',
+  safety: '/brain-cards/safety.webp',
+  rules: '/brain-cards/rules.webp',
+  home: '/brain-cards/home.webp',
+  appliances: '/brain-cards/appliances.webp',
+  local: '/brain-cards/local.webp',
+  escalation: '/brain-cards/escalation.webp',
+  transportation: '/brain-cards/transportation.webp',
+};
+
+const BUILDER_CARD_CSS = `
+.bc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .22s ease, border-color .22s ease;
+}
+.bc-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-strong);
+  box-shadow: 0 18px 40px -18px rgba(0,0,0,.6), 0 0 0 1px rgba(51,230,212,.18);
+}
+.bc-card:focus-visible {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(51,230,212,.4);
+}
+.bc-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.bc-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .4s cubic-bezier(.2,.7,.3,1);
+}
+.bc-card:hover .bc-media img { transform: scale(1.06); }
+.bc-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(14,24,38,0) 35%, rgba(14,24,38,.55) 78%, rgba(14,24,38,.9) 100%);
+}
+.bc-media-badge {
+  position: absolute;
+  top: .6rem;
+  right: .6rem;
+  z-index: 2;
+}
+.bc-body {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  padding: .95rem 1.05rem 1.05rem;
+  flex: 1;
+}
+.bc-blurb {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bc-footer { margin-top: auto; }
+.bc-checklist-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--teal);
+  cursor: pointer;
+  text-align: left;
+}
+.bc-checklist-btn:hover { text-decoration: underline; }
+`;
+
 export function BrainCards({
   propertyId,
   propertyName,
@@ -24,6 +111,7 @@ export function BrainCards({
 
   return (
     <div style={{ marginBottom: '2rem' }}>
+      <style dangerouslySetInnerHTML={{ __html: BUILDER_CARD_CSS }} />
       {/* Health hero */}
       <div className="card" style={{ padding: '1.5rem', marginBottom: '1.25rem' }} data-testid="brain-health-hero">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
@@ -73,57 +161,77 @@ function BuilderCard({ propertyId, card, canEdit }: { propertyId: string; card: 
   const [open, setOpen] = useState(false);
   const color = scoreColor(card.pct);
   const href = `/dashboard/properties/${propertyId}/brain?card=${card.key}`;
+  const image = CARD_IMAGES[card.key];
+  const statusLabel = card.complete ? 'Complete' : card.recommendedComplete ? 'Recommended done' : 'In progress';
 
   return (
-    <div className="card" style={{ padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '.6rem' }} data-testid={`brain-card-${card.key}`}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '.5rem' }}>
-        <div style={{ display: 'flex', gap: '.6rem', alignItems: 'center', minWidth: 0 }}>
-          <span aria-hidden style={{ fontSize: '1.4rem' }}>{card.icon}</span>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: '.95rem' }}>{card.title}</strong>
-              {card.critical && <span className="badge badge-coral" style={{ fontSize: '.62rem' }}>critical</span>}
-            </div>
-            <p className="faint" style={{ fontSize: '.75rem', marginTop: '.1rem' }}>{card.blurb}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.72rem', marginBottom: '.25rem' }}>
-          <span className="faint">{card.complete ? 'Complete' : card.recommendedComplete ? 'Recommended done' : 'In progress'}</span>
-          <span style={{ color, fontWeight: 600 }} data-testid={`card-pct-${card.key}`}>{card.pct}% complete</span>
-        </div>
-        <div style={{ height: 6, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
-          <div style={{ width: `${card.pct}%`, height: '100%', background: color, transition: 'width .3s' }} />
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '.4rem', marginTop: '.1rem' }}>
-        <Link href={href} className="btn btn-sm btn-primary" data-testid={`button-open-card-${card.key}`}>
-          {canEdit ? 'Edit' : 'View'}
-        </Link>
-        {card.checklist.length > 0 && (
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setOpen((v) => !v)} data-testid={`button-checklist-${card.key}`}>
-            {open ? 'Hide checklist' : 'Checklist'}
-          </button>
+    <Link
+      href={href}
+      className="card bc-card"
+      data-testid={`brain-card-${card.key}`}
+      aria-label={`${card.title} — ${card.pct}% complete. ${canEdit ? 'Edit' : 'View'}`}
+    >
+      {/* Media header */}
+      <div className="bc-media">
+        {image && <img src={image} alt="" loading="lazy" />}
+        {card.critical && (
+          <span className="badge badge-coral bc-media-badge" style={{ fontSize: '.62rem' }}>critical</span>
         )}
       </div>
 
-      {open && (
-        <ul style={{ listStyle: 'none', padding: 0, margin: '.25rem 0 0', display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
-          {card.checklist.map((c, i) => (
-            <li key={i} style={{ display: 'flex', gap: '.45rem', alignItems: 'center', fontSize: '.78rem' }} data-testid={`checklist-${card.key}-${i}`}>
-              <span aria-hidden style={{ color: c.done ? 'var(--teal)' : 'var(--text-faint)' }}>{c.done ? '✓' : '○'}</span>
-              <span style={{ color: c.done ? 'var(--text)' : 'var(--text-faint)' }}>
-                {c.label}{!c.required && <span className="faint"> (optional)</span>}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+      <div className="bc-body">
+        <div>
+          <strong style={{ fontSize: '.95rem', display: 'block' }}>{card.title}</strong>
+          <p className="faint bc-blurb" style={{ fontSize: '.75rem', marginTop: '.2rem' }}>{card.blurb}</p>
+        </div>
+
+        {/* Progress region (always rendered) */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.72rem', marginBottom: '.25rem' }}>
+            <span className="faint">{statusLabel}</span>
+            <span style={{ color, fontWeight: 600 }} data-testid={`card-pct-${card.key}`}>{card.pct}%</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{ width: `${card.pct}%`, height: '100%', background: color, transition: 'width .3s' }} />
+          </div>
+        </div>
+
+        {/* Footer — pinned to bottom, aligned across cards */}
+        <div className="bc-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.5rem', paddingTop: '.2rem' }}>
+          <span className="btn btn-sm btn-primary" data-testid={`button-open-card-${card.key}`}>
+            {canEdit ? 'Edit' : 'View'}
+          </span>
+          {card.checklist.length > 0 && (
+            <button
+              type="button"
+              className="bc-checklist-btn"
+              style={{ fontSize: '.75rem' }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen((v) => !v);
+              }}
+              data-testid={`button-checklist-${card.key}`}
+            >
+              {open ? 'Hide checklist' : 'Checklist'}
+            </button>
+          )}
+        </div>
+
+        {open && (
+          <ul style={{ listStyle: 'none', padding: 0, margin: '.1rem 0 0', display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
+            {card.checklist.map((c, i) => (
+              <li key={i} style={{ display: 'flex', gap: '.45rem', alignItems: 'center', fontSize: '.78rem' }} data-testid={`checklist-${card.key}-${i}`}>
+                <span aria-hidden style={{ color: c.done ? 'var(--teal)' : 'var(--text-faint)' }}>{c.done ? '✓' : '○'}</span>
+                <span style={{ color: c.done ? 'var(--text)' : 'var(--text-faint)' }}>
+                  {c.label}{!c.required && <span className="faint"> (optional)</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Link>
   );
 }
 
