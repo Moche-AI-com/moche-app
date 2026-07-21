@@ -133,6 +133,19 @@ export const guestVerifyConfirmSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
 });
 
+// Magic-link / QR redemption (guest-facing). Opaque base64url token.
+export const guestRedeemSchema = z.object({
+  token: z.string().trim().min(16).max(512),
+});
+
+// Host mints a stay or property access link.
+export const linkMintSchema = z.object({
+  kind: z.enum(['stay', 'property']),
+  stayId: z.string().uuid().optional(),
+  requireOtp: z.boolean().optional(),
+  maxRedemptions: z.number().int().min(1).max(10000).optional(),
+});
+
 export const guestChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });

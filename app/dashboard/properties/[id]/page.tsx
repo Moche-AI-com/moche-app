@@ -3,7 +3,10 @@ import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, gapPrompts } from '@/lib/brain/health';
 import { publicEnv, serverEnv } from '@/lib/env';
+import { listPropertySessions } from '@/lib/guest/sessions';
 import { PropertyStatusControls } from './StatusControls';
+import { SessionsPanel } from './SessionsPanel';
+import { PropertyLinkMinter } from './PropertyLinkMinter';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +27,10 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
   const health = computeBrainHealth(items ?? []);
   const prompts = gapPrompts(health);
   const portalUrl = `${publicEnv.appUrl}/g/${property.slug}`;
+
+  // Guest access management is available to owners and co-hosts who can reply to guests.
+  const canManageAccess = can.replyGuests;
+  const sessions = canManageAccess ? await listPropertySessions(property.id, true) : [];
 
   return (
     <div>
@@ -105,6 +112,13 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
           </p>
         )}
       </div>
+
+      {canManageAccess && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <PropertyLinkMinter propertyId={property.id} />
+          <SessionsPanel propertyId={property.id} initialSessions={sessions} />
+        </div>
+      )}
     </div>
   );
 }

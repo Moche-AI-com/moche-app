@@ -49,11 +49,14 @@ export function StaysManager({ propertyId, canManage, stays }: { propertyId: str
                 </p>
               </div>
               {canManage && s.status !== 'revoked' && (
-                <form action={revokeStayAction}>
-                  <input type="hidden" name="propertyId" value={propertyId} />
-                  <input type="hidden" name="stayId" value={s.id} />
-                  <button type="submit" className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} data-testid={`button-revoke-${s.id}`}>Revoke access</button>
-                </form>
+                <div style={{ display: 'flex', gap: '.4rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <StayLinkMinter propertyId={propertyId} stayId={s.id} />
+                  <form action={revokeStayAction}>
+                    <input type="hidden" name="propertyId" value={propertyId} />
+                    <input type="hidden" name="stayId" value={s.id} />
+                    <button type="submit" className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} data-testid={`button-revoke-${s.id}`}>Revoke access</button>
+                  </form>
+                </div>
               )}
             </div>
           ))}
@@ -109,6 +112,60 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
       </div>
       <SubmitButton>Create stay</SubmitButton>
     </form>
+  );
+}
+
+// Per-stay magic link: skips OTP (the host vouches by generating it), redeems straight
+// into a verified session. Shows the URL + QR once; the raw token is never retrievable later.
+function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: string }) {
+  const [minted, setMinted] = useState<{ url: string; qrDataUrl: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function mint() {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/host/properties/${propertyId}/links`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'stay', stayId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not create the link.');
+      setMinted({ url: json.url, qrDataUrl: json.qrDataUrl });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not create the link.');
+    } finally { setBusy(false); }
+  }
+
+  if (minted) {
+    return (
+      <div className="card-2" style={{ padding: '.7rem .8rem', maxWidth: 320 }} data-testid={`stay-link-${stayId}`}>
+        <div style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={minted.qrDataUrl} alt="Stay QR code" style={{ width: 84, height: 84, borderRadius: 6, background: '#fff', padding: 4 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'monospace', fontSize: '.7rem', wordBreak: 'break-all' }}>{minted.url}</div>
+            <div style={{ display: 'flex', gap: '.35rem', marginTop: '.4rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => { void navigator.clipboard?.writeText(minted.url); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+              <a className="btn btn-ghost btn-sm" href={`/dashboard/properties/${propertyId}/welcome-card`} target="_blank" rel="noreferrer">Welcome card</a>
+            </div>
+          </div>
+        </div>
+        <p className="faint" style={{ fontSize: '.68rem', marginTop: '.4rem' }}>Shown once — copy it now.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button className="btn btn-ghost btn-sm" onClick={mint} disabled={busy} data-testid={`button-mint-stay-${stayId}`}>
+        {busy ? 'Creating…' : 'Create magic link'}
+      </button>
+      {err && <p style={{ color: 'var(--coral)', fontSize: '.72rem', marginTop: '.25rem' }}>{err}</p>}
+    </div>
   );
 }
 

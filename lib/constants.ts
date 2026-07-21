@@ -154,3 +154,12 @@ export const VERIFY_MAX_PER_CONTACT_PER_HOUR = 5;
 export const VERIFY_MAX_PER_IP_PER_HOUR = 20;
 
 export const GUEST_SESSION_COOKIE = 'moche_guest_session';
+
+// Magic-link / QR access (Phase 2 Part A).
+export const LINK_REDEEM_MAX_PER_IP_PER_HOUR = 10;
+// Reusable property QR links live this long (no per-stay checkout to anchor to).
+export const PROPERTY_LINK_TTL_DAYS = 90;
+// Stay links can be redeemed a few times so a guest can re-open on a lost/second device.
+export const STAY_LINK_DEFAULT_MAX_REDEMPTIONS = 3;
+// Reusable property QR is posted in the home — high cap, still bounded + rate-limited.
+export const PROPERTY_LINK_DEFAULT_MAX_REDEMPTIONS = 500;
