@@ -1,7 +1,7 @@
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
-import { PLANS, ACTIVATION_FEE_USD } from '@/lib/constants';
+import { PLANS, ACTIVATION_FEE_USD, ACTIVATION_FEE_ENABLED } from '@/lib/constants';
 import { serverEnv } from '@/lib/env';
 import { BillingActions } from './BillingActions';
 
@@ -91,7 +91,9 @@ export default async function BillingPage() {
       </div>
 
       <p className="faint" style={{ fontSize: '.78rem', marginTop: '1.25rem' }}>
-        A one-time ${ACTIVATION_FEE_USD} activation fee covers onboarding and initial Property Brain setup. Prices in USD.
+        {ACTIVATION_FEE_ENABLED
+          ? `A one-time $${ACTIVATION_FEE_USD} activation fee covers onboarding and initial Property Brain setup. Prices in USD.`
+          : 'No setup fees — cancel anytime. Annual plans include two months free. Prices in USD.'}
       </p>
     </div>
   );

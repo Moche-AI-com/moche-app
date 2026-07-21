@@ -71,6 +71,9 @@ export const serverEnv = {
     portfolio_monthly: process.env.STRIPE_PRICE_PORTFOLIO_MONTHLY ?? '',
     portfolio_annual: process.env.STRIPE_PRICE_PORTFOLIO_ANNUAL ?? '',
   },
+  // One-time price for the optional onboarding/activation fee (added to first checkout
+  // when ACTIVATION_FEE_ENABLED is true). Empty when the fee is waived.
+  stripeActivationPriceId: process.env.STRIPE_PRICE_ACTIVATION ?? '',
 };
 
 export function hasServiceRole(): boolean {

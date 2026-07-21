@@ -73,7 +73,12 @@ export const PLANS: Record<PlanId, Plan> = {
   },
 };
 
+// One-time onboarding fee. Kept configurable so it can be switched on later, but
+// waived at launch to reduce first-checkout friction (a paid setup fee on top of a
+// subscription measurably hurts early-stage conversion). When false, checkout bills
+// the plan price only and the billing page advertises "no setup fees".
 export const ACTIVATION_FEE_USD = 49;
+export const ACTIVATION_FEE_ENABLED = false;
 
 // Categories required for the "core" completeness gate — the portal can only go
 // live once these are present. Mirrors the Brain Health "Core layer".
