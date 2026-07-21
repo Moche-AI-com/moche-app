@@ -143,6 +143,14 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
   const access = await requirePropertyAccess(propertyId);
   if (!access.can.editProperty) return { error: 'You do not have permission to edit this property.' };
 
+  const supabase = createClient();
+  // Concierge customization is a paid upgrade (Pro and up). Enforce server-side — the UI
+  // lock is convenience only; this is the real boundary.
+  const ent = await getEntitlements(supabase, access.property.host_account_id);
+  if (!ent.conciergeCustomization) {
+    return { error: 'Concierge customization is available on the Pro plan and above. Upgrade to tune tone, creativity, escalation, and portal modules.' };
+  }
+
   // Module toggles arrive as individual checkbox fields (module_<key>). Rebuild the full
   // modules map from DEFAULT_MODULES so unchecked boxes are stored as false.
   const modules: Record<string, boolean> = {};
@@ -166,7 +174,6 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the concierge settings.' };
   const d = parsed.data;
 
-  const supabase = createClient();
   // Upsert so properties created before settings existed still get a row.
   const { error } = await supabase
     .from('property_settings')
@@ -269,7 +276,7 @@ export async function deletePropertyAction(formData: FormData): Promise<void> {
   redirect('/dashboard/properties');
 }
 
-// Clones a property's brain content into a brand-new property (Growth+ feature).
+// Clones a property's brain content into a brand-new property (Pro+ feature).
 export async function clonePropertyAction(formData: FormData): Promise<void> {
   const sourceId = String(formData.get('propertyId') ?? '');
   const ctx = await requireSession();

@@ -56,11 +56,21 @@ interface Settings {
   modules: Record<string, boolean>;
 }
 
-export function SettingsForms({ property, settings }: { property: Property; settings: Settings }) {
+export function SettingsForms({
+  property,
+  settings,
+  conciergeCustomization,
+  planName,
+}: {
+  property: Property;
+  settings: Settings;
+  conciergeCustomization: boolean;
+  planName: string | null;
+}) {
   return (
     <div style={{ display: 'grid', gap: '1.5rem', maxWidth: 720 }}>
       <BrandingForm property={property} />
-      <ConciergeForm propertyId={property.id} settings={settings} />
+      <ConciergeForm propertyId={property.id} settings={settings} locked={!conciergeCustomization} planName={planName} />
     </div>
   );
 }
@@ -161,17 +171,30 @@ function BrandingForm({ property }: { property: Property }) {
   );
 }
 
-function ConciergeForm({ propertyId, settings }: { propertyId: string; settings: Settings }) {
+function ConciergeForm({ propertyId, settings, locked, planName }: { propertyId: string; settings: Settings; locked: boolean; planName: string | null }) {
   const [state, formAction] = useFormState<PropertyFormState, FormData>(updatePropertySettingsAction, {});
   const modules = settings.modules ?? {};
   return (
-    <form action={formAction} className="card" style={{ padding: '1.5rem' }}>
-      <h2 style={{ fontSize: '1.1rem', marginBottom: '.35rem' }}>Concierge behavior</h2>
+    <form action={formAction} className="card" style={{ padding: '1.5rem', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.35rem' }}>
+        <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Concierge behavior</h2>
+        {locked ? <span className="badge badge-coral">Pro</span> : <span className="badge badge-teal">Included</span>}
+      </div>
       <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1rem' }}>
         How your AI concierge sounds and when it hands questions to you. These apply to the live guest portal.
       </p>
+
+      {locked ? (
+        <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
+          <strong>Customizing your concierge is a Pro feature.</strong>{' '}
+          {planName ? `You’re on ${planName}. ` : ''}Upgrade to tune tone &amp; voice, creativity, escalation sensitivity, and portal modules.{' '}
+          <Link href="/dashboard/billing" className="gradient-text" style={{ fontWeight: 600 }}>See plans →</Link>
+        </div>
+      ) : null}
+
       <FormMessage error={state.error} success={state.success} />
       <input type="hidden" name="propertyId" value={propertyId} />
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.55 : 1 }}>
 
       <div className="field">
         <label className="label" htmlFor="conciergeTone">Tone &amp; voice</label>
@@ -253,8 +276,14 @@ function ConciergeForm({ propertyId, settings }: { propertyId: string; settings:
         })}
       </div>
 
+      </fieldset>
+
       <div style={{ marginTop: '1rem' }}>
-        <SubmitButton className="btn btn-primary">Save concierge settings</SubmitButton>
+        {locked ? (
+          <Link href="/dashboard/billing" className="btn btn-primary">Upgrade to Pro</Link>
+        ) : (
+          <SubmitButton className="btn btn-primary">Save concierge settings</SubmitButton>
+        )}
       </div>
     </form>
   );

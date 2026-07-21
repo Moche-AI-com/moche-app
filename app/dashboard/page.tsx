@@ -80,7 +80,7 @@ export default async function DashboardHome() {
 
       {!ent.active && (
         <div className="alert alert-info" style={{ marginBottom: '1.5rem' }}>
-          You&apos;re on the free build tier ({ent.propertyLimit} property). <Link href="/dashboard/billing" className="gradient-text" style={{ fontWeight: 600 }}>Choose a plan</Link> to publish more properties and unlock co-hosts, cloning, and review nudges.
+          You&apos;re on the free build tier ({ent.propertyLimit} property). <Link href="/dashboard/billing" className="gradient-text" style={{ fontWeight: 600 }}>Choose a plan</Link> to publish more properties and unlock concierge personality control, co-hosts, cloning, and review nudges.
         </div>
       )}
 

@@ -11,9 +11,9 @@ export interface Entitlements {
   active: boolean;
   status: Subscription['status'] | 'none';
   propertyLimit: number;
-  whiteLabel: boolean;
   reviewNudge: boolean;
   smsEscalation: boolean;
+  conciergeCustomization: boolean;
   coHosts: boolean;
   cloning: boolean;
   currentPeriodEnd: string | null;
@@ -35,9 +35,9 @@ export function entitlementsFromSubscription(sub: Subscription | null): Entitlem
       active: false,
       status: sub?.status ?? 'none',
       propertyLimit: 1, // allow one draft property so hosts can build before paying
-      whiteLabel: false,
       reviewNudge: false,
       smsEscalation: false,
+      conciergeCustomization: false,
       coHosts: false,
       cloning: false,
       currentPeriodEnd: sub?.current_period_end ?? null,
@@ -50,9 +50,9 @@ export function entitlementsFromSubscription(sub: Subscription | null): Entitlem
     active: true,
     status: sub!.status,
     propertyLimit: plan.propertyLimit,
-    whiteLabel: plan.whiteLabel,
     reviewNudge: plan.reviewNudge,
     smsEscalation: plan.smsEscalation,
+    conciergeCustomization: plan.conciergeCustomization,
     coHosts: plan.id !== 'starter',
     cloning: plan.id !== 'starter',
     currentPeriodEnd: sub!.current_period_end,

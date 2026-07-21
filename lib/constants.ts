@@ -1,7 +1,7 @@
 import type { Database } from '@/lib/database.types';
 
 export type BrainCategory = Database['public']['Enums']['brain_category'];
-export type PlanId = 'starter' | 'growth' | 'portfolio';
+export type PlanId = 'starter' | 'pro' | 'portfolio';
 export type BillingInterval = 'monthly' | 'annual';
 
 export interface Plan {
@@ -10,9 +10,9 @@ export interface Plan {
   monthly: number; // USD/mo
   annual: number; // USD/yr (2 months free)
   propertyLimit: number;
-  whiteLabel: boolean;
   reviewNudge: boolean;
   smsEscalation: boolean;
+  conciergeCustomization: boolean; // tone / creativity / escalation sensitivity / portal modules
   features: string[];
 }
 
@@ -20,31 +20,34 @@ export const PLANS: Record<PlanId, Plan> = {
   starter: {
     id: 'starter',
     name: 'Starter',
-    monthly: 17,
-    annual: 170,
+    monthly: 29,
+    annual: 290,
     propertyLimit: 1,
-    whiteLabel: false,
     reviewNudge: false,
     smsEscalation: false,
+    conciergeCustomization: false,
     features: [
-      'Full AI guest portal',
+      'Full AI guest concierge portal',
       'QR code + shareable link',
       'Document & URL ingestion',
-      'Multi-language support',
+      'Multi-language guest support',
       'Email escalation',
     ],
   },
-  growth: {
-    id: 'growth',
-    name: 'Growth',
-    monthly: 40,
-    annual: 400,
+  pro: {
+    id: 'pro',
+    name: 'Pro',
+    monthly: 69,
+    annual: 690,
     propertyLimit: 3,
-    whiteLabel: false,
     reviewNudge: false,
     smsEscalation: true,
+    conciergeCustomization: true,
     features: [
       'Everything in Starter',
+      'Concierge personality & tone control',
+      'Creativity & escalation tuning',
+      'Portal module controls',
       'Property cloning',
       'Co-host mode',
       'SMS escalation',
@@ -55,22 +58,22 @@ export const PLANS: Record<PlanId, Plan> = {
   portfolio: {
     id: 'portfolio',
     name: 'Portfolio',
-    monthly: 59,
-    annual: 590,
-    propertyLimit: 5,
-    whiteLabel: true,
+    monthly: 119,
+    annual: 1190,
+    propertyLimit: 8,
     reviewNudge: true,
     smsEscalation: true,
+    conciergeCustomization: true,
     features: [
-      'Everything in Growth',
-      'White-label branding',
+      'Everything in Pro',
       'Post-stay review nudge',
+      'Up to 8 properties',
       'Priority support',
     ],
   },
 };
 
-export const ACTIVATION_FEE_USD = 25;
+export const ACTIVATION_FEE_USD = 49;
 
 // Categories required for the "core" completeness gate — the portal can only go
 // live once these are present. Mirrors the Brain Health "Core layer".

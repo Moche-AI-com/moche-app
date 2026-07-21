@@ -66,8 +66,8 @@ export const serverEnv = {
   stripePrices: {
     starter_monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY ?? '',
     starter_annual: process.env.STRIPE_PRICE_STARTER_ANNUAL ?? '',
-    growth_monthly: process.env.STRIPE_PRICE_GROWTH_MONTHLY ?? '',
-    growth_annual: process.env.STRIPE_PRICE_GROWTH_ANNUAL ?? '',
+    pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY ?? '',
+    pro_annual: process.env.STRIPE_PRICE_PRO_ANNUAL ?? '',
     portfolio_monthly: process.env.STRIPE_PRICE_PORTFOLIO_MONTHLY ?? '',
     portfolio_annual: process.env.STRIPE_PRICE_PORTFOLIO_ANNUAL ?? '',
   },

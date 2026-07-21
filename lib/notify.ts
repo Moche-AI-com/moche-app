@@ -102,12 +102,12 @@ async function loadOwnerContact(
 }
 
 // Creates the durable in-app notification row and fans out to email (now) and host SMS
-// (Growth+, behind a feature flag) on a best-effort basis. Fan-out failures NEVER throw —
+// (Pro+, behind a feature flag) on a best-effort basis. Fan-out failures NEVER throw —
 // the in-app row is the source of truth and the host dashboard always reflects it.
 //
 // Host SMS gating requires ALL of:
 //   1. NOTIFY_SMS_ENABLED feature flag on, AND
-//   2. plan entitlement smsEscalation (Growth+), AND
+//   2. plan entitlement smsEscalation (Pro+), AND
 //   3. valid Twilio config present, AND
 //   4. host owner profile has a non-null phone.
 //

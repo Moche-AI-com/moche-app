@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOURS } from '@/lib/constants';
+import { getEntitlements } from '@/lib/billing/entitlements';
+import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOURS, PLANS } from '@/lib/constants';
 import { SettingsForms } from './SettingsForms';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,8 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
 
   const { property } = access;
   const supabase = createClient();
+  const ent = await getEntitlements(supabase, property.host_account_id);
+  const planName = ent.planId ? PLANS[ent.planId].name : null;
   const { data: settings } = await supabase
     .from('property_settings')
     .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, modules')
@@ -45,7 +48,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
           {property.display_name} — branding, concierge voice, and portal modules.
         </p>
       </div>
-      <SettingsForms property={property} settings={normalized} />
+      <SettingsForms property={property} settings={normalized} conciergeCustomization={ent.conciergeCustomization} planName={planName} />
     </div>
   );
 }

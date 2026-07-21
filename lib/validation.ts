@@ -163,7 +163,7 @@ export const escalationRespondSchema = z.object({
 });
 
 export const checkoutSchema = z.object({
-  plan: z.enum(['starter', 'growth', 'portfolio']),
+  plan: z.enum(['starter', 'pro', 'portfolio']),
   interval: z.enum(['monthly', 'annual']).default('monthly'),
 });
 
