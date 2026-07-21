@@ -109,12 +109,14 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
             aria-disabled={property.status !== 'live'}
             style={property.status !== 'live' ? { pointerEvents: 'none', opacity: 0.5 } : undefined}
           >
-            View concierge portal ↗
+            Preview as guest ↗
           </a>
           <CopyPortalLink url={portalUrl} />
         </div>
         <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>
-          Opens the live guest experience in a new tab so you can test it yourself — exactly what your guests see.
+          Opens the live guest experience in a new tab. Because you’re signed in as the host, you skip guest verification and see a
+          read-only concierge preview — chat with the AI freely; nothing is saved as a guest conversation. On any device where you’re
+          logged in, you can open this link without verifying.
         </p>
         {property.status !== 'live' && (
           <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
@@ -124,7 +126,7 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
         )}
         {property.status === 'live' && (stayCount ?? 0) === 0 && (
           <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
-            Use “View concierge portal” above to test it yourself. To try the full guest flow, add a
+            Use “Preview as guest” above to test it yourself. To try the full guest flow (with real verification), add a
             stay with your own email under{' '}
             <Link href={`/dashboard/properties/${property.id}/stays`} className="gradient-text" style={{ fontWeight: 600 }}>Stays</Link>{' '}
             — guests verify with the contact on their booking before entering.
