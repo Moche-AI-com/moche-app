@@ -497,6 +497,69 @@ export type Database = {
           },
         ]
       }
+      guest_access_links: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          max_redemptions: number
+          property_id: string
+          redemption_count: number
+          require_otp: boolean
+          revoked_at: string | null
+          stay_id: string | null
+          token_hash: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind: string
+          max_redemptions?: number
+          property_id: string
+          redemption_count?: number
+          require_otp?: boolean
+          revoked_at?: string | null
+          stay_id?: string | null
+          token_hash: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          max_redemptions?: number
+          property_id?: string
+          redemption_count?: number
+          require_otp?: boolean
+          revoked_at?: string | null
+          stay_id?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_access_links_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_access_links_stay_id_fkey"
+            columns: ["stay_id"]
+            isOneToOne: false
+            referencedRelation: "stays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guest_access_sessions: {
         Row: {
           created_at: string
