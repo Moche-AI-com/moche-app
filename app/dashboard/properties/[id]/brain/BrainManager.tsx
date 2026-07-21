@@ -21,11 +21,13 @@ export function BrainManager({
   canEdit,
   categories,
   items,
+  defaultCategory = 'core',
 }: {
   propertyId: string;
   canEdit: boolean;
   categories: [string, string][];
   items: Item[];
+  defaultCategory?: string;
 }) {
   const [editing, setEditing] = useState<Item | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -48,6 +50,7 @@ export function BrainManager({
           propertyId={propertyId}
           categories={categories}
           item={editing}
+          defaultCategory={defaultCategory}
           onDone={() => setShowForm(false)}
           key={editing?.id ?? 'new'}
         />
@@ -96,11 +99,13 @@ function BrainItemForm({
   propertyId,
   categories,
   item,
+  defaultCategory,
   onDone,
 }: {
   propertyId: string;
   categories: [string, string][];
   item: Item | null;
+  defaultCategory: string;
   onDone: () => void;
 }) {
   const [state, formAction] = useFormState<BrainActionState, FormData>(saveBrainItemAction, {});
@@ -124,7 +129,7 @@ function BrainItemForm({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="category">Category</label>
-          <select className="select" id="category" name="category" defaultValue={item?.category ?? 'core'} data-testid="select-brain-category">
+          <select className="select" id="category" name="category" defaultValue={item?.category ?? defaultCategory} data-testid="select-brain-category">
             {categories.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
           </select>
         </div>

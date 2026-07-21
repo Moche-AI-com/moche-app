@@ -1,35 +1,59 @@
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { computeBrainHealth } from '@/lib/brain/health';
+import { computeBrainHealth, computeCardHealth, BRAIN_CARDS, type CardKey } from '@/lib/brain/health';
 import { BRAIN_CATEGORY_LABELS } from '@/lib/constants';
 import type { BrainCategory } from '@/lib/constants';
 import { BrainManager } from './BrainManager';
+import { BrainCards } from './BrainCards';
 import { IngestPanel } from './IngestPanel';
 
 export const dynamic = 'force-dynamic';
 
-export default async function BrainPage({ params }: { params: { id: string } }) {
+export default async function BrainPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { card?: string };
+}) {
   const access = await requirePropertyAccess(params.id);
   const supabase = createClient();
 
-  const { data: items } = await supabase
-    .from('brain_items')
-    .select('id, title, body, category, visibility, status, source_type, updated_at, deleted_at')
-    .eq('property_id', params.id)
-    .is('deleted_at', null)
-    .order('category', { ascending: true })
-    .order('updated_at', { ascending: false });
+  const [{ data: items }, { data: settings }, { count: recCount }, { count: emergencyContacts }, { count: primaryContacts }] =
+    await Promise.all([
+      supabase
+        .from('brain_items')
+        .select('id, title, body, category, visibility, status, source_type, updated_at, deleted_at')
+        .eq('property_id', params.id)
+        .is('deleted_at', null)
+        .order('category', { ascending: true })
+        .order('updated_at', { ascending: false }),
+      supabase.from('property_settings').select('confidence_threshold').eq('property_id', params.id).maybeSingle(),
+      supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', params.id).is('deleted_at', null),
+      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('is_emergency', true),
+      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('is_primary', true),
+    ]);
 
-  const health = computeBrainHealth((items ?? []).map((i) => ({ category: i.category, status: i.status, deleted_at: i.deleted_at, visibility: i.visibility })));
+  const brainItems = (items ?? []).map((i) => ({ category: i.category, status: i.status, deleted_at: i.deleted_at, visibility: i.visibility }));
+  const health = computeBrainHealth(brainItems);
 
-  // Group items by category for display.
-  const byCategory = new Map<BrainCategory, typeof items>();
-  for (const it of items ?? []) {
-    const arr = byCategory.get(it.category) ?? [];
-    arr!.push(it);
-    byCategory.set(it.category, arr);
-  }
+  const cardHealth = computeCardHealth(brainItems, {
+    hasAddress: !!(access.property.address_line1 && access.property.address_line1.trim()),
+    recommendationCount: recCount ?? 0,
+    emergencyContactCount: emergencyContacts ?? 0,
+    primaryContactCount: primaryContacts ?? 0,
+    hasSettings: !!settings,
+    confidenceThresholdSet: !!settings && typeof settings.confidence_threshold === 'number',
+  });
+
+  // Optional card filter: when a card is opened, scope the editor list + add form to that card's categories.
+  const activeCard = BRAIN_CARDS.find((c) => c.key === (searchParams.card as CardKey | undefined));
+  const filterCategories = activeCard?.categories ?? [];
+  const filteredItems = activeCard && filterCategories.length > 0
+    ? (items ?? []).filter((i) => filterCategories.includes(i.category))
+    : (items ?? []);
+  const defaultCategory: BrainCategory = activeCard?.primaryCategory ?? 'core';
 
   return (
     <div>
@@ -37,7 +61,7 @@ export default async function BrainPage({ params }: { params: { id: string } }) 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '.5rem 0 1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Property Brain</h1>
-          <p className="faint" style={{ fontSize: '.85rem' }}>Health {health.score}/100 · {health.totalItems} items</p>
+          <p className="faint" style={{ fontSize: '.85rem' }}>Health {cardHealth.score}/100 · {health.totalItems} items</p>
         </div>
       </div>
 
@@ -45,13 +69,24 @@ export default async function BrainPage({ params }: { params: { id: string } }) 
         <div className="alert alert-info" style={{ marginBottom: '1rem' }}>You have read-only access to this Brain.</div>
       )}
 
+      <BrainCards propertyId={params.id} propertyName={access.property.display_name} health={cardHealth} canEdit={access.can.editBrain} />
+
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: '1.5rem', alignItems: 'start' }}>
         <div>
+          {activeCard && (
+            <div className="alert alert-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }} data-testid="card-filter-banner">
+              <span style={{ fontSize: '.85rem' }}>
+                <span aria-hidden>{activeCard.icon}</span> Editing <strong>{activeCard.title}</strong>
+              </span>
+              <Link href={`/dashboard/properties/${params.id}/brain`} className="btn btn-sm btn-ghost" data-testid="button-clear-card-filter">Show all</Link>
+            </div>
+          )}
           <BrainManager
             propertyId={params.id}
             canEdit={access.can.editBrain}
             categories={Object.entries(BRAIN_CATEGORY_LABELS) as [BrainCategory, string][]}
-            items={(items ?? []).map((i) => ({
+            defaultCategory={defaultCategory}
+            items={filteredItems.map((i) => ({
               id: i.id,
               title: i.title,
               body: i.body ?? '',

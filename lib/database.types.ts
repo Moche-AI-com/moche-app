@@ -1506,6 +1506,7 @@ export type Database = {
         | "product_urls"
         | "host_qa"
         | "internal_notes"
+        | "transportation"
       brain_visibility: "guest" | "internal"
       consent_kind: "terms" | "privacy" | "marketing" | "guest_comms"
       conversation_role: "guest" | "assistant" | "host" | "system"
@@ -1702,6 +1703,7 @@ export const Constants = {
         "product_urls",
         "host_qa",
         "internal_notes",
+        "transportation",
       ],
       brain_visibility: ["guest", "internal"],
       consent_kind: ["terms", "privacy", "marketing", "guest_comms"],
