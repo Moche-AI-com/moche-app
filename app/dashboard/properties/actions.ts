@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
-import { propertyCreateSchema, propertyUpdateSchema } from '@/lib/validation';
+import { propertyCreateSchema, propertyUpdateSchema, propertySettingsSchema } from '@/lib/validation';
 import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
@@ -136,6 +136,69 @@ export async function updatePropertyAction(_prev: PropertyFormState, formData: F
   revalidatePath(`/dashboard/properties/${propertyId}`);
   revalidatePath(`/dashboard/properties/${propertyId}/settings`);
   return { success: 'Property saved.' };
+}
+
+export async function updatePropertySettingsAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.editProperty) return { error: 'You do not have permission to edit this property.' };
+
+  // Module toggles arrive as individual checkbox fields (module_<key>). Rebuild the full
+  // modules map from DEFAULT_MODULES so unchecked boxes are stored as false.
+  const modules: Record<string, boolean> = {};
+  for (const key of Object.keys(DEFAULT_MODULES)) {
+    modules[key] = formData.get(`module_${key}`) === 'on';
+  }
+
+  const rawTemp = formData.get('aiTemperature');
+  const rawThreshold = formData.get('confidenceThreshold');
+  const rawGrace = formData.get('gracePeriodHours');
+
+  const parsed = propertySettingsSchema.safeParse({
+    conciergeTone: formData.get('conciergeTone') || undefined,
+    aiTemperature: rawTemp !== null && rawTemp !== '' ? Number(rawTemp) : undefined,
+    confidenceThreshold: rawThreshold !== null && rawThreshold !== '' ? Number(rawThreshold) : undefined,
+    gracePeriodHours: rawGrace !== null && rawGrace !== '' ? Number(rawGrace) : undefined,
+    // Review nudge is driven by the module toggle below; mirror it onto the dedicated flag.
+    reviewNudgeEnabled: modules.review_nudge,
+    modules,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the concierge settings.' };
+  const d = parsed.data;
+
+  const supabase = createClient();
+  // Upsert so properties created before settings existed still get a row.
+  const { error } = await supabase
+    .from('property_settings')
+    .upsert(
+      {
+        property_id: propertyId,
+        ...(d.conciergeTone !== undefined ? { concierge_tone: d.conciergeTone } : {}),
+        ...(d.aiTemperature !== undefined ? { ai_temperature: d.aiTemperature } : {}),
+        ...(d.confidenceThreshold !== undefined ? { confidence_threshold: d.confidenceThreshold } : {}),
+        ...(d.gracePeriodHours !== undefined ? { grace_period_hours: d.gracePeriodHours } : {}),
+        ...(d.reviewNudgeEnabled !== undefined ? { review_nudge_enabled: d.reviewNudgeEnabled } : {}),
+        ...(d.modules !== undefined ? { modules: d.modules as unknown as Json } : {}),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'property_id' },
+    );
+
+  if (error) {
+    log.warn('property_settings_update_failed', { error: error.message });
+    return { error: 'Could not save the concierge settings. Please try again.' };
+  }
+
+  await audit(supabase, {
+    action: 'property.settings.updated',
+    actorProfileId: access.property.host_account_id,
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+  });
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  revalidatePath(`/dashboard/properties/${propertyId}/settings`);
+  return { success: 'Concierge settings saved.' };
 }
 
 async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft' | 'archived') {

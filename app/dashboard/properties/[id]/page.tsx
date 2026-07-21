@@ -7,6 +7,7 @@ import { listPropertySessions } from '@/lib/guest/sessions';
 import { PropertyStatusControls } from './StatusControls';
 import { SessionsPanel } from './SessionsPanel';
 import { PropertyLinkMinter } from './PropertyLinkMinter';
+import { CopyPortalLink } from './CopyPortalLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +99,23 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
           Share this link (or a QR code) with guests. They verify with the contact on their booking before accessing anything.
         </p>
         <div className="card-2" style={{ padding: '.6rem .8rem', fontFamily: 'monospace', fontSize: '.82rem', wordBreak: 'break-all' }}>{portalUrl}</div>
+        <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '.75rem' }}>
+          <a
+            href={portalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-primary btn-sm"
+            data-testid="link-view-portal"
+            aria-disabled={property.status !== 'live'}
+            style={property.status !== 'live' ? { pointerEvents: 'none', opacity: 0.5 } : undefined}
+          >
+            View concierge portal ↗
+          </a>
+          <CopyPortalLink url={portalUrl} />
+        </div>
+        <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>
+          Opens the live guest experience in a new tab so you can test it yourself — exactly what your guests see.
+        </p>
         {property.status !== 'live' && (
           <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
             The portal is only reachable once the property is live. You can go live now — the
@@ -106,7 +124,8 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
         )}
         {property.status === 'live' && (stayCount ?? 0) === 0 && (
           <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
-            To test as a guest, add a stay with your own email under{' '}
+            Use “View concierge portal” above to test it yourself. To try the full guest flow, add a
+            stay with your own email under{' '}
             <Link href={`/dashboard/properties/${property.id}/stays`} className="gradient-text" style={{ fontWeight: 600 }}>Stays</Link>{' '}
             — guests verify with the contact on their booking before entering.
           </p>

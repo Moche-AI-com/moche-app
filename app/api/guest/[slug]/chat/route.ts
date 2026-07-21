@@ -35,6 +35,13 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 
+  // Host-configurable concierge behavior (tone, creativity, escalation threshold).
+  const { data: settings } = await admin
+    .from('property_settings')
+    .select('concierge_tone, ai_temperature, confidence_threshold')
+    .eq('property_id', session.propertyId)
+    .maybeSingle();
+
   // Get-or-create the conversation for this stay.
   let conversationId: string;
   const { data: existing } = await admin
@@ -69,6 +76,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     propertyName: property.display_name,
     question,
     history,
+    conciergeTone: settings?.concierge_tone ?? undefined,
+    aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
+    confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
     source: 'guest_chat',
   });
   const latencyMs = Date.now() - started;
