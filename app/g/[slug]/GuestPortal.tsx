@@ -113,6 +113,9 @@ function VerifyGate({ slug, turnstileSiteKey, onVerified }: { slug: string; turn
       try {
         widgetId.current = ts.render(widgetContainer.current, {
           sitekey: turnstileSiteKey,
+          // 'flexible' lets the widget shrink to the container width so it renders on
+          // narrow mobile screens (fixed 300px widgets overflow small viewports and fail).
+          size: 'flexible',
           callback: (t: string) => { turnstileToken.current = t; },
           'expired-callback': () => { turnstileToken.current = ''; },
           'error-callback': () => { turnstileToken.current = ''; },
@@ -208,7 +211,7 @@ function VerifyGate({ slug, turnstileSiteKey, onVerified }: { slug: string; turn
           />
           {turnstileSiteKey && (
             <>
-              <div ref={widgetContainer} style={{ margin: '1rem 0', minHeight: 65 }} data-testid="turnstile-widget" />
+              <div ref={widgetContainer} style={{ margin: '1rem 0', minHeight: 65, width: '100%' }} data-testid="turnstile-widget" />
               {!widgetReady && <p style={{ opacity: 0.6, fontSize: '.75rem', marginBottom: '.75rem' }}>Loading verification…</p>}
             </>
           )}
