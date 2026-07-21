@@ -68,6 +68,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     propertyName: property.display_name,
     question,
     history,
+    source: 'guest_chat',
   });
   const latencyMs = Date.now() - started;
 

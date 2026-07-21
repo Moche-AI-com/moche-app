@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage: {
+        Row: {
+          cache_hit: boolean
+          completion_tokens: number
+          created_at: string
+          embed_tokens: number
+          est_cost_usd: number
+          id: string
+          kind: string
+          latency_ms: number | null
+          model: string
+          prompt_tokens: number
+          property_id: string | null
+          source: string | null
+          total_tokens: number
+        }
+        Insert: {
+          cache_hit?: boolean
+          completion_tokens?: number
+          created_at?: string
+          embed_tokens?: number
+          est_cost_usd?: number
+          id?: string
+          kind: string
+          latency_ms?: number | null
+          model: string
+          prompt_tokens?: number
+          property_id?: string | null
+          source?: string | null
+        }
+        Update: {
+          cache_hit?: boolean
+          completion_tokens?: number
+          created_at?: string
+          embed_tokens?: number
+          est_cost_usd?: number
+          id?: string
+          kind?: string
+          latency_ms?: number | null
+          model?: string
+          prompt_tokens?: number
+          property_id?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string

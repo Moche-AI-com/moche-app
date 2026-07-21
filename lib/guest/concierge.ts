@@ -4,6 +4,7 @@ import type { Database } from '@/lib/database.types';
 import { getAIProvider, type ChatMessage } from '@/lib/ai';
 import { DEFAULT_CONFIDENCE_THRESHOLD } from '@/lib/constants';
 import { log } from '@/lib/log';
+import { logAiUsage } from '@/lib/ai/usage';
 
 type Admin = SupabaseClient<Database>;
 type IntentType = Database['public']['Enums']['intent_type'];
@@ -52,9 +53,27 @@ const EMERGENCY_PATTERNS = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|
 // Retrieve property-scoped, guest-visible chunks. Isolation is enforced IN THE DATABASE
 // via match_property_chunks(p_property_id, ..., p_guest_only=true). We never retrieve
 // globally and filter afterward — a mismatched property_id simply returns nothing.
-export async function retrieveGuestChunks(admin: Admin, propertyId: string, query: string): Promise<RetrievedChunk[]> {
+// When a usageSink is provided, embed token usage for the query is recorded on it so the
+// caller can log a single, complete AI-usage picture for the turn.
+export async function retrieveGuestChunks(
+  admin: Admin,
+  propertyId: string,
+  query: string,
+  usageSink?: { embedModel: string; embedTokens: number },
+): Promise<RetrievedChunk[]> {
   const provider = getAIProvider();
-  const [embedding] = await provider.embed([query]);
+  let embedding: number[];
+  if (provider.embedWithUsage) {
+    const r = await provider.embedWithUsage([query]);
+    embedding = r.vectors[0];
+    if (usageSink) {
+      usageSink.embedModel = r.model;
+      usageSink.embedTokens = r.totalTokens;
+    }
+  } else {
+    [embedding] = await provider.embed([query]);
+    if (usageSink) usageSink.embedModel = provider.embedModel;
+  }
   const { data, error } = await admin.rpc('match_property_chunks', {
     p_property_id: propertyId,
     p_query_embedding: JSON.stringify(embedding),
@@ -89,13 +108,15 @@ function scoreConfidence(chunks: RetrievedChunk[], answer: string): number {
 
 export async function answerGuestQuestion(
   admin: Admin,
-  opts: { propertyId: string; propertyName: string; question: string; history: ChatMessage[]; confidenceThreshold?: number },
+  opts: { propertyId: string; propertyName: string; question: string; history: ChatMessage[]; confidenceThreshold?: number; source?: string },
 ): Promise<ConciergeAnswer> {
   const provider = getAIProvider();
   const threshold = opts.confidenceThreshold ?? DEFAULT_CONFIDENCE_THRESHOLD;
   const isEmergency = EMERGENCY_PATTERNS.test(opts.question);
+  const startedAt = Date.now();
+  const usageSink = { embedModel: provider.embedModel, embedTokens: 0 };
 
-  const chunks = await retrieveGuestChunks(admin, opts.propertyId, opts.question);
+  const chunks = await retrieveGuestChunks(admin, opts.propertyId, opts.question, usageSink);
   const context = chunks.map((c, i) => `[${i + 1}] (${c.category}) ${c.content}`).join('\n\n');
 
   let intent: IntentType = 'information';
@@ -111,12 +132,25 @@ export async function answerGuestQuestion(
 
   let text: string;
   let model: string;
+  let promptTokens = 0;
+  let completionTokens = 0;
   try {
     const result = await provider.generate(messages, { temperature: 0.2, maxTokens: 500 });
     text = result.text.trim();
     model = result.model;
+    promptTokens = result.usage?.promptTokens ?? 0;
+    completionTokens = result.usage?.completionTokens ?? 0;
   } catch (e) {
     log.warn('generate_failed', { error: String(e) });
+    // Still record the embed cost we already incurred for this turn.
+    void logAiUsage(admin, {
+      propertyId: opts.propertyId,
+      kind: 'embed',
+      model: usageSink.embedModel,
+      embedTokens: usageSink.embedTokens,
+      latencyMs: Date.now() - startedAt,
+      source: opts.source ?? 'guest_chat',
+    });
     return {
       text: "I'm having trouble answering right now. I've flagged this for your host.",
       confidence: 0, intent, model: 'error',
@@ -126,6 +160,19 @@ export async function answerGuestQuestion(
 
   const confidence = scoreConfidence(chunks, text);
   const shouldEscalate = confidence < threshold;
+
+  // Fire-and-forget cost telemetry: one row for the chat turn (prompt+completion) plus
+  // the embed tokens spent on retrieval. Never awaited — logging must not slow the guest.
+  void logAiUsage(admin, {
+    propertyId: opts.propertyId,
+    kind: 'chat',
+    model,
+    promptTokens,
+    completionTokens,
+    embedTokens: usageSink.embedTokens,
+    latencyMs: Date.now() - startedAt,
+    source: opts.source ?? 'guest_chat',
+  });
 
   return {
     text,

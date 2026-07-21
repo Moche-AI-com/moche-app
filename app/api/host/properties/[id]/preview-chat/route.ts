@@ -52,6 +52,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     question: parsed.data.message,
     history,
     confidenceThreshold: settings?.confidence_threshold ?? undefined,
+    source: 'host_preview',
   });
 
   return NextResponse.json({

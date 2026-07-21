@@ -13,9 +13,21 @@ export interface GenerateOptions {
   maxTokens?: number;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
 export interface GenerateResult {
   text: string;
   model: string;
+  usage?: TokenUsage;
+}
+
+export interface EmbedResult {
+  vectors: number[][];
+  model: string;
+  totalTokens: number;
 }
 
 export const EMBED_DIM = 1536;
@@ -26,6 +38,9 @@ export interface AIProvider {
   readonly chatModel: string;
   readonly embedModel: string;
   embed(texts: string[]): Promise<number[][]>;
+  // Optional: same as embed() but also returns the model + token usage for cost logging.
+  // Providers that don't implement it fall back to embed() with zero token accounting.
+  embedWithUsage?(texts: string[]): Promise<EmbedResult>;
   generate(messages: ChatMessage[], opts?: GenerateOptions): Promise<GenerateResult>;
   classifyIntent(text: string): Promise<IntentType>;
 }

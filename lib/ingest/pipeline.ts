@@ -5,6 +5,7 @@ import { getAIProvider } from '@/lib/ai';
 import { chunkText } from '@/lib/ingest/chunk';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { log } from '@/lib/log';
+import { logAiUsage } from '@/lib/ai/usage';
 
 type Client = SupabaseClient<Database>;
 type BrainCategory = Database['public']['Enums']['brain_category'];
@@ -77,7 +78,27 @@ export async function ingestText(client: Client, input: IngestInput): Promise<In
     // 3. Chunk + embed.
     const chunks = chunkText(input.text);
     if (chunks.length === 0) throw new Error('No content to index.');
-    const embeddings = await provider.embed(chunks);
+    const embedStart = Date.now();
+    let embeddings: number[][];
+    let embedModel = provider.embedModel;
+    let embedTokens = 0;
+    if (provider.embedWithUsage) {
+      const r = await provider.embedWithUsage(chunks);
+      embeddings = r.vectors;
+      embedModel = r.model;
+      embedTokens = r.totalTokens;
+    } else {
+      embeddings = await provider.embed(chunks);
+    }
+    // Fire-and-forget ingest embedding cost telemetry.
+    void logAiUsage(createAdminClient(), {
+      propertyId: input.propertyId,
+      kind: 'ingest',
+      model: embedModel,
+      embedTokens,
+      latencyMs: Date.now() - embedStart,
+      source: 'ingest',
+    });
 
     // 4. Insert chunk rows (property-scoped, visibility-scoped).
     const rows = chunks.map((content, i) => ({

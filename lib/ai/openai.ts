@@ -1,5 +1,5 @@
 import 'server-only';
-import type { AIProvider, ChatMessage, GenerateOptions, GenerateResult, IntentType } from './provider';
+import type { AIProvider, ChatMessage, GenerateOptions, GenerateResult, EmbedResult, IntentType } from './provider';
 import { EMBED_DIM } from './provider';
 import { serverEnv } from '@/lib/env';
 import { Constants } from '@/lib/database.types';
@@ -22,28 +22,41 @@ async function post(path: string, body: unknown): Promise<Response> {
   });
 }
 
+async function embedWithUsageImpl(texts: string[]): Promise<EmbedResult> {
+  if (texts.length === 0) {
+    return { vectors: [], model: serverEnv.aiEmbedModel, totalTokens: 0 };
+  }
+  const res = await post('/embeddings', {
+    model: serverEnv.aiEmbedModel,
+    input: texts,
+  });
+  if (!res.ok) {
+    throw new Error(`Embedding request failed: ${res.status}`);
+  }
+  const json = (await res.json()) as {
+    data: Array<{ embedding: number[]; index: number }>;
+    usage?: { total_tokens?: number };
+  };
+  const sorted = json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
+  for (const v of sorted) {
+    if (v.length !== EMBED_DIM) {
+      throw new Error(`Expected ${EMBED_DIM}-dim embeddings, got ${v.length}`);
+    }
+  }
+  return { vectors: sorted, model: serverEnv.aiEmbedModel, totalTokens: json.usage?.total_tokens ?? 0 };
+}
+
 export const openaiProvider: AIProvider = {
   name: 'openai',
   chatModel: serverEnv.aiChatModel,
   embedModel: serverEnv.aiEmbedModel,
 
   async embed(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) return [];
-    const res = await post('/embeddings', {
-      model: serverEnv.aiEmbedModel,
-      input: texts,
-    });
-    if (!res.ok) {
-      throw new Error(`Embedding request failed: ${res.status}`);
-    }
-    const json = (await res.json()) as { data: Array<{ embedding: number[]; index: number }> };
-    const sorted = json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
-    for (const v of sorted) {
-      if (v.length !== EMBED_DIM) {
-        throw new Error(`Expected ${EMBED_DIM}-dim embeddings, got ${v.length}`);
-      }
-    }
-    return sorted;
+    return (await embedWithUsageImpl(texts)).vectors;
+  },
+
+  embedWithUsage(texts: string[]): Promise<EmbedResult> {
+    return embedWithUsageImpl(texts);
   },
 
   async generate(messages: ChatMessage[], opts?: GenerateOptions): Promise<GenerateResult> {
@@ -56,8 +69,18 @@ export const openaiProvider: AIProvider = {
     if (!res.ok) {
       throw new Error(`Chat request failed: ${res.status}`);
     }
-    const json = (await res.json()) as { choices: Array<{ message: { content: string } }> };
-    return { text: json.choices[0]?.message?.content ?? '', model: serverEnv.aiChatModel };
+    const json = (await res.json()) as {
+      choices: Array<{ message: { content: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    return {
+      text: json.choices[0]?.message?.content ?? '',
+      model: serverEnv.aiChatModel,
+      usage: {
+        promptTokens: json.usage?.prompt_tokens ?? 0,
+        completionTokens: json.usage?.completion_tokens ?? 0,
+      },
+    };
   },
 
   async classifyIntent(text: string): Promise<IntentType> {
