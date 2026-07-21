@@ -54,6 +54,7 @@ function DomeMark({ size = 40 }: { size?: number }) {
 
 export function GuestPortal(props: {
   slug: string;
+  propertyId: string;
   propertyName: string;
   location: string;
   brandPrimary: string | null;
@@ -62,6 +63,7 @@ export function GuestPortal(props: {
   coverImageUrl: string | null;
   turnstileSiteKey: string;
   initialVerified: boolean;
+  hostPreview: boolean;
   guestName: string | null;
 }) {
   const [verified, setVerified] = useState(props.initialVerified);
@@ -102,6 +104,13 @@ export function GuestPortal(props: {
           </span>
         </header>
 
+        {props.hostPreview && (
+          <div style={hostPreviewBar} data-testid="banner-host-preview">
+            <span aria-hidden>👁️</span>
+            <span>Host preview — you’re seeing exactly what a verified guest sees. Nothing here is saved as a guest conversation.</span>
+          </div>
+        )}
+
         {!verified ? (
           <VerifyGate
             slug={props.slug}
@@ -110,7 +119,14 @@ export function GuestPortal(props: {
             onVerified={(name) => { setVerified(true); setGuestName(name); }}
           />
         ) : (
-          <Concierge slug={props.slug} propertyName={props.propertyName} guestName={guestName} accent={accent} />
+          <Concierge
+            slug={props.slug}
+            propertyId={props.propertyId}
+            hostPreview={props.hostPreview}
+            propertyName={props.propertyName}
+            guestName={guestName}
+            accent={accent}
+          />
         )}
 
         <footer style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem', marginTop: '2.5rem', fontSize: '.72rem', opacity: 0.45 }}>
@@ -323,7 +339,7 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
   );
 }
 
-function Concierge({ slug, propertyName, guestName, accent }: { slug: string; propertyName: string; guestName: string | null; accent: string }) {
+function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, accent }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null; accent: string }) {
   const [entries, setEntries] = useState<ChatEntry[]>([
     { role: 'assistant', content: `Hi${guestName ? ` ${guestName}` : ''}! I'm your concierge for ${propertyName}. Ask me anything about your stay — WiFi, check-out, the best spots nearby — or tap a shortcut below.` },
   ]);
@@ -337,13 +353,31 @@ function Concierge({ slug, propertyName, guestName, accent }: { slug: string; pr
   async function send(text: string) {
     if (!text.trim() || busy) return;
     setAsked(true);
-    setEntries((e) => [...e, { role: 'guest', content: text }]);
+    const nextEntries: ChatEntry[] = [...entries, { role: 'guest', content: text }];
+    setEntries(nextEntries);
     setInput('');
     setBusy(true);
     try {
-      const res = await fetch(`/api/guest/${slug}/chat`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: text }),
-      });
+      // Hosts previewing their own portal hit the read-only host endpoint (keyed by
+      // property id) so no guest session/conversation/escalation is created. Real
+      // guests use the verified guest chat endpoint (keyed by slug + session cookie).
+      const res = hostPreview
+        ? await fetch(`/api/host/properties/${propertyId}/preview-chat`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              message: text,
+              // Send prior turns (excluding the message just sent) so the preview keeps
+              // context. Endpoint validation caps history at 12 entries.
+              history: entries
+                .filter((m) => m.role === 'guest' || m.role === 'assistant')
+                .slice(-12)
+                .map((m) => ({ role: m.role === 'guest' ? 'user' : 'assistant', content: m.content })),
+            }),
+          })
+        : await fetch(`/api/guest/${slug}/chat`, {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: text }),
+          });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'I could not answer just now.');
       setEntries((e) => [...e, { role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency }]);
@@ -476,6 +510,7 @@ const btnStyle: React.CSSProperties = { width: '100%', padding: '.85rem', border
 const linkBtn: React.CSSProperties = { width: '100%', background: 'none', border: 'none', color: 'inherit', opacity: 0.6, marginTop: '.75rem', cursor: 'pointer', fontSize: '.82rem' };
 const teaserPill: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '.3rem', padding: '.4rem .7rem', borderRadius: 999, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', fontSize: '.78rem', fontWeight: 600 };
 const presenceBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '.6rem', padding: '.7rem .85rem', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', marginBottom: '1rem' };
+const hostPreviewBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '.55rem', padding: '.65rem .85rem', borderRadius: 12, border: '1px solid rgba(124,140,255,0.4)', background: 'rgba(124,140,255,0.12)', color: '#C7CEFF', fontSize: '.8rem', lineHeight: 1.4, marginBottom: '1.1rem', fontWeight: 500 };
 const bubbleGuest: React.CSSProperties = { background: 'linear-gradient(135deg, var(--brand-accent, #33E6D4), #7C8CFF)', color: '#04121a', padding: '.65rem .9rem', borderRadius: '16px 16px 4px 16px', fontSize: '.92rem', lineHeight: 1.45 };
 const bubbleAssistant: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', padding: '.65rem .9rem', borderRadius: '16px 16px 16px 4px', fontSize: '.92rem', lineHeight: 1.45, color: 'inherit' };
 const alertErr: React.CSSProperties = { background: 'rgba(255,138,92,0.12)', border: '1px solid rgba(255,138,92,0.4)', color: '#FF8A5C', padding: '.6rem .8rem', borderRadius: 10, fontSize: '.85rem', marginBottom: '1rem' };

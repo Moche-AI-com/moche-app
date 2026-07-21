@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
+import { getPropertyAccess } from '@/lib/auth/guards';
 import { publicEnv } from '@/lib/env';
 import { GuestPortal } from './GuestPortal';
 
@@ -26,9 +27,18 @@ export default async function GuestPortalPage({ params }: { params: { slug: stri
   const session = await getGuestSession();
   const verified = !!session && session.propertyId === property.id;
 
+  // Host bypass: a logged-in host (owner or co-host) of THIS property can open the
+  // portal on any device without the guest email/phone + Turnstile gate. They get a
+  // read-only preview of the guest concierge (no guest session, conversation, or
+  // escalation is created) via the host preview-chat endpoint. Only checked when the
+  // visitor isn't already a verified guest, so guest behavior is unchanged.
+  const hostAccess = verified ? null : await getPropertyAccess(property.id);
+  const isHostPreview = !!hostAccess;
+
   return (
     <GuestPortal
       slug={property.slug}
+      propertyId={property.id}
       propertyName={property.display_name}
       location={[property.city, property.region, property.country].filter(Boolean).join(', ')}
       brandPrimary={property.brand_primary}
@@ -36,7 +46,8 @@ export default async function GuestPortalPage({ params }: { params: { slug: stri
       logoUrl={property.logo_url}
       coverImageUrl={property.cover_image_url}
       turnstileSiteKey={publicEnv.turnstileSiteKey}
-      initialVerified={verified}
+      initialVerified={verified || isHostPreview}
+      hostPreview={isHostPreview}
       guestName={verified ? session!.guestDisplayName : null}
     />
   );
