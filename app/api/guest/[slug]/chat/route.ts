@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { guestChatSchema } from '@/lib/validation';
 import { answerGuestQuestion } from '@/lib/guest/concierge';
+import { maybeCreateServiceRequest } from '@/lib/guest/maintenance';
 import { notify } from '@/lib/notify';
 import { capture } from '@/lib/posthog-server';
 import type { ChatMessage } from '@/lib/ai';
@@ -113,11 +114,35 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     await capture('escalation_created', session.propertyId, { property_id: session.propertyId });
   }
 
+  // D2 — Intelligence powers actions: if the question is a maintenance / cleaning /
+  // safety / emergency need, open a service request and notify the host. This does
+  // not replace the answer — the guest still gets the concierge reply, plus a short
+  // confirmation line. De-dupe + verified-session guarantees live in the helper.
+  const maintenance = await maybeCreateServiceRequest(admin, {
+    propertyId: session.propertyId,
+    stayId: session.stayId,
+    conversationId,
+    question,
+    answer,
+  });
+  if (maintenance.created) {
+    await capture('service_request_created', session.propertyId, {
+      property_id: session.propertyId,
+      service_type: answer.intent,
+      urgency: maintenance.urgency,
+    });
+  }
+
+  const finalAnswer = maintenance.guestLine
+    ? `${answer.text}\n\n${maintenance.guestLine}`
+    : answer.text;
+
   return NextResponse.json({
     ok: true,
-    answer: answer.text,
+    answer: finalAnswer,
     confidence: Number(answer.confidence.toFixed(2)),
     escalated: answer.shouldEscalate,
     isEmergency: answer.isEmergency,
+    serviceRequestCreated: maintenance.created,
   });
 }
