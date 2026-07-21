@@ -141,7 +141,7 @@ function ScoreRing({ score }: { score: number }) {
 
 function Tile({ href, title, value, sub }: { href: string; title: string; value: string; sub: string }) {
   return (
-    <Link href={href} className="card" style={{ padding: '1.1rem', display: 'block' }}>
+    <Link href={href} className="card card-interactive rise-in" style={{ padding: '1.1rem', display: 'block' }}>
       <div className="faint" style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.05em' }}>{title}</div>
       <div style={{ fontSize: '1.3rem', fontWeight: 600, margin: '.2rem 0' }}>{value}</div>
       <div className="muted" style={{ fontSize: '.8rem' }}>{sub}</div>

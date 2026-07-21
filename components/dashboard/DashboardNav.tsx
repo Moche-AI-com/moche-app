@@ -39,10 +39,12 @@ export function DashboardNav({ unread }: { unread: number }) {
               <Link
                 key={l.href}
                 href={l.href}
+                className={`dash-tab${active ? ' dash-tab-active' : ''}`}
                 style={{
                   padding: '.4rem .75rem', borderRadius: 'var(--radius-md)', fontSize: '.9rem', fontWeight: 600,
                   color: active ? 'var(--teal)' : 'var(--text-muted)',
                   background: active ? 'var(--surface-2)' : 'transparent',
+                  transition: 'color var(--tr), background var(--tr)',
                 }}
               >
                 {l.label}

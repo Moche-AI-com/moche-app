@@ -94,6 +94,72 @@
   }
   .card-2 { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
 
+  /* ---- Interactive dashboard surfaces ---------------------------------- */
+  /* Lift + glow on hover. Transform/opacity only (GPU-friendly, no layout). */
+  .card-interactive {
+    position: relative;
+    transition: transform var(--tr), box-shadow var(--tr), border-color var(--tr);
+    will-change: transform;
+  }
+  .card-interactive::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 1px transparent, 0 0 34px -6px var(--glow-teal);
+    opacity: 0; transition: opacity var(--tr);
+    pointer-events: none;
+  }
+  .card-interactive:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-lg);
+  }
+  .card-interactive:hover::after { opacity: 1; }
+  .card-interactive:active { transform: translateY(-1px); }
+
+  /* Stat card: gradient accent rail on top edge, icon chip, hover sheen. */
+  .stat-card {
+    position: relative; overflow: hidden;
+    padding: 1.25rem;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent-rail, var(--grad));
+    opacity: .0; transition: opacity var(--tr);
+  }
+  .stat-card:hover::before { opacity: 1; }
+  .stat-card.stat-attn::before { opacity: 1; background: var(--coral); }
+  .stat-icon {
+    display: inline-grid; place-items: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--surface-2); color: var(--teal);
+    font-size: 1rem; line-height: 1;
+  }
+  .stat-card.stat-attn .stat-icon { color: var(--coral); }
+
+  /* Animated underline tab (dashboard nav). Underline scales from center. */
+  .dash-tab { position: relative; }
+  .dash-tab::after {
+    content: '';
+    position: absolute; left: .75rem; right: .75rem; bottom: -2px; height: 2px;
+    background: var(--teal); border-radius: 2px;
+    transform: scaleX(0); transform-origin: center;
+    transition: transform var(--tr);
+  }
+  .dash-tab:hover::after { transform: scaleX(1); }
+  .dash-tab.dash-tab-active::after { transform: scaleX(1); }
+
+  /* Staggered entrance for card grids */
+  .rise-in { opacity: 0; animation: riseIn .5s var(--ease-out) forwards; }
+  .rise-in:nth-child(1) { animation-delay: .02s; }
+  .rise-in:nth-child(2) { animation-delay: .07s; }
+  .rise-in:nth-child(3) { animation-delay: .12s; }
+  .rise-in:nth-child(4) { animation-delay: .17s; }
+  .rise-in:nth-child(5) { animation-delay: .22s; }
+  .rise-in:nth-child(6) { animation-delay: .27s; }
+  @keyframes riseIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
     font-family: var(--font-body); font-weight: 600; font-size: .95rem;
@@ -180,4 +246,12 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   .auth-actions .btn, .stack-mobile .btn { width: 100%; }
   /* Two-column form rows collapse to a single column on small phones */
   .grid-2 { grid-template-columns: 1fr !important; }
+}
+
+/* Respect reduced-motion: keep meaning (color/underline) but drop movement */
+@media (prefers-reduced-motion: reduce) {
+  .card-interactive, .card-interactive:hover, .card-interactive:active { transform: none; }
+  .card-interactive { transition: box-shadow var(--tr), border-color var(--tr); }
+  .dash-tab::after { transition: none; }
+  .rise-in { animation: none; opacity: 1; }
 }
