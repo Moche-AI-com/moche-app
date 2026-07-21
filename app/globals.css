@@ -159,6 +159,28 @@
 html, body { max-width: 100%; overflow-x: hidden; }
 img, video, canvas, svg { max-width: 100%; height: auto; }
 
+/* Landing page layout */
+.landing-hero {
+  padding-top: clamp(2.5rem,6vw,5rem);
+  padding-bottom: clamp(2.5rem,6vw,5rem);
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  gap: clamp(1.5rem,4vw,3.5rem);
+  align-items: center;
+}
+.landing-features {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: clamp(1.5rem,4vw,3rem);
+  align-items: center;
+}
+
+@media (max-width: 860px) {
+  .landing-hero,
+  .landing-features { grid-template-columns: 1fr; }
+  /* Put imagery below copy on mobile for the hero, keep brain image after features */
+}
+
 @media (max-width: 720px) {
   .wrap { padding-left: 1.1rem; padding-right: 1.1rem; }
 
