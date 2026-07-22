@@ -2,8 +2,8 @@
 
 import { useFormState } from 'react-dom';
 import Link from 'next/link';
-import { Lock } from 'lucide-react';
-import { updatePropertyAction, updatePropertySettingsAction, type PropertyFormState } from '../../actions';
+import { Lock, Star } from 'lucide-react';
+import { updatePropertyAction, updatePropertySettingsAction, updateReviewNudgeAction, type PropertyFormState } from '../../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
@@ -57,6 +57,7 @@ interface Settings {
   grace_period_hours: number;
   review_nudge_enabled: boolean;
   review_nudge_auto: boolean;
+  review_url: string | null;
   modules: Record<string, boolean>;
   concierge_name: string;
   system_prompt_override: string | null;
@@ -82,18 +83,101 @@ export function SettingsForms({
   property,
   settings,
   premiumUnlocked,
+  reviewUnlocked,
   planName,
 }: {
   property: Property;
   settings: Settings;
   premiumUnlocked: boolean;
+  reviewUnlocked: boolean;
   planName: string | null;
 }) {
   return (
     <div style={{ display: 'grid', gap: '1.5rem', maxWidth: 720 }}>
       <BrandingForm property={property} />
       <ConciergeForm propertyId={property.id} settings={settings} premiumUnlocked={premiumUnlocked} planName={planName} />
+      <ReviewNudgeForm propertyId={property.id} settings={settings} reviewUnlocked={reviewUnlocked} planName={planName} />
     </div>
+  );
+}
+
+function ReviewNudgeForm({ propertyId, settings, reviewUnlocked, planName }: { propertyId: string; settings: Settings; reviewUnlocked: boolean; planName: string | null }) {
+  const [state, formAction] = useFormState<PropertyFormState, FormData>(updateReviewNudgeAction, {});
+  const locked = !reviewUnlocked;
+
+  return (
+    <form action={formAction} className="card" style={{ padding: '1.5rem', position: 'relative' }} data-testid="review-nudge-form">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.35rem' }}>
+        <Star size={18} aria-hidden style={{ color: 'var(--iris, #c9a96e)' }} />
+        <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Review nudge</h2>
+        {locked ? (
+          <span className="badge badge-coral" style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
+            <Lock size={12} aria-hidden /> Pro
+          </span>
+        ) : <span className="badge badge-teal">Included</span>}
+      </div>
+      <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1rem' }}>
+        Gently invite happy guests to leave a review. The nudge appears in the portal as a tasteful,
+        dismissible card — only after a positive signal, and never more than once per visit.
+      </p>
+
+      <FormMessage error={state.error} success={state.success} />
+      <input type="hidden" name="propertyId" value={propertyId} />
+
+      <div style={{ position: 'relative' }}>
+        {locked ? (
+          <div
+            data-testid="review-nudge-lock-overlay"
+            style={{
+              position: 'absolute', inset: 0, zIndex: 2, borderRadius: 12,
+              background: 'color-mix(in srgb, var(--bg) 62%, transparent)',
+              backdropFilter: 'blur(1.5px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+            }}
+          >
+            <div className="card-2" style={{ textAlign: 'center', padding: '1.1rem 1.25rem', maxWidth: 360 }}>
+              <Lock size={22} aria-hidden style={{ marginBottom: '.4rem' }} />
+              <div style={{ fontSize: '.95rem', fontWeight: 600, marginBottom: '.25rem' }}>Upgrade to Pro to turn more happy stays into reviews</div>
+              <p className="muted" style={{ fontSize: '.78rem', marginBottom: '.75rem' }}>
+                {planName ? `You’re on ${planName}. ` : ''}The review nudge invites satisfied guests to leave a review at your chosen link.
+              </p>
+              <Link href="/dashboard/billing" className="btn btn-primary btn-sm" data-testid="review-nudge-upgrade-link">Upgrade to Pro</Link>
+            </div>
+          </div>
+        ) : null}
+
+        <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.55 : 1 }}>
+          <label className="card-2" style={{ display: 'flex', gap: '.7rem', alignItems: 'flex-start', padding: '.7rem .85rem', cursor: 'pointer', marginBottom: '.6rem' }}>
+            <input type="checkbox" name="reviewNudgeEnabled" defaultChecked={settings.review_nudge_enabled} data-testid="toggle-review-nudge-enabled" style={{ marginTop: '.15rem', accentColor: 'var(--teal)', width: 16, height: 16 }} />
+            <span>
+              <span style={{ display: 'block', fontSize: '.9rem', fontWeight: 600 }}>Enable review nudge</span>
+              <span className="muted" style={{ fontSize: '.78rem' }}>Show the invitation card in the guest portal.</span>
+            </span>
+          </label>
+
+          <label className="card-2" style={{ display: 'flex', gap: '.7rem', alignItems: 'flex-start', padding: '.7rem .85rem', cursor: 'pointer', marginBottom: '.85rem' }}>
+            <input type="checkbox" name="reviewNudgeAuto" defaultChecked={settings.review_nudge_auto} data-testid="toggle-review-nudge-auto" style={{ marginTop: '.15rem', accentColor: 'var(--teal)', width: 16, height: 16 }} />
+            <span>
+              <span style={{ display: 'block', fontSize: '.9rem', fontWeight: 600 }}>Surface automatically on a happy moment</span>
+              <span className="muted" style={{ fontSize: '.78rem' }}>When on, the nudge appears right after a guest rates the concierge highly. When off, it stays a subtle, always-available card.</span>
+            </span>
+          </label>
+
+          <div className="field">
+            <label className="label" htmlFor="reviewUrl">Review link</label>
+            <input className="input" id="reviewUrl" name="reviewUrl" type="url" maxLength={2000}
+              defaultValue={settings.review_url ?? ''} placeholder="https://g.page/r/… or your Airbnb/VRBO review link" data-testid="input-review-url" />
+            <p className="faint" style={{ fontSize: '.72rem', marginTop: '.25rem' }}>
+              Where happy guests are sent to leave a review. The nudge only shows when this is set.
+            </p>
+          </div>
+        </fieldset>
+      </div>
+
+      <div style={{ marginTop: '1rem' }}>
+        <SubmitButton className="btn btn-primary" testId="save-review-nudge">Save review nudge</SubmitButton>
+      </div>
+    </form>
   );
 }
 

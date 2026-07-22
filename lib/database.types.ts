@@ -14,6 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
+      upsell_offers: {
+        Row: {
+          active: boolean
+          created_at: string
+          cta_label: string | null
+          description: string | null
+          id: string
+          price_text: string | null
+          property_id: string
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          cta_label?: string | null
+          description?: string | null
+          id?: string
+          price_text?: string | null
+          property_id: string
+          sort_order?: number
+          title: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          cta_label?: string | null
+          description?: string | null
+          id?: string
+          price_text?: string | null
+          property_id?: string
+          sort_order?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upsell_offers_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_feedback: {
+        Row: {
+          comment: string | null
+          created_at: string
+          guest_session_id: string | null
+          host_account_id: string | null
+          id: string
+          page: string | null
+          property_id: string | null
+          rating: number | null
+          source: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          guest_session_id?: string | null
+          host_account_id?: string | null
+          id?: string
+          page?: string | null
+          property_id?: string | null
+          rating?: number | null
+          source: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          guest_session_id?: string | null
+          host_account_id?: string | null
+          id?: string
+          page?: string | null
+          property_id?: string | null
+          rating?: number | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_feedback_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_feedback_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_feedback_guest_session_id_fkey"
+            columns: ["guest_session_id"]
+            isOneToOne: false
+            referencedRelation: "guest_access_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           key: string
@@ -1620,6 +1722,7 @@ export type Database = {
           restricted_topics: string | null
           review_nudge_auto: boolean
           review_nudge_enabled: boolean
+          review_url: string | null
           system_prompt_override: string | null
           updated_at: string
         }
@@ -1637,6 +1740,7 @@ export type Database = {
           restricted_topics?: string | null
           review_nudge_auto?: boolean
           review_nudge_enabled?: boolean
+          review_url?: string | null
           system_prompt_override?: string | null
           updated_at?: string
         }
@@ -1654,6 +1758,7 @@ export type Database = {
           restricted_topics?: string | null
           review_nudge_auto?: boolean
           review_nudge_enabled?: boolean
+          review_url?: string | null
           system_prompt_override?: string | null
           updated_at?: string
         }

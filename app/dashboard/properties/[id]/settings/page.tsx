@@ -24,7 +24,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
   const planName = ent.planId ? PLANS[ent.planId].name : null;
   const { data: settings } = await supabase
     .from('property_settings')
-    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, modules, concierge_name, system_prompt_override, response_length, restricted_topics, language, is_premium_override')
+    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, review_url, modules, concierge_name, system_prompt_override, response_length, restricted_topics, language, is_premium_override')
     .eq('property_id', property.id)
     .maybeSingle();
 
@@ -36,6 +36,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
     grace_period_hours: typeof settings?.grace_period_hours === 'number' ? settings.grace_period_hours : DEFAULT_GRACE_PERIOD_HOURS,
     review_nudge_enabled: settings?.review_nudge_enabled ?? false,
     review_nudge_auto: settings?.review_nudge_auto ?? false,
+    review_url: settings?.review_url ?? null,
     modules: { ...DEFAULT_MODULES, ...rawModules } as Record<string, boolean>,
     concierge_name: settings?.concierge_name ?? DEFAULT_CONCIERGE_NAME,
     system_prompt_override: settings?.system_prompt_override ?? null,
@@ -57,7 +58,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
           {property.display_name} — branding, concierge voice, and portal modules.
         </p>
       </div>
-      <SettingsForms property={property} settings={normalized} premiumUnlocked={premiumUnlocked} planName={planName} />
+      <SettingsForms property={property} settings={normalized} premiumUnlocked={premiumUnlocked} reviewUnlocked={ent.reviewNudge} planName={planName} />
     </div>
   );
 }

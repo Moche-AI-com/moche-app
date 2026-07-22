@@ -8,6 +8,7 @@ import { outstandingReacceptances } from '@/lib/legal/acceptance';
 import { verifyTrustedDeviceValue } from '@/lib/crypto';
 import { TRUSTED_DEVICE_COOKIE } from '@/lib/constants';
 import { ReacceptanceGate } from './ReacceptanceGate';
+import { FeedbackControl } from './FeedbackControl';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {outstanding.length > 0 ? <ReacceptanceGate slugs={outstanding} /> : null}
       <DashboardNav unread={count ?? 0} />
       <main className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>{children}</main>
+      <FeedbackControl />
     </div>
   );
 }

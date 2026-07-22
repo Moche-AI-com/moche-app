@@ -67,6 +67,7 @@ export const propertySettingsSchema = z.object({
   aiTemperature: z.number().min(0).max(2).optional(),
   reviewNudgeEnabled: z.boolean().optional(),
   reviewNudgeAuto: z.boolean().optional(),
+  reviewUrl: z.string().trim().url('Enter a valid review link (https://…)').max(2000).optional().or(z.literal('')),
   modules: z.record(z.boolean()).optional(),
   // Premium concierge controls (server action enforces the plan gate before persisting).
   conciergeName: z.string().trim().max(80).optional(),
@@ -192,6 +193,35 @@ export const hostLoginOtpSchema = z.object({
 export const guestNotifyConsentSchema = z.object({
   contact: z.string().trim().min(3).max(320),
   consent: z.literal(true),
+});
+
+// Add-on — host-configurable upsell offer (CRUD from the dashboard).
+export const upsellOfferSchema = z.object({
+  title: z.string().trim().min(1, 'Give the offer a title.').max(120),
+  description: z.string().trim().max(1000).optional().or(z.literal('')),
+  priceText: z.string().trim().max(60).optional().or(z.literal('')),
+  ctaLabel: z.string().trim().max(40).optional().or(z.literal('')),
+  active: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+});
+
+// Add-on — guest taps an upsell CTA; routes through the existing escalation path.
+export const guestUpsellRequestSchema = z.object({
+  offerId: z.string().uuid(),
+});
+
+// Add-on — one-tap product feedback (guest path, via admin client).
+export const guestFeedbackSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(1000).optional().or(z.literal('')),
+  page: z.string().trim().max(120).optional().or(z.literal('')),
+});
+
+// Add-on — one-tap product feedback (host path, authenticated).
+export const hostFeedbackSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(1000).optional().or(z.literal('')),
+  page: z.string().trim().max(120).optional().or(z.literal('')),
 });
 
 // Answer an escalation via the signed magic link (no dashboard session).

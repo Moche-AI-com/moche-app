@@ -241,6 +241,70 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
   return { success: 'Concierge settings saved.' };
 }
 
+// Review Nudge config — enable, destination review_url, and the "auto" toggle
+// (surface automatically on a positive guest signal). Gated to Pro+ via the
+// reviewNudge entitlement; enforced HERE (the UI lock is convenience only).
+export async function updateReviewNudgeAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.editProperty) return { error: 'You do not have permission to edit this property.' };
+
+  const supabase = createClient();
+  const ent = await getEntitlements(supabase, access.property.host_account_id);
+  if (!ent.reviewNudge) {
+    return { error: 'The Review nudge is a Pro feature. Upgrade to enable it.' };
+  }
+
+  const parsed = propertySettingsSchema
+    .pick({ reviewUrl: true, reviewNudgeEnabled: true, reviewNudgeAuto: true })
+    .safeParse({
+      reviewUrl: formData.get('reviewUrl') || '',
+      reviewNudgeEnabled: formData.get('reviewNudgeEnabled') === 'on',
+      reviewNudgeAuto: formData.get('reviewNudgeAuto') === 'on',
+    });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the review link.' };
+  const d = parsed.data;
+
+  // Keep the modules.review_nudge flag in sync with the dedicated enable toggle so
+  // the portal module list and this control never disagree.
+  const { data: current } = await supabase
+    .from('property_settings')
+    .select('modules')
+    .eq('property_id', propertyId)
+    .maybeSingle();
+  const modules = { ...DEFAULT_MODULES, ...((current?.modules ?? {}) as Record<string, boolean>) };
+  modules.review_nudge = d.reviewNudgeEnabled ?? false;
+
+  const { error } = await supabase
+    .from('property_settings')
+    .upsert(
+      {
+        property_id: propertyId,
+        review_url: d.reviewUrl ? d.reviewUrl : null,
+        review_nudge_enabled: d.reviewNudgeEnabled ?? false,
+        review_nudge_auto: d.reviewNudgeAuto ?? false,
+        modules: modules as unknown as Json,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'property_id' },
+    );
+
+  if (error) {
+    log.warn('review_nudge_update_failed', { error: error.message });
+    return { error: 'Could not save the review nudge settings. Please try again.' };
+  }
+
+  await audit(supabase, {
+    action: 'property.review_nudge.updated',
+    actorProfileId: access.property.host_account_id,
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+  });
+  revalidatePath(`/dashboard/properties/${propertyId}/settings`);
+  return { success: 'Review nudge saved.' };
+}
+
 async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft' | 'archived') {
   const access = await requirePropertyAccess(propertyId);
   if (!access.can.editProperty) return { error: 'You do not have permission to change this property.' };

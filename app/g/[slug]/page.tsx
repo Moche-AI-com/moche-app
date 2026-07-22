@@ -38,6 +38,34 @@ export default async function GuestPortalPage({ params }: { params: { slug: stri
 
   if (!property || property.status !== 'live') notFound();
 
+  // Add-on data (public-safe, per-property): the review-nudge config and the
+  // active upsell offers. Both are host-curated and safe to expose to a guest of
+  // a live property. Fetched via the same admin client (RLS-bypassing) already used
+  // for the public portal render.
+  const [{ data: addonSettings }, { data: offers }] = await Promise.all([
+    admin
+      .from('property_settings')
+      .select('review_nudge_enabled, review_nudge_auto, review_url')
+      .eq('property_id', property.id)
+      .maybeSingle(),
+    admin
+      .from('upsell_offers')
+      .select('id, title, description, price_text, cta_label')
+      .eq('property_id', property.id)
+      .eq('active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+  ]);
+
+  const reviewNudge = {
+    enabled: !!addonSettings?.review_nudge_enabled && !!addonSettings?.review_url,
+    auto: !!addonSettings?.review_nudge_auto,
+    url: addonSettings?.review_url ?? null,
+  };
+  // Active offers are surfaced whenever the host has configured any — guest
+  // visibility is intentionally NOT gated (creating an offer is the host's opt-in).
+  const upsellOffers = offers ?? [];
+
   // If already verified for THIS property, start in the concierge view.
   const session = await getGuestSession();
   const verified = !!session && session.propertyId === property.id;
@@ -65,6 +93,8 @@ export default async function GuestPortalPage({ params }: { params: { slug: stri
       initialVerified={verified || isHostPreview}
       hostPreview={isHostPreview}
       guestName={verified ? session!.guestDisplayName : null}
+      reviewNudge={reviewNudge}
+      upsellOffers={upsellOffers}
     />
   );
 }

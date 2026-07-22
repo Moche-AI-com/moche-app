@@ -4,9 +4,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
   ConciergeBell, X, Send, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
-  AlertTriangle, type LucideIcon,
+  AlertTriangle, ExternalLink, Check, Plus, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
+import { PremiumImage } from '@/components/PremiumImage';
 
 // Luxury concierge palette (per Feature 3 brief). Fixed dark base + gold accent so the
 // portal reads as a high-end hotel experience regardless of per-property brand colors.
@@ -111,6 +112,15 @@ interface ChatEntry {
   isEmergency?: boolean;
 }
 
+export interface ReviewNudgeConfig { enabled: boolean; auto: boolean; url: string | null }
+export interface UpsellOffer {
+  id: string;
+  title: string;
+  description: string | null;
+  price_text: string | null;
+  cta_label: string | null;
+}
+
 /** Moche.AI dome/bell mark — inlined so the brand-scoped portal needs no external CSS. */
 function DomeMark({ size = 40 }: { size?: number }) {
   const gid = 'gpBrandGrad';
@@ -149,6 +159,8 @@ export function GuestPortal(props: {
   initialVerified: boolean;
   hostPreview: boolean;
   guestName: string | null;
+  reviewNudge: ReviewNudgeConfig;
+  upsellOffers: UpsellOffer[];
 }) {
   const [verified, setVerified] = useState(props.initialVerified);
   const [guestName, setGuestName] = useState(props.guestName);
@@ -217,6 +229,8 @@ export function GuestPortal(props: {
             hostPreview={props.hostPreview}
             propertyName={props.propertyName}
             guestName={guestName}
+            reviewNudge={props.reviewNudge}
+            upsellOffers={props.upsellOffers}
           />
         )}
 
@@ -488,7 +502,7 @@ function playChime() {
   }
 }
 
-function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null }) {
+function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, reviewNudge, upsellOffers }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null; reviewNudge: ReviewNudgeConfig; upsellOffers: UpsellOffer[] }) {
   const [entries, setEntries] = useState<ChatEntry[]>([
     { role: 'assistant', content: `Hi${guestName ? ` ${guestName}` : ''}! I'm your concierge for ${propertyName}. Tap a category below for instant answers — or ask me anything.` },
   ]);
@@ -501,7 +515,14 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: {
   // 4c soft-gate: once a question is escalated to the host, offer to notify the guest
   // when the host replies. 'idle' shows the prompt; 'saved'/'skipped' hide it.
   const [notifyChoice, setNotifyChoice] = useState<'idle' | 'saved' | 'skipped'>('idle');
+  // Add-on: one-tap product feedback. 'idle' shows the subtle micro-prompt; 'rated'
+  // shows a brief thanks. Never a blocking modal.
+  const [feedbackState, setFeedbackState] = useState<'idle' | 'rated'>('idle');
+  // Add-on: review nudge. Shown at most once per session (React state only, NOT
+  // localStorage). 'hidden' until a trigger; 'shown' while visible; 'dismissed' once closed.
+  const [reviewNudgeState, setReviewNudgeState] = useState<'hidden' | 'shown' | 'dismissed'>('hidden');
   const hasEscalation = entries.some((e) => e.escalated);
+  const guestMsgCount = entries.filter((e) => e.role === 'guest').length;
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -553,6 +574,31 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: {
     } finally { setBusy(false); }
   }, [busy, entries, hostPreview, propertyId, slug]);
 
+  // Add-on: one-tap feedback. Records a private product_feedback row (guest path).
+  // A positive rating (4-5) is the signal that surfaces the Review Nudge when the host
+  // has it enabled + set to auto. Best-effort POST — never blocks the concierge.
+  const submitFeedback = useCallback(async (rating: number) => {
+    if (feedbackState !== 'idle') return;
+    setFeedbackState('rated');
+    if (rating >= 4 && reviewNudge.enabled && reviewNudge.auto && reviewNudgeState === 'hidden') {
+      setReviewNudgeState('shown');
+    }
+    if (hostPreview) return; // host preview has no guest session — don't write feedback
+    try {
+      await fetch(`/api/guest/${slug}/feedback`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ rating, page: 'guest_portal' }),
+      });
+    } catch { /* best-effort — feedback never blocks the experience */ }
+  }, [feedbackState, reviewNudge, reviewNudgeState, hostPreview, slug]);
+
+  // Review nudge visibility: when auto, only after a positive signal (shown once).
+  // When not auto, a subtle always-available card until dismissed. Either way it is
+  // an invitation, never shown more than once after dismissal, and never blocks chat.
+  const showReviewNudge = reviewNudge.enabled && !!reviewNudge.url && (
+    reviewNudge.auto ? reviewNudgeState === 'shown' : reviewNudgeState !== 'dismissed'
+  );
+
   // Handle a sub-choice tap: either fire the pre-formed query or focus the free-text input.
   function pickSubChoice(choice: SubChoice) {
     setActiveCategory(null);
@@ -599,6 +645,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: {
           </button>
         ))}
       </div>
+
+      {/* Add-on: Enhancements — host-configured upsell offers. Tapping a CTA routes
+          through the existing escalation + notify() path so the host is alerted. */}
+      {upsellOffers.length > 0 && (
+        <UpsellSection slug={slug} offers={upsellOffers} hostPreview={hostPreview} />
+      )}
 
       {/* Persistent AI disclosure (EU AI Act Art. 50). */}
       <div style={{ marginTop: '1.25rem' }}><AiDisclosure variant="banner" /></div>
@@ -650,6 +702,22 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: {
             <button key={s} onClick={() => send(s)} className="gp-pill" data-testid="suggestion-pill">{s}</button>
           ))}
         </div>
+      )}
+
+      {/* Add-on: review nudge — a tasteful, dismissible invitation shown at most once
+          per session (see showReviewNudge logic). Never blocks the concierge. */}
+      {showReviewNudge && (
+        <ReviewNudgeCard
+          url={reviewNudge.url!}
+          propertyName={propertyName}
+          onDismiss={() => setReviewNudgeState('dismissed')}
+        />
+      )}
+
+      {/* Add-on: one-tap product feedback — appears subtly after a couple of
+          interactions. One tap to rate; a positive rating can surface the review nudge. */}
+      {asked && !busy && guestMsgCount >= 2 && (
+        <FeedbackWidget state={feedbackState} onRate={submitFeedback} />
       )}
 
       {/* De-emphasized free-text input — kept available but secondary to the cards. */}
@@ -883,6 +951,187 @@ function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => 
         </button>
         <button type="button" onClick={onSkip} style={linkBtn} data-testid="button-notify-skip">Skip</button>
       </form>
+    </div>
+  );
+}
+
+// Add-on: Enhancements — host-configured upsell offers rendered as frosted cards.
+// Tapping the CTA routes through the EXISTING escalation + notify() path (the same
+// mechanism the chat route uses for low-confidence questions) so the host is alerted
+// in-app, by email, and (Pro+, consented) by SMS. No new guest channel is invented.
+// Guest visibility is intentionally NOT gated — the host creating an offer is the opt-in.
+function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: UpsellOffer[]; hostPreview: boolean }) {
+  // Per-offer request state so each card independently reflects idle/sending/done.
+  const [state, setState] = useState<Record<string, 'idle' | 'busy' | 'done' | 'error'>>({});
+
+  const request = useCallback(async (offerId: string) => {
+    if (state[offerId] === 'busy' || state[offerId] === 'done') return;
+    // Host preview is read-only — reflect success without creating a real escalation.
+    if (hostPreview) { setState((s) => ({ ...s, [offerId]: 'done' })); return; }
+    setState((s) => ({ ...s, [offerId]: 'busy' }));
+    try {
+      const res = await fetch(`/api/guest/${slug}/upsell-request`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ offerId }),
+      });
+      if (!res.ok) throw new Error();
+      setState((s) => ({ ...s, [offerId]: 'done' }));
+    } catch {
+      setState((s) => ({ ...s, [offerId]: 'error' }));
+    }
+  }, [hostPreview, slug, state]);
+
+  return (
+    <section style={{ marginTop: '1.5rem' }} data-testid="upsell-section">
+      {/* Premium banner — drops to a gold-tinted dark gradient if the asset is absent. */}
+      <PremiumImage
+        src="/premium/enhancements-banner.jpg"
+        alt=""
+        aspectRatio="21 / 6"
+        radius={16}
+        sizes="(max-width: 720px) 100vw, 720px"
+        className="gp-upsell-banner"
+      >
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', padding: '.9rem 1.1rem', background: 'linear-gradient(to top, rgba(13,15,20,.75), transparent 70%)' }}>
+          <span className="gp-serif" style={{ fontSize: '1.25rem', color: '#fbf7ef' }}>Elevate your stay</span>
+        </div>
+      </PremiumImage>
+      <div style={{ fontSize: '.72rem', opacity: 0.5, margin: '.7rem .15rem .6rem', textTransform: 'uppercase', letterSpacing: '.14em' }}>
+        Add to your stay
+      </div>
+      <div className="gp-upsells">
+        {offers.map((offer) => {
+          const st = state[offer.id] ?? 'idle';
+          const done = st === 'done';
+          return (
+            <div key={offer.id} style={{ ...cardStyle, padding: '1.15rem' }} className="gp-card" data-testid={`upsell-offer-${offer.id}`}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
+                <span className="gp-serif" style={{ fontSize: '1.15rem', color: '#fbf7ef', lineHeight: 1.2 }}>{offer.title}</span>
+                {offer.price_text && (
+                  <span style={{ color: GOLD, fontWeight: 600, fontSize: '.85rem', flexShrink: 0 }}>{offer.price_text}</span>
+                )}
+              </div>
+              {offer.description && (
+                <p style={{ opacity: 0.7, fontSize: '.85rem', margin: '.4rem 0 .9rem', lineHeight: 1.45 }}>{offer.description}</p>
+              )}
+              <button
+                onClick={() => request(offer.id)}
+                className="gp-upsell-cta"
+                disabled={st === 'busy' || done}
+                data-testid={`button-upsell-request-${offer.id}`}
+              >
+                {done ? (
+                  <><Check size={15} aria-hidden /> Requested</>
+                ) : st === 'busy' ? (
+                  'Sending…'
+                ) : (
+                  <><Plus size={15} aria-hidden /> {offer.cta_label || 'Request'}</>
+                )}
+              </button>
+              {st === 'error' && (
+                <div style={{ ...alertErr, marginTop: '.7rem', marginBottom: 0 }} data-testid={`upsell-error-${offer.id}`}>
+                  Couldn&apos;t send that just now. Please try again.
+                </div>
+              )}
+              {done && (
+                <div style={{ fontSize: '.74rem', opacity: 0.65, marginTop: '.55rem' }}>
+                  Sent to your host — they&apos;ll follow up to confirm.
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <style jsx>{`
+        .gp-upsells { display: grid; grid-template-columns: 1fr; gap: .6rem; }
+        @media (min-width: 520px) { .gp-upsells { grid-template-columns: repeat(2, 1fr); } }
+        .gp-upsell-cta {
+          display: inline-flex; align-items: center; gap: .4rem; padding: .6rem 1rem;
+          border-radius: 999px; cursor: pointer; font-size: .85rem; font-weight: 600;
+          color: #1a1206; border: none; background: linear-gradient(145deg, #e7d3a6, ${GOLD});
+          transition: transform .18s, box-shadow .18s, opacity .18s;
+        }
+        .gp-upsell-cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 26px -14px rgba(201,169,110,.9); }
+        .gp-upsell-cta:disabled { opacity: .7; cursor: default; }
+        @media (prefers-reduced-motion: reduce) { .gp-upsell-cta:hover:not(:disabled) { transform: none; } }
+      `}</style>
+    </section>
+  );
+}
+
+// Add-on: Review nudge — a tasteful, dismissible invitation to leave a review. Shown at
+// most once per session (visibility governed by the caller's reviewNudgeState). The CTA
+// opens the host-configured review URL in a new tab. Never blocks the concierge.
+function ReviewNudgeCard({ url, propertyName, onDismiss }: { url: string; propertyName: string; onDismiss: () => void }) {
+  return (
+    <div style={{ ...cardStyle, marginTop: '.9rem', padding: '1.15rem' }} className="gp-card gp-rise" data-testid="review-nudge-card">
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        data-testid="button-review-nudge-dismiss"
+        style={{ position: 'absolute', top: 10, right: 10, width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.04)', color: 'inherit', opacity: 0.6, cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+      >
+        <X size={15} aria-hidden />
+      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.35rem', paddingRight: '2rem' }}>
+        <Star size={18} aria-hidden style={{ color: GOLD, fill: GOLD }} />
+        <span className="gp-serif" style={{ fontSize: '1.15rem', color: '#fbf7ef' }}>Enjoying your stay?</span>
+      </div>
+      <p style={{ opacity: 0.7, fontSize: '.85rem', margin: '0 0 .9rem', lineHeight: 1.45 }}>
+        If everything&apos;s been wonderful, a quick review for {propertyName} means the world.
+      </p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="gp-review-cta"
+        data-testid="link-review-nudge"
+      >
+        <Star size={15} aria-hidden /> Leave a review <ExternalLink size={13} aria-hidden style={{ opacity: 0.7 }} />
+      </a>
+      <style jsx>{`
+        .gp-review-cta {
+          display: inline-flex; align-items: center; gap: .45rem; padding: .65rem 1.1rem;
+          border-radius: 999px; text-decoration: none; font-size: .85rem; font-weight: 600;
+          color: #1a1206; background: linear-gradient(145deg, #e7d3a6, ${GOLD});
+          transition: transform .18s, box-shadow .18s;
+        }
+        .gp-review-cta:hover { transform: translateY(-1px); box-shadow: 0 10px 26px -14px rgba(201,169,110,.9); }
+        @media (prefers-reduced-motion: reduce) { .gp-review-cta:hover { transform: none; } }
+      `}</style>
+    </div>
+  );
+}
+
+// Add-on: one-tap product feedback — a subtle 1-5 star micro-prompt. One tap records a
+// private product_feedback row and shows a brief thanks. Never a blocking modal; a
+// positive (4-5) rating is the signal that can surface the Review Nudge.
+function FeedbackWidget({ state, onRate }: { state: 'idle' | 'rated'; onRate: (rating: number) => void }) {
+  const [hover, setHover] = useState(0);
+  if (state === 'rated') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginTop: '.9rem', fontSize: '.8rem', opacity: 0.7 }} data-testid="feedback-thanks">
+        <Check size={15} aria-hidden style={{ color: GOLD }} /> Thanks for the feedback.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem', marginTop: '.9rem', flexWrap: 'wrap' }} data-testid="feedback-widget">
+      <span style={{ fontSize: '.8rem', opacity: 0.6 }}>How&apos;s your concierge experience?</span>
+      <div style={{ display: 'inline-flex', gap: '.15rem' }} onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            onClick={() => onRate(n)}
+            onMouseEnter={() => setHover(n)}
+            aria-label={`Rate ${n} of 5`}
+            data-testid={`button-feedback-${n}`}
+            style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', lineHeight: 0, color: GOLD }}
+          >
+            <Star size={18} aria-hidden style={{ fill: n <= hover ? GOLD : 'transparent', opacity: n <= hover ? 1 : 0.5 }} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
