@@ -59,12 +59,18 @@ function extractJsonObject(raw: string): unknown | null {
 
 type GenerateFn = (messages: ChatMessage[], opts?: GenerateOptions) => Promise<GenerateResult>;
 
+// Node normalization is an extraction task: declare the tier so routedCompletion picks
+// the extraction model (gpt-4o-mini) when external routing is enabled. With no
+// OPENROUTER_API_KEY set this is a no-op and behaves exactly as before (in-house provider).
+const extractionCompletion: GenerateFn = (messages, opts) =>
+  routedCompletion(messages, opts, { task: 'extraction' });
+
 // Extract a validated structured node from free-text host content.
 // One initial attempt (temperature 0) plus a single higher-effort retry. Returns
 // null on any failure — the caller must treat null as "skip", never as an error.
 export async function normalizeToNode(
   input: { nodeType: NodeType; title: string; body: string },
-  generate: GenerateFn = routedCompletion,
+  generate: GenerateFn = extractionCompletion,
 ): Promise<NormalizedNode | null> {
   const source = `${input.title}\n\n${input.body}`.trim();
   if (!source) return null;

@@ -35,8 +35,28 @@ export const serverEnv = {
   // uses the existing OpenAI provider and behaves identically to today. When a key is
   // present, eligible tasks are routed to OpenRouter (PII redacted before the external call).
   openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+  // Legacy/default model slug. Still honored as the fallback default for any tier that
+  // does not have its own override set below (keeps existing single-model config working).
   openrouterModel: process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
   openrouterBaseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+
+  // Per-tier model slugs. Each task type maps to a cost/quality-appropriate model.
+  // Extraction & general use a cheap, reliable small model; classification uses an
+  // open-weight Llama; concierge (guest-facing) uses a stronger model but is gated OFF.
+  openrouterModelExtraction:
+    process.env.OPENROUTER_MODEL_EXTRACTION ?? process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
+  openrouterModelClassification:
+    process.env.OPENROUTER_MODEL_CLASSIFICATION ?? 'meta-llama/llama-3.1-8b-instruct',
+  openrouterModelConcierge:
+    process.env.OPENROUTER_MODEL_CONCIERGE ?? 'anthropic/claude-haiku-4.5',
+  openrouterModelGeneral:
+    process.env.OPENROUTER_MODEL_GENERAL ?? process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
+
+  // Concierge (guest-facing) external routing is OFF by default even when an
+  // OPENROUTER_API_KEY is present: guest answers stay on the in-house OpenAI provider
+  // unless this is explicitly enabled. Extraction/classification/general may route as
+  // soon as a key is set.
+  openrouterConciergeEnabled: bool(process.env.OPENROUTER_CONCIERGE_ENABLED, false),
 
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',

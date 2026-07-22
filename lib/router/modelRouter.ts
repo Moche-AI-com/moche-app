@@ -9,9 +9,9 @@ import { redactPII, redactMessages, containsLikelyPII } from '@/lib/ai/redaction
 // here so existing importers of `@/lib/router/modelRouter` keep working unchanged.
 export { redactPII };
 
-// Coarse task taxonomy used to decide how a completion should be routed. The POC
-// only needs a lightweight signal; richer policies (per-tier model maps, cost caps)
-// can hang off this later without touching call sites.
+// Coarse task taxonomy used to decide how a completion should be routed. Each task
+// maps to a cost/quality-appropriate model tier (see modelForTask) and to whether the
+// external route is eligible at all (see shouldRouteExternally).
 export type TaskType = 'extraction' | 'concierge' | 'classification' | 'general';
 
 // Classify a unit of work from a short caller-supplied hint. Purely heuristic and
@@ -34,6 +34,48 @@ export interface RouteOptions {
   task?: TaskType;
 }
 
+// The slice of server env this router reads. Injectable so the pure routing helpers
+// (modelForTask / shouldRouteExternally) are unit-testable without touching real env.
+export type RouterEnv = Pick<
+  typeof serverEnv,
+  | 'openrouterApiKey'
+  | 'openrouterModel'
+  | 'openrouterBaseUrl'
+  | 'openrouterModelExtraction'
+  | 'openrouterModelClassification'
+  | 'openrouterModelConcierge'
+  | 'openrouterModelGeneral'
+  | 'openrouterConciergeEnabled'
+>;
+
+// Per-task model tier. Falls back to the legacy `openrouterModel` default only via the
+// per-tier env defaults (see lib/env.ts), so an unset tier still resolves to a slug.
+export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string {
+  switch (task) {
+    case 'extraction':
+      return env.openrouterModelExtraction;
+    case 'classification':
+      return env.openrouterModelClassification;
+    case 'concierge':
+      return env.openrouterModelConcierge;
+    case 'general':
+    default:
+      return env.openrouterModelGeneral;
+  }
+}
+
+// Whether a given task is eligible to leave our infra for OpenRouter.
+//   - No API key  → never (behaves exactly like today: in-house OpenAI provider).
+//   - concierge   → only when explicitly enabled; guest-facing answers stay in-house
+//                   by default so we never send guest conversations to a third party
+//                   without an intentional opt-in.
+//   - other tasks → eligible as soon as a key is present.
+export function shouldRouteExternally(task: TaskType, env: RouterEnv = serverEnv): boolean {
+  if (!env.openrouterApiKey) return false;
+  if (task === 'concierge') return env.openrouterConciergeEnabled;
+  return true;
+}
+
 // Thrown when the external (OpenRouter) path is refused because redacted content
 // still appears to contain PII. Callers catch this and fall back to the in-house
 // provider — a leak is never worth completing the external request.
@@ -44,15 +86,38 @@ export class ExternalRouteRefused extends Error {
   }
 }
 
-async function openrouterGenerate(messages: ChatMessage[], opts?: GenerateOptions): Promise<GenerateResult> {
+// Hardened Zero-Data-Retention provider restriction sent on every external request.
+//   zdr: true             — request Zero-Data-Retention (no prompt/response retention).
+//   data_collection:'deny'— refuse any downstream provider that collects/trains on data.
+//   allow_fallbacks:false — never silently fall through to a provider that lacks the
+//                           above guarantees; fail closed so the caller falls back to
+//                           the in-house provider instead.
+export const ZDR_PROVIDER_RESTRICTION = {
+  zdr: true,
+  data_collection: 'deny',
+  allow_fallbacks: false,
+} as const;
+
+// Defense-in-depth: after redaction, refuse the external route if any message content
+// still trips the PII detector. Pure + exported so the guarantee is directly testable.
+export function assertNoResidualPII(messages: ChatMessage[]): void {
+  if (messages.some((m) => containsLikelyPII(m.content))) {
+    throw new ExternalRouteRefused('redacted payload still contains likely PII');
+  }
+}
+
+async function openrouterGenerate(
+  messages: ChatMessage[],
+  opts: GenerateOptions | undefined,
+  task: TaskType,
+): Promise<GenerateResult> {
   const url = `${serverEnv.openrouterBaseUrl.replace(/\/$/, '')}/chat/completions`;
+  const model = modelForTask(task, serverEnv);
   // Redact BEFORE anything leaves our infra, then run a post-redaction sanity
   // check. If PII survived redaction, refuse the external route entirely rather
   // than risk sending it — the caller falls back to the in-house provider.
   const redacted = redactMessages(messages);
-  if (redacted.some((m) => containsLikelyPII(m.content))) {
-    throw new ExternalRouteRefused('redacted payload still contains likely PII');
-  }
+  assertNoResidualPII(redacted);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -64,12 +129,13 @@ async function openrouterGenerate(messages: ChatMessage[], opts?: GenerateOption
       'X-OpenRouter-ZDR': 'true',
     },
     body: JSON.stringify({
-      model: serverEnv.openrouterModel,
+      model,
       messages: redacted,
       temperature: opts?.temperature ?? 0.3,
       max_tokens: opts?.maxTokens ?? 600,
-      // Provider-level ZDR flag per OpenRouter's API (header + body, belt & braces).
-      provider: { zdr: true },
+      // Provider-level hardened ZDR restriction per OpenRouter's API (header + body,
+      // belt & braces). See ZDR_PROVIDER_RESTRICTION for the rationale of each flag.
+      provider: ZDR_PROVIDER_RESTRICTION,
     }),
     signal: AbortSignal.timeout(30_000),
   });
@@ -83,7 +149,7 @@ async function openrouterGenerate(messages: ChatMessage[], opts?: GenerateOption
   };
   return {
     text: json.choices[0]?.message?.content ?? '',
-    model: json.model ?? serverEnv.openrouterModel,
+    model: json.model ?? model,
     usage: {
       promptTokens: json.usage?.prompt_tokens ?? 0,
       completionTokens: json.usage?.completion_tokens ?? 0,
@@ -91,28 +157,31 @@ async function openrouterGenerate(messages: ChatMessage[], opts?: GenerateOption
   };
 }
 
-// Generate a completion, optionally routed through OpenRouter.
+// Generate a completion, optionally routed through OpenRouter per task tier.
 //
 // DEFAULT (no OPENROUTER_API_KEY): identical to today — delegates straight to the
-// existing OpenAI provider with the original, un-redacted messages.
+// existing OpenAI provider with the original, un-redacted messages, for every task.
 //
-// When OPENROUTER_API_KEY is set: PII is redacted, a Zero-Data-Retention flag is
-// set on the request, and a post-redaction sanity check runs. If PII survives
-// redaction the external route is REFUSED (ExternalRouteRefused). Any failure —
-// refusal, network error, or non-2xx — falls back to the in-house provider (with
-// the original messages) so enabling routing can never degrade correctness.
+// When OPENROUTER_API_KEY is set: eligible tasks (see shouldRouteExternally — concierge
+// stays in-house unless explicitly enabled) are routed to the task's model tier. PII is
+// redacted, a hardened Zero-Data-Retention restriction is set on the request, and a
+// post-redaction sanity check runs. If PII survives redaction the external route is
+// REFUSED (ExternalRouteRefused). Any failure — refusal, network error, or non-2xx —
+// falls back to the in-house provider (with the original messages) so enabling routing
+// can never degrade correctness.
 export async function routedCompletion(
   messages: ChatMessage[],
   opts?: GenerateOptions,
-  _route?: RouteOptions,
+  route?: RouteOptions,
 ): Promise<GenerateResult> {
-  if (!serverEnv.openrouterApiKey) {
+  const task: TaskType = route?.task ?? 'general';
+  if (!shouldRouteExternally(task, serverEnv)) {
     return getAIProvider().generate(messages, opts);
   }
   try {
-    return await openrouterGenerate(messages, opts);
+    return await openrouterGenerate(messages, opts, task);
   } catch (e) {
-    log.warn('openrouter_route_failed_fallback', { error: String(e) });
+    log.warn('openrouter_route_failed_fallback', { task, error: String(e) });
     return getAIProvider().generate(messages, opts);
   }
 }
