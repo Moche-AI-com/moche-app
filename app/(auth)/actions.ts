@@ -1,9 +1,12 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { signupSchema, loginSchema, resetRequestSchema, resetUpdateSchema } from '@/lib/validation';
-import { publicEnv } from '@/lib/env';
+import { publicEnv, hasServiceRole } from '@/lib/env';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { recordAcceptances } from '@/lib/legal/acceptance';
 import { log } from '@/lib/log';
 
 export interface FormState {
@@ -24,7 +27,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   }
   const { email, password, fullName, accountName } = parsed.data;
   const supabase = createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -37,6 +40,20 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     log.warn('signup_failed', { reason: error.message });
     return { error: error.message };
   }
+
+  // Record the clickwrap consent (Terms + Privacy) as an auditable acceptance row.
+  // The user has no active session yet (email verification pending), so use the
+  // service-role client. Best-effort — never block signup if logging fails.
+  if (data.user && hasServiceRole()) {
+    const h = headers();
+    await recordAcceptances(createAdminClient(), {
+      userId: data.user.id,
+      context: 'signup',
+      ip: h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+      userAgent: h.get('user-agent'),
+    });
+  }
+
   redirect('/verify-email');
 }
 

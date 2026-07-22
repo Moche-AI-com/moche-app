@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { AiDisclosure } from '@/components/AiDisclosure';
 
 const QUICK_ACTIONS = [
   { key: 'wifi', label: 'WiFi', question: 'What is the WiFi network and password?', emoji: '📶' },
@@ -391,6 +392,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, acc
 
   return (
     <div className="gp-rise">
+      {/* Persistent AI disclosure (EU AI Act Art. 50) — always visible above the chat. */}
+      <AiDisclosure variant="banner" />
+
       {/* Presence banner — makes the concierge feel live and personal. */}
       <div style={presenceBar}>
         <DomeMark size={30} />
@@ -453,6 +457,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, acc
           <span>Send</span><span aria-hidden>→</span>
         </button>
       </form>
+
+      {/* Subtle reminder near the input that answers are AI-generated. */}
+      <AiDisclosure variant="note" />
 
       <style jsx>{`
         .gp-rise { animation: gpRise .5s cubic-bezier(.16,1,.3,1) both; }

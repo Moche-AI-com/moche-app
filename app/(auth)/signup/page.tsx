@@ -41,8 +41,12 @@ function SignupForm() {
           <input className="input" id="password" name="password" type="password" autoComplete="new-password" required minLength={10} />
         </div>
         <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', fontSize: '.82rem', marginBottom: '1rem' }} className="muted">
-          <input type="checkbox" name="acceptTerms" required style={{ marginTop: '.2rem' }} />
-          <span>I agree to the Terms of Service and Privacy Policy.</span>
+          <input type="checkbox" name="acceptTerms" required style={{ marginTop: '.2rem' }} data-testid="signup-accept-terms" />
+          <span>
+            I agree to the{' '}
+            <Link href="/legal/terms" target="_blank" className="gradient-text">Terms of Service</Link>{' '}and{' '}
+            <Link href="/legal/privacy" target="_blank" className="gradient-text">Privacy Policy</Link>.
+          </span>
         </label>
         <SubmitButton>Create account</SubmitButton>
       </form>

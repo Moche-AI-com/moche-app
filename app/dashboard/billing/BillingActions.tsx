@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { PlanId } from '@/lib/constants';
 
 type Props =
@@ -10,6 +11,7 @@ type Props =
 export function BillingActions(props: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
 
   async function go(endpoint: string, body: Record<string, unknown>) {
     setLoading(true);
@@ -53,11 +55,21 @@ export function BillingActions(props: Props) {
 
   return (
     <div>
+      {/* Clickwrap: unchecked by default, required before a paid subscription starts. */}
+      <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', fontSize: '.75rem', marginBottom: '.6rem' }} className="muted">
+        <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: '.15rem' }} data-testid="checkout-accept-terms" />
+        <span>
+          I agree to the{' '}
+          <Link href="/legal/terms" target="_blank" className="gradient-text">Terms</Link>,{' '}
+          <Link href="/legal/privacy" target="_blank" className="gradient-text">Privacy Policy</Link>, and{' '}
+          <Link href="/legal/dpa" target="_blank" className="gradient-text">Data Processing Addendum</Link>.
+        </span>
+      </label>
       <button
         type="button"
         className="btn btn-sm btn-primary btn-block"
-        disabled={!props.configured || loading}
-        onClick={() => go('/api/stripe/checkout', { planId: props.planId, interval: 'monthly' })}
+        disabled={!props.configured || loading || !agreed}
+        onClick={() => go('/api/stripe/checkout', { planId: props.planId, interval: 'monthly', acceptTerms: true })}
         title={props.configured ? undefined : 'Connect Stripe to subscribe'}
       >
         {loading ? 'Redirecting…' : props.configured ? 'Choose plan' : 'Unavailable'}

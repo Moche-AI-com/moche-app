@@ -22,6 +22,20 @@ export interface Entitlements {
 
 const ACTIVE_STATUSES: Subscription['status'][] = ['trialing', 'active', 'past_due'];
 
+// Statuses for which a property's guest AI concierge stays ENABLED. Mirrors
+// ACTIVE_STATUSES: trialing/active are fully paid-up, past_due is a grace period
+// during dunning (we keep guests served while the host resolves payment). Blocked
+// statuses: unpaid (dunning exhausted), canceled, incomplete, incomplete_expired,
+// paused. Uses the EXISTING subscription_status enum — no new states invented.
+const GUEST_AI_ENABLED_STATUSES: Subscription['status'][] = ['trialing', 'active', 'past_due'];
+
+// Whether the guest AI concierge should run for a host account's subscription.
+// A missing subscription (free tier / never subscribed) is NOT guest-AI enabled:
+// the public concierge is a paid capability. Derived from the DB, never the client.
+export function guestAiEnabled(sub: Subscription | null): boolean {
+  return !!sub && GUEST_AI_ENABLED_STATUSES.includes(sub.status);
+}
+
 // Entitlements are DERIVED FROM THE DATABASE, never trusted from the client.
 // A missing/inactive subscription grants the minimum (1 property, no paid features).
 export function entitlementsFromSubscription(sub: Subscription | null): Entitlements {
@@ -67,6 +81,18 @@ export async function getEntitlements(client: Client, hostAccountId: string): Pr
     .eq('host_account_id', hostAccountId)
     .maybeSingle();
   return entitlementsFromSubscription(sub ?? null);
+}
+
+// Guest-AI gate for a host account: true when billing status permits serving the
+// guest concierge. Reused by the guest chat path (Part 4) to fail gracefully
+// instead of calling the model for an unpaid/canceled account.
+export async function isGuestAiEnabled(client: Client, hostAccountId: string): Promise<boolean> {
+  const { data: sub } = await client
+    .from('subscriptions')
+    .select('*')
+    .eq('host_account_id', hostAccountId)
+    .maybeSingle();
+  return guestAiEnabled(sub ?? null);
 }
 
 // Enforces the property cap. Counts non-archived, non-deleted properties.

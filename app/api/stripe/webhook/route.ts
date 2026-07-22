@@ -154,6 +154,46 @@ export async function POST(req: Request) {
         break;
       }
 
+      case 'invoice.payment_succeeded': {
+        // Clears dunning: a recovered payment moves past_due/unpaid back to active.
+        // Guarded so we NEVER clobber a canceled/paused/incomplete row (e.g. a final
+        // proration invoice paid after cancellation must not resurrect the sub).
+        const invoice = event.data.object as Stripe.Invoice;
+        const subId = idOf(invoice.subscription);
+        const customerId = idOf(invoice.customer);
+        if (!subId && !customerId) break;
+
+        let query = admin.from('subscriptions').select('host_account_id, status');
+        query = subId
+          ? query.eq('stripe_subscription_id', subId)
+          : query.eq('stripe_customer_id', customerId!);
+        const { data: row } = await query.maybeSingle();
+
+        // Only transition when currently in a dunning state. Leave everything else as-is.
+        if (row && (row.status === 'past_due' || row.status === 'unpaid')) {
+          const update = admin
+            .from('subscriptions')
+            .update({ status: 'active' as SubStatus, updated_at: new Date().toISOString() });
+          const { error } = subId
+            ? await update.eq('stripe_subscription_id', subId)
+            : await update.eq('stripe_customer_id', customerId!);
+          if (error) {
+            log.error('stripe_webhook_update_failed', { type: event.type, error: error.message });
+            return NextResponse.json({ error: 'Persist failed.' }, { status: 500 });
+          }
+          if (row.host_account_id) {
+            await notify(admin, {
+              hostAccountId: row.host_account_id,
+              kind: 'billing',
+              title: 'Payment received',
+              body: 'Your payment went through and your subscription is active again.',
+              link: '/dashboard/billing',
+            });
+          }
+        }
+        break;
+      }
+
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
         const subId = idOf(invoice.subscription);

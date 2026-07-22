@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import { z } from 'zod';
 import { getSessionContext } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getStripe, priceIdFor, BillingNotConfiguredError } from '@/lib/billing/stripe';
 import { publicEnv, serverEnv } from '@/lib/env';
 import { ACTIVATION_FEE_ENABLED } from '@/lib/constants';
+import { recordAcceptances } from '@/lib/legal/acceptance';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 
@@ -14,6 +16,9 @@ export const dynamic = 'force-dynamic';
 const bodySchema = z.object({
   planId: z.enum(['starter', 'pro', 'portfolio']),
   interval: z.enum(['monthly', 'annual']).default('monthly'),
+  // Clickwrap: the checkout UI presents an unchecked-by-default agreement box.
+  // Required true so a paid subscription is never created without recorded consent.
+  acceptTerms: z.literal(true),
 });
 
 export async function POST(req: Request) {
@@ -55,6 +60,17 @@ export async function POST(req: Request) {
 
   const supabase = createClient();
   const hostAccountId = ctx.account.id;
+
+  // Record the checkout clickwrap consent against the authenticated user (RLS lets a
+  // user insert their own acceptance rows). Best-effort — never blocks checkout.
+  const h = headers();
+  await recordAcceptances(supabase, {
+    userId: ctx.user.id,
+    hostAccountId,
+    context: 'checkout',
+    ip: h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    userAgent: h.get('user-agent'),
+  });
 
   try {
     // Ensure a Stripe customer exists for this account, reusing any stored id so we

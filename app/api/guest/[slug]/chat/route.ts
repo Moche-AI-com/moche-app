@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { guestChatSchema } from '@/lib/validation';
 import { answerGuestQuestion } from '@/lib/guest/concierge';
+import { isGuestAiEnabled } from '@/lib/billing/entitlements';
 import { maybeCreateServiceRequest } from '@/lib/guest/maintenance';
 import { notify } from '@/lib/notify';
 import { capture } from '@/lib/posthog-server';
@@ -30,9 +31,26 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
 
   // Confirm the slug matches the session's property (defense in depth).
   const { data: property } = await admin
-    .from('properties').select('id, display_name, slug').eq('id', session.propertyId).maybeSingle();
+    .from('properties').select('id, display_name, slug, host_account_id').eq('id', session.propertyId).maybeSingle();
   if (!property || property.slug !== params.slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
+  }
+
+  // Part 4 — gate guest AI on the host account's billing status. If the account is
+  // not in the guest-AI-enabled set (trialing/active/past_due), respond gracefully
+  // WITHOUT calling the model, embedding, or creating a conversation/escalation.
+  const aiEnabled = await isGuestAiEnabled(admin, property.host_account_id);
+  if (!aiEnabled) {
+    return NextResponse.json({
+      ok: true,
+      answer:
+        "The concierge is temporarily unavailable for this property. Please contact your host directly — and for any emergency, contact local emergency services first.",
+      confidence: 0,
+      escalated: false,
+      isEmergency: false,
+      serviceRequestCreated: false,
+      unavailable: true,
+    });
   }
 
   // Host-configurable concierge behavior (tone, creativity, escalation threshold).

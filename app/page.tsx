@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getUser } from '@/lib/auth/guards';
 import { Logo } from '@/components/Logo';
+import { LegalLinks } from '@/components/legal/LegalLinks';
 import { PLANS, ACTIVATION_FEE_USD, ACTIVATION_FEE_ENABLED } from '@/lib/constants';
 
 export default async function Home() {
@@ -30,6 +31,12 @@ export default async function Home() {
           <Link href="/signup" className="btn btn-primary btn-lg">Create your host account</Link>
           <Link href="/login" className="btn btn-ghost btn-lg">Sign in</Link>
         </div>
+        <p className="faint" style={{ fontSize: '.75rem', marginTop: '.9rem' }}>
+          By creating an account you agree to our{' '}
+          <Link href="/legal/terms" className="muted">Terms</Link>,{' '}
+          <Link href="/legal/privacy" className="muted">Privacy Policy</Link>, and{' '}
+          <Link href="/legal/refund" className="muted">Refund Policy</Link>.
+        </p>
       </section>
 
       <section id="pricing" className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
@@ -90,8 +97,9 @@ export default async function Home() {
         </p>
       </section>
 
-      <footer className="wrap" style={{ paddingBottom: '2.5rem', fontSize: '.75rem', opacity: 0.45 }}>
-        Built in Somerville, MA
+      <footer className="wrap" style={{ paddingTop: '1.5rem', paddingBottom: '2.5rem', borderTop: '1px solid var(--border, rgba(255,255,255,.08))' }}>
+        <LegalLinks variant="full" style={{ marginBottom: '1rem' }} />
+        <p style={{ fontSize: '.75rem', opacity: 0.45, margin: 0 }}>Built in Somerville, MA</p>
       </footer>
     </main>
   );

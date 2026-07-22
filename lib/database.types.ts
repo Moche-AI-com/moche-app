@@ -810,6 +810,77 @@ export type Database = {
           },
         ]
       }
+      legal_documents: {
+        Row: {
+          created_at: string
+          effective_date: string
+          id: string
+          sha256: string | null
+          slug: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          effective_date: string
+          id?: string
+          sha256?: string | null
+          slug: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          effective_date?: string
+          id?: string
+          sha256?: string | null
+          slug?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      legal_acceptances: {
+        Row: {
+          accepted_at: string
+          context: string
+          document_slug: string
+          document_version: string
+          host_account_id: string | null
+          id: string
+          ip: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          context?: string
+          document_slug: string
+          document_version: string
+          host_account_id?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          context?: string
+          document_slug?: string
+          document_version?: string
+          host_account_id?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_acceptances_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       host_accounts: {
         Row: {
           created_at: string
