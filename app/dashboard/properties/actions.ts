@@ -152,12 +152,19 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
   if (!access.can.editProperty) return { error: 'You do not have permission to edit this property.' };
 
   const supabase = createClient();
-  // Concierge customization is a paid upgrade (Pro and up). Enforce server-side — the UI
-  // lock is convenience only; this is the real boundary.
+
+  // The three core sliders (creativity, escalation sensitivity, post-checkout hours)
+  // are FREE for everyone. Persona & advanced controls (name, tone, language, response
+  // length, restricted topics, custom system prompt, portal modules) are premium: a
+  // paid plan OR the per-property is_premium_override unlocks them. Enforced HERE — the
+  // UI lock is convenience only; this is the real boundary.
   const ent = await getEntitlements(supabase, access.property.host_account_id);
-  if (!ent.conciergeCustomization) {
-    return { error: 'Concierge customization is available on the Pro plan and above. Upgrade to tune tone, creativity, escalation, and portal modules.' };
-  }
+  const { data: current } = await supabase
+    .from('property_settings')
+    .select('is_premium_override')
+    .eq('property_id', propertyId)
+    .maybeSingle();
+  const premiumUnlocked = ent.conciergeCustomization || (current?.is_premium_override ?? false);
 
   // Module toggles arrive as individual checkbox fields (module_<key>). Rebuild the full
   // modules map from DEFAULT_MODULES so unchecked boxes are stored as false.
@@ -175,6 +182,11 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
     aiTemperature: rawTemp !== null && rawTemp !== '' ? Number(rawTemp) : undefined,
     confidenceThreshold: rawThreshold !== null && rawThreshold !== '' ? Number(rawThreshold) : undefined,
     gracePeriodHours: rawGrace !== null && rawGrace !== '' ? Number(rawGrace) : undefined,
+    conciergeName: formData.get('conciergeName') || undefined,
+    systemPromptOverride: formData.get('systemPromptOverride') || undefined,
+    responseLength: formData.get('responseLength') || undefined,
+    restrictedTopics: formData.get('restrictedTopics') || undefined,
+    language: formData.get('language') || undefined,
     // Review nudge is driven by the module toggle below; mirror it onto the dedicated flag.
     reviewNudgeEnabled: modules.review_nudge,
     modules,
@@ -182,18 +194,31 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the concierge settings.' };
   const d = parsed.data;
 
+  // Free fields always persist. Premium fields persist only when unlocked — a free user
+  // POSTing premium fields (disabled fieldsets do not submit, but be defensive) is ignored.
+  const premiumPatch = premiumUnlocked
+    ? {
+        ...(d.conciergeTone !== undefined ? { concierge_tone: d.conciergeTone } : {}),
+        ...(d.conciergeName !== undefined ? { concierge_name: d.conciergeName } : {}),
+        ...(d.systemPromptOverride !== undefined ? { system_prompt_override: d.systemPromptOverride || null } : {}),
+        ...(d.responseLength !== undefined ? { response_length: d.responseLength } : {}),
+        ...(d.restrictedTopics !== undefined ? { restricted_topics: d.restrictedTopics || null } : {}),
+        ...(d.language !== undefined ? { language: d.language } : {}),
+        ...(d.reviewNudgeEnabled !== undefined ? { review_nudge_enabled: d.reviewNudgeEnabled } : {}),
+        ...(d.modules !== undefined ? { modules: d.modules as unknown as Json } : {}),
+      }
+    : {};
+
   // Upsert so properties created before settings existed still get a row.
   const { error } = await supabase
     .from('property_settings')
     .upsert(
       {
         property_id: propertyId,
-        ...(d.conciergeTone !== undefined ? { concierge_tone: d.conciergeTone } : {}),
         ...(d.aiTemperature !== undefined ? { ai_temperature: d.aiTemperature } : {}),
         ...(d.confidenceThreshold !== undefined ? { confidence_threshold: d.confidenceThreshold } : {}),
         ...(d.gracePeriodHours !== undefined ? { grace_period_hours: d.gracePeriodHours } : {}),
-        ...(d.reviewNudgeEnabled !== undefined ? { review_nudge_enabled: d.reviewNudgeEnabled } : {}),
-        ...(d.modules !== undefined ? { modules: d.modules as unknown as Json } : {}),
+        ...premiumPatch,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'property_id' },

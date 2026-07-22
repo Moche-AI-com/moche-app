@@ -39,10 +39,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const admin = createAdminClient();
   const history: ChatMessage[] = (parsed.data.history ?? []).map((m) => ({ role: m.role, content: m.content }));
 
-  // Use the host's confidence threshold so escalation behaviour matches production.
+  // Use the host's full concierge config so the preview matches production exactly.
   const { data: settings } = await admin
     .from('property_settings')
-    .select('confidence_threshold')
+    .select('concierge_tone, ai_temperature, confidence_threshold, concierge_name, system_prompt_override, response_length, restricted_topics, language')
     .eq('property_id', params.id)
     .maybeSingle();
 
@@ -51,7 +51,16 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     propertyName: access.property.display_name,
     question: parsed.data.message,
     history,
+    aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
     confidenceThreshold: settings?.confidence_threshold ?? undefined,
+    concierge: {
+      conciergeName: settings?.concierge_name ?? undefined,
+      tone: settings?.concierge_tone ?? undefined,
+      responseLength: settings?.response_length ?? undefined,
+      restrictedTopics: settings?.restricted_topics ?? undefined,
+      language: settings?.language ?? undefined,
+      systemPromptOverride: settings?.system_prompt_override ?? undefined,
+    },
     source: 'host_preview',
   });
 

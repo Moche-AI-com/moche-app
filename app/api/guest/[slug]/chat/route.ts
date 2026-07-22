@@ -53,10 +53,11 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     });
   }
 
-  // Host-configurable concierge behavior (tone, creativity, escalation threshold).
+  // Host-configurable concierge behavior (tone, creativity, escalation threshold,
+  // plus the premium persona/overrides). All layered on the server-side master prompt.
   const { data: settings } = await admin
     .from('property_settings')
-    .select('concierge_tone, ai_temperature, confidence_threshold')
+    .select('concierge_tone, ai_temperature, confidence_threshold, concierge_name, system_prompt_override, response_length, restricted_topics, language')
     .eq('property_id', session.propertyId)
     .maybeSingle();
 
@@ -94,9 +95,16 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     propertyName: property.display_name,
     question,
     history,
-    conciergeTone: settings?.concierge_tone ?? undefined,
     aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
     confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
+    concierge: {
+      conciergeName: settings?.concierge_name ?? undefined,
+      tone: settings?.concierge_tone ?? undefined,
+      responseLength: settings?.response_length ?? undefined,
+      restrictedTopics: settings?.restricted_topics ?? undefined,
+      language: settings?.language ?? undefined,
+      systemPromptOverride: settings?.system_prompt_override ?? undefined,
+    },
     source: 'guest_chat',
   });
   const latencyMs = Date.now() - started;

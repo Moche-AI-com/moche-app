@@ -2,6 +2,7 @@
 
 import { useFormState } from 'react-dom';
 import Link from 'next/link';
+import { Lock } from 'lucide-react';
 import { updatePropertyAction, updatePropertySettingsAction, type PropertyFormState } from '../../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
@@ -57,23 +58,41 @@ interface Settings {
   review_nudge_enabled: boolean;
   review_nudge_auto: boolean;
   modules: Record<string, boolean>;
+  concierge_name: string;
+  system_prompt_override: string | null;
+  response_length: string;
+  restricted_topics: string | null;
+  language: string;
+  is_premium_override: boolean;
 }
+
+const RESPONSE_LENGTH_OPTIONS = [
+  { v: 'concise', l: 'Concise — 1–3 short sentences' },
+  { v: 'balanced', l: 'Balanced — default' },
+  { v: 'detailed', l: 'Detailed — thorough with context' },
+];
+
+const CONCIERGE_LANGUAGES = [
+  { v: 'auto', l: 'Auto — match the guest' },
+  { v: 'English', l: 'English' }, { v: 'Español', l: 'Español' }, { v: 'Français', l: 'Français' },
+  { v: 'Deutsch', l: 'Deutsch' }, { v: 'Português', l: 'Português' }, { v: 'Italiano', l: 'Italiano' },
+];
 
 export function SettingsForms({
   property,
   settings,
-  conciergeCustomization,
+  premiumUnlocked,
   planName,
 }: {
   property: Property;
   settings: Settings;
-  conciergeCustomization: boolean;
+  premiumUnlocked: boolean;
   planName: string | null;
 }) {
   return (
     <div style={{ display: 'grid', gap: '1.5rem', maxWidth: 720 }}>
       <BrandingForm property={property} />
-      <ConciergeForm propertyId={property.id} settings={settings} locked={!conciergeCustomization} planName={planName} />
+      <ConciergeForm propertyId={property.id} settings={settings} premiumUnlocked={premiumUnlocked} planName={planName} />
     </div>
   );
 }
@@ -181,66 +200,33 @@ function BrandingForm({ property }: { property: Property }) {
   );
 }
 
-function ConciergeForm({ propertyId, settings, locked, planName }: { propertyId: string; settings: Settings; locked: boolean; planName: string | null }) {
+function ConciergeForm({ propertyId, settings, premiumUnlocked, planName }: { propertyId: string; settings: Settings; premiumUnlocked: boolean; planName: string | null }) {
   const [state, formAction] = useFormState<PropertyFormState, FormData>(updatePropertySettingsAction, {});
   const modules = settings.modules ?? {};
+  const locked = !premiumUnlocked;
+
   return (
-    <form action={formAction} className="card" style={{ padding: '1.5rem', position: 'relative' }}>
+    <form action={formAction} className="card" style={{ padding: '1.5rem', position: 'relative' }} data-testid="concierge-settings-form">
       <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.35rem' }}>
         <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Concierge behavior</h2>
-        {locked ? <span className="badge badge-coral">Pro</span> : <span className="badge badge-teal">Included</span>}
+        {premiumUnlocked ? <span className="badge badge-teal">Pro unlocked</span> : <span className="badge badge-coral">Free plan</span>}
       </div>
       <p className="muted" style={{ fontSize: '.85rem', marginBottom: '1rem' }}>
         How your AI concierge sounds and when it hands questions to you. These apply to the live guest portal.
       </p>
 
-      {locked ? (
-        <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
-          <strong>Customizing your concierge is a Pro feature.</strong>{' '}
-          {planName ? `You’re on ${planName}. ` : ''}Upgrade to tune tone &amp; voice, creativity, escalation sensitivity, and portal modules.{' '}
-          <Link href="/dashboard/billing" className="gradient-text" style={{ fontWeight: 600 }}>See plans →</Link>
-        </div>
-      ) : null}
-
       <FormMessage error={state.error} success={state.success} />
       <input type="hidden" name="propertyId" value={propertyId} />
-      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.55 : 1 }}>
 
-      <div className="field">
-        <label className="label" htmlFor="conciergeTone">Tone &amp; voice</label>
-        <textarea
-          className="textarea"
-          id="conciergeTone"
-          name="conciergeTone"
-          maxLength={2000}
-          rows={4}
-          defaultValue={settings.concierge_tone ?? ''}
-          placeholder="Describe how the concierge should sound. e.g. Warm, concise, and local — like a thoughtful host who knows the neighborhood."
-        />
-        <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
-          {TONE_PRESETS.map((p) => (
-            <button
-              key={p.label}
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => { const t = document.getElementById('conciergeTone') as HTMLTextAreaElement | null; if (t) t.value = p.text; }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <p className="faint" style={{ fontSize: '.72rem', marginTop: '.4rem' }}>
-          Style guidance only — it never changes the facts, only the delivery. The concierge still answers strictly from your Brain.
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem', marginTop: '.5rem' }}>
+      {/* FREE — always editable: the three core sliders. */}
+      <h3 style={{ fontSize: '.95rem', marginBottom: '.6rem' }}>Core controls</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="aiTemperature">
             Creativity ({(settings.ai_temperature ?? 0.2).toFixed(1)})
           </label>
           <input type="range" id="aiTemperature" name="aiTemperature" min={0} max={1} step={0.1}
-            defaultValue={settings.ai_temperature ?? 0.2} style={{ width: '100%' }}
+            defaultValue={settings.ai_temperature ?? 0.2} style={{ width: '100%' }} data-testid="slider-creativity"
             onChange={(e) => { const l = document.getElementById('tempOut'); if (l) l.textContent = Number(e.target.value).toFixed(1); }} />
           <p className="faint" style={{ fontSize: '.72rem', marginTop: '.25rem' }}>
             Lower = precise &amp; literal. Higher = more conversational. Now: <span id="tempOut">{(settings.ai_temperature ?? 0.2).toFixed(1)}</span>
@@ -251,7 +237,7 @@ function ConciergeForm({ propertyId, settings, locked, planName }: { propertyId:
             Escalation sensitivity ({(settings.confidence_threshold ?? 0.55).toFixed(2)})
           </label>
           <input type="range" id="confidenceThreshold" name="confidenceThreshold" min={0.2} max={0.9} step={0.05}
-            defaultValue={settings.confidence_threshold ?? 0.55} style={{ width: '100%' }}
+            defaultValue={settings.confidence_threshold ?? 0.55} style={{ width: '100%' }} data-testid="slider-escalation"
             onChange={(e) => { const l = document.getElementById('confOut'); if (l) l.textContent = Number(e.target.value).toFixed(2); }} />
           <p className="faint" style={{ fontSize: '.72rem', marginTop: '.25rem' }}>
             Higher = hand more uncertain questions to you. Now: <span id="confOut">{(settings.confidence_threshold ?? 0.55).toFixed(2)}</span>
@@ -259,41 +245,147 @@ function ConciergeForm({ propertyId, settings, locked, planName }: { propertyId:
         </div>
       </div>
 
-      <div className="field" style={{ maxWidth: 260 }}>
-        <label className="label" htmlFor="gracePeriodHours">Post-checkout access (hours)</label>
-        <input className="input" type="number" id="gracePeriodHours" name="gracePeriodHours" min={0} max={168}
-          defaultValue={settings.grace_period_hours ?? 24} />
+      <div className="field" style={{ maxWidth: 320, marginTop: '.5rem' }}>
+        <label className="label" htmlFor="gracePeriodHours">
+          Post-checkout access ({settings.grace_period_hours ?? 24}h)
+        </label>
+        <input type="range" id="gracePeriodHours" name="gracePeriodHours" min={0} max={72} step={1}
+          defaultValue={settings.grace_period_hours ?? 24} style={{ width: '100%' }} data-testid="slider-post-checkout"
+          onChange={(e) => { const l = document.getElementById('graceOut'); if (l) l.textContent = String(e.target.value); }} />
         <p className="faint" style={{ fontSize: '.72rem', marginTop: '.25rem' }}>
-          How long guests can keep using the portal after checkout.
+          How long guests can keep using the portal after checkout. Now: <span id="graceOut">{settings.grace_period_hours ?? 24}</span>h
         </p>
       </div>
 
       <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '1.25rem 0' }} />
 
-      <h3 style={{ fontSize: '.95rem', marginBottom: '.6rem' }}>Portal modules</h3>
-      <div style={{ display: 'grid', gap: '.6rem' }}>
-        {MODULE_LABELS.map((m) => {
-          const checked = modules[m.key] ?? false;
-          return (
-            <label key={m.key} className="card-2" style={{ display: 'flex', gap: '.7rem', alignItems: 'flex-start', padding: '.7rem .85rem', cursor: 'pointer' }}>
-              <input type="checkbox" name={`module_${m.key}`} defaultChecked={checked} style={{ marginTop: '.15rem', accentColor: 'var(--teal)', width: 16, height: 16 }} />
-              <span>
-                <span style={{ display: 'block', fontSize: '.9rem', fontWeight: 600 }}>{m.label}</span>
-                <span className="muted" style={{ fontSize: '.78rem' }}>{m.hint}</span>
-              </span>
-            </label>
-          );
-        })}
+      {/* PREMIUM — persona & advanced controls. Free users see it, locked. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.6rem' }}>
+        <h3 style={{ fontSize: '.95rem', margin: 0 }}>Persona &amp; advanced</h3>
+        {locked ? (
+          <span className="badge badge-coral" style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
+            <Lock size={12} aria-hidden /> Pro
+          </span>
+        ) : <span className="badge badge-teal">Included</span>}
       </div>
 
-      </fieldset>
+      <div style={{ position: 'relative' }}>
+        {locked ? (
+          <div
+            data-testid="premium-lock-overlay"
+            style={{
+              position: 'absolute', inset: 0, zIndex: 2, borderRadius: 12,
+              background: 'color-mix(in srgb, var(--bg) 62%, transparent)',
+              backdropFilter: 'blur(1.5px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+            }}
+          >
+            <div className="card-2" style={{ textAlign: 'center', padding: '1.1rem 1.25rem', maxWidth: 360 }}>
+              <Lock size={22} aria-hidden style={{ marginBottom: '.4rem' }} />
+              <div style={{ fontSize: '.95rem', fontWeight: 600, marginBottom: '.25rem' }}>Upgrade to Pro to customize</div>
+              <p className="muted" style={{ fontSize: '.78rem', marginBottom: '.75rem' }}>
+                {planName ? `You’re on ${planName}. ` : ''}Unlock the concierge name, custom system prompt, tone &amp; language, response length, and restricted topics.
+              </p>
+              <Link href="/dashboard/billing" className="btn btn-primary btn-sm" data-testid="premium-upgrade-link">Upgrade to Pro</Link>
+            </div>
+          </div>
+        ) : null}
+
+        <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.55 : 1 }}>
+          <div className="field">
+            <label className="label" htmlFor="conciergeName">Concierge name</label>
+            <input className="input" id="conciergeName" name="conciergeName" maxLength={80}
+              defaultValue={settings.concierge_name ?? ''} placeholder="Moche Concierge" data-testid="input-concierge-name" />
+            <p className="faint" style={{ fontSize: '.72rem', marginTop: '.25rem' }}>
+              The name your concierge introduces itself with.
+            </p>
+          </div>
+
+          <div className="field">
+            <label className="label" htmlFor="conciergeTone">Tone &amp; voice</label>
+            <textarea
+              className="textarea"
+              id="conciergeTone"
+              name="conciergeTone"
+              maxLength={2000}
+              rows={4}
+              defaultValue={settings.concierge_tone ?? ''}
+              placeholder="Describe how the concierge should sound. e.g. Warm, concise, and local — like a thoughtful host who knows the neighborhood."
+              data-testid="input-concierge-tone"
+            />
+            <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
+              {TONE_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => { const t = document.getElementById('conciergeTone') as HTMLTextAreaElement | null; if (t) t.value = p.text; }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <p className="faint" style={{ fontSize: '.72rem', marginTop: '.4rem' }}>
+              Style guidance only — it never changes the facts, only the delivery. The concierge still answers strictly from your Brain.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+            <div className="field">
+              <label className="label" htmlFor="conciergeLanguage">Response language</label>
+              <select className="select" id="conciergeLanguage" name="language" defaultValue={settings.language || 'auto'} data-testid="select-language">
+                {CONCIERGE_LANGUAGES.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="responseLength">Response length</label>
+              <select className="select" id="responseLength" name="responseLength" defaultValue={settings.response_length || 'balanced'} data-testid="select-response-length">
+                {RESPONSE_LENGTH_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="label" htmlFor="restrictedTopics">Restricted topics</label>
+            <textarea className="textarea" id="restrictedTopics" name="restrictedTopics" maxLength={1000} rows={2}
+              defaultValue={settings.restricted_topics ?? ''}
+              placeholder="Topics the concierge should decline and pass to you, e.g. refunds, disputes, medical advice."
+              data-testid="input-restricted-topics" />
+          </div>
+
+          <div className="field">
+            <label className="label" htmlFor="systemPromptOverride">Custom system prompt</label>
+            <textarea className="textarea" id="systemPromptOverride" name="systemPromptOverride" maxLength={4000} rows={5}
+              defaultValue={settings.system_prompt_override ?? ''}
+              placeholder="Extra instructions layered on top of the default concierge behavior. It never overrides safety rules or invents facts."
+              data-testid="input-system-prompt" />
+            <p className="faint" style={{ fontSize: '.72rem', marginTop: '.25rem' }}>
+              Advanced — additional guidance for scope and style. Safety guardrails always apply.
+            </p>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '1.25rem 0' }} />
+
+          <h4 style={{ fontSize: '.9rem', marginBottom: '.6rem' }}>Portal modules</h4>
+          <div style={{ display: 'grid', gap: '.6rem' }}>
+            {MODULE_LABELS.map((m) => {
+              const checked = modules[m.key] ?? false;
+              return (
+                <label key={m.key} className="card-2" style={{ display: 'flex', gap: '.7rem', alignItems: 'flex-start', padding: '.7rem .85rem', cursor: 'pointer' }}>
+                  <input type="checkbox" name={`module_${m.key}`} defaultChecked={checked} data-testid={`module-${m.key}`} style={{ marginTop: '.15rem', accentColor: 'var(--teal)', width: 16, height: 16 }} />
+                  <span>
+                    <span style={{ display: 'block', fontSize: '.9rem', fontWeight: 600 }}>{m.label}</span>
+                    <span className="muted" style={{ fontSize: '.78rem' }}>{m.hint}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      </div>
 
       <div style={{ marginTop: '1rem' }}>
-        {locked ? (
-          <Link href="/dashboard/billing" className="btn btn-primary">Upgrade to Pro</Link>
-        ) : (
-          <SubmitButton className="btn btn-primary">Save concierge settings</SubmitButton>
-        )}
+        <SubmitButton className="btn btn-primary" testId="save-concierge-settings">Save concierge settings</SubmitButton>
       </div>
     </form>
   );

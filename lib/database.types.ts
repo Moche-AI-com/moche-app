@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       ai_usage: {
         Row: {
           cache_hit: boolean
@@ -1527,35 +1545,53 @@ export type Database = {
       property_settings: {
         Row: {
           ai_temperature: number
+          concierge_name: string
           concierge_tone: string
           confidence_threshold: number
           grace_period_hours: number
+          is_premium_override: boolean
+          language: string
           modules: Json
           property_id: string
+          response_length: string
+          restricted_topics: string | null
           review_nudge_auto: boolean
           review_nudge_enabled: boolean
+          system_prompt_override: string | null
           updated_at: string
         }
         Insert: {
           ai_temperature?: number
+          concierge_name?: string
           concierge_tone?: string
           confidence_threshold?: number
           grace_period_hours?: number
+          is_premium_override?: boolean
+          language?: string
           modules?: Json
           property_id: string
+          response_length?: string
+          restricted_topics?: string | null
           review_nudge_auto?: boolean
           review_nudge_enabled?: boolean
+          system_prompt_override?: string | null
           updated_at?: string
         }
         Update: {
           ai_temperature?: number
+          concierge_name?: string
           concierge_tone?: string
           confidence_threshold?: number
           grace_period_hours?: number
+          is_premium_override?: boolean
+          language?: string
           modules?: Json
           property_id?: string
+          response_length?: string
+          restricted_topics?: string | null
           review_nudge_auto?: boolean
           review_nudge_enabled?: boolean
+          system_prompt_override?: string | null
           updated_at?: string
         }
         Relationships: [

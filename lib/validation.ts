@@ -68,6 +68,12 @@ export const propertySettingsSchema = z.object({
   reviewNudgeEnabled: z.boolean().optional(),
   reviewNudgeAuto: z.boolean().optional(),
   modules: z.record(z.boolean()).optional(),
+  // Premium concierge controls (server action enforces the plan gate before persisting).
+  conciergeName: z.string().trim().max(80).optional(),
+  systemPromptOverride: z.string().trim().max(4000).optional(),
+  responseLength: z.enum(['concise', 'balanced', 'detailed']).optional(),
+  restrictedTopics: z.string().trim().max(1000).optional(),
+  language: z.string().trim().max(40).optional(),
 });
 
 export const brainCategoryEnum = z.enum(Constants.public.Enums.brain_category);

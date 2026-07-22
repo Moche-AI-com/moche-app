@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements } from '@/lib/billing/entitlements';
-import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOURS, PLANS } from '@/lib/constants';
+import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOURS, DEFAULT_CONCIERGE_NAME, DEFAULT_RESPONSE_LENGTH, PLANS } from '@/lib/constants';
 import { SettingsForms } from './SettingsForms';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
   const planName = ent.planId ? PLANS[ent.planId].name : null;
   const { data: settings } = await supabase
     .from('property_settings')
-    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, modules')
+    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, modules, concierge_name, system_prompt_override, response_length, restricted_topics, language, is_premium_override')
     .eq('property_id', property.id)
     .maybeSingle();
 
@@ -37,7 +37,16 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
     review_nudge_enabled: settings?.review_nudge_enabled ?? false,
     review_nudge_auto: settings?.review_nudge_auto ?? false,
     modules: { ...DEFAULT_MODULES, ...rawModules } as Record<string, boolean>,
+    concierge_name: settings?.concierge_name ?? DEFAULT_CONCIERGE_NAME,
+    system_prompt_override: settings?.system_prompt_override ?? null,
+    response_length: (settings?.response_length ?? DEFAULT_RESPONSE_LENGTH) as string,
+    restricted_topics: settings?.restricted_topics ?? null,
+    language: settings?.language ?? 'auto',
+    is_premium_override: settings?.is_premium_override ?? false,
   };
+
+  // Premium concierge controls unlock on a paid plan OR via the per-property override.
+  const premiumUnlocked = ent.conciergeCustomization || normalized.is_premium_override;
 
   return (
     <div>
@@ -48,7 +57,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
           {property.display_name} — branding, concierge voice, and portal modules.
         </p>
       </div>
-      <SettingsForms property={property} settings={normalized} conciergeCustomization={ent.conciergeCustomization} planName={planName} />
+      <SettingsForms property={property} settings={normalized} premiumUnlocked={premiumUnlocked} planName={planName} />
     </div>
   );
 }
