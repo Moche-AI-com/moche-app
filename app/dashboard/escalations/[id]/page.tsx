@@ -49,7 +49,7 @@ export default async function EscalationDetailPage({ params }: { params: { id: s
         </Link>
       </div>
 
-      <h1 style={{ fontSize: '1.6rem', marginBottom: '.35rem' }}>Answer &amp; teach the Brain</h1>
+      <h1 style={{ fontSize: '1.6rem', marginBottom: '.35rem' }}>Answer the guest</h1>
       <p className="muted" style={{ fontSize: '.9rem', marginBottom: '1.25rem' }}>
         {access.property.display_name}
       </p>
@@ -70,7 +70,7 @@ export default async function EscalationDetailPage({ params }: { params: { id: s
             {history.map((m, i) => (
               <div key={i} style={{ fontSize: '.88rem' }}>
                 <span className="faint" style={{ fontSize: '.72rem', display: 'block', marginBottom: '.1rem' }}>
-                  {m.role === 'guest' ? 'Guest' : m.role === 'assistant' ? 'Concierge' : m.role}
+                  {m.role === 'guest' ? 'Guest' : m.role === 'assistant' ? 'Concierge' : m.role === 'host' ? 'You (host)' : m.role}
                 </span>
                 <span>{m.content}</span>
               </div>
@@ -86,7 +86,7 @@ export default async function EscalationDetailPage({ params }: { params: { id: s
               {esc.status}
             </span>
             <p className="faint" style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.04em', margin: '0 0 .3rem' }}>
-              Your answer (saved to the Brain)
+              Your answer
             </p>
             <p style={{ margin: 0 }}>{esc.host_response}</p>
           </div>

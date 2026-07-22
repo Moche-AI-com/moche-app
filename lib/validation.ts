@@ -170,6 +170,11 @@ export const guestChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });
 
+// Guest-initiated manual escalation ("ring the host") — the guest types their issue.
+export const guestEscalateSchema = z.object({
+  message: z.string().trim().min(1, 'Please describe your issue.').max(2000),
+});
+
 export const guestServiceRequestSchema = z.object({
   serviceType: z.enum(['maintenance', 'cleaning', 'safety', 'emergency', 'other']),
   description: z.string().trim().min(1).max(2000),

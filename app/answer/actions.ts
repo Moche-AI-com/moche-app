@@ -59,6 +59,9 @@ export async function answerViaLinkAction(
   const ownerId = (account as { owner_id: string } | null)?.owner_id;
   if (!ownerId) return { error: 'Could not resolve your account. Please open your dashboard instead.' };
 
+  // The magic-link (SMS/email) answer flow has no category-picker UI, so we keep the
+  // default behavior: save to the Brain with the category AI-classified from context.
+  // (answerEscalationCore defaults convertToBrain=true + AI classification.)
   const result = await answerEscalationCore(admin, {
     escalationId: verified.escalationId,
     answerText: parsed.data.response,

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
   ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
-  AlertTriangle, ExternalLink, Check, Plus, type LucideIcon,
+  AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
@@ -17,6 +17,11 @@ const BG = '#0d0f14';
 // Sentinel query: a sub-choice that should just focus the free-text input rather than
 // fire a pre-formed question (keeps a "type your own" escape hatch inside the card UX).
 const FOCUS_INPUT = '__FOCUS_INPUT__';
+
+// Sentinel query: a sub-choice that opens the "Message the host" composer so the guest
+// can type their own issue, which is sent to the host as a manual escalation (rather
+// than firing a canned question at the AI concierge).
+const MESSAGE_HOST = '__MESSAGE_HOST__';
 
 interface SubChoice { label: string; query: string }
 interface Category { key: string; label: string; Icon: LucideIcon; subtitle: string; choices: SubChoice[] }
@@ -99,14 +104,14 @@ const CATEGORIES: Category[] = [
       { label: 'Report an Issue', query: 'I need to report an issue with the property.' },
       { label: 'Request Supplies', query: 'Could I request some extra supplies?' },
       { label: 'Maintenance Help', query: 'Something needs maintenance — can you help?' },
-      { label: 'Message the Host', query: 'I have a question for my host — can you pass it along?' },
+      { label: 'Message the Host', query: MESSAGE_HOST },
       { label: 'Something Else', query: FOCUS_INPUT },
     ],
   },
 ];
 
 interface ChatEntry {
-  role: 'guest' | 'assistant';
+  role: 'guest' | 'assistant' | 'host';
   content: string;
   escalated?: boolean;
   isEmergency?: boolean;
@@ -524,7 +529,15 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   // Add-on: review nudge. Shown at most once per session (React state only, NOT
   // localStorage). 'hidden' until a trigger; 'shown' while visible; 'dismissed' once closed.
   const [reviewNudgeState, setReviewNudgeState] = useState<'hidden' | 'shown' | 'dismissed'>('hidden');
-  const hasEscalation = entries.some((e) => e.escalated);
+  // "Message the host" composer: null = closed. When open, the guest types a free-text
+  // issue that is sent to the host as a manual escalation (not to the AI).
+  const [hostComposerOpen, setHostComposerOpen] = useState(false);
+  const [hostMsg, setHostMsg] = useState('');
+  const [hostSending, setHostSending] = useState(false);
+  const [hostComposerError, setHostComposerError] = useState<string | null>(null);
+  // Timestamp of the newest message we've rendered, so polling only pulls newer ones.
+  const lastSeenRef = useRef<string | null>(null);
+  const hasEscalation = entries.some((e) => e.escalated) || entries.some((e) => e.role === 'host');
   const guestMsgCount = entries.filter((e) => e.role === 'guest').length;
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -602,11 +615,78 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     reviewNudge.auto ? reviewNudgeState === 'shown' : reviewNudgeState !== 'dismissed'
   );
 
-  // Handle a sub-choice tap: either fire the pre-formed query or focus the free-text input.
+  // Send the guest's typed issue straight to the host as a manual escalation. The guest
+  // message is echoed locally and the host is notified server-side; the host's reply
+  // arrives live via polling (see below). Never used in host preview.
+  const sendToHost = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || hostSending) return;
+    setHostSending(true);
+    setHostComposerError(null);
+    if (hostPreview) {
+      // Preview mode has no guest session; just simulate locally so hosts can see the UX.
+      setEntries((e) => [...e, { role: 'guest', content: trimmed, escalated: true }]);
+      setHostComposerOpen(false);
+      setHostMsg('');
+      setHostSending(false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/guest/${slug}/escalate`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: trimmed }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not reach your host just now.');
+      setEntries((e) => [...e, { role: 'guest', content: trimmed, escalated: true }]);
+      setHostComposerOpen(false);
+      setHostMsg('');
+    } catch (e) {
+      setHostComposerError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setHostSending(false);
+    }
+  }, [hostSending, hostPreview, slug]);
+
+  // Live polling: once the conversation has reached the host, poll for host replies (and
+  // any messages we haven't rendered) so the two-way chat updates without a refresh.
+  useEffect(() => {
+    if (hostPreview || !hasEscalation) return;
+    let cancelled = false;
+    async function poll() {
+      try {
+        const qs = lastSeenRef.current ? `?after=${encodeURIComponent(lastSeenRef.current)}` : '';
+        const res = await fetch(`/api/guest/${slug}/messages${qs}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const incoming: { role: string; content: string; created_at: string }[] = json.messages ?? [];
+        if (cancelled || incoming.length === 0) return;
+        // Only surface HOST replies via polling — guest + assistant turns are already
+        // rendered optimistically by send()/sendToHost(). This avoids duplicates.
+        const hostReplies = incoming.filter((m) => m.role === 'host');
+        lastSeenRef.current = incoming[incoming.length - 1]?.created_at ?? lastSeenRef.current;
+        if (hostReplies.length > 0) {
+          if (!muted) playChime();
+          setEntries((e) => [...e, ...hostReplies.map((m) => ({ role: 'host' as const, content: m.content }))]);
+        }
+      } catch { /* best-effort polling */ }
+    }
+    poll();
+    const id = setInterval(poll, 8000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [hostPreview, hasEscalation, slug, muted]);
+
+  // Handle a sub-choice tap: fire a pre-formed query, focus the free-text input, or open
+  // the "Message the host" composer.
   function pickSubChoice(choice: SubChoice) {
     setActiveCategory(null);
     if (choice.query === FOCUS_INPUT) {
       setTimeout(() => inputRef.current?.focus(), 80);
+      return;
+    }
+    if (choice.query === MESSAGE_HOST) {
+      setHostComposerError(null);
+      setHostMsg('');
+      setTimeout(() => setHostComposerOpen(true), 60);
       return;
     }
     send(choice.query);
@@ -617,7 +697,6 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     setActiveCategory(cat);
   }
 
-  const requestCategory = CATEGORIES.find((c) => c.key === 'request')!;
 
   return (
     <div className="gp-rise" style={{ marginTop: '-2rem' }}>
@@ -665,6 +744,18 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         <UpsellSection slug={slug} offers={upsellOffers} hostPreview={hostPreview} />
       )}
 
+      {/* Direct line to the host. Deliberately relocated ABOVE the chat (out of the
+          thumb zone near the send bell) and given a confirm-style composer so guests
+          don't trigger a host ping by accident. */}
+      <button
+        onClick={() => { setHostComposerError(null); setHostMsg(''); setHostComposerOpen(true); }}
+        className="gp-host-link"
+        data-testid="button-service-bell"
+        aria-label="Message your host"
+      >
+        <UserRound size={15} aria-hidden /> Message your host directly
+      </button>
+
       {/* Persistent AI disclosure (EU AI Act Art. 50). */}
       <div style={{ marginTop: '1.25rem' }}><AiDisclosure variant="banner" /></div>
 
@@ -673,8 +764,16 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           {entries.map((m, i) => (
             <div key={i} className="gp-msg" style={{ display: 'flex', gap: '.5rem', alignSelf: m.role === 'guest' ? 'flex-end' : 'flex-start', maxWidth: '90%', flexDirection: m.role === 'guest' ? 'row-reverse' : 'row' }}>
               {m.role === 'assistant' && <span style={{ flexShrink: 0, marginTop: 2 }}><DomeMark size={26} /></span>}
+              {m.role === 'host' && (
+                <span style={{ flexShrink: 0, marginTop: 2, width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `linear-gradient(135deg, #e7d3a6, ${GOLD})`, color: '#1a1206' }} aria-hidden>
+                  <UserRound size={15} />
+                </span>
+              )}
               <div>
-                <div style={m.role === 'guest' ? bubbleGuest : bubbleAssistant} data-testid={`msg-${m.role}-${i}`}>
+                {m.role === 'host' && (
+                  <div style={{ fontSize: '.7rem', fontWeight: 600, color: GOLD, marginBottom: '.2rem', letterSpacing: '.02em' }}>Your host</div>
+                )}
+                <div style={m.role === 'guest' ? bubbleGuest : m.role === 'host' ? bubbleHost : bubbleAssistant} data-testid={`msg-${m.role}-${i}`}>
                   {m.isEmergency && (
                     <div style={{ fontWeight: 700, color: '#e6a15c', marginBottom: '.25rem', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
                       <AlertTriangle size={14} aria-hidden /> For emergencies, contact local services first.
@@ -758,16 +857,6 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         </button>
       </form>
 
-      {/* Direct line to the host — replaces the old floating bell's Request shortcut. */}
-      <button
-        onClick={() => openCategory(requestCategory, true)}
-        className="gp-host-link"
-        data-testid="button-service-bell"
-        aria-label="Ring the concierge for host help"
-      >
-        <ConciergeBell size={15} aria-hidden /> Need the host? Ring for help
-      </button>
-
       <AiDisclosure variant="note" />
 
       {/* Sub-choice slide-over — pre-formed options that instantly trigger the chat. */}
@@ -800,6 +889,60 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* "Message the host" composer — the guest types their own issue and confirms
+          before it's sent to the host (no accidental pings). The host's reply arrives
+          live in the chat above via polling. */}
+      {hostComposerOpen && (
+        <div className="gp-sheet-scrim" onClick={() => !hostSending && setHostComposerOpen(false)} data-testid="host-composer-overlay">
+          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Message your host" data-testid="host-composer">
+            <div className="gp-sheet-grip" aria-hidden />
+            <div className="gp-sheet-head">
+              <span className="gp-cat-icon gp-sheet-badge"><UserRound size={22} aria-hidden /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="gp-serif gp-sheet-title">Message your host</div>
+                <div className="gp-sheet-sub">Type your question or issue — we&rsquo;ll pass it straight to them.</div>
+              </div>
+              <button onClick={() => !hostSending && setHostComposerOpen(false)} className="gp-sheet-close" data-testid="button-close-host-composer" aria-label="Close">
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => { e.preventDefault(); sendToHost(hostMsg); }}
+              style={{ display: 'flex', flexDirection: 'column', gap: '.7rem', padding: '.25rem .2rem .2rem' }}
+            >
+              {hostComposerError && <div style={alertErr}>{hostComposerError}</div>}
+              <textarea
+                autoFocus
+                value={hostMsg}
+                onChange={(e) => setHostMsg(e.target.value)}
+                rows={4}
+                maxLength={2000}
+                placeholder="For example: The AC in the main bedroom isn't turning on — could you help?"
+                data-testid="input-host-message"
+                style={{
+                  width: '100%', resize: 'vertical', borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.04)',
+                  color: '#ece7dd', padding: '.7rem .85rem', fontSize: '.92rem', lineHeight: 1.45,
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                type="submit"
+                className="gp-bell-send"
+                disabled={hostSending || !hostMsg.trim()}
+                data-testid="button-send-host-message"
+                style={{ width: '100%', height: 'auto', padding: '.75rem 1rem', borderRadius: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '.45rem', fontWeight: 600 }}
+              >
+                <Send size={16} aria-hidden /> {hostSending ? 'Sending…' : 'Send to host'}
+              </button>
+              <p className="faint" style={{ fontSize: '.72rem', textAlign: 'center', margin: 0, opacity: 0.6 }}>
+                Your host is notified right away. Their reply appears here in your chat.
+              </p>
+            </form>
           </div>
         </div>
       )}
@@ -1195,5 +1338,8 @@ const presenceBar: React.CSSProperties = { display: 'flex', alignItems: 'center'
 const hostPreviewBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '.55rem', padding: '.65rem .85rem', borderRadius: 12, border: '1px solid rgba(201,169,110,0.35)', background: 'rgba(201,169,110,0.1)', color: '#e7d3a6', fontSize: '.8rem', lineHeight: 1.4, marginTop: '1rem', fontWeight: 500 };
 const bubbleGuest: React.CSSProperties = { background: `linear-gradient(135deg, #e7d3a6, ${GOLD})`, color: '#1a1206', padding: '.65rem .9rem', borderRadius: '16px 16px 4px 16px', fontSize: '.92rem', lineHeight: 1.45, fontWeight: 500 };
 const bubbleAssistant: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', padding: '.65rem .9rem', borderRadius: '16px 16px 16px 4px', fontSize: '.92rem', lineHeight: 1.45, color: 'inherit' };
+// Host reply bubble — distinct from the AI concierge (gold-tinted border + surface) so
+// guests can tell a real host response apart from the automated concierge.
+const bubbleHost: React.CSSProperties = { background: 'rgba(201,169,110,0.12)', border: `1px solid ${GOLD}55`, padding: '.65rem .9rem', borderRadius: '16px 16px 16px 4px', fontSize: '.92rem', lineHeight: 1.45, color: 'inherit' };
 const alertErr: React.CSSProperties = { background: 'rgba(230,161,92,0.12)', border: '1px solid rgba(230,161,92,0.4)', color: '#e6a15c', padding: '.6rem .8rem', borderRadius: 10, fontSize: '.85rem', marginBottom: '1rem' };
 const alertOk: React.CSSProperties = { background: 'rgba(201,169,110,0.1)', border: '1px solid rgba(201,169,110,0.35)', color: GOLD, padding: '.6rem .8rem', borderRadius: 10, fontSize: '.85rem', marginBottom: '1rem' };
