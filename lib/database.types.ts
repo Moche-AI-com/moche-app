@@ -108,6 +108,60 @@ export type Database = {
           },
         ]
       }
+      property_knowledge_nodes: {
+        Row: {
+          content: string
+          created_at: string
+          data: Json
+          embedding: string | null
+          id: string
+          node_type: string
+          property_id: string
+          source_brain_item_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          data?: Json
+          embedding?: string | null
+          id?: string
+          node_type: string
+          property_id: string
+          source_brain_item_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          data?: Json
+          embedding?: string | null
+          id?: string
+          node_type?: string
+          property_id?: string
+          source_brain_item_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_knowledge_nodes_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_knowledge_nodes_source_brain_item_id_fkey"
+            columns: ["source_brain_item_id"]
+            isOneToOne: false
+            referencedRelation: "brain_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1707,6 +1761,23 @@ export type Database = {
           document_id: string
           id: string
           similarity: number
+        }[]
+      }
+      match_property_knowledge: {
+        Args: {
+          p_match_count?: number
+          p_node_types?: string[]
+          p_property_id: string
+          p_query_embedding: string
+        }
+        Returns: {
+          content: string
+          data: Json
+          id: string
+          node_type: string
+          property_id: string
+          similarity: number
+          title: string
         }[]
       }
       property_account: { Args: { prop: string }; Returns: string }
