@@ -68,6 +68,8 @@ export async function POST(req: Request) {
     userId: ctx.user.id,
     hostAccountId,
     context: 'checkout',
+    // Record exactly the agreements shown at checkout (paid subscription adds the DPA).
+    slugs: ['terms', 'privacy', 'acceptable-use', 'dpa'],
     ip: h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
     userAgent: h.get('user-agent'),
   });

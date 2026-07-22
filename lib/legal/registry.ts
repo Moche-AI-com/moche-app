@@ -156,5 +156,7 @@ export const CURRENT_VERSIONS: Record<LegalSlug, string> = LEGAL_DOCS.reduce(
 );
 
 // The documents a host must (re)accept via clickwrap. Guests get the in-portal
-// AI disclosure instead; these are the host-facing agreements.
-export const CLICKWRAP_SLUGS: LegalSlug[] = ['terms', 'privacy'];
+// AI disclosure instead; these are the host-facing agreements. The Acceptable Use
+// Policy is included so we have explicit, auditable consent to the usage rules we
+// enforce (incl. the flowed-down Llama 3 AUP) before an account can be created.
+export const CLICKWRAP_SLUGS: LegalSlug[] = ['terms', 'privacy', 'acceptable-use'];

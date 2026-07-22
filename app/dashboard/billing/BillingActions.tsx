@@ -60,9 +60,10 @@ export function BillingActions(props: Props) {
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: '.15rem' }} data-testid="checkout-accept-terms" />
         <span>
           I agree to the{' '}
-          <Link href="/legal/terms" target="_blank" className="gradient-text">Terms</Link>,{' '}
-          <Link href="/legal/privacy" target="_blank" className="gradient-text">Privacy Policy</Link>, and{' '}
-          <Link href="/legal/dpa" target="_blank" className="gradient-text">Data Processing Addendum</Link>.
+          <Link href="/legal/terms" target="_blank" rel="noopener noreferrer" className="gradient-text">Terms</Link>,{' '}
+          <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="gradient-text">Privacy Policy</Link>,{' '}
+          <Link href="/legal/acceptable-use" target="_blank" rel="noopener noreferrer" className="gradient-text">Acceptable Use Policy</Link>, and{' '}
+          <Link href="/legal/dpa" target="_blank" rel="noopener noreferrer" className="gradient-text">Data Processing Addendum</Link>.
         </span>
       </label>
       <button

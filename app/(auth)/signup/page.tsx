@@ -40,14 +40,20 @@ function SignupForm() {
           <label className="label" htmlFor="password">Password <span className="faint">(min 10 characters)</span></label>
           <input className="input" id="password" name="password" type="password" autoComplete="new-password" required minLength={10} />
         </div>
-        <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', fontSize: '.82rem', marginBottom: '1rem' }} className="muted">
+        <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', fontSize: '.82rem', marginBottom: '.6rem' }} className="muted">
           <input type="checkbox" name="acceptTerms" required style={{ marginTop: '.2rem' }} data-testid="signup-accept-terms" />
           <span>
-            I agree to the{' '}
-            <Link href="/legal/terms" target="_blank" className="gradient-text">Terms of Service</Link>{' '}and{' '}
-            <Link href="/legal/privacy" target="_blank" className="gradient-text">Privacy Policy</Link>.
+            I have read and agree to the{' '}
+            <Link href="/legal/terms" target="_blank" rel="noopener noreferrer" className="gradient-text">Terms of Service</Link>,{' '}
+            <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="gradient-text">Privacy Policy</Link>, and{' '}
+            <Link href="/legal/acceptable-use" target="_blank" rel="noopener noreferrer" className="gradient-text">Acceptable Use Policy</Link>.
           </span>
         </label>
+        <p className="muted" style={{ fontSize: '.74rem', marginBottom: '1rem', lineHeight: 1.5 }}>
+          Moche uses AI to help answer guest questions — see our{' '}
+          <Link href="/legal/ai-policy" target="_blank" rel="noopener noreferrer" className="gradient-text">AI Policy</Link>. By continuing you also acknowledge our{' '}
+          <Link href="/legal/cookies" target="_blank" rel="noopener noreferrer" className="gradient-text">Cookie Notice</Link>. Each opens in a new tab so you can read it in full.
+        </p>
         <SubmitButton>Create account</SubmitButton>
       </form>
       <div style={{ marginTop: '1.25rem', textAlign: 'center', fontSize: '.85rem' }}>
