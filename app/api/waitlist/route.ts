@@ -1,41 +1,82 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { log } from '@/lib/log';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// Public, unauthenticated marketing waitlist. Hardened against spam/abuse:
+//   - per-IP rate limit (Supabase-backed fixed window)
+//   - strict input validation with length caps
+//   - service-role insert (table has no public INSERT policy)
+// Always returns a generic ok so it can't be used to probe state.
+const WAITLIST_MAX_PER_IP_PER_HOUR = 5;
+
+const schema = z.object({
+  email: z.string().trim().toLowerCase().email().max(200),
+  properties: z.string().trim().max(120).optional().nullable(),
+  pain_point: z.string().trim().max(2000).optional().nullable(),
+});
+
+function clientIp(req: Request): string {
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0].trim();
+  return req.headers.get('x-real-ip') ?? '0.0.0.0';
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { email, properties, pain_point } = body as {
-      email?: string;
-      properties?: string;
-      pain_point?: string;
-    };
+    let payload: unknown = {};
+    try {
+      payload = await req.json();
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Invalid request' }, { status: 400 });
+    }
 
-    if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+    const parsed = schema.safeParse(payload ?? {});
+    if (!parsed.success) {
       return NextResponse.json({ ok: false, error: 'Invalid email' }, { status: 400 });
     }
 
-    // Persist to Supabase using the service role key so RLS is bypassed
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    if (!hasServiceRole()) {
+      log.error('waitlist_no_service_role', {});
+      // Acknowledge gracefully without exposing config state.
+      return NextResponse.json({ ok: true });
+    }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const admin = createAdminClient();
 
-    const { error } = await supabase.from('waitlist_signups').insert({
-      email: email.toLowerCase().trim(),
+    // Per-IP rate limit to prevent automated signup floods.
+    const ipLimit = await checkRateLimit(admin, {
+      key: clientIp(req),
+      limit: WAITLIST_MAX_PER_IP_PER_HOUR,
+      windowSeconds: 60 * 60,
+      action: 'waitlist.signup',
+    });
+    if (!ipLimit.allowed) {
+      log.warn('waitlist_rate_ip', {});
+      return NextResponse.json({ ok: true }); // generic — no abuse signal
+    }
+
+    const { email, properties, pain_point } = parsed.data;
+    // waitlist_signups is a marketing-only table not present in the generated DB types.
+    // Cast narrowly for this untyped insert; validation above guarantees shape.
+    const { error } = await (admin.from('waitlist_signups' as never) as any).insert({
+      email,
       property_count: properties || null,
       pain_point: pain_point || null,
     });
 
     if (error) {
-      // Table may not exist yet — still acknowledge the submission gracefully
-      console.error('[waitlist] supabase insert error:', error.message);
+      // Table may not exist yet — still acknowledge the submission gracefully.
+      log.error('waitlist_insert_failed', { error: error.message });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[waitlist] unexpected error:', err);
+    log.error('waitlist_unexpected', { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 });
   }
 }

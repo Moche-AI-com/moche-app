@@ -41,7 +41,10 @@ export default async function BillingPage() {
                 {new Date(ent.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
             </div>
-            <BillingActions mode="portal" configured={billingConfigured} />
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <BillingActions mode="portal" configured={billingConfigured} />
+              <BillingActions mode="refund" configured={billingConfigured} />
+            </div>
           </div>
         </div>
       ) : null}

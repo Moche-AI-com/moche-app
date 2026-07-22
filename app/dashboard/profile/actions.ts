@@ -3,9 +3,11 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
 import { requireSession } from '@/lib/auth/guards';
 import { profileUpdateSchema } from '@/lib/validation';
 import { audit } from '@/lib/audit';
+import { confirmDeletion } from '@/lib/legal/data-rights';
 import { log } from '@/lib/log';
 
 export interface ProfileFormState {
@@ -60,6 +62,7 @@ export async function requestAccountDeletionAction(_prev: ProfileFormState, form
   const supabase = createClient();
   const now = new Date().toISOString();
 
+  // 1) Record the erasure request (non-destructive, auditable) on the profile.
   const { error: profileErr } = await supabase
     .from('profiles')
     .update({ deletion_requested_at: now, updated_at: now })
@@ -69,9 +72,28 @@ export async function requestAccountDeletionAction(_prev: ProfileFormState, form
     return { error: 'Could not process the deletion request. Please contact support.' };
   }
 
-  // Only the owner can soft-delete the account itself.
+  // 2) Perform the actual GDPR Art. 17 / CCPA erasure. Only the account owner can
+  //    trigger destructive erasure; a non-owner member's request is recorded above
+  //    and the account is left for the owner to action. Billing, legal-acceptance,
+  //    and audit records are retained per legal obligation (see confirmDeletion).
   if (ctx.account.owner_id === ctx.user.id) {
-    await supabase.from('host_accounts').update({ deleted_at: now, updated_at: now }).eq('id', ctx.account.id);
+    if (hasServiceRole()) {
+      const result = await confirmDeletion(createAdminClient(), {
+        userId: ctx.user.id,
+        hostAccountId: ctx.account.id,
+      });
+      if (!result.ok) {
+        log.error('account_deletion_erasure_partial', {
+          hostAccountId: ctx.account.id,
+          errorCount: result.errors.length,
+        });
+      }
+    } else {
+      // No service role available: fall back to a soft-delete so the request is
+      // honored at the access level and can be completed by an operator.
+      log.error('account_deletion_no_service_role', { hostAccountId: ctx.account.id });
+      await supabase.from('host_accounts').update({ deleted_at: now, updated_at: now }).eq('id', ctx.account.id);
+    }
   }
 
   await audit(supabase, {
