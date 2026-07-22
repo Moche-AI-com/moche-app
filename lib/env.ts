@@ -31,6 +31,13 @@ export const serverEnv = {
   aiEmbedModel: process.env.AI_EMBED_MODEL ?? 'text-embedding-3-small',
   aiChatModel: process.env.AI_CHAT_MODEL ?? 'gpt-4o-mini',
 
+  // OpenRouter model-routing toggle. OFF by default: with no key set, routedCompletion()
+  // uses the existing OpenAI provider and behaves identically to today. When a key is
+  // present, eligible tasks are routed to OpenRouter (PII redacted before the external call).
+  openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+  openrouterModel: process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
+  openrouterBaseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',
   firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev',

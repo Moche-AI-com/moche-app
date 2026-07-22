@@ -10,6 +10,8 @@ import { log } from '@/lib/log';
 import { getAIProvider } from '@/lib/ai';
 import { chunkText } from '@/lib/ingest/chunk';
 import { bumpBrainVersion } from '@/lib/brain/cache';
+import { upsertNormalizedNode } from '@/lib/normalizer';
+import type { Database } from '@/lib/database.types';
 
 export interface BrainActionState {
   error?: string;
@@ -181,4 +183,16 @@ export async function reindexBrainItem(
     log.warn('chunk_insert_failed', { itemId, error: error.message });
     await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId);
   }
+
+  // Property Knowledge Graph (POC): best-effort normalization of WiFi / check-in /
+  // check-out items into a structured node. Fully non-blocking — a normalizer failure
+  // must never affect the chunk-based path above, so it runs after the primary write
+  // and swallows all errors internally.
+  await upsertNormalizedNode(admin, {
+    propertyId,
+    brainItemId: itemId,
+    category: category as Database['public']['Enums']['brain_category'],
+    title,
+    body,
+  });
 }
