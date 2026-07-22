@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
-  ConciergeBell, X, Send, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
+  ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
   AlertTriangle, ExternalLink, Check, Plus, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
@@ -621,7 +621,8 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 
   return (
     <div className="gp-rise" style={{ marginTop: '-2rem' }}>
-      {/* Presence banner — makes the concierge feel live and personal. */}
+      {/* Presence banner — makes the concierge feel live and personal. The chime
+          mute control now lives here (inline), replacing the old floating stack. */}
       <div style={presenceBar}>
         <DomeMark size={30} />
         <div style={{ flex: 1 }}>
@@ -630,6 +631,15 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             <span className="gp-dot" /> Online · replies instantly
           </div>
         </div>
+        <button
+          onClick={() => setMuted((m) => !m)}
+          className="gp-mute"
+          data-testid="button-toggle-chime"
+          aria-label={muted ? 'Unmute chime' : 'Mute chime'}
+          title={muted ? 'Unmute chime' : 'Mute chime'}
+        >
+          {muted ? <VolumeX size={15} aria-hidden /> : <Volume2 size={15} aria-hidden />}
+        </button>
       </div>
 
       {/* Choice-driven category cards — the primary, zero-typing UX. */}
@@ -723,63 +733,72 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         <FeedbackWidget state={feedbackState} onRate={submitFeedback} />
       )}
 
-      {/* De-emphasized free-text input — kept available but secondary to the cards. */}
-      <form onSubmit={(e) => { e.preventDefault(); send(input); }} style={{ display: 'flex', gap: '.5rem', marginTop: '.9rem' }} data-testid="chat-form">
+      {/* De-emphasized free-text input — kept available but secondary to the cards.
+          The send action is the concierge service bell: tapping it rings the concierge
+          and submits the message. A soft chime plays on send when unmuted. */}
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (input.trim() && !busy) { if (!muted) playChime(); send(input); } }}
+        style={{ display: 'flex', gap: '.5rem', marginTop: '.9rem', alignItems: 'stretch' }}
+        data-testid="chat-form"
+      >
         <input
           ref={inputRef}
           style={mutedInputStyle} value={input} onChange={(e) => setInput(e.target.value)}
-          placeholder="Or type your own question…" disabled={busy} data-testid="input-chat"
+          placeholder="Type your question, then ring the bell…" disabled={busy} data-testid="input-chat"
         />
-        <button type="submit" className="gp-send" disabled={busy || !input.trim()} data-testid="button-send-chat" aria-label="Send">
-          <Send size={16} aria-hidden />
+        <button
+          type="submit"
+          className="gp-bell-send"
+          disabled={busy || !input.trim()}
+          data-testid="button-send-chat"
+          aria-label="Ring the concierge to send"
+          title="Ring the concierge"
+        >
+          <ConciergeBell size={20} aria-hidden />
         </button>
       </form>
 
-      <AiDisclosure variant="note" />
+      {/* Direct line to the host — replaces the old floating bell's Request shortcut. */}
+      <button
+        onClick={() => openCategory(requestCategory, true)}
+        className="gp-host-link"
+        data-testid="button-service-bell"
+        aria-label="Ring the concierge for host help"
+      >
+        <ConciergeBell size={15} aria-hidden /> Need the host? Ring for help
+      </button>
 
-      {/* Concierge Service Bell — floating gold button; soft chime + opens the Request flow. */}
-      <div className="gp-bell-wrap">
-        <button
-          onClick={() => setMuted((m) => !m)}
-          className="gp-mute"
-          data-testid="button-toggle-chime"
-          aria-label={muted ? 'Unmute chime' : 'Mute chime'}
-          title={muted ? 'Unmute chime' : 'Mute chime'}
-        >
-          {muted ? <VolumeX size={15} aria-hidden /> : <Volume2 size={15} aria-hidden />}
-        </button>
-        <button
-          onClick={() => openCategory(requestCategory, true)}
-          className="gp-bell"
-          data-testid="button-service-bell"
-          aria-label="Ring the concierge service bell"
-          title="Concierge service bell"
-        >
-          <ConciergeBell size={26} aria-hidden />
-        </button>
-      </div>
+      <AiDisclosure variant="note" />
 
       {/* Sub-choice slide-over — pre-formed options that instantly trigger the chat. */}
       {activeCategory && (
         <div className="gp-sheet-scrim" onClick={() => setActiveCategory(null)} data-testid="subchoice-overlay">
-          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${activeCategory.label} options`} data-testid={`subchoice-${activeCategory.key}`}>
+          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`${activeCategory.label} options`} data-testid={`subchoice-${activeCategory.key}`}>
+            <div className="gp-sheet-grip" aria-hidden />
             <div className="gp-sheet-head">
-              <span className="gp-cat-icon" style={{ width: 40, height: 40 }}><activeCategory.Icon size={20} aria-hidden /></span>
-              <div style={{ flex: 1 }}>
-                <div className="gp-serif" style={{ fontSize: '1.3rem', color: '#fbf7ef' }}>{activeCategory.label}</div>
-                <div style={{ fontSize: '.78rem', opacity: 0.6 }}>{activeCategory.subtitle}</div>
+              <span className="gp-cat-icon gp-sheet-badge"><activeCategory.Icon size={22} aria-hidden /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="gp-serif gp-sheet-title">{activeCategory.label}</div>
+                <div className="gp-sheet-sub">{activeCategory.subtitle}</div>
               </div>
               <button onClick={() => setActiveCategory(null)} className="gp-sheet-close" data-testid="button-close-subchoice" aria-label="Close">
                 <X size={18} aria-hidden />
               </button>
             </div>
+            <div className="gp-sheet-hint">Tap an option for an instant answer</div>
             <div className="gp-sheet-choices">
-              {activeCategory.choices.map((c) => (
-                <button key={c.label} onClick={() => pickSubChoice(c)} className="gp-subchoice" data-testid={`subchoice-option-${activeCategory!.key}`}>
-                  <span>{c.label}</span>
-                  <ArrowRight size={16} aria-hidden style={{ opacity: 0.5 }} />
-                </button>
-              ))}
+              {activeCategory.choices.map((c) => {
+                const isFocus = c.query === FOCUS_INPUT;
+                return (
+                  <button key={c.label} onClick={() => pickSubChoice(c)} className={`gp-subchoice${isFocus ? ' gp-subchoice-alt' : ''}`} data-testid={`subchoice-option-${activeCategory!.key}`}>
+                    <span className="gp-subchoice-icon" aria-hidden>
+                      {isFocus ? <MessageCircle size={16} /> : <activeCategory.Icon size={16} />}
+                    </span>
+                    <span className="gp-subchoice-label">{c.label}</span>
+                    <ArrowRight size={15} aria-hidden className="gp-subchoice-arrow" />
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -817,14 +836,23 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           transition: border-color .18s, background .18s, transform .18s;
         }
         .gp-pill:hover { border-color: ${GOLD}; background: rgba(201,169,110,.12); transform: translateY(-1px); }
-        .gp-send {
-          flex-shrink: 0; width: 46px; border-radius: 12px; border: 1px solid rgba(201,169,110,.4);
-          background: rgba(201,169,110,.14); color: ${GOLD}; cursor: pointer;
+        .gp-bell-send {
+          flex-shrink: 0; width: 52px; border-radius: 12px; border: none;
+          background: linear-gradient(145deg, #e7d3a6, ${GOLD}); color: #1a1206; cursor: pointer;
           display: inline-flex; align-items: center; justify-content: center;
-          transition: background .18s, transform .18s;
+          box-shadow: 0 10px 26px -14px rgba(201,169,110,.9), inset 0 1px 1px rgba(255,255,255,.45);
+          transition: transform .2s cubic-bezier(.16,1,.3,1), box-shadow .18s, filter .18s;
         }
-        .gp-send:hover:not(:disabled) { background: rgba(201,169,110,.24); transform: translateY(-1px); }
-        .gp-send:disabled { opacity: .4; cursor: default; }
+        .gp-bell-send:hover:not(:disabled) { transform: translateY(-2px) scale(1.03); box-shadow: 0 14px 32px -12px rgba(201,169,110,1), inset 0 1px 1px rgba(255,255,255,.45); }
+        .gp-bell-send:active:not(:disabled) { transform: translateY(0) scale(.95); }
+        .gp-bell-send:disabled { opacity: .45; filter: grayscale(.35); cursor: default; box-shadow: none; }
+        .gp-host-link {
+          display: inline-flex; align-items: center; gap: .4rem; margin: .7rem auto 0; padding: .4rem .2rem;
+          background: none; border: none; color: ${GOLD}; cursor: pointer;
+          font-size: .8rem; font-weight: 500; opacity: .82; width: 100%; justify-content: center;
+          transition: opacity .18s;
+        }
+        .gp-host-link:hover { opacity: 1; text-decoration: underline; text-underline-offset: 3px; }
         .gp-typing {
           width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5;
           animation: gpBlink 1.2s infinite;
@@ -832,26 +860,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         .gp-typing:nth-child(2) { animation-delay: .2s; }
         .gp-typing:nth-child(3) { animation-delay: .4s; }
         .gp-msg { animation: gpMsg .35s cubic-bezier(.16,1,.3,1) both; }
-        .gp-bell-wrap {
-          position: fixed; right: max(1.1rem, env(safe-area-inset-right)); bottom: max(1.1rem, env(safe-area-inset-bottom));
-          z-index: 40; display: flex; flex-direction: column; align-items: center; gap: .5rem;
-        }
         .gp-mute {
-          width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: #ece7dd;
-          border: 1px solid rgba(255,255,255,.14); background: rgba(13,15,20,.7); backdrop-filter: blur(10px);
-          display: grid; place-items: center; opacity: .8; transition: opacity .18s, transform .18s;
+          flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: #ece7dd;
+          border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
+          display: grid; place-items: center; opacity: .7; transition: opacity .18s, transform .18s, background .18s;
         }
-        .gp-mute:hover { opacity: 1; transform: translateY(-1px); }
-        .gp-bell {
-          width: 60px; height: 60px; border-radius: 50%; cursor: pointer; color: #1a1206;
-          border: none; background: linear-gradient(145deg, #e7d3a6, ${GOLD});
-          display: grid; place-items: center;
-          box-shadow: 0 12px 34px -8px rgba(201,169,110,.7), inset 0 1px 1px rgba(255,255,255,.4);
-          animation: gpBellIn .5s cubic-bezier(.16,1,.3,1) both;
-          transition: transform .2s cubic-bezier(.16,1,.3,1);
-        }
-        .gp-bell:hover { transform: translateY(-2px) scale(1.04); }
-        .gp-bell:active { transform: translateY(0) scale(.96); }
+        .gp-mute:hover { opacity: 1; transform: translateY(-1px); background: rgba(255,255,255,.07); }
         .gp-sheet-scrim {
           position: fixed; inset: 0; z-index: 50; background: rgba(6,8,12,.6); backdrop-filter: blur(4px);
           display: flex; align-items: flex-end; justify-content: center; padding: 0;
@@ -864,31 +878,61 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           animation: gpSheetUp .34s cubic-bezier(.16,1,.3,1) both;
         }
         @media (min-width: 560px) { .gp-sheet { border-radius: 22px; } }
-        .gp-sheet-head { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; }
+        .gp-sheet-grip {
+          width: 40px; height: 4px; border-radius: 999px; background: rgba(255,255,255,.18);
+          margin: -.35rem auto .95rem;
+        }
+        @media (min-width: 560px) { .gp-sheet-grip { display: none; } }
+        .gp-sheet-head { display: flex; align-items: center; gap: .75rem; margin-bottom: .35rem; }
+        .gp-sheet-badge {
+          width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0;
+          box-shadow: inset 0 1px 1px rgba(255,255,255,.08);
+        }
+        .gp-sheet-title { font-size: 1.35rem; color: #fbf7ef; line-height: 1.15; }
+        .gp-sheet-sub { font-size: .8rem; opacity: .6; margin-top: .1rem; }
+        .gp-sheet-hint {
+          font-size: .68rem; opacity: .42; text-transform: uppercase; letter-spacing: .14em;
+          margin: 0 0 .85rem 3.35rem;
+        }
         .gp-sheet-close {
-          width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: inherit;
+          width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: inherit; flex-shrink: 0;
           border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04);
-          display: grid; place-items: center; opacity: .75;
+          display: grid; place-items: center; opacity: .75; transition: opacity .18s, background .18s;
         }
-        .gp-sheet-close:hover { opacity: 1; }
-        .gp-sheet-choices { display: flex; flex-direction: column; gap: .5rem; }
+        .gp-sheet-close:hover { opacity: 1; background: rgba(255,255,255,.08); }
+        .gp-sheet-choices { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+        @media (min-width: 460px) { .gp-sheet-choices { grid-template-columns: repeat(2, 1fr); } }
         .gp-subchoice {
-          display: flex; align-items: center; justify-content: space-between; gap: .6rem;
-          padding: .85rem 1rem; border-radius: 13px; cursor: pointer; color: #ece7dd;
-          border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03);
-          font-size: .95rem; text-align: left;
-          transition: border-color .18s, background .18s, transform .18s;
+          display: flex; align-items: center; gap: .65rem;
+          padding: .9rem 1rem; border-radius: 14px; cursor: pointer; color: #f0ebe1;
+          border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.035);
+          font-size: .92rem; font-weight: 500; text-align: left;
+          transition: border-color .18s, background .18s, transform .18s, box-shadow .18s;
         }
-        .gp-subchoice:hover { border-color: rgba(201,169,110,.5); background: rgba(201,169,110,.1); transform: translateX(2px); }
+        .gp-subchoice:hover {
+          border-color: rgba(201,169,110,.55); background: rgba(201,169,110,.11);
+          transform: translateY(-2px); box-shadow: 0 12px 26px -18px rgba(201,169,110,.8);
+        }
+        .gp-subchoice:active { transform: translateY(0); }
+        .gp-subchoice-icon {
+          display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+          color: ${GOLD}; background: rgba(201,169,110,.12); border: 1px solid rgba(201,169,110,.2);
+        }
+        .gp-subchoice-label { flex: 1; min-width: 0; line-height: 1.25; }
+        .gp-subchoice-arrow { opacity: .4; flex-shrink: 0; transition: transform .18s, opacity .18s; }
+        .gp-subchoice:hover .gp-subchoice-arrow { opacity: .85; transform: translateX(2px); }
+        .gp-subchoice-alt {
+          border-style: dashed; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.02);
+        }
+        .gp-subchoice-alt .gp-subchoice-icon { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); color: #ece7dd; }
         @keyframes gpPulse { 0% { box-shadow: 0 0 0 0 ${GOLD}66; } 70% { box-shadow: 0 0 0 6px ${GOLD}00; } 100% { box-shadow: 0 0 0 0 ${GOLD}00; } }
         @keyframes gpBlink { 0%, 60%, 100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
         @keyframes gpMsg { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         @keyframes gpFade { from { opacity: 0; } to { opacity: 1; } }
         @keyframes gpSheetUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
-        @keyframes gpBellIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: reduce) {
-          .gp-dot, .gp-typing, .gp-msg, .gp-pills, .gp-bell, .gp-sheet, .gp-sheet-scrim { animation: none; }
-          .gp-cat:hover, .gp-pill:hover, .gp-send:hover:not(:disabled), .gp-bell:hover, .gp-subchoice:hover, .gp-mute:hover { transform: none; }
+          .gp-dot, .gp-typing, .gp-msg, .gp-pills, .gp-sheet, .gp-sheet-scrim { animation: none; }
+          .gp-cat:hover, .gp-pill:hover, .gp-bell-send:hover:not(:disabled), .gp-subchoice:hover, .gp-mute:hover { transform: none; }
         }
       `}</style>
     </div>
