@@ -87,10 +87,11 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   } as never);
 
   // Reuse an existing OPEN escalation for this conversation if one is already pending
-  // (avoids duplicate host pings when a guest sends several lines). Otherwise open one.
+  // (avoids duplicate host pings when a guest sends several lines in quick succession).
+  // Otherwise open a new one.
   const { data: openEsc } = await admin
     .from('escalations')
-    .select('id')
+    .select('id, question, updated_at')
     .eq('conversation_id', conversationId)
     .eq('property_id', session.propertyId)
     .eq('status', 'open')
@@ -98,8 +99,15 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     .limit(1)
     .maybeSingle();
 
-  let escId = (openEsc as { id: string } | null)?.id ?? null;
+  const openRow = openEsc as { id: string; question: string; updated_at: string } | null;
+  let escId = openRow?.id ?? null;
   let created = false;
+  // Re-ping the host if the reused escalation hasn't been touched in a while, so a
+  // genuinely new issue (not just a rapid follow-up line) doesn't get silently swallowed
+  // into a stale open thread. Rapid multi-line sends still coalesce into one ping.
+  const REPING_AFTER_MS = 10 * 60 * 1000;
+  let shouldNotify = false;
+
   if (!escId) {
     const { data: esc } = await admin
       .from('escalations')
@@ -114,11 +122,21 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
       .single();
     escId = (esc as { id: string } | null)?.id ?? null;
     created = true;
+    shouldNotify = true;
+  } else {
+    // Reuse: refresh the escalation so the host sees the LATEST question and an updated
+    // timestamp. This fixes host views showing a stale earlier question.
+    const staleMs = openRow ? Date.now() - new Date(openRow.updated_at).getTime() : Infinity;
+    shouldNotify = staleMs >= REPING_AFTER_MS;
+    await admin
+      .from('escalations')
+      .update({ question: message, updated_at: new Date().toISOString() } as never)
+      .eq('id', escId);
   }
 
-  // Notify the host. Only ping on a NEW escalation to avoid spamming on follow-ups; a
-  // reused open escalation already alerted them.
-  if (created && escId) {
+  // Notify the host on a new escalation, or when a reused one had gone quiet long enough
+  // that this counts as a fresh ask. Rapid follow-up lines within the window stay silent.
+  if (shouldNotify && escId) {
     const answerUrl = `${publicEnv.appUrl}/answer/${signEscalationLinkToken(escId)}`;
     await notify(admin, {
       hostAccountId: property.host_account_id,
