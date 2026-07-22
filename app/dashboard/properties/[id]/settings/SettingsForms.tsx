@@ -4,6 +4,7 @@ import { useFormState } from 'react-dom';
 import Link from 'next/link';
 import { updatePropertyAction, updatePropertySettingsAction, type PropertyFormState } from '../../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 const COMMON_TZ = [
   'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
@@ -41,6 +42,8 @@ interface Property {
   address_line1: string | null;
   address_line2: string | null;
   postal_code: string | null;
+  lat: number | null;
+  lng: number | null;
   brand_primary: string | null;
   brand_accent: string | null;
   cover_image_url: string | null;
@@ -115,6 +118,13 @@ function BrandingForm({ property }: { property: Property }) {
           </select>
         </div>
       </div>
+
+      <AddressAutocomplete
+        targets={{ line1: 'addressLine1', city: 'city', state: 'region', postalCode: 'postalCode', country: 'country' }}
+        initialLat={property.lat}
+        initialLng={property.lng}
+        initialQuery={property.address_line1 ?? ''}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">

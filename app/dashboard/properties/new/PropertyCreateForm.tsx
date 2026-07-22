@@ -3,6 +3,7 @@
 import { useFormState } from 'react-dom';
 import { createPropertyAction, type PropertyFormState } from '../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 const COMMON_TZ = [
   'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
@@ -40,6 +41,10 @@ export function PropertyCreateForm() {
           </select>
         </div>
       </div>
+      <AddressAutocomplete
+        targets={{ city: 'city', state: 'region', country: 'country' }}
+      />
+
       <div className="field">
         <label className="label" htmlFor="locale">Default language</label>
         <select className="select" id="locale" name="locale" defaultValue="en">

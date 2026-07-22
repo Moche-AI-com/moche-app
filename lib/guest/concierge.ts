@@ -109,6 +109,55 @@ ${chunkContext || '(no additional knowledge available for this property yet)'}
 
 const EMERGENCY_PATTERNS = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|intruder|burglar|bleeding|unconscious|heart attack|can'?t breathe|emergency|ambulance|assault)\b/i;
 
+const NEARBY_CATEGORY_LABEL: Record<string, string> = {
+  restaurant: 'Restaurant', cafe: 'Cafe', bar: 'Bar/Pub', grocery: 'Grocery',
+  pharmacy: 'Pharmacy', hospital: 'Hospital', tourist_attraction: 'Attraction',
+  golf_course: 'Golf course', convenience_store: 'Convenience store', bakery: 'Bakery',
+  park: 'Park', gas_station: 'Gas station',
+};
+
+function nearbyDistance(m: number | null): string {
+  if (m == null) return '';
+  return m < 950 ? ` (~${Math.round(m / 50) * 50} m)` : ` (~${(m / 1000).toFixed(1)} km)`;
+}
+
+// Build a concise, host-curated local-places block for the concierge. Hierarchy:
+// host-starred first (with the host's notes), then the rest of the non-hidden set.
+// Hidden places are excluded entirely. Returns '' when there is nothing to add so
+// the base prompt is unchanged for properties without nearby data.
+async function buildNearbyPlacesContext(admin: Admin, propertyId: string): Promise<string> {
+  const { data, error } = await admin
+    .from('nearby_places')
+    .select('category, name, host_notes, host_starred, rating, distance_m')
+    .eq('property_id', propertyId)
+    .eq('hidden', false)
+    .order('host_starred', { ascending: false })
+    .order('rating', { ascending: false, nullsFirst: false })
+    .order('distance_m', { ascending: true })
+    .limit(60);
+  if (error || !data || data.length === 0) return '';
+
+  const starred = data.filter((p) => p.host_starred);
+  const rest = data.filter((p) => !p.host_starred);
+
+  const fmt = (p: (typeof data)[number]) => {
+    const label = NEARBY_CATEGORY_LABEL[p.category] ?? p.category;
+    let line = `- ${p.name ?? 'Unnamed'} (${label})${nearbyDistance(p.distance_m)}`;
+    if (p.host_starred) line += ' — Host favorite.';
+    if (p.host_notes) line += ` Host note: ${p.host_notes}`;
+    return line;
+  };
+
+  const sections: string[] = [];
+  if (starred.length > 0) {
+    sections.push(`Host favorites (recommend these first):\n${starred.map(fmt).join('\n')}`);
+  }
+  if (rest.length > 0) {
+    sections.push(`Other nearby places:\n${rest.slice(0, 40).map(fmt).join('\n')}`);
+  }
+  return `Nearby places (for local recommendations — prefer host favorites, and share the host's note when present):\n${sections.join('\n\n')}`;
+}
+
 // Retrieve property-scoped, guest-visible chunks. Isolation is enforced IN THE DATABASE
 // via match_property_chunks(p_property_id, ..., p_guest_only=true). We never retrieve
 // globally and filter afterward — a mismatched property_id simply returns nothing.
@@ -254,7 +303,12 @@ export async function answerGuestQuestion(
     : [];
 
   const chunks = await retrieveGuestChunks(admin, opts.propertyId, opts.question, usageSink, embedding);
-  const context = chunks.map((c, i) => `[${i + 1}] (${c.category}) ${c.content}`).join('\n\n');
+  const chunkContext = chunks.map((c, i) => `[${i + 1}] (${c.category}) ${c.content}`).join('\n\n');
+
+  // Extend (never replace) the knowledge context with host-curated nearby places
+  // so the concierge can make grounded local recommendations. Excluded when empty.
+  const nearbyContext = await buildNearbyPlacesContext(admin, opts.propertyId);
+  const context = [chunkContext, nearbyContext].filter(Boolean).join('\n\n');
 
   let intent: IntentType = 'information';
   try {

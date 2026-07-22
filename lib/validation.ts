@@ -27,6 +27,12 @@ export const profileUpdateSchema = z.object({
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a hex color like #33E6D4');
 
+// Coordinates arrive from the address autocomplete / manual pin as form strings.
+// Empty string => undefined; otherwise a bounded finite number.
+const emptyToUndefined = (v: unknown) => (v === '' || v == null ? undefined : v);
+const latitude = z.preprocess(emptyToUndefined, z.coerce.number().min(-90).max(90).optional());
+const longitude = z.preprocess(emptyToUndefined, z.coerce.number().min(-180).max(180).optional());
+
 export const propertyCreateSchema = z.object({
   displayName: z.string().trim().min(1, 'Property name is required.').max(120),
   // City + country are required so every portal has real location context for the
@@ -42,9 +48,16 @@ export const propertyUpdateSchema = propertyCreateSchema.partial().extend({
   addressLine1: z.string().trim().max(200).optional().or(z.literal('')),
   addressLine2: z.string().trim().max(200).optional().or(z.literal('')),
   postalCode: z.string().trim().max(40).optional().or(z.literal('')),
+  lat: latitude,
+  lng: longitude,
   brandPrimary: hexColor.optional().or(z.literal('')),
   brandAccent: hexColor.optional().or(z.literal('')),
   coverImageUrl: z.string().url().max(2000).optional().or(z.literal('')),
+});
+
+export const propertyCreateWithGeoSchema = propertyCreateSchema.extend({
+  lat: latitude,
+  lng: longitude,
 });
 
 export const propertySettingsSchema = z.object({

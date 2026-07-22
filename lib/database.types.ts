@@ -1257,6 +1257,8 @@ export type Database = {
           display_name: string
           host_account_id: string
           id: string
+          lat: number | null
+          lng: number | null
           locale: string
           logo_url: string | null
           postal_code: string | null
@@ -1280,6 +1282,8 @@ export type Database = {
           display_name: string
           host_account_id: string
           id?: string
+          lat?: number | null
+          lng?: number | null
           locale?: string
           logo_url?: string | null
           postal_code?: string | null
@@ -1303,6 +1307,8 @@ export type Database = {
           display_name?: string
           host_account_id?: string
           id?: string
+          lat?: number | null
+          lng?: number | null
           locale?: string
           logo_url?: string | null
           postal_code?: string | null
@@ -1319,6 +1325,74 @@ export type Database = {
             columns: ["host_account_id"]
             isOneToOne: false
             referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nearby_places: {
+        Row: {
+          category: string
+          created_at: string
+          distance_m: number | null
+          hidden: boolean
+          host_notes: string | null
+          host_starred: boolean
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string | null
+          photo_ref: string | null
+          place_id: string | null
+          price_level: number | null
+          property_id: string
+          rating: number | null
+          refreshed_at: string
+          review_count: number | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          distance_m?: number | null
+          hidden?: boolean
+          host_notes?: string | null
+          host_starred?: boolean
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          photo_ref?: string | null
+          place_id?: string | null
+          price_level?: number | null
+          property_id: string
+          rating?: number | null
+          refreshed_at?: string
+          review_count?: number | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          distance_m?: number | null
+          hidden?: boolean
+          host_notes?: string | null
+          host_starred?: boolean
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          photo_ref?: string | null
+          place_id?: string | null
+          price_level?: number | null
+          property_id?: string
+          rating?: number | null
+          refreshed_at?: string
+          review_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nearby_places_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
         ]

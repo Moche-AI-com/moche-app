@@ -150,6 +150,10 @@
   .dash-tab:hover::after { transform: scaleX(1); }
   .dash-tab.dash-tab-active::after { transform: scaleX(1); }
 
+  /* Inline spinner (lucide Loader2) */
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* Staggered entrance for card grids */
   .rise-in { opacity: 0; animation: riseIn .5s var(--ease-out) forwards; }
   .rise-in:nth-child(1) { animation-delay: .02s; }

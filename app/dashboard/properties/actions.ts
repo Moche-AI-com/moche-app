@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
-import { propertyCreateSchema, propertyUpdateSchema, propertySettingsSchema } from '@/lib/validation';
+import { propertyCreateWithGeoSchema, propertyUpdateSchema, propertySettingsSchema } from '@/lib/validation';
 import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
@@ -29,13 +29,15 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
     return { error: `You've reached your plan's limit of ${gate.limit} propert${gate.limit === 1 ? 'y' : 'ies'}. Upgrade to add more.` };
   }
 
-  const parsed = propertyCreateSchema.safeParse({
+  const parsed = propertyCreateWithGeoSchema.safeParse({
     displayName: formData.get('displayName'),
     city: formData.get('city') || '',
     region: formData.get('region') || '',
     country: formData.get('country') || '',
     timezone: formData.get('timezone') || 'UTC',
     locale: formData.get('locale') || 'en',
+    lat: formData.get('lat') ?? '',
+    lng: formData.get('lng') ?? '',
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the property details.' };
 
@@ -49,6 +51,8 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
       city: d.city || null,
       region: d.region || null,
       country: d.country || null,
+      lat: d.lat ?? null,
+      lng: d.lng ?? null,
       timezone: d.timezone,
       locale: d.locale,
       status: 'draft',
@@ -94,6 +98,8 @@ export async function updatePropertyAction(_prev: PropertyFormState, formData: F
     addressLine1: formData.get('addressLine1') || '',
     addressLine2: formData.get('addressLine2') || '',
     postalCode: formData.get('postalCode') || '',
+    lat: formData.get('lat') ?? '',
+    lng: formData.get('lng') ?? '',
     brandPrimary: formData.get('brandPrimary') || '',
     brandAccent: formData.get('brandAccent') || '',
     coverImageUrl: formData.get('coverImageUrl') || '',
@@ -114,6 +120,8 @@ export async function updatePropertyAction(_prev: PropertyFormState, formData: F
       address_line1: d.addressLine1 || null,
       address_line2: d.addressLine2 || null,
       postal_code: d.postalCode || null,
+      lat: d.lat ?? null,
+      lng: d.lng ?? null,
       brand_primary: d.brandPrimary || null,
       brand_accent: d.brandAccent || null,
       cover_image_url: d.coverImageUrl || null,

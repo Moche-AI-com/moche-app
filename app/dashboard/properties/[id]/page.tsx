@@ -89,6 +89,7 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
         <Tile href={`/dashboard/properties/${property.id}/brain`} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
         <Tile href={`/dashboard/properties/${property.id}/stays`} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
         <Tile href={`/dashboard/escalations?property=${property.id}`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
+        <Tile href={`/dashboard/properties/${property.id}/nearby`} title="Nearby places" value="Discover" sub="Auto-found local spots" />
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} title="Settings" value="Configure" sub="Branding, tone, modules" />}
       </div>
 
