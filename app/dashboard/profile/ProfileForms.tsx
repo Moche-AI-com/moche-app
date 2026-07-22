@@ -4,7 +4,7 @@ import { useFormState } from 'react-dom';
 import { updateProfileAction, requestAccountDeletionAction, type ProfileFormState } from './actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 
-export function ProfileForm({ email, fullName, phone }: { email: string; fullName: string; phone: string }) {
+export function ProfileForm({ email, fullName }: { email: string; fullName: string }) {
   const [state, formAction] = useFormState<ProfileFormState, FormData>(updateProfileAction, {});
   return (
     <form action={formAction} className="card" style={{ padding: '1.5rem', maxWidth: 520 }}>
@@ -18,10 +18,9 @@ export function ProfileForm({ email, fullName, phone }: { email: string; fullNam
         <label className="label" htmlFor="fullName">Full name</label>
         <input className="input" id="fullName" name="fullName" defaultValue={fullName} maxLength={120} required />
       </div>
-      <div className="field">
-        <label className="label" htmlFor="phone">Phone (optional)</label>
-        <input className="input" id="phone" name="phone" defaultValue={phone} maxLength={40} placeholder="+1 555 000 0000" />
-      </div>
+      <p className="faint" style={{ fontSize: '.75rem', margin: 0 }}>
+        Manage your phone number, SMS alerts, and two-factor login in the Phone &amp; security section below.
+      </p>
       <SubmitButton>Save profile</SubmitButton>
     </form>
   );

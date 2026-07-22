@@ -1,13 +1,33 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { signupSchema, loginSchema, resetRequestSchema, resetUpdateSchema } from '@/lib/validation';
+import { signupSchema, loginSchema, resetRequestSchema, resetUpdateSchema, hostLoginOtpSchema } from '@/lib/validation';
 import { publicEnv, hasServiceRole } from '@/lib/env';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireSession } from '@/lib/auth/guards';
 import { recordAcceptances } from '@/lib/legal/acceptance';
+import { createAndSendHostOtp, verifyHostOtp } from '@/lib/auth/host-otp';
+import { verifyTrustedDeviceValue, signTrustedDeviceValue } from '@/lib/crypto';
+import { TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_TTL_DAYS } from '@/lib/constants';
 import { log } from '@/lib/log';
+
+function safeNext(raw: FormDataEntryValue | null): string {
+  const next = typeof raw === 'string' ? raw : '';
+  return next.startsWith('/') ? next : '/dashboard';
+}
+
+function trustedDeviceCookieOptions() {
+  return {
+    name: TRUSTED_DEVICE_COOKIE,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: TRUSTED_DEVICE_TTL_DAYS * 24 * 60 * 60,
+  };
+}
 
 export interface FormState {
   error?: string;
@@ -65,12 +85,76 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   if (!parsed.success) return { error: 'Enter a valid email and password.' };
 
   const supabase = createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) {
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
+  if (error || !data.user) {
     return { error: 'Invalid email or password.' };
   }
-  const next = (formData.get('next') as string) || '/dashboard';
-  redirect(next.startsWith('/') ? next : '/dashboard');
+  const next = safeNext(formData.get('next'));
+
+  // Optional SMS 2FA: only for hosts who verified a phone AND enabled the toggle.
+  // A valid trusted-device cookie skips the step. This never touches guest auth.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('phone, phone_verified_at, two_factor_enabled')
+    .eq('id', data.user.id)
+    .single();
+
+  const needs2fa =
+    !!profile?.two_factor_enabled && !!profile.phone_verified_at && !!profile.phone;
+  if (needs2fa) {
+    const trusted = verifyTrustedDeviceValue(data.user.id, cookies().get(TRUSTED_DEVICE_COOKIE)?.value);
+    if (!trusted && hasServiceRole()) {
+      await createAndSendHostOtp(createAdminClient(), {
+        userId: data.user.id,
+        phone: profile!.phone!,
+        purpose: 'login',
+      });
+      redirect(`/login/verify?next=${encodeURIComponent(next)}`);
+    }
+  }
+
+  redirect(next);
+}
+
+// Step two of login 2FA: verify the SMS code, then trust this device so the user
+// is not challenged again for TRUSTED_DEVICE_TTL_DAYS. Requires an active session
+// (created by the password step) — this does not bypass password auth.
+export async function verifyLoginOtpAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const ctx = await requireSession();
+  const parsed = hostLoginOtpSchema.safeParse({ code: formData.get('code') });
+  if (!parsed.success) return { error: 'Enter the 6-digit code we texted you.' };
+  if (!hasServiceRole()) return { error: 'Two-factor login is unavailable right now.' };
+
+  const ok = await verifyHostOtp(createAdminClient(), {
+    userId: ctx.user.id,
+    purpose: 'login',
+    code: parsed.data.code,
+  });
+  if (!ok) return { error: 'That code is invalid or has expired. Request a new one.' };
+
+  cookies().set({
+    ...trustedDeviceCookieOptions(),
+    value: signTrustedDeviceValue(ctx.user.id),
+  });
+  redirect(safeNext(formData.get('next')));
+}
+
+// Resend a fresh login OTP (rate-limited inside createAndSendHostOtp).
+export async function resendLoginOtpAction(_prev: FormState, _formData: FormData): Promise<FormState> {
+  const ctx = await requireSession();
+  if (!ctx.profile.phone || !ctx.profile.phone_verified_at) {
+    return { error: 'No verified phone on file.' };
+  }
+  if (!hasServiceRole()) return { error: 'Two-factor login is unavailable right now.' };
+  const res = await createAndSendHostOtp(createAdminClient(), {
+    userId: ctx.user.id,
+    phone: ctx.profile.phone,
+    purpose: 'login',
+  });
+  if (!res.ok) {
+    return { error: res.rateLimited ? 'Too many code requests. Try again later.' : 'Could not send a new code.' };
+  }
+  return { success: 'A new code is on its way.' };
 }
 
 export async function logoutAction(): Promise<void> {

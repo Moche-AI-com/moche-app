@@ -498,6 +498,10 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   const [muted, setMuted] = useState(false);
+  // 4c soft-gate: once a question is escalated to the host, offer to notify the guest
+  // when the host replies. 'idle' shows the prompt; 'saved'/'skipped' hide it.
+  const [notifyChoice, setNotifyChoice] = useState<'idle' | 'saved' | 'skipped'>('idle');
+  const hasEscalation = entries.some((e) => e.escalated);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -627,6 +631,17 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: {
           )}
         </div>
       </div>
+
+      {/* 4c soft-gate: contextual "Notify Me / Skip" once a question reaches the host.
+          Never shown in host preview (no real guest session to attach consent to). */}
+      {!hostPreview && hasEscalation && notifyChoice === 'idle' && (
+        <NotifyMeCard slug={slug} onSaved={() => setNotifyChoice('saved')} onSkip={() => setNotifyChoice('skipped')} />
+      )}
+      {!hostPreview && notifyChoice === 'saved' && (
+        <div style={{ ...alertOk, marginTop: '.9rem', marginBottom: 0 }} data-testid="notify-saved">
+          Great — we&apos;ll let you know as soon as your host replies.
+        </div>
+      )}
 
       {/* Dynamic suggestion pills — natural follow-ups parsed from the AI reply. */}
       {asked && !busy && suggestions.length > 0 && (
@@ -805,6 +820,69 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: {
           .gp-cat:hover, .gp-pill:hover, .gp-send:hover:not(:disabled), .gp-bell:hover, .gp-subchoice:hover, .gp-mute:hover { transform: none; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// TCPA / consent fine print shown at the point of opt-in. Mirrors the host-side notice.
+const GUEST_NOTIFY_FINE_PRINT =
+  'By tapping Notify me you agree to receive a one-time automated message (SMS or email) from ' +
+  'Moche.AI when your host replies. Message & data rates may apply. Reply STOP to opt out. ' +
+  'Consent is not a condition of any service.';
+
+// 4c — inline soft-gate. Captures a contact + explicit consent and posts to the
+// notify-consent endpoint, which stores it on the guest's verified session row.
+function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => void; onSkip: () => void }) {
+  const [contact, setContact] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!consent) { setErr('Please tick the box to consent.'); return; }
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/guest/${slug}/notify-consent`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contact, consent }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not save your preference.');
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginTop: '.9rem', padding: '1.15rem' }} className="gp-card gp-rise" data-testid="notify-me-card">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.35rem' }}>
+        <ConciergeBell size={18} aria-hidden style={{ color: GOLD }} />
+        <span className="gp-serif" style={{ fontSize: '1.15rem', color: '#fbf7ef' }}>Want a heads-up when your host replies?</span>
+      </div>
+      <p style={{ opacity: 0.7, fontSize: '.85rem', margin: '0 0 .9rem', lineHeight: 1.45 }}>
+        We&apos;ve passed your question to your host. Leave a contact and we&apos;ll ping you the moment they answer.
+      </p>
+      <form onSubmit={submit}>
+        {err && <div style={{ ...alertErr, marginBottom: '.8rem' }} data-testid="notify-error">{err}</div>}
+        <label style={labelStyle}>Email or phone</label>
+        <input
+          style={inputStyle} value={contact} onChange={(e) => setContact(e.target.value)}
+          placeholder="you@email.com or +1 555 000 0000" autoComplete="off" required data-testid="input-notify-contact"
+        />
+        <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', fontSize: '.76rem', opacity: 0.8, margin: '0 0 1rem', lineHeight: 1.45, cursor: 'pointer' }}>
+          <input
+            type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
+            style={{ marginTop: 3, flexShrink: 0 }} data-testid="checkbox-notify-consent"
+          />
+          <span>{GUEST_NOTIFY_FINE_PRINT}</span>
+        </label>
+        <button type="submit" style={btnStyle} className="gp-btn" disabled={busy || !contact.trim()} data-testid="button-notify-me">
+          {busy ? 'Saving…' : 'Notify me'}
+        </button>
+        <button type="button" onClick={onSkip} style={linkBtn} data-testid="button-notify-skip">Skip</button>
+      </form>
     </div>
   );
 }

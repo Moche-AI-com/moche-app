@@ -175,6 +175,31 @@ export const guestServiceRequestSchema = z.object({
   urgency: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
 });
 
+// Host phone verification + optional login 2FA (Feature 4a).
+export const hostPhoneSchema = z.object({
+  phone: z.string().trim().min(7, 'Enter a valid phone number.').max(40),
+});
+export const hostOtpConfirmSchema = z.object({
+  phone: z.string().trim().min(7).max(40),
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+  optIn: z.boolean().default(false),
+});
+export const hostLoginOtpSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+});
+
+// Guest "Notify Me" soft-gate consent capture (Feature 4c).
+export const guestNotifyConsentSchema = z.object({
+  contact: z.string().trim().min(3).max(320),
+  consent: z.literal(true),
+});
+
+// Answer an escalation via the signed magic link (no dashboard session).
+export const escalationLinkAnswerSchema = z.object({
+  token: z.string().trim().min(16).max(1024),
+  response: z.string().trim().min(1).max(4000),
+});
+
 export const escalationRespondSchema = z.object({
   response: z.string().trim().min(1).max(4000),
   convertToBrain: z.boolean().default(false),

@@ -16,6 +16,9 @@ interface NotifyParams {
   link?: string;
   propertyId?: string | null;
   recipientProfileId?: string | null;
+  // Optional absolute URL delivered in the email + SMS fan-out (e.g. an escalation
+  // answer magic link). Kept short for SMS. Never logged.
+  actionUrl?: string;
 }
 
 // Host notification kinds that fan out to email.
@@ -85,7 +88,7 @@ async function sendHostEmail(to: string, subject: string, text: string): Promise
 async function loadOwnerContact(
   client: Client,
   hostAccountId: string
-): Promise<{ email: string | null; phone: string | null } | null> {
+): Promise<{ email: string | null; phone: string | null; smsOptIn: boolean; phoneVerifiedAt: string | null } | null> {
   const { data: account } = await client
     .from('host_accounts')
     .select('owner_id')
@@ -94,11 +97,12 @@ async function loadOwnerContact(
   if (!account) return null;
   const { data: profile } = await client
     .from('profiles')
-    .select('email, phone')
+    .select('email, phone, sms_opt_in, phone_verified_at')
     .eq('id', (account as { owner_id: string }).owner_id)
     .maybeSingle();
   if (!profile) return null;
-  return { email: (profile as { email: string | null }).email, phone: (profile as { phone: string | null }).phone };
+  const row = profile as { email: string | null; phone: string | null; sms_opt_in: boolean; phone_verified_at: string | null };
+  return { email: row.email, phone: row.phone, smsOptIn: !!row.sms_opt_in, phoneVerifiedAt: row.phone_verified_at };
 }
 
 // Creates the durable in-app notification row and fans out to email (now) and host SMS
@@ -109,12 +113,10 @@ async function loadOwnerContact(
 //   1. NOTIFY_SMS_ENABLED feature flag on, AND
 //   2. plan entitlement smsEscalation (Pro+), AND
 //   3. valid Twilio config present, AND
-//   4. host owner profile has a non-null phone.
-//
-// TODO(consent): profiles has no phone_verified_at / sms_opt_in columns yet. A follow-up
-// ADDITIVE migration (profiles.phone_verified_at, profiles.sms_opt_in) is REQUIRED for TCPA
-// compliance BEFORE NOTIFY_SMS_ENABLED may be turned on in production. Until then SMS stays
-// gated by the flag (default false) and the four conditions above.
+//   4. host owner profile has a non-null phone that is VERIFIED (phone_verified_at) AND
+//      an active TCPA opt-in (sms_opt_in). This resolves the former TODO(consent):
+//      profiles.phone_verified_at / sms_opt_in are added by supabase-migrations-FEATURE4.sql
+//      and captured through the verified-phone flow in dashboard/profile/security-actions.ts.
 export async function notify(client: Client, p: NotifyParams): Promise<void> {
   // 1. Durable in-app row (source of truth).
   try {
@@ -142,17 +144,48 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
   // 2. Email fan-out (all host notification kinds).
   if (wantsEmail && contact.email) {
     const url = p.link ? `${publicEnv.appUrl}${p.link}` : '';
-    const text = `${p.body ?? p.title}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
+    const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
+    const text = `${p.body ?? p.title}${action}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
     await sendHostEmail(contact.email, `Moche.AI: ${p.title}`, text);
   }
 
   // 3. Host SMS fan-out (escalation + maintenance only, all gates must pass).
-  if (wantsSmsKind && serverEnv.notifySmsEnabled && contact.phone) {
+  //    Consent-gated per TCPA: the owner must have a VERIFIED phone AND an active
+  //    sms_opt_in. This resolves notify()'s historical TODO(consent).
+  if (wantsSmsKind && serverEnv.notifySmsEnabled && contact.phone && contact.smsOptIn && contact.phoneVerifiedAt) {
     const ent = await getEntitlements(client, p.hostAccountId);
     if (ent.smsEscalation && resolveTwilioAuth()) {
       // Keep it short; never include guest PII beyond the already-truncated title.
-      await sendSms(contact.phone, `Moche.AI: ${p.title}`);
+      // Append the answer magic link when present so the host can reply from the SMS.
+      const msg = p.actionUrl ? `Moche.AI: ${p.title} Answer: ${p.actionUrl}` : `Moche.AI: ${p.title}`;
+      await sendSms(contact.phone, msg);
     }
+  }
+}
+
+// Sends a host phone-verification / login 2FA OTP over SMS, reusing the same Twilio
+// fetch path as every other SMS here (no second client). The full code is NEVER logged.
+export async function sendHostOtp(phone: string, code: string): Promise<boolean> {
+  return sendSms(phone, `Moche.AI verification code: ${code}\n\nExpires in 10 minutes. Never share this code. Reply STOP to opt out.`);
+}
+
+// Best-effort guest ping when a host answers an escalation. Only ever called after an
+// affirmative TCPA opt-in (notification_consent) recorded on the guest session. The
+// answer text is NOT included — the guest opens their concierge to read it. Failures
+// are swallowed; contact/body are never logged (status codes only, via the senders).
+export async function notifyGuestReply(p: { contact: string; propertyName: string; portalUrl: string }): Promise<void> {
+  try {
+    if (p.contact.includes('@')) {
+      await sendHostEmail(
+        p.contact,
+        `Your host replied — ${p.propertyName}`,
+        `Good news — your host just replied to your question about ${p.propertyName}.\n\nOpen your concierge to read it: ${p.portalUrl}`,
+      );
+    } else {
+      await sendSms(p.contact, `Moche.AI: Your host replied to your question. Open your concierge: ${p.portalUrl} Reply STOP to opt out.`);
+    }
+  } catch {
+    /* best-effort — never block the answer flow */
   }
 }
 

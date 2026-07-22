@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHash, randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
 import { serverEnv } from '@/lib/env';
 
 // --- Contact normalization + hashing -------------------------------------
@@ -76,4 +76,58 @@ export function safeEqualHex(a: string, b: string): boolean {
   } catch {
     return false;
   }
+}
+
+// --- HMAC-signed, single-purpose tokens ----------------------------------
+// Used for the escalation "answer without login" magic link and the trusted-device
+// second-factor cookie. Keyed by a server secret (guestContactSalt, namespaced) so
+// tokens cannot be forged client-side. Payloads are non-secret; the HMAC is the guard.
+
+function hmac(namespace: string, payload: string): string {
+  return createHmac('sha256', `${serverEnv.guestContactSalt}:${namespace}`).update(payload).digest('hex');
+}
+
+// Mints a 15-minute token scoped to exactly one escalation. The token is opaque to the
+// client and reveals nothing beyond an id it already cannot act on without a valid HMAC.
+export function signEscalationLinkToken(escalationId: string, ttlMinutes = 15): string {
+  const exp = Date.now() + ttlMinutes * 60 * 1000;
+  const nonce = randomBytes(9).toString('base64url');
+  const payload = `${escalationId}.${exp}.${nonce}`;
+  const sig = hmac('escalation-link', payload);
+  return `${Buffer.from(payload).toString('base64url')}.${sig}`;
+}
+
+// Verifies an escalation magic-link token. Returns the escalationId only if the HMAC
+// matches (constant-time) and the token has not expired. Never throws; never logs.
+export function verifyEscalationLinkToken(token: string): { escalationId: string } | null {
+  const dot = token.lastIndexOf('.');
+  if (dot <= 0) return null;
+  const payloadB64 = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  let payload: string;
+  try {
+    payload = Buffer.from(payloadB64, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  const expected = hmac('escalation-link', payload);
+  if (!safeEqualHex(sig, expected)) return null;
+  const [escalationId, expStr] = payload.split('.');
+  if (!escalationId || !expStr) return null;
+  const exp = Number(expStr);
+  if (!Number.isFinite(exp) || exp < Date.now()) return null;
+  return { escalationId };
+}
+
+// --- Trusted-device second-factor cookie ---------------------------------
+// After a host clears the SMS OTP login challenge we set an httpOnly cookie proving the
+// second factor for this device. Value is an HMAC of the user id (no PII, unforgeable).
+
+export function signTrustedDeviceValue(userId: string): string {
+  return hmac('2fa-device', userId);
+}
+
+export function verifyTrustedDeviceValue(userId: string, value: string | undefined): boolean {
+  if (!value) return false;
+  return safeEqualHex(value, signTrustedDeviceValue(userId));
 }

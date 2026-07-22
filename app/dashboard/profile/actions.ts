@@ -17,16 +17,17 @@ export async function updateProfileAction(_prev: ProfileFormState, formData: For
   const ctx = await requireSession();
   const parsed = profileUpdateSchema.safeParse({
     fullName: formData.get('fullName'),
-    phone: formData.get('phone') || '',
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check your details.' };
 
   const supabase = createClient();
+  // Phone is deliberately NOT updated here — it is owned by the verified phone flow in
+  // security-actions.ts so we never overwrite a verified number (and its consent state)
+  // with an unverified one from this basic form.
   const { error } = await supabase
     .from('profiles')
     .update({
       full_name: parsed.data.fullName,
-      phone: parsed.data.phone ? parsed.data.phone : null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', ctx.user.id);

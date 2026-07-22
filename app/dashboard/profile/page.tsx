@@ -1,5 +1,6 @@
 import { requireSession } from '@/lib/auth/guards';
 import { ProfileForm, DeleteAccountForm } from './ProfileForms';
+import { SecurityForms } from './SecurityForms';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,12 @@ export default async function ProfilePage() {
         <ProfileForm
           email={ctx.profile.email}
           fullName={ctx.profile.full_name ?? ''}
-          phone={ctx.profile.phone ?? ''}
+        />
+        <SecurityForms
+          initialPhone={ctx.profile.phone ?? ''}
+          phoneVerified={!!ctx.profile.phone_verified_at}
+          smsOptIn={!!ctx.profile.sms_opt_in}
+          twoFactorEnabled={!!ctx.profile.two_factor_enabled}
         />
         <div className="card" style={{ padding: '1.5rem', maxWidth: 520 }}>
           <h3 style={{ fontSize: '1.05rem', marginBottom: '.5rem' }}>Export your data</h3>

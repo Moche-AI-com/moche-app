@@ -184,6 +184,14 @@ export const VERIFY_MAX_PER_IP_PER_HOUR = 20;
 
 export const GUEST_SESSION_COOKIE = 'moche_guest_session';
 
+// Host OTP (phone verification + optional login 2FA). Mirrors the guest OTP tuning.
+export const HOST_OTP_TTL_MINUTES = 10;
+export const HOST_OTP_MAX_ATTEMPTS = 5;
+export const HOST_OTP_MAX_PER_HOUR = 5;
+// httpOnly cookie proving the SMS second factor was cleared on this device.
+export const TRUSTED_DEVICE_COOKIE = 'moche_2fa_device';
+export const TRUSTED_DEVICE_TTL_DAYS = 30;
+
 // Magic-link / QR access (Phase 2 Part A).
 export const LINK_REDEEM_MAX_PER_IP_PER_HOUR = 10;
 // Reusable property QR links live this long (no per-stay checkout to anchor to).

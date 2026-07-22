@@ -683,8 +683,12 @@ export type Database = {
         Row: {
           created_at: string
           expires_at: string
+          guest_contact: string | null
+          guest_contact_type: string | null
           id: string
           ip_hash: string | null
+          notification_consent: boolean
+          notification_consent_at: string | null
           property_id: string
           revoked_at: string | null
           session_token_hash: string
@@ -696,8 +700,12 @@ export type Database = {
         Insert: {
           created_at?: string
           expires_at: string
+          guest_contact?: string | null
+          guest_contact_type?: string | null
           id?: string
           ip_hash?: string | null
+          notification_consent?: boolean
+          notification_consent_at?: string | null
           property_id: string
           revoked_at?: string | null
           session_token_hash: string
@@ -709,8 +717,12 @@ export type Database = {
         Update: {
           created_at?: string
           expires_at?: string
+          guest_contact?: string | null
+          guest_contact_type?: string | null
           id?: string
           ip_hash?: string | null
+          notification_consent?: boolean
+          notification_consent_at?: string | null
           property_id?: string
           revoked_at?: string | null
           session_token_hash?: string
@@ -1227,8 +1239,12 @@ export type Database = {
           is_admin: boolean
           mfa_ready: boolean
           phone: string | null
+          phone_verified_at: string | null
           privacy_accepted_at: string | null
+          sms_opt_in: boolean
+          sms_opt_in_at: string | null
           terms_accepted_at: string | null
+          two_factor_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -1241,8 +1257,12 @@ export type Database = {
           is_admin?: boolean
           mfa_ready?: boolean
           phone?: string | null
+          phone_verified_at?: string | null
           privacy_accepted_at?: string | null
+          sms_opt_in?: boolean
+          sms_opt_in_at?: string | null
           terms_accepted_at?: string | null
+          two_factor_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -1255,9 +1275,52 @@ export type Database = {
           is_admin?: boolean
           mfa_ready?: boolean
           phone?: string | null
+          phone_verified_at?: string | null
           privacy_accepted_at?: string | null
+          sms_opt_in?: boolean
+          sms_opt_in_at?: string | null
           terms_accepted_at?: string | null
+          two_factor_enabled?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      host_otp_challenges: {
+        Row: {
+          attempts: number
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          max_attempts: number
+          phone_last4: string | null
+          purpose: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          max_attempts?: number
+          phone_last4?: string | null
+          purpose?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_attempts?: number
+          phone_last4?: string | null
+          purpose?: string
+          user_id?: string
         }
         Relationships: []
       }

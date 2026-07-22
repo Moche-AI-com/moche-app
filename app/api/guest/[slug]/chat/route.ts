@@ -6,6 +6,8 @@ import { answerGuestQuestion } from '@/lib/guest/concierge';
 import { isGuestAiEnabled } from '@/lib/billing/entitlements';
 import { maybeCreateServiceRequest } from '@/lib/guest/maintenance';
 import { notify } from '@/lib/notify';
+import { signEscalationLinkToken } from '@/lib/crypto';
+import { publicEnv } from '@/lib/env';
 import { capture } from '@/lib/posthog-server';
 import type { ChatMessage } from '@/lib/ai';
 import { log } from '@/lib/log';
@@ -135,6 +137,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
 
     const { data: prop } = await admin.from('properties').select('host_account_id').eq('id', session.propertyId).maybeSingle();
     if (prop) {
+      // 15-minute signed magic link scoped to THIS escalation so the host can answer
+      // straight from the SMS/email without a full dashboard login. Token never logged.
+      const answerUrl = escId ? `${publicEnv.appUrl}/answer/${signEscalationLinkToken(escId)}` : undefined;
       await notify(admin, {
         hostAccountId: (prop as { host_account_id: string }).host_account_id,
         kind: 'escalation',
@@ -143,6 +148,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
         propertyId: session.propertyId,
         // Deep-link straight to the answer form (in-app + email fan-out use this).
         link: escId ? `/dashboard/escalations/${escId}` : '/dashboard/escalations',
+        // One-tap answer magic link (email + gated SMS fan-out).
+        actionUrl: answerUrl,
       });
     }
     log.info('guest_escalation_created', { escalationId: (esc as { id: string } | null)?.id, confidence: answer.confidence });
