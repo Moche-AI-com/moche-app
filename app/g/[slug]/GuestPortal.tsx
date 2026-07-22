@@ -247,9 +247,12 @@ export function GuestPortal(props: {
         .gp-hero-bg {
           position: absolute; inset: 0; background-size: cover; background-position: center;
           background-color: #14171f;
+          /* No property cover photo? Fall back to a premium villa hero under a gold tint.
+             If /premium/portal-hero.jpg is ever absent, the gradient + solid color still render. */
           background-image:
-            radial-gradient(120% 90% at 50% 0%, rgba(201,169,110,.14), transparent 60%),
-            linear-gradient(160deg, #191d27, #0d0f14);
+            radial-gradient(120% 90% at 50% 0%, rgba(201,169,110,.16), transparent 60%),
+            linear-gradient(160deg, rgba(25,29,39,.72), rgba(13,15,20,.86)),
+            url(/premium/portal-hero.jpg);
         }
         .gp-hero-scrim {
           position: absolute; inset: 0;
