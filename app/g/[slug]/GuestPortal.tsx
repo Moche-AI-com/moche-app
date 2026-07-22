@@ -647,6 +647,36 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     }
   }, [hostSending, hostPreview, slug]);
 
+  // Hydrate prior conversation history on mount so a returning guest (new tab, reload,
+  // came back later) sees their earlier messages AND any host reply — not just a fresh
+  // greeting. Without this, the two-way loop only worked within one uninterrupted session.
+  // Runs once; if history exists it replaces the greeting-only transcript and seeds the
+  // poll cursor so the live poll picks up from the newest message.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hostPreview || hydratedRef.current) return;
+    hydratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/guest/${slug}/messages`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const history: { role: string; content: string; created_at: string; model?: string | null }[] = json.messages ?? [];
+        if (cancelled || history.length === 0) return;
+        const hydrated: ChatEntry[] = history
+          .filter((m) => m.role === 'guest' || m.role === 'assistant' || m.role === 'host')
+          .map((m) => ({ role: m.role as 'guest' | 'assistant' | 'host', content: m.content }));
+        if (hydrated.length === 0) return;
+        lastSeenRef.current = history[history.length - 1]?.created_at ?? null;
+        // Keep the greeting as the lead-in, then the real history beneath it.
+        setEntries((e) => [e[0], ...hydrated]);
+        setAsked(true);
+      } catch { /* best-effort hydration */ }
+    })();
+    return () => { cancelled = true; };
+  }, [hostPreview, slug]);
+
   // Live polling: once the conversation has reached the host, poll for host replies (and
   // any messages we haven't rendered) so the two-way chat updates without a refresh.
   useEffect(() => {
