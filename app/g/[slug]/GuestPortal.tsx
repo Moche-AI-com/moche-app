@@ -1,25 +1,107 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
+  ConciergeBell, X, Send, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
+  AlertTriangle, type LucideIcon,
+} from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 
-const QUICK_ACTIONS = [
-  { key: 'wifi', label: 'WiFi', question: 'What is the WiFi network and password?', emoji: '📶' },
-  { key: 'checkin', label: 'Check-in', question: 'What is the check-in process and time?', emoji: '🔑' },
-  { key: 'checkout', label: 'Check-out', question: 'What is the check-out process and time?', emoji: '🧳' },
-  { key: 'parking', label: 'Parking', question: 'Where can I park?', emoji: '🅿️' },
-  { key: 'rules', label: 'House Rules', question: 'What are the house rules?', emoji: '📋' },
-  { key: 'local', label: 'Local Tips', question: 'What do you recommend nearby?', emoji: '📍' },
-];
+// Luxury concierge palette (per Feature 3 brief). Fixed dark base + gold accent so the
+// portal reads as a high-end hotel experience regardless of per-property brand colors.
+const GOLD = '#c9a96e';
+const BG = '#0d0f14';
 
-// Follow-up suggestions shown after the concierge answers, to keep guests exploring.
-const FOLLOW_UPS = [
-  'Best coffee nearby?',
-  'Where should we eat dinner?',
-  'Any good beaches or trails?',
-  'How does the trash & recycling work?',
-  'What time is quiet hours?',
-  'Is there a grocery store close by?',
+// Sentinel query: a sub-choice that should just focus the free-text input rather than
+// fire a pre-formed question (keeps a "type your own" escape hatch inside the card UX).
+const FOCUS_INPUT = '__FOCUS_INPUT__';
+
+interface SubChoice { label: string; query: string }
+interface Category { key: string; label: string; Icon: LucideIcon; subtitle: string; choices: SubChoice[] }
+
+// Choice-driven categories (zero-typing UX). Each opens a sub-choice screen whose taps
+// fire a pre-formed natural-language query at the existing concierge chat API.
+const CATEGORIES: Category[] = [
+  {
+    key: 'dining', label: 'Dining', Icon: UtensilsCrossed, subtitle: 'Where to eat & drink',
+    choices: [
+      { label: 'Casual Dining', query: 'What are the best casual dining spots nearby?' },
+      { label: 'Fine Dining', query: 'Can you recommend upscale or fine dining restaurants nearby?' },
+      { label: 'Coffee', query: 'Where can I get great coffee nearby?' },
+      { label: 'Drinks', query: 'What are good bars or places for a drink nearby?' },
+      { label: 'Takeout', query: 'What are good takeout or delivery options nearby?' },
+      { label: 'Grocery', query: 'Where is the nearest grocery store?' },
+    ],
+  },
+  {
+    key: 'local', label: 'Local Guide', Icon: Compass, subtitle: 'Explore the area',
+    choices: [
+      { label: 'Top Attractions', query: 'What are the top attractions and things to do nearby?' },
+      { label: 'Nature & Outdoors', query: 'Are there good beaches, parks, or trails nearby?' },
+      { label: 'Family Friendly', query: 'What are some family-friendly activities nearby?' },
+      { label: 'Nightlife', query: 'What is the nightlife like around here?' },
+      { label: 'Hidden Gems', query: "What are some local hidden gems most visitors don't know about?" },
+      { label: 'Getting Around', query: 'How do I get around the area — transit, taxis, or rideshare?' },
+    ],
+  },
+  {
+    key: 'checkinout', label: 'Check-In / Out', Icon: KeyRound, subtitle: 'Arrival & departure',
+    choices: [
+      { label: 'Check-In Time', query: 'What is the check-in time and process?' },
+      { label: 'Check-Out Time', query: 'What is the check-out time and process?' },
+      { label: 'Access / Door Code', query: 'How do I access the property — door code or lockbox?' },
+      { label: 'Early Arrival', query: 'Is early check-in or luggage drop-off possible?' },
+      { label: 'Late Checkout', query: 'Is a late check-out possible?' },
+    ],
+  },
+  {
+    key: 'housekeeping', label: 'Housekeeping', Icon: Sparkles, subtitle: 'Comfort & supplies',
+    choices: [
+      { label: 'Fresh Towels', query: 'Could I get fresh towels?' },
+      { label: 'Toiletries', query: 'Where can I find extra toiletries and essentials?' },
+      { label: 'Trash & Recycling', query: 'How does the trash and recycling work?' },
+      { label: 'Cleaning Request', query: 'Can I request a mid-stay cleaning?' },
+      { label: 'Laundry', query: 'Is there a washer, dryer, or laundry service?' },
+    ],
+  },
+  {
+    key: 'wifi', label: 'WiFi & Info', Icon: Wifi, subtitle: 'House essentials',
+    choices: [
+      { label: 'WiFi Password', query: 'What is the WiFi network name and password?' },
+      { label: 'House Rules', query: 'What are the house rules?' },
+      { label: 'Parking', query: 'Where can I park?' },
+      { label: 'Appliances', query: 'How do I use the appliances — TV, thermostat, coffee maker?' },
+      { label: 'Emergency Info', query: 'What should I do in an emergency, and who do I contact?' },
+    ],
+  },
+  {
+    key: 'favorites', label: 'Favorites', Icon: Star, subtitle: "Host's top picks",
+    choices: [
+      { label: "Host's Top Picks", query: "What are the host's personal favorite recommendations nearby?" },
+      { label: 'Best Restaurants', query: 'Which restaurants does the host recommend most?' },
+      { label: 'Must-See Spots', query: 'What are the must-see spots the host recommends?' },
+      { label: 'Local Favorites', query: 'What local favorites should I not miss?' },
+    ],
+  },
+  {
+    key: 'ask', label: 'Ask Anything', Icon: MessageCircle, subtitle: 'Your own question',
+    choices: [
+      { label: 'What can you help with?', query: 'What can you help me with during my stay?' },
+      { label: 'Plan my evening', query: 'Can you suggest a plan for my evening nearby?' },
+      { label: 'Type my own question', query: FOCUS_INPUT },
+    ],
+  },
+  {
+    key: 'request', label: 'Request', Icon: ConciergeBell, subtitle: 'Ask the host for help',
+    choices: [
+      { label: 'Report an Issue', query: 'I need to report an issue with the property.' },
+      { label: 'Request Supplies', query: 'Could I request some extra supplies?' },
+      { label: 'Maintenance Help', query: 'Something needs maintenance — can you help?' },
+      { label: 'Message the Host', query: 'I have a question for my host — can you pass it along?' },
+      { label: 'Something Else', query: FOCUS_INPUT },
+    ],
+  },
 ];
 
 interface ChatEntry {
@@ -33,27 +115,28 @@ interface ChatEntry {
 function DomeMark({ size = 40 }: { size?: number }) {
   const gid = 'gpBrandGrad';
   return (
-    <span aria-hidden style={{ width: size, height: size, display: 'grid', placeItems: 'center', filter: 'drop-shadow(0 0 8px rgba(51,230,212,.4))' }}>
+    <span aria-hidden style={{ width: size, height: size, display: 'grid', placeItems: 'center' }}>
       <svg viewBox="0 0 48 48" fill="none" width={size} height={size} role="img">
         <defs>
           <linearGradient id={gid} x1="6" y1="10" x2="42" y2="40" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#33E6D4" />
-            <stop offset="1" stopColor="#7C8CFF" />
+            <stop stopColor={GOLD} />
+            <stop offset="1" stopColor="#e7d3a6" />
           </linearGradient>
         </defs>
         <path d="M5 34h38" stroke={`url(#${gid})`} strokeWidth="2.4" strokeLinecap="round" />
         <path d="M8 34a16 16 0 0 1 32 0" stroke={`url(#${gid})`} strokeWidth="2.4" fill="none" />
         <path d="M13 34a11 11 0 0 1 22 0" stroke={`url(#${gid})`} strokeWidth="1.7" opacity="0.7" fill="none" />
         <path d="M18.5 34a5.5 5.5 0 0 1 11 0" stroke={`url(#${gid})`} strokeWidth="1.7" opacity="0.55" fill="none" />
-        <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill="#33E6D4" opacity="0.9" />
-        <circle cx="24" cy="12" r="2.4" fill="#FF8A5C" />
-        <path d="M24 12v-4" stroke="#FF8A5C" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill={GOLD} opacity="0.9" />
+        <circle cx="24" cy="12" r="2.4" fill={GOLD} />
+        <path d="M24 12v-4" stroke={GOLD} strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     </span>
   );
 }
 
 export function GuestPortal(props: {
+  fontClassName: string;
   slug: string;
   propertyId: string;
   propertyName: string;
@@ -70,45 +153,53 @@ export function GuestPortal(props: {
   const [verified, setVerified] = useState(props.initialVerified);
   const [guestName, setGuestName] = useState(props.guestName);
 
-  const primary = props.brandPrimary || '#12B5AD';
-  const accent = props.brandAccent || '#33E6D4';
-
   return (
     <div
-      className="gp-root"
+      className={`gp-root ${props.fontClassName}`}
       style={{
         minHeight: '100dvh',
-        background: 'var(--bg, #070C14)',
-        color: 'var(--text, #E9EEF5)',
-        ['--brand-primary' as string]: primary,
-        ['--brand-accent' as string]: accent,
+        background: BG,
+        color: '#ece7dd',
+        fontFamily: 'var(--font-portal-sans), system-ui, sans-serif',
+        ['--gp-gold' as string]: GOLD,
       }}
     >
-      {/* Ambient brand glow behind the content — depth without a heavy image. */}
-      <div className="gp-aura" aria-hidden />
-
-      <div style={{ position: 'relative', maxWidth: 620, margin: '0 auto', padding: '1.25rem 1rem 3rem' }}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.5rem 0 1.25rem' }}>
-          {props.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={props.logoUrl} alt="" style={{ height: 44, width: 44, borderRadius: 12, objectFit: 'cover' }} />
-          ) : (
-            <DomeMark size={44} />
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: '1.05rem', lineHeight: 1.1 }}>{props.propertyName}</div>
-            {props.location && <div style={{ fontSize: '.78rem', opacity: 0.6 }}>{props.location}</div>}
+      {/* Full-screen property-photo hero with a bottom-to-top dark gradient for legibility. */}
+      <section className="gp-hero" data-testid="portal-hero">
+        <div
+          className="gp-hero-bg"
+          style={props.coverImageUrl ? { backgroundImage: `url(${props.coverImageUrl})` } : undefined}
+          aria-hidden
+        />
+        <div className="gp-hero-scrim" aria-hidden />
+        <div className="gp-hero-inner">
+          <header className="gp-hero-top">
+            {props.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={props.logoUrl} alt="" style={{ height: 40, width: 40, borderRadius: 10, objectFit: 'cover' }} />
+            ) : (
+              <DomeMark size={40} />
+            )}
+            <span className="gp-brandchip">
+              <DomeMark size={15} />
+              <span>Moche<span style={{ color: GOLD }}>.AI</span></span>
+            </span>
+          </header>
+          <div className="gp-hero-title">
+            <div className="gp-eyebrow">Your Private Concierge</div>
+            <h1 className="gp-serif" data-testid="portal-property-name">{props.propertyName}</h1>
+            {props.location && (
+              <div className="gp-hero-loc"><MapPin size={14} aria-hidden /> {props.location}</div>
+            )}
           </div>
-          <span className="gp-brandchip">
-            <DomeMark size={16} />
-            <span>Moche<span style={{ color: accent }}>.AI</span></span>
-          </span>
-        </header>
+        </div>
+      </section>
 
+      <div className="gp-container">
         {props.hostPreview && (
           <div style={hostPreviewBar} data-testid="banner-host-preview">
-            <span aria-hidden>👁️</span>
-            <span>Host preview — you’re seeing exactly what a verified guest sees. Nothing here is saved as a guest conversation.</span>
+            <Eye size={16} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>Host preview — you&apos;re seeing exactly what a verified guest sees. Nothing here is saved as a guest conversation.</span>
           </div>
         )}
 
@@ -126,32 +217,66 @@ export function GuestPortal(props: {
             hostPreview={props.hostPreview}
             propertyName={props.propertyName}
             guestName={guestName}
-            accent={accent}
           />
         )}
 
-        <footer style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem', marginTop: '2.5rem', fontSize: '.72rem', opacity: 0.45 }}>
+        <footer className="gp-footer">
           <DomeMark size={14} />
           <span>Powered by Moche.AI · Your host verifies access. We never share your details.</span>
         </footer>
       </div>
 
       {/* Portal-scoped styles + motion. Standalone from dashboard CSS. */}
-      <style jsx>{`
-        .gp-aura {
-          position: fixed; inset: 0; pointer-events: none; z-index: 0;
-          background:
-            radial-gradient(60% 40% at 50% -5%, rgba(51,230,212,.14), transparent 70%),
-            radial-gradient(50% 40% at 100% 10%, rgba(124,140,255,.10), transparent 70%);
+      <style jsx global>{`
+        .gp-serif { font-family: var(--font-portal-serif), Georgia, serif; }
+        .gp-hero { position: relative; min-height: 58dvh; display: flex; overflow: hidden; }
+        .gp-hero-bg {
+          position: absolute; inset: 0; background-size: cover; background-position: center;
+          background-color: #14171f;
+          background-image:
+            radial-gradient(120% 90% at 50% 0%, rgba(201,169,110,.14), transparent 60%),
+            linear-gradient(160deg, #191d27, #0d0f14);
+        }
+        .gp-hero-scrim {
+          position: absolute; inset: 0;
+          background: linear-gradient(to top, ${BG} 4%, rgba(13,15,20,.55) 45%, rgba(13,15,20,.25) 100%);
+        }
+        .gp-hero-inner {
+          position: relative; z-index: 1; width: 100%; max-width: 720px; margin: 0 auto;
+          padding: 1.4rem 1.25rem 2rem; display: flex; flex-direction: column; justify-content: space-between;
+        }
+        .gp-hero-top { display: flex; align-items: center; justify-content: space-between; }
+        .gp-hero-title { margin-top: auto; }
+        .gp-eyebrow {
+          font-size: .72rem; letter-spacing: .28em; text-transform: uppercase; color: ${GOLD};
+          opacity: .9; margin-bottom: .35rem;
+        }
+        .gp-hero-title h1 {
+          font-size: clamp(2.4rem, 8vw, 3.6rem); line-height: 1.02; font-weight: 600;
+          letter-spacing: -.01em; margin: 0; color: #fbf7ef;
+          text-shadow: 0 2px 30px rgba(0,0,0,.5);
+        }
+        .gp-hero-loc {
+          display: inline-flex; align-items: center; gap: .35rem; margin-top: .6rem;
+          font-size: .85rem; opacity: .75;
         }
         .gp-brandchip {
-          display: inline-flex; align-items: center; gap: .3rem;
-          font-size: .72rem; font-weight: 600; opacity: .7;
-          padding: .28rem .55rem; border-radius: 999px;
-          border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03);
-          white-space: nowrap;
+          display: inline-flex; align-items: center; gap: .35rem;
+          font-size: .72rem; font-weight: 600; opacity: .85;
+          padding: .3rem .6rem; border-radius: 999px;
+          border: 1px solid rgba(201,169,110,.25); background: rgba(13,15,20,.4);
+          backdrop-filter: blur(8px); white-space: nowrap;
         }
-        @media (max-width: 420px) { .gp-brandchip span:last-child { display: none; } }
+        .gp-container { position: relative; max-width: 720px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+        .gp-footer {
+          display: flex; align-items: center; justify-content: center; gap: .4rem;
+          margin-top: 2.5rem; font-size: .72rem; opacity: 0.4;
+        }
+        .gp-rise { animation: gpRise .6s cubic-bezier(.16,1,.3,1) both; }
+        @keyframes gpRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+        @media (prefers-reduced-motion: reduce) {
+          .gp-rise { animation: none; }
+        }
       `}</style>
     </div>
   );
@@ -269,10 +394,10 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
   }
 
   return (
-    <div style={cardStyle} className="gp-card gp-rise">
-      <h1 style={{ fontSize: '1.5rem', marginBottom: '.4rem', letterSpacing: '-.01em' }}>
+    <div style={{ ...cardStyle, marginTop: '-3.5rem' }} className="gp-card gp-rise">
+      <h2 className="gp-serif" style={{ fontSize: '1.9rem', marginBottom: '.4rem', letterSpacing: '-.01em', color: '#fbf7ef', fontWeight: 600 }}>
         Welcome{step === 'contact' ? ` to ${propertyName}` : ''}
-      </h1>
+      </h2>
       <p style={{ opacity: 0.72, fontSize: '.92rem', marginBottom: '1.1rem', lineHeight: 1.5 }}>
         Verify with the email or phone on your booking to unlock your personal concierge.
       </p>
@@ -281,11 +406,11 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       {step === 'contact' && (
         <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
           {[
-            { icon: '⚡', text: 'Instant answers' },
-            { icon: '📍', text: 'Local gems' },
-            { icon: '🛎️', text: '24/7 help' },
+            { Icon: Zap, text: 'Instant answers' },
+            { Icon: MapPin, text: 'Local gems' },
+            { Icon: ConciergeBell, text: '24/7 help' },
           ].map((b) => (
-            <span key={b.text} style={teaserPill}><span aria-hidden>{b.icon}</span> {b.text}</span>
+            <span key={b.text} style={teaserPill}><b.Icon size={14} aria-hidden style={{ color: GOLD }} /> {b.text}</span>
           ))}
         </div>
       )}
@@ -324,36 +449,74 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       )}
 
       <style jsx>{`
-        .gp-rise { animation: gpRise .5s cubic-bezier(.16,1,.3,1) both; }
         .gp-shimmer {
           background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 50%, rgba(255,255,255,.04) 75%);
           background-size: 200% 100%; animation: gpShimmer 1.4s infinite;
         }
-        @keyframes gpRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
         @keyframes gpShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        @media (prefers-reduced-motion: reduce) {
-          .gp-rise { animation: none; }
-          .gp-shimmer { animation: none; }
-        }
+        @media (prefers-reduced-motion: reduce) { .gp-shimmer { animation: none; } }
       `}</style>
     </div>
   );
 }
 
-function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, accent }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null; accent: string }) {
+// Soft synthesized bell chime via Web Audio — no audio asset needed. Gentle two-note
+// ping. Best-effort: silently no-ops if Web Audio is unavailable or blocked.
+function playChime() {
+  try {
+    const Ctx = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext });
+    const AC = Ctx.AudioContext ?? Ctx.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+    [880, 1318.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = now + i * 0.12;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1.2);
+    });
+    setTimeout(() => { try { ctx.close(); } catch { /* noop */ } }, 1600);
+  } catch {
+    /* audio not available — silent */
+  }
+}
+
+function Concierge({ slug, propertyId, hostPreview, propertyName, guestName }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null }) {
   const [entries, setEntries] = useState<ChatEntry[]>([
-    { role: 'assistant', content: `Hi${guestName ? ` ${guestName}` : ''}! I'm your concierge for ${propertyName}. Ask me anything about your stay — WiFi, check-out, the best spots nearby — or tap a shortcut below.` },
+    { role: 'assistant', content: `Hi${guestName ? ` ${guestName}` : ''}! I'm your concierge for ${propertyName}. Tap a category below for instant answers — or ask me anything.` },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [asked, setAsked] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState<Category | null>(null);
+  const [muted, setMuted] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Default the chime to muted when the guest prefers reduced motion (a calm-experience signal).
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setMuted(true);
+    }
+  }, []);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [entries, busy]);
 
-  async function send(text: string) {
+  const send = useCallback(async (text: string) => {
     if (!text.trim() || busy) return;
     setAsked(true);
+    setSuggestions([]);
+    // Bring the conversation into view after a card-driven query.
+    setTimeout(() => chatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
     const nextEntries: ChatEntry[] = [...entries, { role: 'guest', content: text }];
     setEntries(nextEntries);
     setInput('');
@@ -368,8 +531,6 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, acc
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               message: text,
-              // Send prior turns (excluding the message just sent) so the preview keeps
-              // context. Endpoint validation caps history at 12 entries.
               history: entries
                 .filter((m) => m.role === 'guest' || m.role === 'assistant')
                 .slice(-12)
@@ -382,19 +543,31 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, acc
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'I could not answer just now.');
       setEntries((e) => [...e, { role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency }]);
+      setSuggestions(Array.isArray(json.suggestions) ? json.suggestions.slice(0, 3) : []);
     } catch (e) {
       setEntries((prev) => [...prev, { role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
     } finally { setBusy(false); }
+  }, [busy, entries, hostPreview, propertyId, slug]);
+
+  // Handle a sub-choice tap: either fire the pre-formed query or focus the free-text input.
+  function pickSubChoice(choice: SubChoice) {
+    setActiveCategory(null);
+    if (choice.query === FOCUS_INPUT) {
+      setTimeout(() => inputRef.current?.focus(), 80);
+      return;
+    }
+    send(choice.query);
   }
 
-  // Rotate a few follow-up suggestions once the guest has started chatting.
-  const followUps = FOLLOW_UPS.slice(0, 3);
+  function openCategory(cat: Category, chime = false) {
+    if (chime && !muted) playChime();
+    setActiveCategory(cat);
+  }
+
+  const requestCategory = CATEGORIES.find((c) => c.key === 'request')!;
 
   return (
-    <div className="gp-rise">
-      {/* Persistent AI disclosure (EU AI Act Art. 50) — always visible above the chat. */}
-      <AiDisclosure variant="banner" />
-
+    <div className="gp-rise" style={{ marginTop: '-2rem' }}>
       {/* Presence banner — makes the concierge feel live and personal. */}
       <div style={presenceBar}>
         <DomeMark size={30} />
@@ -406,103 +579,230 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, acc
         </div>
       </div>
 
-      <div style={{ fontSize: '.74rem', opacity: 0.55, margin: '0 .15rem .5rem', textTransform: 'uppercase', letterSpacing: '.06em' }}>Quick shortcuts</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '.5rem', marginBottom: '1rem' }}>
-        {QUICK_ACTIONS.map((q) => (
-          <button key={q.key} onClick={() => send(q.question)} disabled={busy} className="gp-chip" data-testid={`chip-${q.key}`}>
-            <span aria-hidden style={{ fontSize: '1.15rem' }}>{q.emoji}</span>
-            <span>{q.label}</span>
+      {/* Choice-driven category cards — the primary, zero-typing UX. */}
+      <div style={{ fontSize: '.72rem', opacity: 0.5, margin: '.25rem .15rem .6rem', textTransform: 'uppercase', letterSpacing: '.14em' }}>How can we help?</div>
+      <div className="gp-cats" data-testid="category-grid">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.key}
+            onClick={() => openCategory(cat)}
+            className="gp-cat gp-card"
+            data-testid={`category-${cat.key}`}
+          >
+            <span className="gp-cat-icon"><cat.Icon size={22} aria-hidden /></span>
+            <span className="gp-serif gp-cat-label">{cat.label}</span>
+            <span className="gp-cat-sub">{cat.subtitle}</span>
           </button>
         ))}
       </div>
 
-      <div ref={scrollRef} style={{ ...cardStyle, maxHeight: '52dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '.85rem', padding: '1.1rem' }}>
-        {entries.map((m, i) => (
-          <div key={i} className="gp-msg" style={{ display: 'flex', gap: '.5rem', alignSelf: m.role === 'guest' ? 'flex-end' : 'flex-start', maxWidth: '90%', flexDirection: m.role === 'guest' ? 'row-reverse' : 'row' }}>
-            {m.role === 'assistant' && <span style={{ flexShrink: 0, marginTop: 2 }}><DomeMark size={26} /></span>}
-            <div>
-              <div style={m.role === 'guest' ? bubbleGuest : bubbleAssistant} data-testid={`msg-${m.role}-${i}`}>
-                {m.isEmergency && <div style={{ fontWeight: 700, color: '#FF8A5C', marginBottom: '.25rem' }}>⚠ For emergencies, contact local services first.</div>}
-                <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+      {/* Persistent AI disclosure (EU AI Act Art. 50). */}
+      <div style={{ marginTop: '1.25rem' }}><AiDisclosure variant="banner" /></div>
+
+      <div ref={chatRef} style={{ scrollMarginTop: '1rem' }}>
+        <div ref={scrollRef} style={{ ...cardStyle, maxHeight: '48dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '.85rem', padding: '1.1rem' }} data-testid="chat-view">
+          {entries.map((m, i) => (
+            <div key={i} className="gp-msg" style={{ display: 'flex', gap: '.5rem', alignSelf: m.role === 'guest' ? 'flex-end' : 'flex-start', maxWidth: '90%', flexDirection: m.role === 'guest' ? 'row-reverse' : 'row' }}>
+              {m.role === 'assistant' && <span style={{ flexShrink: 0, marginTop: 2 }}><DomeMark size={26} /></span>}
+              <div>
+                <div style={m.role === 'guest' ? bubbleGuest : bubbleAssistant} data-testid={`msg-${m.role}-${i}`}>
+                  {m.isEmergency && (
+                    <div style={{ fontWeight: 700, color: '#e6a15c', marginBottom: '.25rem', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
+                      <AlertTriangle size={14} aria-hidden /> For emergencies, contact local services first.
+                    </div>
+                  )}
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                </div>
+                {m.escalated && <div style={{ fontSize: '.72rem', opacity: 0.6, marginTop: '.25rem' }}>Sent to your host — they&apos;ll follow up.</div>}
               </div>
-              {m.escalated && <div style={{ fontSize: '.72rem', opacity: 0.6, marginTop: '.25rem' }}>Sent to your host — they&apos;ll follow up.</div>}
             </div>
-          </div>
-        ))}
-        {busy && (
-          <div style={{ display: 'flex', gap: '.5rem', alignSelf: 'flex-start' }}>
-            <span style={{ flexShrink: 0, marginTop: 2 }}><DomeMark size={26} /></span>
-            <div style={{ ...bubbleAssistant, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span className="gp-typing" /><span className="gp-typing" /><span className="gp-typing" />
+          ))}
+          {busy && (
+            <div style={{ display: 'flex', gap: '.5rem', alignSelf: 'flex-start' }}>
+              <span style={{ flexShrink: 0, marginTop: 2 }}><DomeMark size={26} /></span>
+              <div style={{ ...bubbleAssistant, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span className="gp-typing" /><span className="gp-typing" /><span className="gp-typing" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Follow-up suggestions — nudge the next question to keep them engaged. */}
-      {asked && !busy && (
-        <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.75rem' }}>
-          {followUps.map((f) => (
-            <button key={f} onClick={() => send(f)} className="gp-followup" data-testid="chip-followup">{f}</button>
+      {/* Dynamic suggestion pills — natural follow-ups parsed from the AI reply. */}
+      {asked && !busy && suggestions.length > 0 && (
+        <div key={suggestions.join('|')} className="gp-pills" data-testid="suggestion-pills">
+          {suggestions.map((s) => (
+            <button key={s} onClick={() => send(s)} className="gp-pill" data-testid="suggestion-pill">{s}</button>
           ))}
         </div>
       )}
 
-      <form onSubmit={(e) => { e.preventDefault(); send(input); }} style={{ display: 'flex', gap: '.5rem', marginTop: '.75rem' }}>
+      {/* De-emphasized free-text input — kept available but secondary to the cards. */}
+      <form onSubmit={(e) => { e.preventDefault(); send(input); }} style={{ display: 'flex', gap: '.5rem', marginTop: '.9rem' }} data-testid="chat-form">
         <input
-          style={{ ...inputStyle, marginBottom: 0 }} value={input} onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about your stay…" disabled={busy} data-testid="input-chat"
+          ref={inputRef}
+          style={mutedInputStyle} value={input} onChange={(e) => setInput(e.target.value)}
+          placeholder="Or type your own question…" disabled={busy} data-testid="input-chat"
         />
-        <button type="submit" className="gp-btn" style={{ ...btnStyle, width: 'auto', marginTop: 0, padding: '0 1.25rem', display: 'inline-flex', alignItems: 'center', gap: '.4rem' }} disabled={busy || !input.trim()} data-testid="button-send-chat">
-          <span>Send</span><span aria-hidden>→</span>
+        <button type="submit" className="gp-send" disabled={busy || !input.trim()} data-testid="button-send-chat" aria-label="Send">
+          <Send size={16} aria-hidden />
         </button>
       </form>
 
-      {/* Subtle reminder near the input that answers are AI-generated. */}
       <AiDisclosure variant="note" />
 
+      {/* Concierge Service Bell — floating gold button; soft chime + opens the Request flow. */}
+      <div className="gp-bell-wrap">
+        <button
+          onClick={() => setMuted((m) => !m)}
+          className="gp-mute"
+          data-testid="button-toggle-chime"
+          aria-label={muted ? 'Unmute chime' : 'Mute chime'}
+          title={muted ? 'Unmute chime' : 'Mute chime'}
+        >
+          {muted ? <VolumeX size={15} aria-hidden /> : <Volume2 size={15} aria-hidden />}
+        </button>
+        <button
+          onClick={() => openCategory(requestCategory, true)}
+          className="gp-bell"
+          data-testid="button-service-bell"
+          aria-label="Ring the concierge service bell"
+          title="Concierge service bell"
+        >
+          <ConciergeBell size={26} aria-hidden />
+        </button>
+      </div>
+
+      {/* Sub-choice slide-over — pre-formed options that instantly trigger the chat. */}
+      {activeCategory && (
+        <div className="gp-sheet-scrim" onClick={() => setActiveCategory(null)} data-testid="subchoice-overlay">
+          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${activeCategory.label} options`} data-testid={`subchoice-${activeCategory.key}`}>
+            <div className="gp-sheet-head">
+              <span className="gp-cat-icon" style={{ width: 40, height: 40 }}><activeCategory.Icon size={20} aria-hidden /></span>
+              <div style={{ flex: 1 }}>
+                <div className="gp-serif" style={{ fontSize: '1.3rem', color: '#fbf7ef' }}>{activeCategory.label}</div>
+                <div style={{ fontSize: '.78rem', opacity: 0.6 }}>{activeCategory.subtitle}</div>
+              </div>
+              <button onClick={() => setActiveCategory(null)} className="gp-sheet-close" data-testid="button-close-subchoice" aria-label="Close">
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+            <div className="gp-sheet-choices">
+              {activeCategory.choices.map((c) => (
+                <button key={c.label} onClick={() => pickSubChoice(c)} className="gp-subchoice" data-testid={`subchoice-option-${activeCategory!.key}`}>
+                  <span>{c.label}</span>
+                  <ArrowRight size={16} aria-hidden style={{ opacity: 0.5 }} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
-        .gp-rise { animation: gpRise .5s cubic-bezier(.16,1,.3,1) both; }
-        .gp-msg { animation: gpMsg .35s cubic-bezier(.16,1,.3,1) both; }
         .gp-dot {
-          width: 7px; height: 7px; border-radius: 50%; background: ${accent};
-          box-shadow: 0 0 0 0 ${accent}; animation: gpPulse 2s infinite;
+          width: 7px; height: 7px; border-radius: 50%; background: ${GOLD};
+          box-shadow: 0 0 0 0 ${GOLD}; animation: gpPulse 2s infinite;
         }
-        .gp-chip {
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem;
-          padding: .7rem .4rem; border-radius: 14px; cursor: pointer;
-          border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03);
-          color: inherit; font-size: .78rem; font-weight: 600;
-          transition: transform .18s cubic-bezier(.16,1,.3,1), border-color .18s, background .18s, box-shadow .18s;
+        .gp-cats { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+        @media (min-width: 520px) { .gp-cats { grid-template-columns: repeat(4, 1fr); } }
+        .gp-cat {
+          display: flex; flex-direction: column; align-items: flex-start; gap: .1rem;
+          padding: .95rem .85rem; cursor: pointer; text-align: left; color: inherit;
+          transition: transform .2s cubic-bezier(.16,1,.3,1), border-color .2s, background .2s, box-shadow .2s;
         }
-        .gp-chip:hover:not(:disabled) {
-          transform: translateY(-2px); border-color: ${accent};
-          background: rgba(255,255,255,.06); box-shadow: 0 10px 26px -14px ${accent};
+        .gp-cat:hover {
+          transform: translateY(-3px); border-color: rgba(201,169,110,.5);
+          box-shadow: 0 14px 34px -18px rgba(201,169,110,.7);
         }
-        .gp-chip:active:not(:disabled) { transform: translateY(0); }
-        .gp-chip:disabled { opacity: .5; cursor: default; }
-        .gp-followup {
-          padding: .45rem .8rem; border-radius: 999px; cursor: pointer;
-          border: 1px dashed rgba(255,255,255,.18); background: transparent; color: inherit;
-          font-size: .78rem; transition: border-color .18s, background .18s, transform .18s;
+        .gp-cat:active { transform: translateY(-1px); }
+        .gp-cat-icon {
+          display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px;
+          margin-bottom: .5rem; color: ${GOLD};
+          background: rgba(201,169,110,.12); border: 1px solid rgba(201,169,110,.22);
         }
-        .gp-followup:hover { border-color: ${accent}; background: rgba(255,255,255,.04); transform: translateY(-1px); }
-        .gp-btn { transition: transform .18s cubic-bezier(.16,1,.3,1), filter .18s; }
-        .gp-btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
-        .gp-btn:active:not(:disabled) { transform: translateY(0); }
+        .gp-cat-label { font-size: 1.12rem; font-weight: 600; line-height: 1.1; color: #f3ede1; }
+        .gp-cat-sub { font-size: .72rem; opacity: .55; }
+        .gp-pills { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .85rem; animation: gpFade .4s ease both; }
+        .gp-pill {
+          padding: .5rem .9rem; border-radius: 999px; cursor: pointer; color: #ece7dd;
+          border: 1px solid rgba(201,169,110,.3); background: rgba(255,255,255,.05);
+          backdrop-filter: blur(12px); font-size: .8rem;
+          transition: border-color .18s, background .18s, transform .18s;
+        }
+        .gp-pill:hover { border-color: ${GOLD}; background: rgba(201,169,110,.12); transform: translateY(-1px); }
+        .gp-send {
+          flex-shrink: 0; width: 46px; border-radius: 12px; border: 1px solid rgba(201,169,110,.4);
+          background: rgba(201,169,110,.14); color: ${GOLD}; cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center;
+          transition: background .18s, transform .18s;
+        }
+        .gp-send:hover:not(:disabled) { background: rgba(201,169,110,.24); transform: translateY(-1px); }
+        .gp-send:disabled { opacity: .4; cursor: default; }
         .gp-typing {
           width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5;
           animation: gpBlink 1.2s infinite;
         }
         .gp-typing:nth-child(2) { animation-delay: .2s; }
         .gp-typing:nth-child(3) { animation-delay: .4s; }
-        @keyframes gpRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-        @keyframes gpMsg { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-        @keyframes gpPulse { 0% { box-shadow: 0 0 0 0 ${accent}66; } 70% { box-shadow: 0 0 0 6px ${accent}00; } 100% { box-shadow: 0 0 0 0 ${accent}00; } }
+        .gp-msg { animation: gpMsg .35s cubic-bezier(.16,1,.3,1) both; }
+        .gp-bell-wrap {
+          position: fixed; right: max(1.1rem, env(safe-area-inset-right)); bottom: max(1.1rem, env(safe-area-inset-bottom));
+          z-index: 40; display: flex; flex-direction: column; align-items: center; gap: .5rem;
+        }
+        .gp-mute {
+          width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: #ece7dd;
+          border: 1px solid rgba(255,255,255,.14); background: rgba(13,15,20,.7); backdrop-filter: blur(10px);
+          display: grid; place-items: center; opacity: .8; transition: opacity .18s, transform .18s;
+        }
+        .gp-mute:hover { opacity: 1; transform: translateY(-1px); }
+        .gp-bell {
+          width: 60px; height: 60px; border-radius: 50%; cursor: pointer; color: #1a1206;
+          border: none; background: linear-gradient(145deg, #e7d3a6, ${GOLD});
+          display: grid; place-items: center;
+          box-shadow: 0 12px 34px -8px rgba(201,169,110,.7), inset 0 1px 1px rgba(255,255,255,.4);
+          animation: gpBellIn .5s cubic-bezier(.16,1,.3,1) both;
+          transition: transform .2s cubic-bezier(.16,1,.3,1);
+        }
+        .gp-bell:hover { transform: translateY(-2px) scale(1.04); }
+        .gp-bell:active { transform: translateY(0) scale(.96); }
+        .gp-sheet-scrim {
+          position: fixed; inset: 0; z-index: 50; background: rgba(6,8,12,.6); backdrop-filter: blur(4px);
+          display: flex; align-items: flex-end; justify-content: center; padding: 0;
+          animation: gpFade .25s ease both;
+        }
+        @media (min-width: 560px) { .gp-sheet-scrim { align-items: center; padding: 1rem; } }
+        .gp-sheet {
+          width: 100%; max-width: 560px; border-radius: 22px 22px 0 0;
+          padding: 1.25rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+          animation: gpSheetUp .34s cubic-bezier(.16,1,.3,1) both;
+        }
+        @media (min-width: 560px) { .gp-sheet { border-radius: 22px; } }
+        .gp-sheet-head { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; }
+        .gp-sheet-close {
+          width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: inherit;
+          border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04);
+          display: grid; place-items: center; opacity: .75;
+        }
+        .gp-sheet-close:hover { opacity: 1; }
+        .gp-sheet-choices { display: flex; flex-direction: column; gap: .5rem; }
+        .gp-subchoice {
+          display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+          padding: .85rem 1rem; border-radius: 13px; cursor: pointer; color: #ece7dd;
+          border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03);
+          font-size: .95rem; text-align: left;
+          transition: border-color .18s, background .18s, transform .18s;
+        }
+        .gp-subchoice:hover { border-color: rgba(201,169,110,.5); background: rgba(201,169,110,.1); transform: translateX(2px); }
+        @keyframes gpPulse { 0% { box-shadow: 0 0 0 0 ${GOLD}66; } 70% { box-shadow: 0 0 0 6px ${GOLD}00; } 100% { box-shadow: 0 0 0 0 ${GOLD}00; } }
         @keyframes gpBlink { 0%, 60%, 100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+        @keyframes gpMsg { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        @keyframes gpFade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes gpSheetUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+        @keyframes gpBellIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: reduce) {
-          .gp-rise, .gp-msg, .gp-dot, .gp-typing { animation: none; }
-          .gp-chip:hover:not(:disabled), .gp-followup:hover, .gp-btn:hover:not(:disabled) { transform: none; }
+          .gp-dot, .gp-typing, .gp-msg, .gp-pills, .gp-bell, .gp-sheet, .gp-sheet-scrim { animation: none; }
+          .gp-cat:hover, .gp-pill:hover, .gp-send:hover:not(:disabled), .gp-bell:hover, .gp-subchoice:hover, .gp-mute:hover { transform: none; }
         }
       `}</style>
     </div>
@@ -510,15 +810,16 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, acc
 }
 
 // --- Inline styles (portal is brand-scoped, standalone from dashboard CSS) ---
-const cardStyle: React.CSSProperties = { position: 'relative', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 18, padding: '1.5rem', backdropFilter: 'blur(6px)' };
+const cardStyle: React.CSSProperties = { position: 'relative', background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 18, padding: '1.5rem', backdropFilter: 'blur(12px)', boxShadow: '0 20px 50px -30px rgba(0,0,0,.8)' };
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: '.82rem', opacity: 0.7, marginBottom: '.4rem' };
 const inputStyle: React.CSSProperties = { width: '100%', padding: '.8rem .9rem', borderRadius: 12, border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.03)', color: 'inherit', fontSize: '1rem', marginBottom: '1rem', outline: 'none' };
-const btnStyle: React.CSSProperties = { width: '100%', padding: '.85rem', borderRadius: 12, border: 'none', background: 'var(--brand-accent, #33E6D4)', color: '#04121a', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', marginTop: '.25rem' };
+const mutedInputStyle: React.CSSProperties = { flex: 1, padding: '.7rem .9rem', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.025)', color: 'inherit', fontSize: '.9rem', outline: 'none', opacity: 0.85 };
+const btnStyle: React.CSSProperties = { width: '100%', padding: '.85rem', borderRadius: 12, border: 'none', background: `linear-gradient(145deg, #e7d3a6, ${GOLD})`, color: '#1a1206', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', marginTop: '.25rem' };
 const linkBtn: React.CSSProperties = { width: '100%', background: 'none', border: 'none', color: 'inherit', opacity: 0.6, marginTop: '.75rem', cursor: 'pointer', fontSize: '.82rem' };
-const teaserPill: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '.3rem', padding: '.4rem .7rem', borderRadius: 999, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', fontSize: '.78rem', fontWeight: 600 };
-const presenceBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '.6rem', padding: '.7rem .85rem', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', marginBottom: '1rem' };
-const hostPreviewBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '.55rem', padding: '.65rem .85rem', borderRadius: 12, border: '1px solid rgba(124,140,255,0.4)', background: 'rgba(124,140,255,0.12)', color: '#C7CEFF', fontSize: '.8rem', lineHeight: 1.4, marginBottom: '1.1rem', fontWeight: 500 };
-const bubbleGuest: React.CSSProperties = { background: 'linear-gradient(135deg, var(--brand-accent, #33E6D4), #7C8CFF)', color: '#04121a', padding: '.65rem .9rem', borderRadius: '16px 16px 4px 16px', fontSize: '.92rem', lineHeight: 1.45 };
+const teaserPill: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '.3rem', padding: '.4rem .7rem', borderRadius: 999, border: '1px solid rgba(201,169,110,0.25)', background: 'rgba(255,255,255,0.03)', fontSize: '.78rem', fontWeight: 600 };
+const presenceBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '.6rem', padding: '.7rem .85rem', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', backdropFilter: 'blur(12px)', marginBottom: '1.25rem' };
+const hostPreviewBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '.55rem', padding: '.65rem .85rem', borderRadius: 12, border: '1px solid rgba(201,169,110,0.35)', background: 'rgba(201,169,110,0.1)', color: '#e7d3a6', fontSize: '.8rem', lineHeight: 1.4, marginTop: '1rem', fontWeight: 500 };
+const bubbleGuest: React.CSSProperties = { background: `linear-gradient(135deg, #e7d3a6, ${GOLD})`, color: '#1a1206', padding: '.65rem .9rem', borderRadius: '16px 16px 4px 16px', fontSize: '.92rem', lineHeight: 1.45, fontWeight: 500 };
 const bubbleAssistant: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', padding: '.65rem .9rem', borderRadius: '16px 16px 16px 4px', fontSize: '.92rem', lineHeight: 1.45, color: 'inherit' };
-const alertErr: React.CSSProperties = { background: 'rgba(255,138,92,0.12)', border: '1px solid rgba(255,138,92,0.4)', color: '#FF8A5C', padding: '.6rem .8rem', borderRadius: 10, fontSize: '.85rem', marginBottom: '1rem' };
-const alertOk: React.CSSProperties = { background: 'rgba(51,230,212,0.1)', border: '1px solid rgba(51,230,212,0.35)', color: '#33E6D4', padding: '.6rem .8rem', borderRadius: 10, fontSize: '.85rem', marginBottom: '1rem' };
+const alertErr: React.CSSProperties = { background: 'rgba(230,161,92,0.12)', border: '1px solid rgba(230,161,92,0.4)', color: '#e6a15c', padding: '.6rem .8rem', borderRadius: 10, fontSize: '.85rem', marginBottom: '1rem' };
+const alertOk: React.CSSProperties = { background: 'rgba(201,169,110,0.1)', border: '1px solid rgba(201,169,110,0.35)', color: GOLD, padding: '.6rem .8rem', borderRadius: 10, fontSize: '.85rem', marginBottom: '1rem' };

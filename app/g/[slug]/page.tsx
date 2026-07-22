@@ -1,9 +1,24 @@
 import { notFound } from 'next/navigation';
+import { Cormorant_Garamond, Inter } from 'next/font/google';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { getPropertyAccess } from '@/lib/auth/guards';
 import { publicEnv } from '@/lib/env';
 import { GuestPortal } from './GuestPortal';
+
+// Luxury concierge typography: serif display for headings, clean sans for body.
+// Exposed as CSS variables so the brand-scoped portal styles can reference them.
+const displaySerif = Cormorant_Garamond({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-portal-serif',
+  display: 'swap',
+});
+const bodySans = Inter({
+  subsets: ['latin'],
+  variable: '--font-portal-sans',
+  display: 'swap',
+});
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +52,7 @@ export default async function GuestPortalPage({ params }: { params: { slug: stri
 
   return (
     <GuestPortal
+      fontClassName={`${displaySerif.variable} ${bodySans.variable}`}
       slug={property.slug}
       propertyId={property.id}
       propertyName={property.display_name}

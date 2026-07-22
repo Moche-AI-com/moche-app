@@ -70,5 +70,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     confidence: Number(answer.confidence.toFixed(2)),
     escalated: answer.shouldEscalate,
     isEmergency: answer.isEmergency,
+    suggestions: answer.suggestions,
   });
 }

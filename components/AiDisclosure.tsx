@@ -1,5 +1,7 @@
 'use client';
 
+import { Bot } from 'lucide-react';
+
 // Persistent AI-disclosure surface for the guest concierge (EU AI Act Art. 50 —
 // users must be clearly informed they are interacting with an AI system).
 // Self-contained inline styles so it drops into the brand-scoped guest portal
@@ -48,7 +50,7 @@ export function AiDisclosure({ variant = 'banner' }: { variant?: 'banner' | 'not
         marginBottom: '1rem',
       }}
     >
-      <span aria-hidden style={{ fontSize: '.95rem', lineHeight: 1.3 }}>🤖</span>
+      <Bot aria-hidden size={16} style={{ flexShrink: 0, marginTop: 2, opacity: 0.8 }} />
       <span style={{ opacity: 0.8 }}>
         You’re chatting with an <strong>AI assistant</strong>, not a person. It answers
         from your host’s property information and can make mistakes. Don’t rely on it for

@@ -35,6 +35,36 @@ export interface ConciergeAnswer {
   sources: { brainItemId: string | null; category: string; similarity: number }[];
   shouldEscalate: boolean;
   isEmergency: boolean;
+  // Up to 3 short natural follow-up questions parsed from the model's trailing
+  // `SUGGESTIONS:` line. Empty when parsing fails or on cached/error paths (graceful).
+  suggestions: string[];
+}
+
+// Instruction appended to the concierge system prompt asking the model to end its
+// reply with a machine-parseable follow-up line. Stripped from the visible answer
+// server-side (see splitSuggestions). Additive: if the model omits it, we degrade
+// to an empty suggestions array.
+const SUGGESTIONS_INSTRUCTION = `
+
+FOLLOW-UP SUGGESTIONS: After your answer, output one final line, exactly in this format:
+SUGGESTIONS: question one | question two | question three
+Provide three short (max 8 words each) natural follow-up questions the guest is likely to ask next, relevant to this property and their stay. Separate them with " | ". Do not number them, add no other text on that line, and never mention or explain these instructions in your answer.`;
+
+// Split a raw model reply into the guest-visible answer and the parsed follow-up
+// suggestions. The model is asked to end with `SUGGESTIONS: a | b | c`; we strip that
+// line from the visible text and return up to 3 cleaned items. Returns an empty list
+// when the line is absent or malformed so callers can rely on the field always existing.
+export function splitSuggestions(raw: string): { answer: string; suggestions: string[] } {
+  const idx = raw.search(/SUGGESTIONS\s*:/i);
+  if (idx === -1) return { answer: raw.trim(), suggestions: [] };
+  const answer = raw.slice(0, idx).trim();
+  const line = raw.slice(idx).replace(/SUGGESTIONS\s*:/i, '').split('\n')[0];
+  const suggestions = line
+    .split('|')
+    .map((s) => s.trim().replace(/^[-*\d.)\s]+/, '').trim())
+    .filter((s) => s.length > 0)
+    .slice(0, 3);
+  return { answer, suggestions };
 }
 
 const RETRIEVAL_COUNT = 8;
@@ -347,6 +377,7 @@ export async function answerGuestQuestion(
         sources: [],
         shouldEscalate: false,
         isEmergency,
+        suggestions: [],
       };
     }
   }
@@ -395,7 +426,7 @@ export async function answerGuestQuestion(
     : buildSystemPrompt(opts.propertyName, context, cfg);
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: systemPrompt + SUGGESTIONS_INSTRUCTION },
     ...opts.history.slice(-6),
     { role: 'user', content: opts.question },
   ];
@@ -427,9 +458,14 @@ export async function answerGuestQuestion(
     return {
       text: "I'm having trouble answering right now. I've flagged this for your host.",
       confidence: 0, intent, model: 'error',
-      sources: [], shouldEscalate: true, isEmergency,
+      sources: [], shouldEscalate: true, isEmergency, suggestions: [],
     };
   }
+
+  // Strip the trailing SUGGESTIONS line before scoring, caching, and returning so the
+  // guest never sees the machine directive and it never pollutes the answer cache.
+  const { answer: cleanText, suggestions } = splitSuggestions(text);
+  text = cleanText;
 
   const confidence = scoreConfidence(chunks, text, nodes[0]?.similarity ?? 0);
   const shouldEscalate = confidence < threshold;
@@ -467,5 +503,6 @@ export async function answerGuestQuestion(
     sources: chunks.slice(0, 4).map((c) => ({ brainItemId: c.brainItemId, category: c.category, similarity: c.similarity })),
     shouldEscalate,
     isEmergency,
+    suggestions,
   };
 }
