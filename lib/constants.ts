@@ -196,7 +196,10 @@ export const TRUSTED_DEVICE_TTL_DAYS = 30;
 export const LINK_REDEEM_MAX_PER_IP_PER_HOUR = 10;
 // Reusable property QR links live this long (no per-stay checkout to anchor to).
 export const PROPERTY_LINK_TTL_DAYS = 90;
-// Stay links can be redeemed a few times so a guest can re-open on a lost/second device.
-export const STAY_LINK_DEFAULT_MAX_REDEMPTIONS = 3;
+// Stay links are shareable across a whole party (each guest/device consumes one
+// redemption) and allow re-opening on a lost/second device. Sized for a larger group
+// plus a couple of spare devices; still bounded + IP rate-limited so a leaked link
+// can't be redeemed indefinitely. Hosts can override per-link via maxRedemptions.
+export const STAY_LINK_DEFAULT_MAX_REDEMPTIONS = 12;
 // Reusable property QR is posted in the home — high cap, still bounded + rate-limited.
 export const PROPERTY_LINK_DEFAULT_MAX_REDEMPTIONS = 500;

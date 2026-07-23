@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
   ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
@@ -456,6 +457,10 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
             </>
           )}
           <button type="submit" style={btnStyle} className="gp-btn" disabled={busy} data-testid="button-send-code">{busy ? 'Sending…' : 'Send code'}</button>
+          <p style={{ fontSize: '.78rem', opacity: 0.6, marginTop: '.9rem', lineHeight: 1.5, textAlign: 'center' }} data-testid="gate-party-hint">
+            Travelling with a group? Ask whoever booked to share their guest link — everyone
+            in the party can open it instantly, no code needed.
+          </p>
         </form>
       ) : (
         <form onSubmit={confirm}>
@@ -535,6 +540,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const [hostMsg, setHostMsg] = useState('');
   const [hostSending, setHostSending] = useState(false);
   const [hostComposerError, setHostComposerError] = useState<string | null>(null);
+  // Portal guard: overlays must render into document.body (see anySheetOpen effect below)
+  // to escape the transformed .gp-rise ancestor, which would otherwise trap position:fixed
+  // and make bottom sheets appear below the tapped card instead of pinned to the viewport.
+  // createPortal requires the DOM, so we only portal after mount to stay SSR-safe.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   // Timestamp of the newest message we've rendered, so polling only pulls newer ones.
   const lastSeenRef = useRef<string | null>(null);
   const hasEscalation = entries.some((e) => e.escalated) || entries.some((e) => e.role === 'host');
@@ -551,6 +562,16 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   }, []);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [entries, busy]);
+
+  // Lock body scroll while a bottom sheet is open so the underlying portal can't scroll
+  // behind the sheet on mobile (a common bottom-sheet UX defect). Restored on close.
+  const anySheetOpen = !!activeCategory || hostComposerOpen;
+  useEffect(() => {
+    if (!anySheetOpen || typeof document === 'undefined') return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [anySheetOpen]);
 
   const send = useCallback(async (text: string) => {
     if (!text.trim() || busy) return;
@@ -889,8 +910,10 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 
       <AiDisclosure variant="note" />
 
-      {/* Sub-choice slide-over — pre-formed options that instantly trigger the chat. */}
-      {activeCategory && (
+      {/* Sub-choice slide-over — pre-formed options that instantly trigger the chat.
+          Portaled to document.body so position:fixed resolves against the viewport and
+          the sheet pins to the bottom of the screen (not below the tapped card). */}
+      {mounted && activeCategory && createPortal(
         <div className="gp-sheet-scrim" onClick={() => setActiveCategory(null)} data-testid="subchoice-overlay">
           <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`${activeCategory.label} options`} data-testid={`subchoice-${activeCategory.key}`}>
             <div className="gp-sheet-grip" aria-hidden />
@@ -920,13 +943,15 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* "Message the host" composer — the guest types their own issue and confirms
           before it's sent to the host (no accidental pings). The host's reply arrives
-          live in the chat above via polling. */}
-      {hostComposerOpen && (
+          live in the chat above via polling. Portaled to document.body for the same
+          fixed-positioning reason as the sub-choice sheet above. */}
+      {mounted && hostComposerOpen && createPortal(
         <div className="gp-sheet-scrim" onClick={() => !hostSending && setHostComposerOpen(false)} data-testid="host-composer-overlay">
           <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Message your host" data-testid="host-composer">
             <div className="gp-sheet-grip" aria-hidden />
@@ -974,10 +999,13 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
               </p>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      <style jsx>{`
+      {/* Global (not scoped) so the portaled bottom sheets rendered into document.body
+          still receive these styles. All selectors are gp-* prefixed — no collision risk. */}
+      <style jsx global>{`
         .gp-dot {
           width: 7px; height: 7px; border-radius: 50%; background: ${GOLD};
           box-shadow: 0 0 0 0 ${GOLD}; animation: gpPulse 2s infinite;

@@ -154,7 +154,10 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
             </div>
           </div>
         </div>
-        <p className="faint" style={{ fontSize: '.68rem', marginTop: '.4rem' }}>Shown once — copy it now.</p>
+        <p className="faint" style={{ fontSize: '.68rem', marginTop: '.4rem' }}>
+          Shown once — copy it now. Share with your whole party: anyone who opens it goes
+          straight into the concierge, no email or phone verification needed.
+        </p>
       </div>
     );
   }
@@ -162,8 +165,11 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
   return (
     <div>
       <button className="btn btn-ghost btn-sm" onClick={mint} disabled={busy} data-testid={`button-mint-stay-${stayId}`}>
-        {busy ? 'Creating…' : 'Create magic link'}
+        {busy ? 'Creating…' : 'Create shareable guest link'}
       </button>
+      <p className="faint" style={{ fontSize: '.68rem', marginTop: '.25rem', maxWidth: 320 }}>
+        One tap-to-enter link for the whole party — skips verification for every guest.
+      </p>
       {err && <p style={{ color: 'var(--coral)', fontSize: '.72rem', marginTop: '.25rem' }}>{err}</p>}
     </div>
   );
