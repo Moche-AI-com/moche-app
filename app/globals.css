@@ -252,10 +252,41 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   .grid-2 { grid-template-columns: 1fr !important; }
 }
 
+/* ============================================================
+   Property Brain — responsive layout
+   The Brain page uses a two-column (editor + sidebar) shell and a
+   two-column knowledge form. These are CSS-class driven so they can
+   collapse on small screens (inline grid styles cannot be overridden
+   by media queries, which caused the scattered mobile layout).
+   ============================================================ */
+.brain-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.brain-sidebar { position: sticky; top: 1rem; }
+.brain-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.brain-health-hero-row { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  /* Collapse the editor/sidebar shell — sidebar drops below the editor
+     and stops being sticky so it doesn't float awkwardly on phones. */
+  .brain-shell { grid-template-columns: 1fr; gap: 1.25rem; }
+  .brain-sidebar { position: static; top: auto; }
+}
+
+@media (max-width: 560px) {
+  .brain-form-grid { grid-template-columns: 1fr; }
+  /* Health hero: let the CTA go full-width under the score + copy */
+  .brain-health-hero-row .btn { width: 100%; }
+}
+
 /* Respect reduced-motion: keep meaning (color/underline) but drop movement */
 @media (prefers-reduced-motion: reduce) {
   .card-interactive, .card-interactive:hover, .card-interactive:active { transform: none; }
   .card-interactive { transition: box-shadow var(--tr), border-color var(--tr); }
   .dash-tab::after { transition: none; }
   .rise-in { animation: none; opacity: 1; }
+  .brain-graph-node, .brain-graph-edge { transition: none !important; }
 }

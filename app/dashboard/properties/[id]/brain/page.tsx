@@ -16,7 +16,7 @@ export default async function BrainPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { card?: string };
+  searchParams: { card?: string; edit?: string };
 }) {
   const access = await requirePropertyAccess(params.id);
   const supabase = createClient();
@@ -70,10 +70,26 @@ export default async function BrainPage({
         <div className="alert alert-info" style={{ marginBottom: '1rem' }}>You have read-only access to this Brain.</div>
       )}
 
-      <BrainCards propertyId={params.id} propertyName={access.property.display_name} health={cardHealth} canEdit={access.can.editBrain} />
+      <BrainCards
+        propertyId={params.id}
+        propertyName={access.property.display_name}
+        propertySlug={access.property.slug}
+        health={cardHealth}
+        canEdit={access.can.editBrain}
+        graphItems={(items ?? []).map((i) => ({
+          id: i.id,
+          title: i.title,
+          category: i.category,
+          visibility: i.visibility,
+          status: i.status,
+          sourceType: i.source_type,
+          bodyPreview: (i.body ?? '').slice(0, 160),
+        }))}
+        categoryLabels={BRAIN_CATEGORY_LABELS as Record<string, string>}
+      />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: '1.5rem', alignItems: 'start' }}>
-        <div>
+      <div className="brain-shell">
+        <div id="brain-editor" style={{ scrollMarginTop: '1rem' }}>
           {activeCard && (
             <div className="alert alert-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }} data-testid="card-filter-banner">
               <span style={{ fontSize: '.85rem' }}>
@@ -87,6 +103,7 @@ export default async function BrainPage({
             canEdit={access.can.editBrain}
             categories={Object.entries(BRAIN_CATEGORY_LABELS) as [BrainCategory, string][]}
             defaultCategory={defaultCategory}
+            editItemId={searchParams.edit}
             items={filteredItems.map((i) => ({
               id: i.id,
               title: i.title,
@@ -98,7 +115,7 @@ export default async function BrainPage({
             }))}
           />
         </div>
-        <div style={{ position: 'sticky', top: '1rem' }}>
+        <div className="brain-sidebar">
           {access.can.editBrain && (
             <Link href={`/dashboard/properties/${params.id}/recommendations`} className="btn btn-sm btn-ghost btn-block" style={{ marginBottom: '1rem' }}>
               Manage local recommendations →

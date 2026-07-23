@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { saveBrainItemAction, deleteBrainItemAction, type BrainActionState } from './actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
@@ -22,12 +22,14 @@ export function BrainManager({
   categories,
   items,
   defaultCategory = 'core',
+  editItemId,
 }: {
   propertyId: string;
   canEdit: boolean;
   categories: [string, string][];
   items: Item[];
   defaultCategory?: string;
+  editItemId?: string;
 }) {
   const [editing, setEditing] = useState<Item | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -36,6 +38,22 @@ export function BrainManager({
     setEditing(item);
     setShowForm(true);
   };
+
+  // Deep-link from the knowledge graph: ?edit=<id> auto-opens that item's editor
+  // and scrolls it into view. Runs once when a matching item is present.
+  useEffect(() => {
+    if (!canEdit || !editItemId) return;
+    const target = items.find((i) => i.id === editItemId);
+    if (!target) return;
+    setEditing(target);
+    setShowForm(true);
+    // Let the form render, then scroll the editor region into view.
+    const t = setTimeout(() => {
+      document.getElementById('brain-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editItemId]);
 
   return (
     <div>
@@ -126,7 +144,7 @@ function BrainItemForm({
         <label className="label" htmlFor="title">Title</label>
         <input className="input" id="title" name="title" defaultValue={item?.title ?? ''} maxLength={200} required data-testid="input-brain-title" />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      <div className="brain-form-grid">
         <div className="field">
           <label className="label" htmlFor="category">Category</label>
           <select className="select" id="category" name="category" defaultValue={item?.category ?? defaultCategory} data-testid="select-brain-category">

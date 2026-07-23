@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { ExternalLink, Network, LayoutGrid } from 'lucide-react';
 import type { CardBrainHealth, CardHealth } from '@/lib/brain/health';
-import { PreviewChat } from './PreviewChat';
+import { BrainGraph, type GraphItem } from './BrainGraph';
 
 function scoreColor(pct: number): string {
   return pct >= 80 ? 'var(--teal)' : pct >= 50 ? 'var(--iris)' : 'var(--coral)';
@@ -101,22 +102,29 @@ const BUILDER_CARD_CSS = `
 export function BrainCards({
   propertyId,
   propertyName,
+  propertySlug,
   health,
   canEdit,
+  graphItems,
+  categoryLabels,
 }: {
   propertyId: string;
   propertyName: string;
+  propertySlug: string;
   health: CardBrainHealth;
   canEdit: boolean;
+  graphItems: GraphItem[];
+  categoryLabels: Record<string, string>;
 }) {
-  const [preview, setPreview] = useState(false);
+  const [view, setView] = useState<'graph' | 'cards'>('graph');
+  const guestPortalUrl = `/g/${propertySlug}`;
 
   return (
     <div style={{ marginBottom: '2rem' }}>
       <style dangerouslySetInnerHTML={{ __html: BUILDER_CARD_CSS }} />
       {/* Health hero */}
       <div className="card" style={{ padding: '1.5rem', marginBottom: '1.25rem' }} data-testid="brain-health-hero">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+        <div className="brain-health-hero-row">
           <ScoreRing score={health.score} />
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
@@ -129,32 +137,68 @@ export function BrainCards({
                 : 'Finish the guest-critical cards (Core, Safety, Rules) to get your concierge guest-ready.'}
             </p>
           </div>
-          <button
+          {/* Opens the real guest portal in a new tab — what a guest actually sees. */}
+          <a
             className="btn btn-primary"
-            onClick={() => setPreview((v) => !v)}
+            href={guestPortalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             data-testid="button-preview-guest"
-            style={{ alignSelf: 'flex-start' }}
+            style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}
           >
-            {preview ? 'Close preview' : 'Preview as guest'}
+            Preview as guest <ExternalLink size={15} />
+          </a>
+        </div>
+      </div>
+
+      {/* View toggle: Graph (default, Obsidian-style) or the onboarding cards */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.75rem', marginBottom: '.85rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'inline-flex', background: 'var(--surface-2, rgba(255,255,255,.04))', border: '1px solid var(--border)', borderRadius: 999, padding: 3 }} role="tablist" aria-label="Brain view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'graph'}
+            className={`btn btn-sm ${view === 'graph' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: '.35rem' }}
+            onClick={() => setView('graph')}
+            data-testid="button-view-graph"
+          >
+            <Network size={15} /> Graph
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'cards'}
+            className={`btn btn-sm ${view === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: '.35rem' }}
+            onClick={() => setView('cards')}
+            data-testid="button-view-cards"
+          >
+            <LayoutGrid size={15} /> Setup cards
           </button>
         </div>
+        <span className="faint" style={{ fontSize: '.75rem' }}>
+          {view === 'graph' ? 'Hover a node to see its section · tap to edit' : 'Track setup progress by section'}
+        </span>
       </div>
 
-      {preview && (
-        <div style={{ marginBottom: '1.25rem' }}>
-          <PreviewChat propertyId={propertyId} propertyName={propertyName} />
+      {view === 'graph' ? (
+        <BrainGraph
+          propertyId={propertyId}
+          items={graphItems}
+          categoryLabels={categoryLabels}
+          canEdit={canEdit}
+        />
+      ) : (
+        <div
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}
+          data-testid="brain-cards-grid"
+        >
+          {health.cards.map((card) => (
+            <BuilderCard key={card.key} propertyId={propertyId} card={card} canEdit={canEdit} />
+          ))}
         </div>
       )}
-
-      {/* Card grid */}
-      <div
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}
-        data-testid="brain-cards-grid"
-      >
-        {health.cards.map((card) => (
-          <BuilderCard key={card.key} propertyId={propertyId} card={card} canEdit={canEdit} />
-        ))}
-      </div>
     </div>
   );
 }
