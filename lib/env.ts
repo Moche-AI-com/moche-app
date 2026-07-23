@@ -64,6 +64,10 @@ export const serverEnv = {
 
   resendApiKey: process.env.RESEND_API_KEY ?? '', // Server-only. Email delivery via Resend.
 
+  // Internal business inbox that receives product-feedback pings (host feedback
+  // submissions) for follow-up. Server-only. Override via FEEDBACK_INBOX in Vercel.
+  feedbackInbox: process.env.FEEDBACK_INBOX ?? 'hostspark.org@gmail.com',
+
   // Twilio — SMS delivery. SERVER ONLY. Never prefix with NEXT_PUBLIC_.
   // Dual auth: prefer API Key SID/Secret (revocable), fall back to Account Auth Token.
   // Legacy aliases TWILIO_API_KEY / TWILIO_API_SECRET are accepted so existing Vercel env works.

@@ -84,6 +84,19 @@ async function sendHostEmail(to: string, subject: string, text: string): Promise
   }
 }
 
+// Sends a plain-text email to our internal business inbox (product feedback pings, ops
+// follow-ups). Best-effort and non-blocking: returns false and logs a warning if Resend
+// is not configured or the send fails. The recipient is serverEnv.feedbackInbox and is
+// never a guest/host-controlled address, so this is not a spam vector.
+export async function sendInternalEmail(subject: string, text: string): Promise<boolean> {
+  const to = serverEnv.feedbackInbox;
+  if (!to) {
+    log.warn('internal_email_no_inbox', {});
+    return false;
+  }
+  return sendHostEmail(to, subject, text);
+}
+
 // Loads the host account owner's contact details (email + phone) for fan-out.
 async function loadOwnerContact(
   client: Client,

@@ -614,17 +614,24 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   // Add-on: one-tap feedback. Records a private product_feedback row (guest path).
   // A positive rating (4-5) is the signal that surfaces the Review Nudge when the host
   // has it enabled + set to auto. Best-effort POST — never blocks the concierge.
-  const submitFeedback = useCallback(async (rating: number) => {
-    if (feedbackState !== 'idle') return;
-    setFeedbackState('rated');
-    if (rating >= 4 && reviewNudge.enabled && reviewNudge.auto && reviewNudgeState === 'hidden') {
-      setReviewNudgeState('shown');
+  // Records the rating immediately (one tap). An optional comment can follow via a second
+  // call once the guest has rated; we send it as a distinct row so the host sees the note.
+  const submitFeedback = useCallback(async (rating: number, comment?: string) => {
+    const isFirst = feedbackState === 'idle';
+    if (isFirst) {
+      setFeedbackState('rated');
+      if (rating >= 4 && reviewNudge.enabled && reviewNudge.auto && reviewNudgeState === 'hidden') {
+        setReviewNudgeState('shown');
+      }
     }
     if (hostPreview) return; // host preview has no guest session — don't write feedback
+    const trimmed = comment?.trim();
+    // On the first call we always record the rating. A follow-up call carries only a comment.
+    if (!isFirst && !trimmed) return;
     try {
       await fetch(`/api/guest/${slug}/feedback`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rating, page: 'guest_portal' }),
+        body: JSON.stringify({ rating, page: 'guest_portal', ...(trimmed ? { comment: trimmed } : {}) }),
       });
     } catch { /* best-effort — feedback never blocks the experience */ }
   }, [feedbackState, reviewNudge, reviewNudgeState, hostPreview, slug]);
@@ -1354,12 +1361,47 @@ function ReviewNudgeCard({ url, propertyName, onDismiss }: { url: string; proper
 // Add-on: one-tap product feedback — a subtle 1-5 star micro-prompt. One tap records a
 // private product_feedback row and shows a brief thanks. Never a blocking modal; a
 // positive (4-5) rating is the signal that can surface the Review Nudge.
-function FeedbackWidget({ state, onRate }: { state: 'idle' | 'rated'; onRate: (rating: number) => void }) {
+function FeedbackWidget({ state, onRate }: { state: 'idle' | 'rated'; onRate: (rating: number, comment?: string) => void }) {
   const [hover, setHover] = useState(0);
+  const [rated, setRated] = useState(0);
+  const [comment, setComment] = useState('');
+  const [commentSent, setCommentSent] = useState(false);
+
+  // Phase 2: after a rating is recorded, invite an optional comment. Fully skippable —
+  // the rating is already saved, so this never blocks and adds no friction.
   if (state === 'rated') {
+    if (commentSent) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginTop: '.9rem', fontSize: '.8rem', opacity: 0.7 }} data-testid="feedback-thanks">
+          <Check size={15} aria-hidden style={{ color: GOLD }} /> Thanks — your host will see this.
+        </div>
+      );
+    }
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginTop: '.9rem', fontSize: '.8rem', opacity: 0.7 }} data-testid="feedback-thanks">
-        <Check size={15} aria-hidden style={{ color: GOLD }} /> Thanks for the feedback.
+      <div style={{ marginTop: '.9rem' }} data-testid="feedback-comment">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontSize: '.8rem', opacity: 0.7, marginBottom: '.5rem' }}>
+          <Check size={15} aria-hidden style={{ color: GOLD }} /> Thanks for rating. Anything you&apos;d like to add?
+        </div>
+        <form
+          onSubmit={(e) => { e.preventDefault(); if (comment.trim()) onRate(rated || 5, comment); setCommentSent(true); }}
+          style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}
+        >
+          <input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            maxLength={1000}
+            placeholder="Optional — tell your host what worked (or didn't)"
+            data-testid="input-feedback-comment"
+            style={{ ...mutedInputStyle, minWidth: 0, flex: '1 1 220px' }}
+          />
+          <button
+            type="submit"
+            data-testid="button-feedback-comment-send"
+            style={{ padding: '.55rem .9rem', borderRadius: 12, border: 'none', background: `linear-gradient(145deg, #e7d3a6, ${GOLD})`, color: '#1a1206', fontWeight: 700, fontSize: '.82rem', cursor: 'pointer' }}
+          >
+            {comment.trim() ? 'Send' : 'Done'}
+          </button>
+        </form>
       </div>
     );
   }
@@ -1370,7 +1412,7 @@ function FeedbackWidget({ state, onRate }: { state: 'idle' | 'rated'; onRate: (r
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
-            onClick={() => onRate(n)}
+            onClick={() => { setRated(n); onRate(n); }}
             onMouseEnter={() => setHover(n)}
             aria-label={`Rate ${n} of 5`}
             data-testid={`button-feedback-${n}`}
