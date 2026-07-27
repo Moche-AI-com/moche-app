@@ -125,6 +125,18 @@ export const SUBPROCESSORS: Subprocessor[] = [
     active: true,
   },
   {
+    vendor: 'Mapbox',
+    purpose:
+      'Address autocomplete/geocoding, nearby place discovery, and static map images on the host dashboard',
+    dataProcessed:
+      'Property address strings and coordinates entered by the host, plus the host browser’s request metadata (IP, referrer) when a static map image loads. No guest identity or guest message content is sent.',
+    region: 'US',
+    dpaUrl: 'https://www.mapbox.com/legal/dpa',
+    transferMechanism: 'SCCs',
+    retention: 'Query logs per Mapbox policy; results cached in the host’s own property records',
+    active: true,
+  },
+  {
     vendor: 'PostHog',
     purpose: 'Product analytics (host-side usage; no guest PII sent)',
     dataProcessed: 'Pseudonymous host user id, product events, page views',

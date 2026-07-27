@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { isNearbyStale, refreshNearbyPlaces } from '@/lib/local/nearby';
+import { geoProvider } from '@/lib/local/geo';
 import { NearbyPlacesManager } from './NearbyPlacesManager';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export default async function NearbyPlacesPage({ params }: { params: { id: strin
   const supabase = createClient();
   const { data: places } = await supabase
     .from('nearby_places')
-    .select('id, place_id, category, name, rating, review_count, lat, lng, price_level, host_starred, host_notes, hidden, distance_m, refreshed_at')
+    .select('id, place_id, category, name, rating, review_count, lat, lng, price_level, host_starred, host_notes, hidden, distance_m, refreshed_at, address, url, phone, source')
     .eq('property_id', params.id)
     .order('category', { ascending: true })
     .order('distance_m', { ascending: true });
@@ -33,7 +34,8 @@ export default async function NearbyPlacesPage({ params }: { params: { id: strin
       </Link>
       <h1 style={{ marginTop: '.5rem' }}>Nearby places</h1>
       <p className="muted" style={{ maxWidth: 640 }}>
-        Auto-discovered from free OpenStreetMap data within ~2&nbsp;km of your property. Star the places
+        Auto-discovered within ~2&nbsp;km of your property using{' '}
+        {geoProvider() === 'mapbox' ? 'Mapbox place data' : 'free OpenStreetMap data'}. Star the places
         you love, add a note, or hide the ones you don&apos;t. Your concierge recommends starred places
         first (with your notes) and never mentions hidden ones.
       </p>
@@ -41,6 +43,8 @@ export default async function NearbyPlacesPage({ params }: { params: { id: strin
         propertyId={params.id}
         canEdit={access.can.editProperty}
         hasCoords={hasCoords}
+        propertyLat={typeof p.lat === 'number' ? p.lat : null}
+        propertyLng={typeof p.lng === 'number' ? p.lng : null}
         initialPlaces={(places ?? []) as never}
       />
     </div>

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import StaticMapPreview from '@/components/StaticMapPreview';
 import {
   discoverLocalIntelAction,
   updateRecommendationAction,
@@ -25,6 +26,8 @@ interface Rec {
   approved: boolean;
   hidden: boolean;
   ai_source: string | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -59,11 +62,15 @@ export function RecommendationsManager({
   hasAddress,
   canEdit,
   initialRecs,
+  propertyLat,
+  propertyLng,
 }: {
   propertyId: string;
   hasAddress: boolean;
   canEdit: boolean;
   initialRecs: Rec[];
+  propertyLat?: number | null;
+  propertyLng?: number | null;
 }) {
   const router = useRouter();
   const [discoverState, discoverAction] = useFormState<RecActionState, FormData>(
@@ -84,7 +91,7 @@ export function RecommendationsManager({
         <h3 style={{ margin: 0 }}>Auto-find places</h3>
         <p className="muted" style={{ fontSize: '.85rem', margin: '.4rem 0 .8rem' }}>
           We look up restaurants, cafes, attractions, grocery, pharmacy and hospitals near your
-          property using free map data. Nothing is shared with guests until you approve it.
+          property using map data. Nothing is shared with guests until you approve it.
         </p>
         {!hasAddress && (
           <p style={{ color: 'var(--danger, #c0392b)', fontSize: '.85rem' }}>
@@ -108,6 +115,24 @@ export function RecommendationsManager({
           </p>
         )}
       </section>
+
+      {/* Map of what guests actually see */}
+      {typeof propertyLat === 'number' && typeof propertyLng === 'number' && (
+        <StaticMapPreview
+          lat={propertyLat}
+          lng={propertyLng}
+          markers={live
+            .filter((r) => typeof r.lat === 'number' && typeof r.lng === 'number')
+            .map((r) => ({
+              lat: r.lat as number,
+              lng: r.lng as number,
+              color: r.host_preference === 'loved' ? 'f97362' : '6366f1',
+            }))}
+          height={240}
+          width={1100}
+          caption={`What guests see: your property (teal) and ${live.length} approved place${live.length === 1 ? '' : 's'} — your favorites in coral.`}
+        />
+      )}
 
       {/* Pending review */}
       {pending.length > 0 && (

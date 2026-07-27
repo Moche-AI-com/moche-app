@@ -765,3 +765,6 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   .dash-panel-link, .dash-panel-link:hover { gap: .3rem; }
   .dash-collapsible, .dash-collapse-chevron, .dash-feed-item { transition: none; }
 }
+
+/* Static map preview embedded under the address autocomplete field. */
+.address-map-preview { margin-top: .6rem; }

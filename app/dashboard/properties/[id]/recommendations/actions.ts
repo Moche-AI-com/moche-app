@@ -7,7 +7,8 @@ import { requirePropertyAccess, requireSession } from '@/lib/auth/guards';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import { bumpBrainVersion } from '@/lib/brain/cache';
-import { discoverLocalIntel, type LocalPoi } from '@/lib/local/osm';
+import type { LocalPoi } from '@/lib/local/osm';
+import { discoverLocalIntelViaProvider } from '@/lib/local/geo';
 import { reindexBrainItem } from '@/app/dashboard/properties/[id]/brain/actions';
 
 export interface RecActionState {
@@ -56,7 +57,7 @@ export async function discoverLocalIntelAction(
     return { error: 'Add the property address first (Settings) so we can find nearby places.' };
   }
 
-  const { geocode, pois } = await discoverLocalIntel(address);
+  const { geocode, pois } = await discoverLocalIntelViaProvider(address);
   if (!geocode) return { error: 'We could not locate that address. Double-check it in Settings.' };
   if (pois.length === 0) return { ok: true, found: 0 };
 
@@ -81,7 +82,11 @@ export async function discoverLocalIntelAction(
       address: poi.address,
       url: poi.url,
       distance_note: metersToFriendly(poi.distanceMeters),
-      description: `${CATEGORY_LABEL[poi.category] ?? poi.category}${poi.distanceMeters != null ? ` · ${metersToFriendly(poi.distanceMeters)}` : ''}`,
+      description: [
+        CATEGORY_LABEL[poi.category] ?? poi.category,
+        poi.distanceMeters != null ? metersToFriendly(poi.distanceMeters) : null,
+        poi.phone ? `Phone ${poi.phone}` : null,
+      ].filter(Boolean).join(' · '),
       visibility: 'guest' as const,
       ai_source: poi.aiSource,
       lat: poi.lat,

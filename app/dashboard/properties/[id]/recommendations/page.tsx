@@ -11,13 +11,13 @@ export default async function RecommendationsPage({ params }: { params: { id: st
 
   const { data: recs } = await supabase
     .from('recommendations')
-    .select('id, name, category, address, url, distance_note, description, host_note, host_preference, priority_weight, approved, hidden, ai_source')
+    .select('id, name, category, address, url, distance_note, description, host_note, host_preference, priority_weight, approved, hidden, ai_source, lat, lng')
     .eq('property_id', params.id)
     .is('deleted_at', null)
     .order('approved', { ascending: true })
     .order('name', { ascending: true });
 
-  const p = access.property;
+  const p = access.property as typeof access.property & { lat: number | null; lng: number | null };
   const hasAddress = !!(p.address_line1 && p.address_line1.trim());
   const rows = recs ?? [];
 
@@ -36,6 +36,8 @@ export default async function RecommendationsPage({ params }: { params: { id: st
         hasAddress={hasAddress}
         canEdit={access.can.editBrain}
         initialRecs={rows as never}
+        propertyLat={typeof p.lat === 'number' ? p.lat : null}
+        propertyLng={typeof p.lng === 'number' ? p.lng : null}
       />
     </div>
   );

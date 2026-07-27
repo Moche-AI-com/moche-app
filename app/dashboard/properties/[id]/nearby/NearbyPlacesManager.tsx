@@ -3,7 +3,9 @@
 import { useState, type ReactNode } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { Star, EyeOff, Eye, RefreshCw, StickyNote, MapPin } from 'lucide-react';
+import { Star, EyeOff, Eye, RefreshCw, StickyNote, MapPin, Phone, Globe, Navigation } from 'lucide-react';
+import StaticMapPreview from '@/components/StaticMapPreview';
+import { directionsUrl } from '@/lib/local/static-map';
 import {
   refreshNearbyPlacesAction,
   updateNearbyPlaceAction,
@@ -25,6 +27,10 @@ interface Place {
   hidden: boolean;
   distance_m: number | null;
   refreshed_at: string;
+  address: string | null;
+  url: string | null;
+  phone: string | null;
+  source: string | null;
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -43,6 +49,14 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 const CATEGORY_ORDER = Object.keys(CATEGORY_LABEL);
+
+const linkStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '.25rem',
+  color: 'var(--teal-deep, #0f766e)',
+  textDecoration: 'none',
+};
 
 function metersToFriendly(m: number | null): string | null {
   if (m == null) return null;
@@ -87,23 +101,43 @@ export function NearbyPlacesManager({
   propertyId,
   canEdit,
   hasCoords,
+  propertyLat,
+  propertyLng,
   initialPlaces,
 }: {
   propertyId: string;
   canEdit: boolean;
   hasCoords: boolean;
+  propertyLat?: number | null;
+  propertyLng?: number | null;
   initialPlaces: Place[];
 }) {
   const router = useRouter();
   const [refreshState, refreshAction] = useFormState<NearbyActionState, FormData>(refreshNearbyPlacesAction, {});
+  const [filter, setFilter] = useState<string>('all');
+  const [starredOnly, setStarredOnly] = useState(false);
 
   const visible = initialPlaces.filter((p) => !p.hidden);
   const hidden = initialPlaces.filter((p) => p.hidden);
   const starredCount = initialPlaces.filter((p) => p.host_starred).length;
 
+  const filtered = visible.filter(
+    (p) => (filter === 'all' || p.category === filter) && (!starredOnly || p.host_starred),
+  );
+
   const grouped = CATEGORY_ORDER
-    .map((cat) => ({ cat, items: visible.filter((p) => p.category === cat) }))
+    .map((cat) => ({ cat, items: filtered.filter((p) => p.category === cat) }))
     .filter((g) => g.items.length > 0);
+
+  // Pins for the overview map: starred places in coral so the host can see their
+  // curated set at a glance, everything else in iris.
+  const pins = filtered
+    .filter((p) => typeof p.lat === 'number' && typeof p.lng === 'number')
+    .sort((a, b) => Number(b.host_starred) - Number(a.host_starred) || (a.distance_m ?? 0) - (b.distance_m ?? 0))
+    .slice(0, 18)
+    .map((p) => ({ lat: p.lat as number, lng: p.lng as number, color: p.host_starred ? 'f97362' : '6366f1' }));
+
+  const availableCategories = CATEGORY_ORDER.filter((cat) => visible.some((p) => p.category === cat));
 
   return (
     <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.5rem' }}>
@@ -135,9 +169,50 @@ export function NearbyPlacesManager({
         )}
       </section>
 
+      {hasCoords && (
+        <StaticMapPreview
+          lat={propertyLat}
+          lng={propertyLng}
+          markers={pins}
+          height={260}
+          width={1100}
+          caption={
+            pins.length > 0
+              ? `Your property (teal) and ${pins.length} nearby place${pins.length === 1 ? '' : 's'} — starred ones in coral.`
+              : 'Your property location.'
+          }
+        />
+      )}
+
+      {availableCategories.length > 1 && (
+        <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <FilterChip label="All" active={filter === 'all'} onClick={() => setFilter('all')} count={visible.length} />
+          {availableCategories.map((cat) => (
+            <FilterChip
+              key={cat}
+              label={CATEGORY_LABEL[cat] ?? cat}
+              active={filter === cat}
+              onClick={() => setFilter(cat)}
+              count={visible.filter((p) => p.category === cat).length}
+            />
+          ))}
+          {starredCount > 0 && (
+            <FilterChip
+              label="Starred"
+              active={starredOnly}
+              onClick={() => setStarredOnly((s) => !s)}
+              count={starredCount}
+              icon={<Star size={12} fill={starredOnly ? 'currentColor' : 'none'} aria-hidden />}
+            />
+          )}
+        </div>
+      )}
+
       {grouped.length === 0 ? (
         <p className="muted" style={{ fontSize: '.9rem' }}>
-          No places yet. {hasCoords ? 'Click “Refresh nearby places” to discover them.' : 'Add the property location to get started.'}
+          {visible.length === 0
+            ? `No places yet. ${hasCoords ? 'Click “Refresh nearby places” to discover them.' : 'Add the property location to get started.'}`
+            : 'No places match this filter.'}
         </p>
       ) : (
         grouped.map(({ cat, items }) => (
@@ -168,6 +243,45 @@ export function NearbyPlacesManager({
   );
 }
 
+function FilterChip({
+  label,
+  active,
+  onClick,
+  count,
+  icon,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  count: number;
+  icon?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '.3rem',
+        padding: '.3rem .6rem',
+        fontSize: '.78rem',
+        borderRadius: 999,
+        cursor: 'pointer',
+        border: `1px solid ${active ? 'var(--teal)' : 'var(--border)'}`,
+        background: active ? 'var(--teal)' : 'var(--surface)',
+        color: active ? '#fff' : 'var(--text)',
+        transition: 'background var(--tr, .15s) var(--ease-out, ease)',
+      }}
+    >
+      {icon}
+      {label}
+      <span style={{ opacity: 0.7 }}>{count}</span>
+    </button>
+  );
+}
+
 function PlaceCard({
   place,
   propertyId,
@@ -193,6 +307,29 @@ function PlaceCard({
           <div className="muted" style={{ fontSize: '.8rem' }}>
             {dist ? `${dist} away` : null}
             {place.rating != null ? `${dist ? ' · ' : ''}${place.rating}★` : ''}
+            {place.address ? `${dist || place.rating != null ? ' · ' : ''}${place.address}` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: '.7rem', flexWrap: 'wrap', marginTop: '.3rem', fontSize: '.78rem' }}>
+            {place.phone && (
+              <a href={`tel:${place.phone}`} style={linkStyle}>
+                <Phone size={12} aria-hidden /> {place.phone}
+              </a>
+            )}
+            {place.url && (
+              <a href={place.url} target="_blank" rel="noopener noreferrer nofollow" style={linkStyle}>
+                <Globe size={12} aria-hidden /> Website
+              </a>
+            )}
+            {place.lat != null && place.lng != null && (
+              <a
+                href={directionsUrl(place.lat, place.lng, place.name ?? undefined)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={linkStyle}
+              >
+                <Navigation size={12} aria-hidden /> Directions
+              </a>
+            )}
           </div>
           {place.host_notes && <p style={{ fontSize: '.82rem', margin: '.35rem 0 0' }}>{place.host_notes}</p>}
         </div>

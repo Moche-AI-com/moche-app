@@ -147,3 +147,6 @@ test-results/
 playwright-report/
 next-env.d.ts
 .vercel
+
+# Local ops notes containing account identifiers — never commit
+TWILIO-A2P-RESUBMISSION.md

@@ -1,11 +1,12 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchNearbyPlaces } from '@/lib/local/osm';
+import { geoNearbyPlaces } from '@/lib/local/geo';
 import { log } from '@/lib/log';
 
-// Refresh cadence: a property's nearby set is re-fetched from Overpass at most
-// once every 30 days unless a host forces it. OSM is slow-moving and we must be
-// a good citizen (never call live per guest).
+// Refresh cadence: a property's nearby set is re-fetched from the geo provider
+// (Mapbox when a key is present, Overpass otherwise) at most once every 30 days
+// unless a host forces it. Place data is slow-moving, and caching in our own
+// table means guest traffic never fans out to a third-party API.
 export const NEARBY_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
 const NEARBY_RADIUS_M = 2000;
 const PER_CATEGORY_LIMIT = 15;
@@ -29,7 +30,7 @@ export async function refreshNearbyPlaces(
     return { ok: false, found: 0, skipped: 'no_coords' };
   }
 
-  const places = await fetchNearbyPlaces({
+  const { places, provider } = await geoNearbyPlaces({
     lat: coords.lat,
     lng: coords.lng,
     radiusMeters: NEARBY_RADIUS_M,
@@ -55,6 +56,10 @@ export async function refreshNearbyPlaces(
     lat: p.lat,
     lng: p.lng,
     distance_m: p.distanceMeters,
+    address: p.address ?? null,
+    url: p.url ?? null,
+    phone: p.phone ?? null,
+    source: provider,
     refreshed_at: now,
   }));
 
@@ -66,6 +71,7 @@ export async function refreshNearbyPlaces(
     return { ok: false, found: 0, error: error.message };
   }
 
+  log.info('nearby_refreshed', { provider, found: rows.length });
   return { ok: true, found: rows.length };
 }
 

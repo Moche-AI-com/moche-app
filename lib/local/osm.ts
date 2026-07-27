@@ -38,9 +38,10 @@ export interface LocalPoi {
   address: string | null;
   distanceMeters: number | null;
   // Provenance so the host review UI can label the source.
-  aiSource: 'osm_overpass';
-  // Optional website/phone when OSM tags carry them.
+  aiSource: 'osm_overpass' | 'mapbox';
+  // Optional website/phone when the provider carries them.
   url: string | null;
+  phone: string | null;
 }
 
 export interface GeocodeResult {
@@ -200,6 +201,7 @@ export async function fetchNearbyPois(opts: {
       distanceMeters: haversineMeters(opts.lat, opts.lng, lat, lng),
       aiSource: 'osm_overpass',
       url: tags.website ?? tags['contact:website'] ?? null,
+      phone: tags.phone ?? tags['contact:phone'] ?? null,
     };
     const list = byCat.get(cat) ?? [];
     list.push(poi);
@@ -337,12 +339,17 @@ export const NEARBY_CATEGORIES: NearbyCategory[] = [
 ];
 
 export interface NearbyPlace {
-  placeId: string; // OSM element id, e.g. "node/12345"
+  // Provider-scoped id: "node/12345" (OSM) or "mapbox/<mapbox_id>".
+  placeId: string;
   category: NearbyCategory;
   name: string;
   lat: number;
   lng: number;
   distanceMeters: number;
+  // Present when the provider supplies them (Mapbox does; Overpass sometimes).
+  address?: string | null;
+  url?: string | null;
+  phone?: string | null;
 }
 
 // key=value tag filters per category (any match => that category).
@@ -443,6 +450,9 @@ export async function fetchNearbyPlaces(opts: {
       lat,
       lng,
       distanceMeters: haversineMeters(opts.lat, opts.lng, lat, lng),
+      address: tagAddress(tags),
+      url: tags.website ?? tags['contact:website'] ?? null,
+      phone: tags.phone ?? tags['contact:phone'] ?? null,
     });
     byCat.set(cat, list);
   }

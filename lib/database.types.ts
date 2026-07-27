@@ -1514,6 +1514,7 @@ export type Database = {
       }
       nearby_places: {
         Row: {
+          address: string | null
           category: string
           created_at: string
           distance_m: number | null
@@ -1528,11 +1529,15 @@ export type Database = {
           place_id: string | null
           price_level: number | null
           property_id: string
+          phone: string | null
           rating: number | null
           refreshed_at: string
           review_count: number | null
+          source: string | null
+          url: string | null
         }
         Insert: {
+          address?: string | null
           category: string
           created_at?: string
           distance_m?: number | null
@@ -1547,11 +1552,15 @@ export type Database = {
           place_id?: string | null
           price_level?: number | null
           property_id: string
+          phone?: string | null
           rating?: number | null
           refreshed_at?: string
           review_count?: number | null
+          source?: string | null
+          url?: string | null
         }
         Update: {
+          address?: string | null
           category?: string
           created_at?: string
           distance_m?: number | null
@@ -1566,9 +1575,12 @@ export type Database = {
           place_id?: string | null
           price_level?: number | null
           property_id?: string
+          phone?: string | null
           rating?: number | null
           refreshed_at?: string
           review_count?: number | null
+          source?: string | null
+          url?: string | null
         }
         Relationships: [
           {
