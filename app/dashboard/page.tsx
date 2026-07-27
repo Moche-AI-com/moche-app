@@ -80,15 +80,21 @@ export default async function DashboardHome() {
   return (
     <div className="dash-overview">
       <div className="dash-topbar">
-        <Link href="/dashboard/properties/new" className="btn btn-primary dash-newbtn">
-          <Plus size={16} aria-hidden /> New property
+        <Link href="/dashboard/properties/new" className="btn dash-newbtn">
+          <span className="dash-newbtn-icon" aria-hidden>
+            <Plus size={14} aria-hidden />
+          </span>
+          New property
         </Link>
       </div>
 
       <ValueHero hostName={hostName} metrics={metrics} />
 
       {!ent.active && (
-        <div className="alert alert-info" style={{ marginTop: '1.25rem' }}>
+        // No marginTop: .dash-overview already supplies --gap-section between
+        // its children, and stacking a margin on top of that is what made the
+        // vertical rhythm jump.
+        <div className="alert alert-info">
           You&apos;re on the free build tier ({ent.propertyLimit} property).{' '}
           <Link href="/dashboard/billing" className="gradient-text" style={{ fontWeight: 600 }}>
             Choose a plan
@@ -118,7 +124,7 @@ export default async function DashboardHome() {
           </div>
 
           {(properties?.length ?? 0) === 0 ? (
-            <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+            <div className="card" style={{ padding: '2.25rem var(--pad-card)', textAlign: 'center' }}>
               <p className="muted" style={{ marginBottom: '1rem' }}>
                 No properties yet. Create your first Property Brain to get started.
               </p>
@@ -158,7 +164,7 @@ export default async function DashboardHome() {
           )}
         </div>
 
-        <div className="dash-col-side" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="dash-col-side" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-section)' }}>
           <ActivityFeedCard events={feed} />
           <GuestFeedbackPanel feedback={feedback} />
         </div>

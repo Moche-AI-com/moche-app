@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity,
@@ -9,6 +10,7 @@ import {
   BedDouble,
   BrainCircuit,
   CheckCircle2,
+  ConciergeBell,
   Gauge,
   MessageCircle,
   PieChart,
@@ -20,6 +22,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ActivityTrend, TopicRow, FeedEvent, FeedKind } from '@/lib/dashboard/insights';
+import { summarizeTrend } from '@/lib/dashboard/trend-summary';
 
 function fmt(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
@@ -120,9 +123,26 @@ export function AttentionStrip({
 // Bars (not a smoothed area) because daily counts are discrete and mostly
 // small — interpolating between them would invent activity that never happened.
 
+const RANGES = [7, 14] as const;
+type Range = (typeof RANGES)[number];
+
 export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
-  const { days, peakQuestions, totalQuestions, totalAnswers, deltaPct, busiestDay } = trend;
+  // The server always loads the full 14-day window, so switching range is a
+  // local slice — instant, no refetch, no loading state to design around.
+  const [range, setRange] = useState<Range>(14);
+
+  const days = useMemo(() => trend.days.slice(-range), [trend.days, range]);
+  // Re-derive the headline numbers for the visible window, using the same
+  // helper the server uses, so the stats always agree with the bars.
+  const { peakQuestions, totalQuestions, totalAnswers, totalEscalations, deltaPct, busiestDay } = useMemo(
+    () => summarizeTrend(days),
+    [days],
+  );
   const hasData = totalQuestions > 0 || totalAnswers > 0;
+  // Keep the empty state keyed to the whole window, not the slice: a host with
+  // activity 10 days ago should see "nothing in the last 7 days", not the
+  // first-run onboarding copy that tells them to go share a link.
+  const hasDataInWindow = trend.totalQuestions > 0 || trend.totalAnswers > 0;
 
   // Chart geometry in viewBox units. preserveAspectRatio="none" lets it stretch
   // to any container width; non-scaling strokes keep hairlines crisp.
@@ -141,21 +161,37 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
           </h2>
           <p className="dash-section-sub">Guest questions handled over the last {days.length} days.</p>
         </div>
-        {deltaPct != null ? (
-          <span className={`dash-delta ${deltaPct >= 0 ? 'dash-delta-up' : 'dash-delta-down'}`} data-testid="trend-delta">
-            {deltaPct >= 0 ? <TrendingUp size={13} aria-hidden /> : <TrendingDown size={13} aria-hidden />}
-            {deltaPct >= 0 ? '+' : ''}
-            {deltaPct}%
-          </span>
-        ) : (
-          hasData && (
-            // No prior half-window to compare against, so a percentage would be
-            // meaningless. Say "new activity" rather than showing a fake +100%.
-            <span className="dash-delta dash-delta-up" data-testid="trend-delta-new">
-              <Sparkles size={13} aria-hidden /> New activity
+        <div className="dash-panel-head-aside">
+          <div className="dash-range" role="group" aria-label="Activity date range" data-testid="trend-range">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={`dash-range-btn${r === range ? ' dash-range-btn-active' : ''}`}
+                aria-pressed={r === range}
+                onClick={() => setRange(r)}
+                data-testid={`trend-range-${r}`}
+              >
+                {r}d
+              </button>
+            ))}
+          </div>
+          {deltaPct != null ? (
+            <span className={`dash-delta ${deltaPct >= 0 ? 'dash-delta-up' : 'dash-delta-down'}`} data-testid="trend-delta">
+              {deltaPct >= 0 ? <TrendingUp size={13} aria-hidden /> : <TrendingDown size={13} aria-hidden />}
+              {deltaPct >= 0 ? '+' : ''}
+              {deltaPct}%
             </span>
-          )
-        )}
+          ) : (
+            hasData && (
+              // No prior half-window to compare against, so a percentage would be
+              // meaningless. Say "new activity" rather than showing a fake +100%.
+              <span className="dash-delta dash-delta-up" data-testid="trend-delta-new">
+                <ConciergeBell size={13} aria-hidden /> New activity
+              </span>
+            )
+          )}
+        </div>
       </div>
 
       {hasData ? (
@@ -216,7 +252,7 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
             </div>
           </div>
 
-          {trend.totalEscalations > 0 && (
+          {totalEscalations > 0 && (
             <p className="dash-chart-legend">
               <span className="dash-legend-dot" aria-hidden /> Coral dots mark days a question was escalated to you.
             </p>
@@ -227,9 +263,13 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
           <span className="dash-panel-empty-icon" aria-hidden>
             <Activity size={20} aria-hidden />
           </span>
-          <p className="dash-panel-empty-title">No guest activity yet</p>
+          <p className="dash-panel-empty-title">
+            {hasDataInWindow ? `Nothing in the last ${range} days` : 'No guest activity yet'}
+          </p>
           <p className="dash-panel-empty-sub">
-            Share a property link with a guest and this chart fills in as your concierge starts fielding questions.
+            {hasDataInWindow
+              ? 'Your concierge was quiet this stretch. Switch to 14 days to see earlier activity.'
+              : 'Share a property link with a guest and this chart fills in as your concierge starts fielding questions.'}
           </p>
         </div>
       )}

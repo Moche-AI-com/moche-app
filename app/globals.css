@@ -16,6 +16,16 @@
   --ease-out: cubic-bezier(.16,1,.3,1);
   --tr: 200ms var(--ease-out);
   --wrap: 1200px;
+  /* One spacing scale for the dashboard shell. Every card uses the same interior
+     padding so stacked cards share a left edge, and every gap between major
+     sections is identical — the difference between "clean" and "drifted" is
+     usually just that these two numbers were picked ad hoc per component. */
+  --pad-card: 1.5rem;
+  --gap-section: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  :root { --pad-card: 1.15rem; --gap-section: 1.15rem; }
 }
 
 [data-theme='dark'], :root {
@@ -124,7 +134,7 @@
   /* Stat card: gradient accent rail on top edge, icon chip, hover sheen. */
   .stat-card {
     position: relative; overflow: hidden;
-    padding: 1.25rem;
+    padding: var(--pad-card);
   }
   .stat-card::before {
     content: '';
@@ -328,9 +338,40 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 /* ============================================================
    Home dashboard overview — premium value surface
    ============================================================ */
-.dash-overview { display: flex; flex-direction: column; gap: 1.75rem; }
+.dash-overview { display: flex; flex-direction: column; gap: var(--gap-section); }
 .dash-topbar { display: flex; justify-content: flex-end; }
-.dash-newbtn { display: inline-flex; align-items: center; gap: .4rem; }
+/* Primary "New property" action.
+   Deliberately not a pill: fully-rounded buttons read as marketing CTAs, and
+   inside the app this should feel like product chrome. The radius is stepped
+   just inside the card radius (--radius-md vs --radius-lg) so it sits in the
+   same family as the surfaces around it. Brand gradient + a recessed icon chip
+   carry the emphasis instead of the shape. */
+.dash-newbtn {
+  display: inline-flex; align-items: center; gap: .55rem;
+  padding: .5rem .95rem .5rem .55rem;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-size: .88rem; font-weight: 600; letter-spacing: .005em;
+  color: #04121a;
+  /* Teal family only, not the full brand gradient: --grad ends on iris, and the
+     dark button text over that end measures ~3.5:1 in light theme (fails AA).
+     teal -> teal-deep keeps the depth and stays >=4.5:1 in both themes. */
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-deep) 100%);
+  box-shadow: 0 1px 2px rgba(4,18,26,.18), 0 10px 26px -14px var(--glow-teal);
+  transition: transform var(--tr), box-shadow var(--tr), filter var(--tr);
+}
+.dash-newbtn:hover {
+  transform: translateY(-1px);
+  /* filter, not a background swap: gradients don't interpolate smoothly. */
+  filter: brightness(1.05);
+  box-shadow: 0 2px 5px rgba(4,18,26,.2), 0 16px 34px -14px var(--glow-teal);
+}
+.dash-newbtn:active { transform: translateY(0); }
+.dash-newbtn-icon {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 7px;
+  background: rgba(4,18,26,.14);
+}
 
 /* Hero value banner */
 .dash-hero {
@@ -375,7 +416,7 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   display: grid; gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
-.dash-metric { padding: 1.15rem 1.25rem; }
+.dash-metric { padding: var(--pad-card); }
 .dash-metric-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .8rem; }
 .dash-metric-label {
   font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
@@ -391,7 +432,7 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 .dash-metric-hint { font-size: .76rem; color: var(--text-faint); margin-top: .5rem; }
 
 /* Two-column layout: properties + feedback rail */
-.dash-two-col { display: grid; gap: 1.5rem; grid-template-columns: 1fr; align-items: start; }
+.dash-two-col { display: grid; gap: var(--gap-section); grid-template-columns: 1fr; align-items: start; }
 @media (min-width: 1024px) { .dash-two-col { grid-template-columns: 1.55fr 1fr; } }
 .dash-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 1rem; }
 .dash-section-title {
@@ -405,11 +446,11 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   font-size: .82rem; font-weight: 600; color: var(--teal);
 }
 .dash-props-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.dash-prop-card { padding: 1.25rem; display: block; }
+.dash-prop-card { padding: var(--pad-card); display: block; }
 
 /* Guest AI feedback panel */
-.dash-fb-panel { padding: 1.4rem; }
-.dash-fb-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.1rem; }
+.dash-fb-panel { padding: var(--pad-card); }
+.dash-fb-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .dash-fb-score { text-align: right; flex-shrink: 0; }
 .dash-fb-score-num { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; line-height: 1; color: var(--teal); }
 .dash-fb-score-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-top: .25rem; line-height: 1.5; }
@@ -424,7 +465,7 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 .dash-fb-time { font-size: .72rem; color: var(--text-faint); margin-left: auto; }
 .dash-fb-comment { margin: 0; font-size: .9rem; line-height: 1.45; color: var(--text); }
 .dash-fb-comment-muted { color: var(--text-muted); font-style: italic; }
-.dash-fb-empty { text-align: center; padding: 2rem 1rem; }
+.dash-fb-empty { text-align: center; padding: 1.25rem .5rem; }
 .dash-fb-empty-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 48px; height: 48px; border-radius: 14px; margin-bottom: .85rem;
@@ -441,7 +482,9 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 /* Attention strip — actionable work above the fold */
 .dash-attn {
   display: flex; align-items: flex-start; gap: .85rem;
-  padding: 1rem 1.15rem;
+  /* Horizontal padding matches --pad-card so this strip's content lines up with
+     the cards stacked above and below it. */
+  padding: 1.15rem var(--pad-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-strong);
   background:
@@ -482,10 +525,36 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 }
 
 /* Shared panel shell for the insight cards */
-.dash-panel { padding: 1.4rem; }
+.dash-panel { padding: var(--pad-card); }
 .dash-panel-head {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 1rem; margin-bottom: 1.1rem;
+  gap: 1rem; margin-bottom: 1rem;
+}
+.dash-panel-head-aside {
+  display: flex; align-items: center; gap: .5rem; flex-shrink: 0;
+}
+
+/* Segmented range control (7d / 14d). Inset track + raised active segment,
+   so the selected state reads as physically on top rather than just tinted. */
+.dash-range {
+  display: inline-flex; padding: 2px; gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.dash-range-btn {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-body); font-size: .76rem; font-weight: 600;
+  padding: .26rem .55rem;
+  border-radius: calc(var(--radius-sm) - 3px);
+  color: var(--text-faint);
+  transition: color var(--tr), background var(--tr), box-shadow var(--tr);
+}
+.dash-range-btn:hover { color: var(--text); }
+.dash-range-btn-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,.22);
 }
 .dash-panel-link {
   display: inline-flex; align-items: center; gap: .3rem;
@@ -493,7 +562,9 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   transition: gap var(--tr);
 }
 .dash-panel-link:hover { gap: .5rem; }
-.dash-panel-empty { text-align: center; padding: 1.75rem 1rem; }
+/* The panel already supplies --pad-card; this only adds the extra breathing
+   room an empty state wants, rather than stacking a second full padding. */
+.dash-panel-empty { text-align: center; padding: 1.25rem .5rem; }
 .dash-panel-empty-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 44px; height: 44px; border-radius: 13px; margin-bottom: .8rem;
@@ -612,10 +683,11 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
 }
 
 /* Insights row: chart gets the space, topics ride alongside */
-.dash-insights-row { display: grid; gap: 1.5rem; grid-template-columns: 1fr; align-items: start; }
+.dash-insights-row { display: grid; gap: var(--gap-section); grid-template-columns: 1fr; align-items: start; }
 @media (min-width: 900px) { .dash-insights-row { grid-template-columns: 1.6fr 1fr; } }
 
 @media (prefers-reduced-motion: reduce) {
+  .dash-newbtn:hover, .dash-newbtn:active { transform: none; }
   .dash-attn-chip-link:hover,
   a.dash-feed-link:hover { transform: none; }
   .dash-topic-fill { transition: none; }

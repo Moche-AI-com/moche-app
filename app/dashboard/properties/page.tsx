@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
@@ -29,7 +30,14 @@ export default async function PropertiesPage() {
           <p className="muted" style={{ fontSize: '.9rem' }}>{gate.used} of {ent.propertyLimit} used on your plan.</p>
         </div>
         {gate.ok ? (
-          <Link href="/dashboard/properties/new" className="btn btn-primary">+ New property</Link>
+          // Same treatment as the home dashboard action, so the primary
+          // "add a property" affordance looks identical wherever it appears.
+          <Link href="/dashboard/properties/new" className="btn dash-newbtn">
+            <span className="dash-newbtn-icon" aria-hidden>
+              <Plus size={14} aria-hidden />
+            </span>
+            New property
+          </Link>
         ) : (
           <Link href="/dashboard/billing" className="btn btn-coral">Upgrade to add more</Link>
         )}

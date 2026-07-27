@@ -4,6 +4,9 @@ import type { Database } from '@/lib/database.types';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { hasServiceRole } from '@/lib/env';
 import { log } from '@/lib/log';
+import { summarizeTrend, type TrendDay, type TrendSummary } from '@/lib/dashboard/trend-summary';
+
+export type { TrendDay };
 
 type Client = SupabaseClient<Database>;
 
@@ -13,23 +16,8 @@ type Client = SupabaseClient<Database>;
 // dense series (one entry per day, zero-filled) so the chart never has gaps.
 // ---------------------------------------------------------------------------
 
-export interface TrendDay {
-  date: string; // ISO yyyy-mm-dd (UTC day bucket)
-  label: string; // short display label, e.g. "Jul 14"
-  questions: number; // guest turns that day
-  answers: number; // assistant turns that day
-  escalations: number; // escalations opened that day
-}
-
-export interface ActivityTrend {
+export interface ActivityTrend extends TrendSummary {
   days: TrendDay[];
-  totalQuestions: number;
-  totalAnswers: number;
-  totalEscalations: number;
-  peakQuestions: number; // max questions in a single day (chart y-scale)
-  /** % change in questions, current half of window vs. previous half. null when no prior baseline. */
-  deltaPct: number | null;
-  busiestDay: TrendDay | null;
 }
 
 function dayKey(iso: string): string {
@@ -98,20 +86,7 @@ export async function loadActivityTrend(supabase: Client, propertyIds: string[],
       if (bucket) bucket.escalations += 1;
     }
 
-    trend.totalQuestions = trend.days.reduce((a, d) => a + d.questions, 0);
-    trend.totalAnswers = trend.days.reduce((a, d) => a + d.answers, 0);
-    trend.totalEscalations = trend.days.reduce((a, d) => a + d.escalations, 0);
-    trend.peakQuestions = trend.days.reduce((a, d) => Math.max(a, d.questions), 0);
-
-    // Momentum: second half of the window vs. the first half.
-    const mid = Math.floor(days / 2);
-    const prev = trend.days.slice(0, mid).reduce((a, d) => a + d.questions, 0);
-    const curr = trend.days.slice(mid).reduce((a, d) => a + d.questions, 0);
-    if (prev > 0) trend.deltaPct = Math.round(((curr - prev) / prev) * 100);
-    else if (curr > 0) trend.deltaPct = null; // brand-new activity, no honest baseline
-
-    const busiest = trend.days.reduce<TrendDay | null>((best, d) => (d.questions > (best?.questions ?? 0) ? d : best), null);
-    trend.busiestDay = busiest;
+    Object.assign(trend, summarizeTrend(trend.days));
   } catch (e) {
     log.warn('dashboard_activity_trend_failed', { error: String(e) });
   }
