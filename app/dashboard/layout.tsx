@@ -24,12 +24,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const supabase = createClient();
-  const [{ count }, outstanding] = await Promise.all([
+  const [{ count }, { data: recentNotifications }, outstanding] = await Promise.all([
     supabase
       .from('notifications')
       .select('id', { count: 'exact', head: true })
       .eq('host_account_id', ctx.account.id)
       .is('read_at', null),
+    // Feeds the notification bell dropdown — most recent items across all kinds,
+    // read or not, so a host can see what they already cleared too.
+    supabase
+      .from('notifications')
+      .select('id, kind, title, body, link, read_at, created_at')
+      .eq('host_account_id', ctx.account.id)
+      .order('created_at', { ascending: false })
+      .limit(8),
     // Re-acceptance gate: which clickwrap docs has this host not accepted at the
     // current version? Resilient to a missing table (returns [] pre-migration).
     outstandingReacceptances(supabase, ctx.user.id),
@@ -39,7 +47,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       <PostHogIdentify userId={ctx.user.id} email={ctx.profile.email} />
       {outstanding.length > 0 ? <ReacceptanceGate slugs={outstanding} /> : null}
-      <DashboardNav unread={count ?? 0} />
+      <DashboardNav unread={count ?? 0} notifications={recentNotifications ?? []} />
       <main className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>{children}</main>
       <FeedbackControl />
     </div>

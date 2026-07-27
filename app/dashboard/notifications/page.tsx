@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import { CheckCheck } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { markAllNotificationsReadFormAction } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,12 +33,22 @@ export default async function NotificationsPage() {
     .limit(100);
 
   const list = items ?? [];
+  const unreadCount = list.filter((n) => !n.read_at).length;
 
   return (
     <div>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.8rem' }}>Notifications</h1>
-        <p className="muted" style={{ fontSize: '.9rem' }}>Escalations, service requests, and account activity.</p>
+      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: '1.8rem' }}>Notifications</h1>
+          <p className="muted" style={{ fontSize: '.9rem' }}>Escalations, service requests, and account activity.</p>
+        </div>
+        {unreadCount > 0 && (
+          <form action={markAllNotificationsReadFormAction}>
+            <button type="submit" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}>
+              <CheckCheck size={15} aria-hidden /> Mark all as read ({unreadCount})
+            </button>
+          </form>
+        )}
       </div>
 
       {list.length === 0 ? (
