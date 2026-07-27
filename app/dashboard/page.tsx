@@ -60,6 +60,13 @@ export default async function DashboardHome() {
 
   const hostName = (ctx.profile.full_name ?? '').split(' ')[0] ?? '';
 
+  // Stays and Brain are per-property pages — with exactly one property we can
+  // deep-link straight into it; with zero or multiple, send hosts to the
+  // property picker instead of guessing which one they mean.
+  const singlePropertyId = propertyIds.length === 1 ? propertyIds[0] : null;
+  const activeStaysHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/stays` : '/dashboard/properties';
+  const knowledgeItemsHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/brain` : '/dashboard/properties';
+
   return (
     <div className="dash-overview">
       <div className="dash-topbar">
@@ -80,7 +87,7 @@ export default async function DashboardHome() {
         </div>
       )}
 
-      <ValueMetricsGrid metrics={metrics} />
+      <ValueMetricsGrid metrics={metrics} activeStaysHref={activeStaysHref} knowledgeItemsHref={knowledgeItemsHref} />
 
       <div className="dash-two-col">
         <div className="dash-col-main">

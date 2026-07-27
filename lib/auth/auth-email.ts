@@ -151,19 +151,31 @@ export async function createUserAndSendConfirmation(
     },
   });
 
-  if (error || !data?.properties?.action_link || !data.user) {
+  if (error || !data?.properties?.hashed_token || !data.user) {
     const reason = error?.message ?? 'link_generation_failed';
     // "User already registered" is an expected, non-alarming case.
     log.warn('signup_link_generation_failed', { reason });
     return { ok: false, reason };
   }
 
+  // Build a link that points straight at our own server-side callback with the
+  // token-hash query params. We deliberately do NOT use `action_link` (the raw
+  // Supabase /auth/v1/verify URL): that endpoint runs the implicit flow and
+  // returns the session in the URL *hash fragment*, which a server route handler
+  // can never read — so the session was never set and users bounced to
+  // /login?error=auth_callback. Our callback's verifyOtp({token_hash,type})
+  // branch consumes these query params server-side and sets the auth cookie.
+  const confirmUrl =
+    `${publicEnv.appUrl}/auth/callback` +
+    `?token_hash=${encodeURIComponent(data.properties.hashed_token)}` +
+    `&type=signup`;
+
   const { html, text } = renderAuthEmail({
     preheader: 'Confirm your email to activate your Moche.AI host account.',
     heading: 'Confirm your email',
     intro: 'Welcome to Moche.AI. Confirm your email address to activate your host account and start building your Property Brain.',
     buttonLabel: 'Confirm my email',
-    url: data.properties.action_link,
+    url: confirmUrl,
     outro: 'This link expires in 24 hours. If you did not create a Moche.AI account, you can safely ignore this email.',
   });
 
@@ -178,7 +190,8 @@ export async function sendPasswordReset(
   admin: AdminClient,
   params: { email: string; next?: string },
 ): Promise<void> {
-  const redirectTo = `${publicEnv.appUrl}/auth/callback?next=${encodeURIComponent(params.next ?? '/reset/update')}`;
+  const next = params.next ?? '/reset/update';
+  const redirectTo = `${publicEnv.appUrl}/auth/callback?next=${encodeURIComponent(next)}`;
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'recovery',
     email: params.email,
@@ -187,17 +200,27 @@ export async function sendPasswordReset(
 
   // Non-existent email → Supabase returns an error; swallow it to avoid
   // account enumeration. Nothing is sent, but the caller's response is identical.
-  if (error || !data?.properties?.action_link) {
+  if (error || !data?.properties?.hashed_token) {
     log.info('password_reset_no_send', { reason: error?.message ?? 'no_link' });
     return;
   }
+
+  // Same rationale as signup: point at our server-side callback with token-hash
+  // query params (verifyOtp), not the implicit-flow action_link. Carry `next` so
+  // the callback lands the user on the password-update screen after the session
+  // cookie is set.
+  const confirmUrl =
+    `${publicEnv.appUrl}/auth/callback` +
+    `?token_hash=${encodeURIComponent(data.properties.hashed_token)}` +
+    `&type=recovery` +
+    `&next=${encodeURIComponent(next)}`;
 
   const { html, text } = renderAuthEmail({
     preheader: 'Reset your Moche.AI password.',
     heading: 'Reset your password',
     intro: 'We received a request to reset the password for your Moche.AI host account. Click below to choose a new password.',
     buttonLabel: 'Reset my password',
-    url: data.properties.action_link,
+    url: confirmUrl,
     outro: 'This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email — your password will not change.',
   });
 

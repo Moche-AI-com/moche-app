@@ -131,7 +131,15 @@ function MetricTile({ m }: { m: Metric }) {
   );
 }
 
-export function ValueMetricsGrid({ metrics }: { metrics: ValueMetrics }) {
+export function ValueMetricsGrid({
+  metrics,
+  activeStaysHref,
+  knowledgeItemsHref,
+}: {
+  metrics: ValueMetrics;
+  activeStaysHref?: string;
+  knowledgeItemsHref?: string;
+}) {
   const tiles: Metric[] = [
     {
       label: 'Questions answered',
@@ -165,12 +173,14 @@ export function ValueMetricsGrid({ metrics }: { metrics: ValueMetrics }) {
       label: 'Active stays',
       value: fmt(metrics.activeStays),
       icon: BedDouble,
+      href: activeStaysHref,
       hint: metrics.activeStays === 0 ? 'No guests in-house' : 'Guests in-house now',
     },
     {
       label: 'Knowledge items',
       value: fmt(metrics.knowledgeItems),
       icon: BrainCircuit,
+      href: knowledgeItemsHref,
       hint: 'Powering your concierge',
     },
     {

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/Logo';
 import { logoutAction } from '@/app/(auth)/actions';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Bell } from 'lucide-react';
+import { NotificationBell, type NotificationItem } from '@/components/dashboard/NotificationBell';
 
 const LINKS = [
   { href: '/dashboard', label: 'Overview' },
@@ -16,7 +16,7 @@ const LINKS = [
   { href: '/dashboard/profile', label: 'Profile' },
 ];
 
-export function DashboardNav({ unread }: { unread: number }) {
+export function DashboardNav({ unread, notifications }: { unread: number; notifications: NotificationItem[] }) {
   const pathname = usePathname();
   return (
     <header style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 50 }}>
@@ -24,9 +24,7 @@ export function DashboardNav({ unread }: { unread: number }) {
         <div className="dash-nav-brandrow" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Logo href="/dashboard" size={32} />
           <div className="dash-nav-controls-mobile" style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
-            <Link href="/dashboard/notifications" className="badge" title="Notifications" style={{ display: 'inline-flex', alignItems: 'center', gap: '.35rem' }}>
-              <Bell size={14} aria-hidden /> {unread > 0 ? <strong style={{ color: 'var(--coral)' }}>{unread}</strong> : '0'}
-            </Link>
+            <NotificationBell unread={unread} items={notifications} />
             <ThemeToggle />
             <form action={logoutAction}>
               <button className="btn btn-ghost btn-sm" type="submit">Sign out</button>
@@ -54,9 +52,7 @@ export function DashboardNav({ unread }: { unread: number }) {
           })}
         </nav>
         <div className="dash-nav-controls-desktop" style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
-          <Link href="/dashboard/notifications" className="badge" title="Notifications" style={{ display: 'inline-flex', alignItems: 'center', gap: '.35rem' }}>
-            <Bell size={14} aria-hidden /> {unread > 0 ? <strong style={{ color: 'var(--coral)' }}>{unread}</strong> : '0'}
-          </Link>
+          <NotificationBell unread={unread} items={notifications} />
           <ThemeToggle />
           <form action={logoutAction}>
             <button className="btn btn-ghost btn-sm" type="submit">Sign out</button>
