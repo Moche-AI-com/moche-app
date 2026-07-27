@@ -64,6 +64,27 @@ export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string
   }
 }
 
+// Secondary models per task, tried by OpenRouter itself (via the `models` array) if the
+// primary tier is unavailable, rate-limited, or errors. This is the FIRST resilience
+// layer and is much faster than falling all the way back to our in-house provider.
+// Every slug here has been verified to resolve under ZDR_PROVIDER_RESTRICTION.
+// Order matters: cheapest capable model first. The in-house provider remains the final
+// backstop if the whole OpenRouter request fails (see routedCompletion).
+const TASK_FALLBACKS: Record<TaskType, readonly string[]> = {
+  extraction: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'],
+  classification: ['openai/gpt-4o-mini'],
+  concierge: ['openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
+  general: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
+};
+
+// Full ordered model chain for a task: the configured primary tier followed by its
+// verified fallbacks, de-duplicated so an override that matches a fallback slug does
+// not send the same model twice.
+export function modelChainForTask(task: TaskType, env: RouterEnv = serverEnv): string[] {
+  const primary = modelForTask(task, env);
+  return [primary, ...TASK_FALLBACKS[task].filter((m) => m !== primary)];
+}
+
 // Whether a given task is eligible to leave our infra for OpenRouter.
 //   - No API key  → never (behaves exactly like today: in-house OpenAI provider).
 //   - concierge   → only when explicitly enabled; guest-facing answers stay in-house
@@ -112,7 +133,8 @@ async function openrouterGenerate(
   task: TaskType,
 ): Promise<GenerateResult> {
   const url = `${serverEnv.openrouterBaseUrl.replace(/\/$/, '')}/chat/completions`;
-  const model = modelForTask(task, serverEnv);
+  const chain = modelChainForTask(task, serverEnv);
+  const model = chain[0];
   // Redact BEFORE anything leaves our infra, then run a post-redaction sanity
   // check. If PII survived redaction, refuse the external route entirely rather
   // than risk sending it — the caller falls back to the in-house provider.
@@ -129,7 +151,11 @@ async function openrouterGenerate(
       'X-OpenRouter-ZDR': 'true',
     },
     body: JSON.stringify({
+      // `models` (ordered) asks OpenRouter to try the next slug in the chain if the
+      // primary is down/rate-limited, giving in-router failover before we fall all the
+      // way back to the in-house provider. `model` is kept for older-client parity.
       model,
+      models: chain,
       messages: redacted,
       temperature: opts?.temperature ?? 0.3,
       max_tokens: opts?.maxTokens ?? 600,

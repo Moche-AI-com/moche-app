@@ -208,8 +208,8 @@ describe('routedCompletion', () => {
     expect(res.model).toBe('dev-fallback-chat');
   });
 
-  it('with key + concierge enabled: routes to the haiku tier', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse('anthropic/claude-haiku-4.5'));
+  it('with key + concierge enabled: routes to the concierge tier', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse('google/gemini-2.5-flash'));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
@@ -217,7 +217,40 @@ describe('routedCompletion', () => {
     });
 
     await routedCompletion(MESSAGES, undefined, { task: 'concierge' });
-    expect(lastBody(fetchMock).model).toBe('anthropic/claude-haiku-4.5');
+    expect(lastBody(fetchMock).model).toBe('google/gemini-2.5-flash');
+  });
+
+  it('sends an ordered models[] chain so OpenRouter can fail over in-router', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_CONCIERGE_ENABLED: 'true',
+    });
+
+    await routedCompletion(MESSAGES, undefined, { task: 'concierge' });
+    const body = lastBody(fetchMock);
+    const models = body.models as string[];
+    expect(Array.isArray(models)).toBe(true);
+    // Primary first, then verified backups; primary must match the single `model` field.
+    expect(models[0]).toBe(body.model);
+    expect(models.length).toBeGreaterThan(1);
+  });
+
+  it('never sends a duplicate slug when an override equals a fallback', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_CONCIERGE_ENABLED: 'true',
+      // Deliberately set the primary to one of the concierge fallbacks.
+      OPENROUTER_MODEL_CONCIERGE: 'openai/gpt-4o-mini',
+    });
+
+    await routedCompletion(MESSAGES, undefined, { task: 'concierge' });
+    const models = lastBody(fetchMock).models as string[];
+    expect(models[0]).toBe('openai/gpt-4o-mini');
+    expect(new Set(models).size).toBe(models.length);
   });
 
   it('honors a per-tier env override', async () => {

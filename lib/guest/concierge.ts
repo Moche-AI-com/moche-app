@@ -2,6 +2,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import { getAIProvider, type ChatMessage } from '@/lib/ai';
+import { routedCompletion } from '@/lib/router/modelRouter';
 import { DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_MASTER_CONCIERGE_PROMPT, DEFAULT_CONCIERGE_NAME } from '@/lib/constants';
 import { log } from '@/lib/log';
 import { logAiUsage } from '@/lib/ai/usage';
@@ -436,10 +437,17 @@ export async function answerGuestQuestion(
   let promptTokens = 0;
   let completionTokens = 0;
   try {
-    const result = await provider.generate(messages, {
-      temperature: typeof opts.aiTemperature === 'number' ? opts.aiTemperature : 0.2,
-      maxTokens: 500,
-    });
+    // Routed through the model router: stays on the in-house provider unless the
+    // guest-facing concierge route has been explicitly opted into OpenRouter (see
+    // shouldRouteExternally in modelRouter.ts) — same messages, same fallback safety.
+    const result = await routedCompletion(
+      messages,
+      {
+        temperature: typeof opts.aiTemperature === 'number' ? opts.aiTemperature : 0.2,
+        maxTokens: 500,
+      },
+      { task: 'concierge' },
+    );
     text = result.text.trim();
     model = result.model;
     promptTokens = result.usage?.promptTokens ?? 0;

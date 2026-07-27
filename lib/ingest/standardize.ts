@@ -1,5 +1,5 @@
 import 'server-only';
-import { getAIProvider } from '@/lib/ai';
+import { routedCompletion } from '@/lib/router/modelRouter';
 import { log } from '@/lib/log';
 
 // ============================================================================
@@ -55,7 +55,6 @@ export async function standardizeListing(rawText: string, sourceUrl?: string): P
   const trimmed = rawText.trim();
   if (trimmed.length < 40) return { text: trimmed, standardized: false };
 
-  const provider = getAIProvider();
   const input = trimmed.slice(0, MAX_INPUT_CHARS);
 
   const userContent = [
@@ -68,12 +67,13 @@ export async function standardizeListing(rawText: string, sourceUrl?: string): P
     .join('\n');
 
   try {
-    const result = await provider.generate(
+    const result = await routedCompletion(
       [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userContent },
       ],
       { temperature: 0.1, maxTokens: 1200 },
+      { task: 'extraction' },
     );
     const out = (result.text ?? '').trim();
     if (!out || out.length < 20 || /^no usable property information/i.test(out)) {

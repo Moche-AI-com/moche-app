@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Building2 } from 'lucide-react';
 import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -49,10 +50,11 @@ export default async function EscalationDetailPage({ params }: { params: { id: s
         </Link>
       </div>
 
-      <h1 style={{ fontSize: '1.6rem', marginBottom: '.35rem' }}>Answer the guest</h1>
-      <p className="muted" style={{ fontSize: '.9rem', marginBottom: '1.25rem' }}>
-        {access.property.display_name}
-      </p>
+      <h1 style={{ fontSize: '1.6rem', marginBottom: '.5rem' }}>Answer the guest</h1>
+      <span className="badge badge-property" style={{ marginBottom: '1.25rem', display: 'inline-flex' }}>
+        <Building2 size={12} aria-hidden />
+        <span>{access.property.display_name}</span>
+      </span>
 
       <div className="card" style={{ padding: '1.15rem 1.25rem', marginBottom: '1.25rem' }}>
         <span className="faint" style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>

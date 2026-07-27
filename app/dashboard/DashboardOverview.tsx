@@ -16,6 +16,8 @@ import {
   ArrowUpRight,
   ThumbsUp,
   Timer,
+  CalendarClock,
+  Activity,
   type LucideIcon,
 } from 'lucide-react';
 import type { ValueMetrics, GuestFeedbackSummary, GuestAiFeedbackItem } from '@/lib/dashboard/overview';
@@ -36,6 +38,22 @@ function timeAgo(iso: string): string {
   const d = Math.floor(h / 24);
   if (d < 7) return `${d}d ago`;
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// "Today" / "Tomorrow" / "Jul 30" — short, scannable date labels for arrival hints.
+function dayLabel(iso: string): string {
+  const target = new Date(iso);
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOf(target) - startOf(new Date())) / 86400000);
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  return target.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+export interface NextArrival {
+  guestName: string;
+  propertyName: string | null;
+  checkIn: string;
 }
 
 // --- Hero value banner ----------------------------------------------------
@@ -137,10 +155,18 @@ export function ValueMetricsGrid({
   metrics,
   activeStaysHref,
   knowledgeItemsHref,
+  upcomingCheckIns,
+  nextArrival,
+  avgBrainHealthPct,
+  propertiesNeedingAttention,
 }: {
   metrics: ValueMetrics;
   activeStaysHref?: string;
   knowledgeItemsHref?: string;
+  upcomingCheckIns?: number;
+  nextArrival?: NextArrival | null;
+  avgBrainHealthPct?: number | null;
+  propertiesNeedingAttention?: number;
 }) {
   const tiles: Metric[] = [
     {
@@ -202,6 +228,34 @@ export function ValueMetricsGrid({
       attn: metrics.openServiceRequests > 0,
     },
   ];
+
+  if (upcomingCheckIns != null) {
+    tiles.push({
+      label: 'Upcoming check-ins',
+      value: fmt(upcomingCheckIns),
+      icon: CalendarClock,
+      href: activeStaysHref,
+      hint: nextArrival
+        ? `Next: ${nextArrival.guestName}${nextArrival.propertyName ? ` \u00b7 ${nextArrival.propertyName}` : ''} \u2014 ${dayLabel(nextArrival.checkIn)}`
+        : 'None in the next 3 days',
+      tone: 'iris',
+    });
+  }
+
+  if (avgBrainHealthPct != null) {
+    const needsAttention = (propertiesNeedingAttention ?? 0) > 0;
+    tiles.push({
+      label: 'Brain health',
+      value: `${avgBrainHealthPct}%`,
+      icon: Activity,
+      href: knowledgeItemsHref,
+      hint: needsAttention
+        ? `${propertiesNeedingAttention} propert${propertiesNeedingAttention === 1 ? 'y' : 'ies'} need${propertiesNeedingAttention === 1 ? 's' : ''} attention`
+        : 'All properties in good shape',
+      tone: avgBrainHealthPct >= 70 ? 'teal' : needsAttention ? 'coral' : 'iris',
+      attn: needsAttention,
+    });
+  }
 
   return (
     <div className="dash-metrics-grid">

@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useFormState } from 'react-dom';
+import {
+  Home, KeyRound, ScrollText, Cpu, MapPin, Car, Siren, FileText, Link2, HelpCircle, Lock, BookOpen,
+} from 'lucide-react';
 import { saveBrainItemAction, deleteBrainItemAction, type BrainActionState } from './actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
+import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
+import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
 
 type BrainCat = string;
 interface Item {
@@ -15,6 +20,24 @@ interface Item {
   status: string;
   sourceType: string;
 }
+
+// Small, tasteful icon per knowledge category so a grouped list scans at a
+// glance instead of reading as a wall of identical cards. Falls back to
+// BookOpen for any category not in the map (keeps this forward-compatible
+// with new categories added later).
+const CATEGORY_ICON: Record<string, typeof Home> = {
+  core: Home,
+  checkin_checkout: KeyRound,
+  house_rules: ScrollText,
+  appliances: Cpu,
+  local_recommendations: MapPin,
+  transportation: Car,
+  emergency: Siren,
+  documents: FileText,
+  product_urls: Link2,
+  host_qa: HelpCircle,
+  internal_notes: Lock,
+};
 
 export function BrainManager({
   propertyId,
@@ -33,6 +56,7 @@ export function BrainManager({
 }) {
   const [editing, setEditing] = useState<Item | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const { isCollapsed, toggle } = useCollapsedCards();
 
   const open = (item: Item | null) => {
     setEditing(item);
@@ -54,6 +78,21 @@ export function BrainManager({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editItemId]);
+
+  // Group items by category, in the same order as the category dropdown, and
+  // drop empty groups — a host editing one card's worth of knowledge (e.g. via
+  // ?card=safety) shouldn't see ten collapsed empty sections.
+  const groups = useMemo(() => {
+    const byCat = new Map<string, Item[]>();
+    for (const it of items) {
+      const arr = byCat.get(it.category) ?? [];
+      arr.push(it);
+      byCat.set(it.category, arr);
+    }
+    return categories
+      .map(([value, label]) => ({ value, label, items: byCat.get(value) ?? [] }))
+      .filter((g) => g.items.length > 0);
+  }, [items, categories]);
 
   return (
     <div>
@@ -79,34 +118,74 @@ export function BrainManager({
           <p className="muted">No knowledge yet. Add essentials like WiFi, check-in, and house rules to get started.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
-          {items.map((it) => (
-            <div key={it.id} className="card" style={{ padding: '1rem' }} data-testid={`card-brain-${it.id}`}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', alignItems: 'flex-start' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <strong>{it.title}</strong>
-                    {it.visibility === 'internal' && <span className="badge badge-coral">host-only</span>}
-                    {it.status === 'failed' && <span className="badge badge-coral">index failed</span>}
-                    {it.status === 'processing' && <span className="badge">processing…</span>}
-                    {it.sourceType === 'url' && <span className="badge">URL</span>}
-                    {it.sourceType === 'document' && <span className="badge">doc</span>}
+        <div className="brain-groups">
+          {groups.map((group) => {
+            const Icon = CATEGORY_ICON[group.value] ?? BookOpen;
+            const panelId = `brain-group-${group.value}`;
+            const collapsed = isCollapsed(`brain-${propertyId}-${group.value}`);
+            return (
+              <section className="card brain-group" key={group.value}>
+                <div className="brain-group-head">
+                  <div className="brain-group-heading">
+                    <Icon size={16} aria-hidden style={{ color: 'var(--iris)' }} />
+                    <h3>{group.label.split('(')[0].trim()}</h3>
+                    <span className="badge">{group.items.length}</span>
                   </div>
-                  {it.body && <p className="muted" style={{ fontSize: '.83rem', marginTop: '.35rem', whiteSpace: 'pre-wrap' }}>{truncate(it.body, 220)}</p>}
+                  <CollapseToggle
+                    collapsed={collapsed}
+                    onToggle={() => toggle(`brain-${propertyId}-${group.value}`)}
+                    panelId={panelId}
+                    label={group.label}
+                  />
                 </div>
-                {canEdit && (
-                  <div style={{ display: 'flex', gap: '.35rem', flexShrink: 0 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => open(it)} data-testid={`button-edit-${it.id}`}>Edit</button>
-                    <form action={deleteBrainItemAction}>
-                      <input type="hidden" name="propertyId" value={propertyId} />
-                      <input type="hidden" name="itemId" value={it.id} />
-                      <button className="btn btn-ghost btn-sm" type="submit" style={{ color: 'var(--coral)' }} data-testid={`button-delete-${it.id}`}>Delete</button>
-                    </form>
+                <CollapsibleBody id={panelId} collapsed={collapsed}>
+                  <div className="brain-item-list">
+                    {group.items.map((it) => (
+                      <BrainItemRow key={it.id} item={it} propertyId={propertyId} canEdit={canEdit} onEdit={() => open(it)} />
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
+                </CollapsibleBody>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BrainItemRow({
+  item,
+  propertyId,
+  canEdit,
+  onEdit,
+}: {
+  item: Item;
+  propertyId: string;
+  canEdit: boolean;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="brain-item" data-testid={`card-brain-${item.id}`}>
+      <div className="brain-item-body">
+        <div className="brain-item-title-row">
+          <strong className="brain-item-title">{item.title}</strong>
+          {item.visibility === 'internal' && <span className="badge badge-coral">host-only</span>}
+          {item.status === 'failed' && <span className="badge badge-coral">index failed</span>}
+          {item.status === 'processing' && <span className="badge">processing…</span>}
+          {item.sourceType === 'url' && <span className="badge">URL</span>}
+          {item.sourceType === 'document' && <span className="badge">doc</span>}
+        </div>
+        {item.body && <p className="brain-item-preview">{truncate(item.body, 140)}</p>}
+      </div>
+      {canEdit && (
+        <div className="brain-item-actions">
+          <button className="btn btn-ghost btn-sm" onClick={onEdit} data-testid={`button-edit-${item.id}`}>Edit</button>
+          <form action={deleteBrainItemAction}>
+            <input type="hidden" name="propertyId" value={propertyId} />
+            <input type="hidden" name="itemId" value={item.id} />
+            <button className="btn btn-ghost btn-sm" type="submit" style={{ color: 'var(--coral)' }} data-testid={`button-delete-${item.id}`}>Delete</button>
+          </form>
         </div>
       )}
     </div>

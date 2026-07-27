@@ -47,8 +47,12 @@ export const serverEnv = {
     process.env.OPENROUTER_MODEL_EXTRACTION ?? process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
   openrouterModelClassification:
     process.env.OPENROUTER_MODEL_CLASSIFICATION ?? 'meta-llama/llama-3.1-8b-instruct',
+  // Gemini 2.5 Flash: verified available under our Zero-Data-Retention provider
+  // restriction, ~2.7x cheaper per answer than claude-haiku-4.5 ($0.30/$2.50 per M
+  // tokens vs $1.00/$5.00) at comparable grounded-chat quality. Chosen to keep the
+  // guest-facing path affordable within the account's monthly credit cap.
   openrouterModelConcierge:
-    process.env.OPENROUTER_MODEL_CONCIERGE ?? 'anthropic/claude-haiku-4.5',
+    process.env.OPENROUTER_MODEL_CONCIERGE ?? 'google/gemini-2.5-flash',
   openrouterModelGeneral:
     process.env.OPENROUTER_MODEL_GENERAL ?? process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
 

@@ -87,8 +87,8 @@ export const LEGAL_DOCS: LegalDocMeta[] = [
     slug: 'subprocessors',
     title: 'Subprocessors',
     navLabel: 'Subprocessors',
-    version: 'v1.0.0',
-    lastUpdated: '2026-07-22',
+    version: 'v1.1.0',
+    lastUpdated: '2026-07-27',
     summary: 'The third-party services that process data on our behalf, their purpose, region, and safeguards.',
   },
   {
@@ -103,9 +103,10 @@ export const LEGAL_DOCS: LegalDocMeta[] = [
     slug: 'ai-policy',
     title: 'AI Disclosure & Use Policy',
     navLabel: 'AI Policy',
-    version: 'v1.0.0',
-    lastUpdated: '2026-07-22',
-    summary: 'How the AI concierge works, its limits, and when it refuses or escalates to a human host.',
+    version: 'v1.1.0',
+    lastUpdated: '2026-07-27',
+    summary:
+      'How the AI concierge works, which models answer guests, its limits, the redaction and zero-data-retention safeguards applied before content leaves our infrastructure, and when it refuses or escalates to a human host.',
   },
   {
     slug: 'open-source',

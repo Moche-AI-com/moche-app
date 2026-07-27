@@ -3,8 +3,9 @@
 // so there is one authoritative record of who processes what, where.
 //
 // ACCURACY RULE (see LEGAL_COMPLIANCE_SPEC "REALITY CHECK"): only mark a vendor
-// `active: true` if it is actually wired in the codebase today. OpenRouter is
-// DORMANT (code path exists, no API key set) and is marked active: false.
+// `active: true` if it is actually wired in the codebase today. OpenRouter became
+// ACTIVE once an API key was configured in production and model routing (including
+// the guest-facing concierge tier) was enabled.
 
 export interface Subprocessor {
   vendor: string;
@@ -55,7 +56,8 @@ export const SUBPROCESSORS: Subprocessor[] = [
   },
   {
     vendor: 'OpenAI',
-    purpose: 'Primary AI subprocessor — chat completions and text embeddings (text-embedding-3-small)',
+    purpose:
+      'AI subprocessor — text embeddings (text-embedding-3-small), guest-intent classification, and the fallback path for all chat completions if model routing is unavailable',
     dataProcessed: 'Guest questions and property knowledge context (PII redacted before external routing where applicable)',
     region: 'US',
     dpaUrl: 'https://openai.com/policies/data-processing-addendum',
@@ -65,14 +67,16 @@ export const SUBPROCESSORS: Subprocessor[] = [
   },
   {
     vendor: 'OpenRouter',
-    purpose: 'Optional/conditional AI model router (failover / model diversity)',
-    dataProcessed: 'Redacted prompt content only, when enabled',
-    region: 'US',
+    purpose:
+      'AI model router — directs completion requests to a task-appropriate model (currently Google Gemini 2.5 Flash for guest answers, OpenAI GPT-4o-mini and Meta Llama 3.1 for background extraction/classification) with automatic failover between models',
+    dataProcessed:
+      'Prompt content only, with personal data programmatically redacted before the request leaves our infrastructure: guest questions and the relevant property knowledge context. A post-redaction check blocks the external request entirely if personal data is still detected. No guest identity, contact details, or account data are sent.',
+    region: 'US (routes to model providers in the US/EU)',
     dpaUrl: 'https://openrouter.ai/privacy',
     transferMechanism: 'SCCs',
-    retention: 'Zero-Data-Retention requested when the external path is enabled',
-    active: false,
-    note: 'Conditional / optional — NOT currently active. No API key configured; all AI traffic routes to OpenAI today.',
+    retention:
+      'Zero-Data-Retention enforced on every request: prompts and responses are not logged or retained by OpenRouter, and any downstream model provider that would collect or train on the data is refused (the request fails closed and falls back to our primary provider instead)',
+    active: true,
   },
   {
     vendor: 'Resend',

@@ -242,6 +242,11 @@
   }
   .badge-teal { color: var(--teal); border-color: var(--teal); background: transparent; }
   .badge-coral { color: var(--coral); border-color: var(--coral); background: transparent; }
+  .badge-property {
+    color: var(--iris); border-color: var(--iris); background: color-mix(in srgb, var(--iris) 10%, transparent);
+    font-weight: 700; max-width: 100%;
+  }
+  .badge-property span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .gradient-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .muted { color: var(--text-muted); }
@@ -311,6 +316,27 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 .brain-sidebar { position: sticky; top: 1rem; }
 .brain-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
 .brain-health-hero-row { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+
+/* Grouped knowledge list — each category collapses into its own card so a
+   property with 40+ items reads as ~8 scannable sections instead of one
+   long scroll of identical-looking cards. */
+.brain-groups { display: flex; flex-direction: column; gap: .85rem; }
+.brain-group { padding: 1rem 1.15rem; }
+.brain-group-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.brain-group-heading { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.brain-group-heading h3 { font-size: .95rem; margin: 0; font-family: var(--font-display); }
+.brain-group-heading .badge { flex-shrink: 0; }
+.brain-item-list { display: flex; flex-direction: column; gap: .5rem; margin-top: .9rem; }
+.brain-item {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem;
+  padding: .8rem .9rem; border-radius: var(--radius-md); background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.brain-item-body { min-width: 0; }
+.brain-item-title-row { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+.brain-item-title { font-size: .92rem; }
+.brain-item-preview { color: var(--text-muted); font-size: .82rem; margin: .3rem 0 0; line-height: 1.45; }
+.brain-item-actions { display: flex; gap: .35rem; flex-shrink: 0; }
 
 @media (max-width: 900px) {
   /* Collapse the editor/sidebar shell — sidebar drops below the editor
@@ -462,6 +488,41 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 .dash-fb-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .35rem; }
 .dash-fb-stars { display: inline-flex; gap: 1px; color: var(--coral-soft); }
 .dash-fb-prop { font-size: .74rem; font-weight: 600; color: var(--text-muted); }
+
+/* Escalations list — property filter strip + grouped sections */
+.esc-filter-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: var(--gap-section); }
+.esc-filter-pill {
+  display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .85rem;
+  border-radius: 9999px; font-size: .82rem; font-weight: 600; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-muted); transition: border-color var(--tr), color var(--tr), background var(--tr);
+}
+.esc-filter-pill:hover { border-color: var(--text-muted); color: var(--text); }
+.esc-filter-pill.is-active { background: var(--iris); border-color: var(--iris); color: #fff; }
+.esc-filter-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+  padding: 0 .3rem; border-radius: 9999px; font-size: .68rem; font-weight: 700;
+  background: rgba(255,255,255,.14);
+}
+.esc-filter-pill:not(.is-active) .esc-filter-count.has-open { background: var(--coral); color: #fff; }
+
+.esc-group { display: flex; flex-direction: column; gap: .85rem; margin-bottom: var(--gap-section); }
+.esc-group:last-child { margin-bottom: 0; }
+.esc-group-head { display: flex; align-items: center; gap: .55rem; padding: 0 .1rem; }
+.esc-group-title { font-family: var(--font-display); font-size: 1rem; margin: 0; color: var(--text); }
+.esc-group-sub { font-size: .78rem; color: var(--text-faint); }
+
+.esc-item { padding: var(--pad-card); display: flex; flex-direction: column; gap: .7rem; }
+.esc-item-top { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+.esc-item-badges { display: flex; align-items: center; gap: .45rem; min-width: 0; }
+.esc-item-time { font-size: .76rem; color: var(--text-faint); white-space: nowrap; }
+.esc-item-question { font-size: .96rem; font-weight: 600; line-height: 1.45; margin: 0; }
+.esc-item-response {
+  border-left: 3px solid var(--teal); padding: .1rem 0 .1rem .8rem; margin: 0;
+  font-size: .88rem; color: var(--text-muted); line-height: 1.5;
+}
+.esc-item-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.esc-quick-form { margin-top: .3rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+.esc-empty { text-align: center; padding: 2.5rem var(--pad-card); }
 .dash-fb-time { font-size: .72rem; color: var(--text-faint); margin-left: auto; }
 .dash-fb-comment { margin: 0; font-size: .9rem; line-height: 1.45; color: var(--text); }
 .dash-fb-comment-muted { color: var(--text-muted); font-style: italic; }

@@ -31,10 +31,23 @@ export default async function DashboardHome() {
   let totalKnowledge = 0;
   const brainByProperty = new Map<string, number>();
   const itemsByProperty = new Map<string, number>();
+  // Upcoming arrivals — checking in within the next 3 days, soonest first.
+  let upcomingCheckIns = 0;
+  let nextArrival: { guestName: string; propertyName: string | null; checkIn: string } | null = null;
   if (propertyIds.length > 0) {
-    const [{ count: stayCount }, { data: brainItems }] = await Promise.all([
+    const soon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ count: stayCount }, { data: brainItems }, { data: arrivals }] = await Promise.all([
       supabase.from('stays').select('id', { count: 'exact', head: true }).in('property_id', propertyIds).eq('status', 'active'),
       supabase.from('brain_items').select('category, status, deleted_at, visibility, property_id').in('property_id', propertyIds),
+      supabase
+        .from('stays')
+        .select('id, property_id, guest_display_name, check_in')
+        .in('property_id', propertyIds)
+        .in('status', ['upcoming', 'active'])
+        .gte('check_in', new Date().toISOString())
+        .lte('check_in', soon)
+        .is('deleted_at', null)
+        .order('check_in', { ascending: true }),
     ]);
     activeStays = stayCount ?? 0;
     for (const pid of propertyIds) {
@@ -44,7 +57,21 @@ export default async function DashboardHome() {
       itemsByProperty.set(pid, liveCount);
       totalKnowledge += liveCount;
     }
+    upcomingCheckIns = arrivals?.length ?? 0;
+    const first = arrivals?.[0];
+    if (first) {
+      nextArrival = {
+        guestName: (first.guest_display_name as string | null)?.trim() || 'A guest',
+        propertyName: propertyNames.get(first.property_id as string) ?? null,
+        checkIn: first.check_in as string,
+      };
+    }
   }
+
+  // Portfolio-wide Brain health — average score + how many properties are lagging.
+  const healthScores = [...brainByProperty.values()];
+  const avgBrainHealthPct = healthScores.length > 0 ? Math.round(healthScores.reduce((a, b) => a + b, 0) / healthScores.length) : null;
+  const propertiesNeedingAttention = healthScores.filter((h) => h < 60).length;
 
   const escCount = openEsc?.length ?? 0;
   const svcCount = services?.length ?? 0;
@@ -105,7 +132,15 @@ export default async function DashboardHome() {
 
       <AttentionStrip openEscalations={escCount} openServiceRequests={svcCount} lowRatings={lowRatings} />
 
-      <ValueMetricsGrid metrics={metrics} activeStaysHref={activeStaysHref} knowledgeItemsHref={knowledgeItemsHref} />
+      <ValueMetricsGrid
+        metrics={metrics}
+        activeStaysHref={activeStaysHref}
+        knowledgeItemsHref={knowledgeItemsHref}
+        upcomingCheckIns={upcomingCheckIns}
+        nextArrival={nextArrival}
+        avgBrainHealthPct={avgBrainHealthPct}
+        propertiesNeedingAttention={propertiesNeedingAttention}
+      />
 
       <div className="dash-insights-row">
         <ActivityTrendCard trend={trend} />

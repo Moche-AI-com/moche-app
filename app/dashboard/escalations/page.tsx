@@ -1,85 +1,88 @@
-import Link from 'next/link';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { EscalationsList, type EscalationRowData } from './EscalationsList';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_BADGE: Record<string, string> = {
-  open: 'badge-coral',
-  answered: 'badge-teal',
-  resolved: '',
-  dismissed: '',
-};
-
-export default async function EscalationsPage() {
+// Escalations open across a host's entire portfolio, grouped by property so it's always
+// clear which listing a question belongs to. Supports an optional ?property=<id> filter
+// so hosts managing several properties can focus on one at a time.
+export default async function EscalationsPage({
+  searchParams,
+}: {
+  searchParams: { property?: string };
+}) {
   const ctx = await requireSession();
   const supabase = createClient();
 
-  // RLS scopes properties to the host account; escalations join through them.
   const { data: properties } = await supabase
     .from('properties')
     .select('id, display_name')
     .eq('host_account_id', ctx.account.id)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .order('display_name', { ascending: true });
 
-  const propMap = new Map((properties ?? []).map((p) => [p.id, p.display_name]));
-  const propIds = (properties ?? []).map((p) => p.id);
+  const propList = properties ?? [];
+  const propMap = new Map<string, string>(propList.map((p) => [p.id, p.display_name as string]));
+  const propertyIds = propList.map((p) => p.id);
 
-  let list: {
-    id: string;
-    property_id: string;
-    question: string;
-    status: string;
-    host_response: string | null;
-    created_at: string;
-    responded_at: string | null;
-  }[] = [];
-  if (propIds.length) {
-    const { data: escalations } = await supabase
-      .from('escalations')
-      .select('id, property_id, question, status, host_response, created_at, responded_at')
-      .in('property_id', propIds)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    list = escalations ?? [];
+  const activeFilter = searchParams.property && propMap.has(searchParams.property) ? searchParams.property : null;
+
+  const { data: escalations } = propertyIds.length
+    ? await supabase
+        .from('escalations')
+        .select('id, property_id, question, status, host_response, created_at, responded_at')
+        .in('property_id', activeFilter ? [activeFilter] : propertyIds)
+        .order('created_at', { ascending: false })
+        .limit(200)
+    : { data: [] };
+
+  const rows: EscalationRowData[] = (escalations ?? []).map((e) => ({
+    id: e.id as string,
+    propertyId: e.property_id as string,
+    propertyName: propMap.get(e.property_id as string) ?? 'Unknown property',
+    question: e.question as string,
+    status: e.status as string,
+    hostResponse: (e.host_response as string | null) ?? null,
+    createdAt: e.created_at as string,
+    respondedAt: (e.responded_at as string | null) ?? null,
+  }));
+
+  // Open-escalation counts per property drive the filter pill badges — the number a
+  // host actually cares about when deciding where to focus first.
+  const openCountByProperty = new Map<string, number>();
+  for (const r of rows) {
+    if (r.status === 'open') openCountByProperty.set(r.propertyId, (openCountByProperty.get(r.propertyId) ?? 0) + 1);
   }
-  const open = list.filter((e) => e.status === 'open');
+  // Recompute against the *unfiltered* set so pill counts stay accurate while a filter is active.
+  if (activeFilter && propertyIds.length > 1) {
+    const { data: allOpen } = await supabase
+      .from('escalations')
+      .select('property_id')
+      .in('property_id', propertyIds)
+      .eq('status', 'open');
+    openCountByProperty.clear();
+    for (const o of allOpen ?? []) {
+      const pid = o.property_id as string;
+      openCountByProperty.set(pid, (openCountByProperty.get(pid) ?? 0) + 1);
+    }
+  }
 
   return (
-    <div>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.8rem' }}>Escalations</h1>
-        <p className="muted" style={{ fontSize: '.9rem' }}>
-          Guest questions the concierge couldn&rsquo;t answer confidently. {open.length} awaiting a response.
-        </p>
+    <div className="dash-overview">
+      <div className="dash-section-head">
+        <div>
+          <h1 className="dash-section-title">Guest escalations</h1>
+          <p className="dash-section-sub">Questions your AI concierge couldn&apos;t answer on its own.</p>
+        </div>
       </div>
 
-      {list.length === 0 ? (
-        <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
-          <p className="muted">No escalations yet. When the AI concierge is unsure, the question lands here so you can answer it and teach the Property Brain.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
-          {list.map((e) => (
-            <div key={e.id} className="card" style={{ padding: '1.15rem 1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.6rem', marginBottom: '.5rem', flexWrap: 'wrap' }}>
-                <span className="faint" style={{ fontSize: '.78rem' }}>{propMap.get(e.property_id) ?? 'Property'}</span>
-                <span className={`badge ${STATUS_BADGE[e.status] ?? ''}`}>{e.status}</span>
-              </div>
-              <p style={{ margin: '0 0 .5rem', fontWeight: 500 }}>{e.question}</p>
-              {e.host_response ? (
-                <p className="muted" style={{ fontSize: '.85rem', margin: 0, paddingLeft: '.75rem', borderLeft: '2px solid var(--border)' }}>
-                  {e.host_response}
-                </p>
-              ) : (
-                <Link href={`/dashboard/escalations/${e.id}`} className="btn btn-sm btn-primary" style={{ marginTop: '.25rem' }}>
-                  Answer &amp; teach the Brain
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <EscalationsList
+        rows={rows}
+        properties={propList.map((p) => ({ id: p.id as string, name: p.display_name as string }))}
+        openCountByProperty={Object.fromEntries(openCountByProperty)}
+        activeFilter={activeFilter}
+      />
     </div>
   );
 }

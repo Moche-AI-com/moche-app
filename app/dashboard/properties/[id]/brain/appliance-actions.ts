@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requirePropertyAccess } from '@/lib/auth/guards';
-import { getAIProvider } from '@/lib/ai';
+import { routedCompletion } from '@/lib/router/modelRouter';
 import { logAiUsage } from '@/lib/ai/usage';
 import { ingestText } from '@/lib/ingest/pipeline';
 import { log } from '@/lib/log';
@@ -43,16 +43,16 @@ export async function lookupApplianceAction(
   if (!model || model.length < 3) return { error: 'Enter an appliance make and model.' };
   if (model.length > 160) return { error: 'That is too long — just the make and model.' };
 
-  const provider = getAIProvider();
   const started = Date.now();
   let result;
   try {
-    result = await provider.generate(
+    result = await routedCompletion(
       [
         { role: 'system', content: SYSTEM },
         { role: 'user', content: `Appliance: ${model}` },
       ],
       { temperature: 0.3, maxTokens: 700 },
+      { task: 'general' },
     );
   } catch (e) {
     log.warn('appliance_lookup_failed', { error: String(e) });

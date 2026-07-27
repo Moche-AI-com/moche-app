@@ -1,5 +1,5 @@
 import 'server-only';
-import { getAIProvider } from '@/lib/ai';
+import { routedCompletion } from '@/lib/router/modelRouter';
 import { Constants } from '@/lib/database.types';
 import { log } from '@/lib/log';
 
@@ -43,9 +43,8 @@ export async function classifyBrainAnswer(input: {
   const fallback: Classification = { category: 'host_qa', title: rawTitle };
 
   try {
-    const provider = getAIProvider();
     const catList = CATEGORIES.map((c) => `- ${c}: ${CATEGORY_HINTS[c]}`).join('\n');
-    const result = await provider.generate(
+    const result = await routedCompletion(
       [
         {
           role: 'system',
@@ -63,6 +62,7 @@ export async function classifyBrainAnswer(input: {
         },
       ],
       { temperature: 0, maxTokens: 200 },
+      { task: 'classification' },
     );
 
     const text = result.text.trim();
