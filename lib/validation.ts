@@ -10,6 +10,10 @@ export const signupSchema = z.object({
   fullName: z.string().trim().min(1).max(120),
   accountName: z.string().trim().min(1).max(120).optional(),
   acceptTerms: z.literal(true),
+  // A2P 10DLC: explicit, opt-in SMS/WhatsApp consent. Defaults false and is only
+  // true when the host actively checks the (unchecked) box. Stored as a
+  // consent flag; texting is further gated on a later phone-verification step.
+  smsOptIn: z.boolean().optional().default(false),
 });
 
 export const loginSchema = z.object({

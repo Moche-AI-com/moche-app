@@ -4,10 +4,11 @@ import { redirect } from 'next/navigation';
 import { headers, cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { signupSchema, loginSchema, resetRequestSchema, resetUpdateSchema, hostLoginOtpSchema } from '@/lib/validation';
-import { publicEnv, hasServiceRole } from '@/lib/env';
+import { hasServiceRole } from '@/lib/env';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireSession } from '@/lib/auth/guards';
 import { recordAcceptances } from '@/lib/legal/acceptance';
+import { createUserAndSendConfirmation, sendPasswordReset } from '@/lib/auth/auth-email';
 import { createAndSendHostOtp, verifyHostOtp } from '@/lib/auth/host-otp';
 import { verifyTrustedDeviceValue, signTrustedDeviceValue } from '@/lib/crypto';
 import { TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_TTL_DAYS } from '@/lib/constants';
@@ -41,38 +42,58 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     fullName: formData.get('fullName'),
     accountName: formData.get('accountName') || undefined,
     acceptTerms: formData.get('acceptTerms') === 'on',
+    smsOptIn: formData.get('smsOptIn') === 'on',
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Please check your details.' };
   }
-  const { email, password, fullName, accountName } = parsed.data;
-  const supabase = createClient();
-  const { data, error } = await supabase.auth.signUp({
+  const { email, password, fullName, accountName, smsOptIn } = parsed.data;
+
+  // Account creation + confirmation email both require the service-role client
+  // (Supabase's built-in SMTP sender is disabled in favour of our Resend transport).
+  if (!hasServiceRole()) {
+    log.error('signup_no_service_role', {});
+    return { error: 'Account signup is temporarily unavailable. Please try again shortly.' };
+  }
+  const admin = createAdminClient();
+
+  // Creates the (unconfirmed) auth user via admin.generateLink and emails the
+  // confirmation link through Resend. Returns a friendly message on any failure —
+  // this path must NEVER surface a raw/stringified error object to the UI.
+  const result = await createUserAndSendConfirmation(admin, {
     email,
     password,
-    options: {
-      emailRedirectTo: `${publicEnv.appUrl}/auth/callback`,
-      // The handle_new_user trigger reads these into profiles/host_accounts.
-      data: { full_name: fullName, account_name: accountName ?? `${fullName}'s properties` },
-    },
+    data: { full_name: fullName, account_name: accountName ?? `${fullName}'s properties` },
   });
-  if (error) {
-    log.warn('signup_failed', { reason: error.message });
-    return { error: error.message };
+
+  if (!result.ok) {
+    // Map known reasons to friendly copy; default to a generic retry message so
+    // an empty/opaque error can never render as "{}".
+    const reason = result.reason.toLowerCase();
+    if (reason.includes('already') && reason.includes('regist')) {
+      return { error: 'An account with this email already exists. Try signing in instead.' };
+    }
+    if (reason.includes('email') || reason.includes('send')) {
+      return { error: 'We couldn\u2019t send your confirmation email just now. Please try again in a moment.' };
+    }
+    return { error: 'We couldn\u2019t create your account just now. Please try again shortly.' };
   }
 
-  // Record the clickwrap consent (Terms + Privacy) as an auditable acceptance row.
-  // The user has no active session yet (email verification pending), so use the
-  // service-role client. Best-effort — never block signup if logging fails.
-  if (data.user && hasServiceRole()) {
-    const h = headers();
-    await recordAcceptances(createAdminClient(), {
-      userId: data.user.id,
-      context: 'signup',
-      ip: h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
-      userAgent: h.get('user-agent'),
-    });
+  // Persist consent + acceptances (best-effort — never block a successful signup).
+  const h = headers();
+  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+  const userAgent = h.get('user-agent');
+
+  // A2P 10DLC: record explicit SMS/WhatsApp opt-in only when actively given.
+  if (smsOptIn) {
+    const { error: consentError } = await admin
+      .from('profiles')
+      .update({ sms_opt_in: true, sms_opt_in_at: new Date().toISOString() })
+      .eq('id', result.userId);
+    if (consentError) log.warn('sms_opt_in_persist_failed', { reason: consentError.message });
   }
+
+  await recordAcceptances(admin, { userId: result.userId, context: 'signup', ip, userAgent });
 
   redirect('/verify-email');
 }
@@ -166,10 +187,11 @@ export async function logoutAction(): Promise<void> {
 export async function resetRequestAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = resetRequestSchema.safeParse({ email: formData.get('email') });
   if (!parsed.success) return { error: 'Enter a valid email address.' };
-  const supabase = createClient();
-  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${publicEnv.appUrl}/auth/callback?next=/reset/update`,
-  });
+  // Send the recovery link via our Resend transport (Supabase built-in SMTP is
+  // disabled). Silently no-ops for unknown emails to avoid account enumeration.
+  if (hasServiceRole()) {
+    await sendPasswordReset(createAdminClient(), { email: parsed.data.email, next: '/reset/update' });
+  }
   // Identical response regardless of whether the email exists.
   return { success: 'If an account exists for that email, a reset link is on its way.' };
 }

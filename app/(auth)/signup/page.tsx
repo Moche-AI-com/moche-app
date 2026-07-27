@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useFormState } from 'react-dom';
+import { MessageSquare } from 'lucide-react';
 import { signupAction, type FormState } from '../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 
@@ -54,6 +55,41 @@ function SignupForm() {
           <Link href="/legal/ai-policy" target="_blank" rel="noopener noreferrer" className="gradient-text">AI Policy</Link>. By continuing you also acknowledge our{' '}
           <Link href="/legal/cookies" target="_blank" rel="noopener noreferrer" className="gradient-text">Cookie Notice</Link>. Each opens in a new tab so you can read it in full.
         </p>
+
+        {/* A2P 10DLC opt-in — SEPARATE from Terms, UNCHECKED by default, active
+            consent. Never a condition of signup (checkbox is not `required`). */}
+        <div
+          style={{
+            border: '1px solid rgba(157,176,198,0.18)',
+            borderRadius: '.7rem',
+            padding: '.85rem .9rem',
+            marginBottom: '1rem',
+            background: 'rgba(51,230,212,0.04)',
+          }}
+        >
+          <label style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start', fontSize: '.82rem' }}>
+            <input
+              type="checkbox"
+              name="smsOptIn"
+              value="on"
+              defaultChecked={false}
+              style={{ marginTop: '.15rem' }}
+              data-testid="signup-sms-optin"
+            />
+            <span style={{ lineHeight: 1.5 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.35rem', fontWeight: 600, color: 'var(--text)' }}>
+                <MessageSquare size={14} aria-hidden="true" /> Text me guest &amp; property alerts (optional)
+              </span>
+              <br />
+              I agree to receive account and guest-related SMS/WhatsApp messages from Moche.AI at the phone
+              number I verify in settings. Message frequency varies. Message &amp; data rates may apply.
+              Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. See our{' '}
+              <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="gradient-text">Privacy Policy</Link>{' '}and{' '}
+              <Link href="/legal/terms" target="_blank" rel="noopener noreferrer" className="gradient-text">Terms</Link>.
+            </span>
+          </label>
+        </div>
+
         <SubmitButton>Create account</SubmitButton>
       </form>
       <div style={{ marginTop: '1.25rem', textAlign: 'center', fontSize: '.85rem' }}>

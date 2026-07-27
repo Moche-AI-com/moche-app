@@ -80,7 +80,29 @@ export default function TermsPage() {
         includes model-provider restrictions flowed down to end users.
       </p>
 
-      <h2 id="law">8. Governing law &amp; disputes</h2>
+      <h2 id="messaging">8. SMS &amp; WhatsApp messaging</h2>
+      <AttorneyReview topic="A2P messaging terms / mobile opt-in">
+        <p>
+          Moche.AI offers optional SMS and WhatsApp messaging. If you opt in and verify a mobile
+          number, you consent to receive <strong>account and guest-related messages</strong> from
+          Moche.AI &mdash; such as new guest questions, escalations, verification codes, and
+          maintenance or billing alerts. <strong>Opting in is not a condition of purchase or of
+          using the Service.</strong>
+        </p>
+        <ul>
+          <li><strong>Message frequency varies</strong> with your account activity and guest interactions.</li>
+          <li><strong>Message and data rates may apply</strong> from your carrier.</li>
+          <li>Reply <strong>STOP</strong> to unsubscribe at any time, or <strong>HELP</strong> for help. You can also manage messaging in <em>Dashboard &rarr; Settings</em>.</li>
+          <li>Supported carriers are not liable for delayed or undelivered messages.</li>
+        </ul>
+        <p>
+          We <strong>do not sell or share mobile opt-in data or phone numbers with third parties or
+          affiliates for their marketing purposes</strong>. See how we handle messaging data in our{' '}
+          <a href="/legal/privacy">Privacy Policy</a>.
+        </p>
+      </AttorneyReview>
+
+      <h2 id="law">9. Governing law &amp; disputes</h2>
       <AttorneyReview topic="Governing law">
         <p>
           These Terms are governed by the laws of the{' '}
@@ -90,13 +112,13 @@ export default function TermsPage() {
         </p>
       </AttorneyReview>
 
-      <h2>9. Changes</h2>
+      <h2>10. Changes</h2>
       <p>
         We may update these Terms; material changes require renewed acceptance before continued
         use. The current version and effective date appear at the top of this page.
       </p>
 
-      <h2>10. Contact</h2>
+      <h2>11. Contact</h2>
       <p>
         Questions about these Terms: see <a href="/legal/support">Support &amp; Data Rights</a>.
       </p>

@@ -79,7 +79,32 @@ export default function PrivacyPage() {
         </p>
       </AttorneyReview>
 
-      <h2>7. Your rights</h2>
+      <h2>7. SMS &amp; WhatsApp messaging</h2>
+      <AttorneyReview topic="A2P messaging / mobile opt-in">
+        <p>
+          If you opt in during signup or in <em>Dashboard &rarr; Settings</em> and verify a mobile
+          number, Moche.AI may send you <strong>account and guest-related messages</strong> by SMS
+          and/or WhatsApp &mdash; for example new guest questions, escalations that need your
+          attention, verification codes, and maintenance or billing alerts. Guests who opt in may
+          likewise receive messages relating to their stay.
+        </p>
+        <ul>
+          <li><strong>Consent is optional.</strong> Opting in to messaging is never a condition of creating an account or using the Service.</li>
+          <li><strong>Message frequency varies</strong> based on account activity and guest interactions.</li>
+          <li><strong>Message and data rates may apply</strong> from your mobile carrier.</li>
+          <li><strong>Opt out any time</strong> by replying <strong>STOP</strong> to a text message, or by turning messaging off in <em>Dashboard &rarr; Settings</em>. Reply <strong>HELP</strong> for help, or contact us at <a href="/legal/support">Support &amp; Data Rights</a>.</li>
+        </ul>
+        <p>
+          <strong>We do not sell, rent, or share mobile opt-in information or phone numbers with
+          third parties or affiliates for their own marketing or promotional purposes.</strong>
+          Phone numbers collected for SMS/WhatsApp are used solely to deliver the messages described
+          above and are handled by our messaging processor, <strong>Twilio</strong> (see the{' '}
+          <a href="/legal/subprocessors">Subprocessors</a> page), for the sole purpose of message
+          delivery.
+        </p>
+      </AttorneyReview>
+
+      <h2>8. Your rights</h2>
       <p>
         Subject to applicable law you may access, correct, delete, port, or object to/restrict
         processing of your personal data, and (CCPA/CPRA) opt out of sale/sharing and limit use of
@@ -90,14 +115,14 @@ export default function PrivacyPage() {
         for exercising these rights.
       </p>
 
-      <h2>8. Retention</h2>
+      <h2>9. Retention</h2>
       <p>
         We keep personal data only as long as needed for the purposes above or as required by law.
         Billing and legal-acceptance records are retained for statutory periods even after account
         deletion (see the <a href="/legal/support">data-rights</a> section).
       </p>
 
-      <h2>9. Contact</h2>
+      <h2>10. Contact</h2>
       <p>See <a href="/legal/support">Support &amp; Data Rights</a> for our privacy contact.</p>
     </article>
   );
