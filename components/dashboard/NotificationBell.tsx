@@ -131,7 +131,7 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '.85rem 1rem', borderBottom: '1px solid var(--border)' }}>
             <strong style={{ fontSize: '.9rem' }}>Notifications</strong>
-            {unread > 0 && (
+            {unread > 0 ? (
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
@@ -141,6 +141,16 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
               >
                 <CheckCheck size={13} aria-hidden /> Mark all read
               </button>
+            ) : (
+              // Say so explicitly. An empty header next to already-read rows reads
+              // as a missing button rather than as "nothing to do".
+              <span
+                className="faint"
+                data-testid="notifications-all-read"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.76rem' }}
+              >
+                <CheckCheck size={13} aria-hidden /> All caught up
+              </span>
             )}
           </div>
 

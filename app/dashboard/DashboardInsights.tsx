@@ -141,12 +141,20 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
           </h2>
           <p className="dash-section-sub">Guest questions handled over the last {days.length} days.</p>
         </div>
-        {deltaPct != null && (
+        {deltaPct != null ? (
           <span className={`dash-delta ${deltaPct >= 0 ? 'dash-delta-up' : 'dash-delta-down'}`} data-testid="trend-delta">
             {deltaPct >= 0 ? <TrendingUp size={13} aria-hidden /> : <TrendingDown size={13} aria-hidden />}
             {deltaPct >= 0 ? '+' : ''}
             {deltaPct}%
           </span>
+        ) : (
+          hasData && (
+            // No prior half-window to compare against, so a percentage would be
+            // meaningless. Say "new activity" rather than showing a fake +100%.
+            <span className="dash-delta dash-delta-up" data-testid="trend-delta-new">
+              <Sparkles size={13} aria-hidden /> New activity
+            </span>
+          )
         )}
       </div>
 
@@ -190,8 +198,9 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
                 const h = d.questions > 0 ? Math.max((d.questions / scale) * (H - 4), 1.5) : 0;
                 return (
                   <g key={d.date}>
-                    {/* faint full-height track so empty days still read as days */}
-                    <rect x={x} y={2} width={barW} height={H - 2} fill="var(--surface-2)" opacity="0.55" rx="0.6" />
+                    {/* Full-height track so zero-activity days still read as days.
+                        Uses --chart-track (not surface-2, which is invisible on a card). */}
+                    <rect x={x} y={2} width={barW} height={H - 2} fill="var(--chart-track)" rx="0.6" />
                     {h > 0 && <rect x={x} y={H - h} width={barW} height={h} fill="url(#barGrad)" rx="0.6" />}
                     {d.escalations > 0 && <circle cx={x + barW / 2} cy={1.6} r="1.1" fill="var(--coral)" />}
                     <title>{`${d.label}: ${d.questions} question${d.questions === 1 ? '' : 's'}, ${d.answers} answer${

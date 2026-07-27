@@ -39,6 +39,9 @@
   --glow-teal: rgba(51,230,212,.35);
   --shadow-lg: 0 30px 80px -20px rgba(0,0,0,.7);
   --shadow-md: 0 16px 40px -16px rgba(0,0,0,.6);
+  /* Chart bar track for zero-activity days. Needs its own token: surface-2 is
+     too close to surface on the card background to read as a bar slot. */
+  --chart-track: rgba(120,160,210,.13);
 }
 
 [data-theme='light'] {
@@ -49,6 +52,7 @@
   --surface-glass: rgba(255,255,255,.7);
   --border: rgba(20,50,90,.12);
   --border-strong: rgba(20,50,90,.22);
+  --chart-track: rgba(20,50,90,.10);
   --text:#0C1B2E;
   --text-muted:#4A5E76;
   --text-faint:#8394A8;
@@ -163,9 +167,12 @@
     background: var(--surface-2);
     transform: translateY(-1px);
   }
+  /* Keyboard focus gets the same pill + lift as hover, on top of the global
+     focus ring, so tabbing through the nav is as legible as mousing over it. */
   .dash-tab:focus-visible {
     color: var(--text);
     background: var(--surface-2);
+    transform: translateY(-1px);
   }
   .dash-tab:active { transform: translateY(0); }
   .dash-tab:hover::after,
