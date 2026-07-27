@@ -14,15 +14,19 @@ import {
   Gauge,
   MessageCircle,
   PieChart,
+  RotateCcw,
   Sparkles,
   Star,
   TrendingDown,
   TrendingUp,
   Wrench,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import type { ActivityTrend, TopicRow, FeedEvent, FeedKind } from '@/lib/dashboard/insights';
 import { summarizeTrend } from '@/lib/dashboard/trend-summary';
+import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
+import { useCollapsedCards, useDismissedFeedItems } from '@/lib/dashboard/use-dashboard-ui-state';
 
 function fmt(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
@@ -130,6 +134,8 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
   // The server always loads the full 14-day window, so switching range is a
   // local slice — instant, no refetch, no loading state to design around.
   const [range, setRange] = useState<Range>(14);
+  const { isCollapsed, toggle } = useCollapsedCards();
+  const collapsed = isCollapsed('concierge-activity');
 
   const days = useMemo(() => trend.days.slice(-range), [trend.days, range]);
   // Re-derive the headline numbers for the visible window, using the same
@@ -191,9 +197,11 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
               </span>
             )
           )}
+          <CollapseToggle collapsed={collapsed} onToggle={() => toggle('concierge-activity')} panelId="concierge-activity-body" label="Concierge activity" />
         </div>
       </div>
 
+      <CollapsibleBody id="concierge-activity-body" collapsed={collapsed}>
       {hasData ? (
         <>
           <div className="dash-chart-stats">
@@ -273,6 +281,7 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
           </p>
         </div>
       )}
+      </CollapsibleBody>
     </section>
   );
 }
@@ -280,6 +289,8 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
 // --- Topic breakdown ------------------------------------------------------
 
 export function TopTopicsCard({ topics, brainHref }: { topics: TopicRow[]; brainHref?: string }) {
+  const { isCollapsed, toggle } = useCollapsedCards();
+  const collapsed = isCollapsed('top-topics');
   return (
     <section className="card dash-panel rise-in" data-testid="top-topics-card">
       <div className="dash-panel-head">
@@ -289,8 +300,12 @@ export function TopTopicsCard({ topics, brainHref }: { topics: TopicRow[]; brain
           </h2>
           <p className="dash-section-sub">Your most common question topics.</p>
         </div>
+        <div className="dash-panel-head-aside">
+          <CollapseToggle collapsed={collapsed} onToggle={() => toggle('top-topics')} panelId="top-topics-body" label="What guests ask about" />
+        </div>
       </div>
 
+      <CollapsibleBody id="top-topics-body" collapsed={collapsed}>
       {topics.length > 0 ? (
         <>
           <ul className="dash-topics">
@@ -325,6 +340,7 @@ export function TopTopicsCard({ topics, brainHref }: { topics: TopicRow[]; brain
           </p>
         </div>
       )}
+      </CollapsibleBody>
     </section>
   );
 }
@@ -347,7 +363,15 @@ const FEED_TONE: Record<FeedKind, string> = {
   brain: 'var(--teal)',
 };
 
-function FeedRow({ event }: { event: FeedEvent }) {
+function FeedRow({
+  event,
+  exiting,
+  onDismiss,
+}: {
+  event: FeedEvent;
+  exiting: boolean;
+  onDismiss: (id: string) => void;
+}) {
   const Icon = FEED_ICON[event.kind] ?? Gauge;
   const body = (
     <>
@@ -374,19 +398,59 @@ function FeedRow({ event }: { event: FeedEvent }) {
   );
 
   return (
-    <li className={`dash-feed-item${event.actionable ? ' dash-feed-item-attn' : ''}`} data-testid="feed-item">
-      {event.href ? (
-        <Link href={event.href} className="dash-feed-link">
-          {body}
-        </Link>
-      ) : (
-        <div className="dash-feed-link dash-feed-link-static">{body}</div>
-      )}
+    <li
+      className={`dash-feed-item${event.actionable ? ' dash-feed-item-attn' : ''}${exiting ? ' dash-feed-item-exiting' : ''}`}
+      data-testid="feed-item"
+    >
+      {/* Dismiss lives as a sibling of the link, not nested inside it — an
+          interactive button inside an anchor is invalid HTML and would fire
+          the row's navigation on every click. */}
+      <div className="dash-feed-row">
+        {event.href ? (
+          <Link href={event.href} className="dash-feed-link">
+            {body}
+          </Link>
+        ) : (
+          <div className="dash-feed-link dash-feed-link-static">{body}</div>
+        )}
+        <button
+          type="button"
+          className="dash-feed-dismiss"
+          onClick={() => onDismiss(event.id)}
+          aria-label={`Clear activity: ${event.title}`}
+          data-testid="feed-item-dismiss"
+        >
+          <X size={14} aria-hidden />
+        </button>
+      </div>
     </li>
   );
 }
 
 export function ActivityFeedCard({ events }: { events: FeedEvent[] }) {
+  const { isCollapsed, toggle } = useCollapsedCards();
+  const collapsed = isCollapsed('recent-activity');
+  const { dismissedIds, dismiss, restore } = useDismissedFeedItems();
+  // Two-phase removal: mark exiting so the row can animate out, then actually
+  // drop it from the list once the animation finishes. Doing this in one step
+  // would just make items vanish, which reads as a glitch rather than a clear.
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+
+  const visibleEvents = events.filter((e) => !dismissedIds.includes(e.id));
+  const clearedCount = events.length - visibleEvents.length;
+
+  const handleDismiss = (id: string) => {
+    setExitingIds((prev) => new Set(prev).add(id));
+    window.setTimeout(() => {
+      dismiss(id);
+      setExitingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 220);
+  };
+
   return (
     <section className="card dash-panel rise-in" data-testid="activity-feed-card">
       <div className="dash-panel-head">
@@ -396,12 +460,21 @@ export function ActivityFeedCard({ events }: { events: FeedEvent[] }) {
           </h2>
           <p className="dash-section-sub">Everything happening across your properties.</p>
         </div>
+        <div className="dash-panel-head-aside">
+          {clearedCount > 0 && (
+            <button type="button" className="dash-feed-restore" onClick={restore} data-testid="feed-restore">
+              <RotateCcw size={12} aria-hidden /> {clearedCount} cleared
+            </button>
+          )}
+          <CollapseToggle collapsed={collapsed} onToggle={() => toggle('recent-activity')} panelId="recent-activity-body" label="Recent activity" />
+        </div>
       </div>
 
-      {events.length > 0 ? (
+      <CollapsibleBody id="recent-activity-body" collapsed={collapsed}>
+      {visibleEvents.length > 0 ? (
         <ul className="dash-feed">
-          {events.map((e) => (
-            <FeedRow key={e.id} event={e} />
+          {visibleEvents.map((e) => (
+            <FeedRow key={e.id} event={e} exiting={exitingIds.has(e.id)} onDismiss={handleDismiss} />
           ))}
         </ul>
       ) : (
@@ -409,12 +482,22 @@ export function ActivityFeedCard({ events }: { events: FeedEvent[] }) {
           <span className="dash-panel-empty-icon" aria-hidden>
             <Activity size={20} aria-hidden />
           </span>
-          <p className="dash-panel-empty-title">Nothing has happened yet</p>
+          <p className="dash-panel-empty-title">{clearedCount > 0 ? 'All caught up' : 'Nothing has happened yet'}</p>
           <p className="dash-panel-empty-sub">
-            Stays, guest questions, service requests, and Brain updates will all stream into this feed.
+            {clearedCount > 0 ? (
+              <>
+                You cleared everything in this list.{' '}
+                <button type="button" className="dash-panel-empty-link" onClick={restore}>
+                  Restore cleared activity
+                </button>
+              </>
+            ) : (
+              'Stays, guest questions, service requests, and Brain updates will all stream into this feed.'
+            )}
           </p>
         </div>
       )}
+      </CollapsibleBody>
     </section>
   );
 }

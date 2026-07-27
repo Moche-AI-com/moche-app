@@ -19,6 +19,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ValueMetrics, GuestFeedbackSummary, GuestAiFeedbackItem } from '@/lib/dashboard/overview';
+import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
+import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
 
 function fmt(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
@@ -255,6 +257,8 @@ function FeedbackRow({ item }: { item: GuestAiFeedbackItem }) {
 
 export function GuestFeedbackPanel({ feedback }: { feedback: GuestFeedbackSummary }) {
   const hasFeedback = feedback.count > 0;
+  const { isCollapsed, toggle } = useCollapsedCards();
+  const collapsed = isCollapsed('guest-feedback');
   return (
     <section className="card dash-fb-panel rise-in" data-testid="guest-feedback-panel">
       <div className="dash-fb-header">
@@ -264,23 +268,27 @@ export function GuestFeedbackPanel({ feedback }: { feedback: GuestFeedbackSummar
           </h2>
           <p className="dash-section-sub">What guests think of the concierge you set up.</p>
         </div>
-        {hasFeedback && feedback.satisfactionPct != null && (
-          <div className="dash-fb-score" data-testid="guest-feedback-score">
-            <div className="dash-fb-score-num">{feedback.satisfactionPct}%</div>
-            <div className="dash-fb-score-label">
-              satisfied
-              <br />
-              {feedback.avgRating != null && (
-                <span className="dash-fb-avg">
-                  <Star size={11} aria-hidden style={{ fill: 'currentColor' }} /> {feedback.avgRating} avg · {fmt(feedback.count)} rating
-                  {feedback.count === 1 ? '' : 's'}
-                </span>
-              )}
+        <div className="dash-panel-head-aside">
+          {hasFeedback && feedback.satisfactionPct != null && (
+            <div className="dash-fb-score" data-testid="guest-feedback-score">
+              <div className="dash-fb-score-num">{feedback.satisfactionPct}%</div>
+              <div className="dash-fb-score-label">
+                satisfied
+                <br />
+                {feedback.avgRating != null && (
+                  <span className="dash-fb-avg">
+                    <Star size={11} aria-hidden style={{ fill: 'currentColor' }} /> {feedback.avgRating} avg · {fmt(feedback.count)} rating
+                    {feedback.count === 1 ? '' : 's'}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          <CollapseToggle collapsed={collapsed} onToggle={() => toggle('guest-feedback')} panelId="guest-feedback-body" label="Guest feedback on your AI" />
+        </div>
       </div>
 
+      <CollapsibleBody id="guest-feedback-body" collapsed={collapsed}>
       {hasFeedback ? (
         <ul className="dash-fb-list">
           {feedback.recent.map((item) => (
@@ -298,6 +306,7 @@ export function GuestFeedbackPanel({ feedback }: { feedback: GuestFeedbackSummar
           </p>
         </div>
       )}
+      </CollapsibleBody>
     </section>
   );
 }

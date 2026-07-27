@@ -686,10 +686,82 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
 .dash-insights-row { display: grid; gap: var(--gap-section); grid-template-columns: 1fr; align-items: start; }
 @media (min-width: 900px) { .dash-insights-row { grid-template-columns: 1.6fr 1fr; } }
 
+/* Collapsible cards: grid-template-rows 1fr -> 0fr avoids measuring pixel
+   heights in JS, so charts and variable-length lists animate correctly
+   without a ResizeObserver. */
+.dash-collapsible {
+  display: grid; grid-template-rows: 1fr;
+  transition: grid-template-rows 260ms var(--ease-out);
+}
+.dash-collapsible[data-collapsed="true"] { grid-template-rows: 0fr; }
+.dash-collapsible-inner { overflow: hidden; min-height: 0; }
+
+.dash-collapse-toggle {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-muted); cursor: pointer;
+  transition: background var(--tr), border-color var(--tr), color var(--tr);
+}
+.dash-collapse-toggle:hover {
+  background: var(--surface); border-color: var(--border-strong); color: var(--text);
+}
+.dash-collapse-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+.dash-collapse-chevron { transition: transform 220ms var(--ease-out); }
+.dash-collapse-chevron[data-collapsed="true"] { transform: rotate(-90deg); }
+
+/* Recent-activity dismiss: sits beside the row's link rather than inside it
+   (see FeedRow comment), so it needs its own tiny flex shell. */
+.dash-feed-row { display: flex; align-items: flex-start; gap: .4rem; }
+.dash-feed-row > .dash-feed-link { flex: 1; min-width: 0; }
+.dash-feed-dismiss {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 26px; height: 26px; margin-top: .8rem; border-radius: 999px;
+  background: transparent; border: 1px solid transparent;
+  color: var(--text-faint); opacity: 0; cursor: pointer;
+  transition: opacity var(--tr), background var(--tr), color var(--tr), border-color var(--tr);
+}
+.dash-feed-item:hover .dash-feed-dismiss,
+.dash-feed-item:focus-within .dash-feed-dismiss,
+.dash-feed-dismiss:focus-visible { opacity: 1; }
+.dash-feed-dismiss:hover {
+  background: color-mix(in srgb, var(--coral) 12%, transparent);
+  border-color: color-mix(in srgb, var(--coral) 30%, transparent);
+  color: var(--coral);
+}
+.dash-feed-dismiss:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+
+/* Exit animation on clear — same grid-rows trick, plus a fade so the row
+   reads as "dismissed" rather than abruptly deleted. */
+.dash-feed-item {
+  display: grid; grid-template-rows: 1fr; opacity: 1;
+  transition: grid-template-rows 220ms var(--ease-out), opacity 220ms var(--ease-out);
+}
+.dash-feed-item > .dash-feed-row { overflow: hidden; min-height: 0; }
+.dash-feed-item-exiting { grid-template-rows: 0fr; opacity: 0; }
+
+.dash-feed-restore {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .72rem; font-weight: 600; color: var(--text-muted);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: .3rem .55rem; cursor: pointer;
+  transition: background var(--tr), color var(--tr), border-color var(--tr);
+  white-space: nowrap;
+}
+.dash-feed-restore:hover { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+
+.dash-panel-empty-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--teal); font-weight: 600; text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--teal) 40%, transparent);
+}
+.dash-panel-empty-link:hover { text-decoration-color: var(--teal); }
+
 @media (prefers-reduced-motion: reduce) {
   .dash-newbtn:hover, .dash-newbtn:active { transform: none; }
   .dash-attn-chip-link:hover,
   a.dash-feed-link:hover { transform: none; }
   .dash-topic-fill { transition: none; }
   .dash-panel-link, .dash-panel-link:hover { gap: .3rem; }
+  .dash-collapsible, .dash-collapse-chevron, .dash-feed-item { transition: none; }
 }
