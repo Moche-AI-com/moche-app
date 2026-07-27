@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/server';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { loadValueMetrics, loadGuestFeedback } from '@/lib/dashboard/overview';
+import { loadActivityTrend, loadTopTopics, loadActivityFeed } from '@/lib/dashboard/insights';
 import { ValueHero, ValueMetricsGrid, GuestFeedbackPanel } from './DashboardOverview';
+import { AttentionStrip, ActivityTrendCard, TopTopicsCard, ActivityFeedCard } from './DashboardInsights';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,8 +49,10 @@ export default async function DashboardHome() {
   const escCount = openEsc?.length ?? 0;
   const svcCount = services?.length ?? 0;
 
-  // Value metrics + guest AI feedback (admin-scoped to this host's properties).
-  const [metrics, feedback] = await Promise.all([
+  // Value metrics, guest AI feedback, and the insight panels. All admin-scoped to
+  // this host's own property IDs and all best-effort — a failure in any one of
+  // them degrades to an empty state instead of blanking the dashboard.
+  const [metrics, feedback, trend, topics, feed] = await Promise.all([
     loadValueMetrics(supabase, propertyIds, {
       activeStays,
       openEscalations: escCount,
@@ -56,7 +60,13 @@ export default async function DashboardHome() {
       knowledgeItems: totalKnowledge,
     }),
     loadGuestFeedback(supabase, propertyIds, propertyNames),
+    loadActivityTrend(supabase, propertyIds, 14),
+    loadTopTopics(supabase, propertyIds, 5),
+    loadActivityFeed(supabase, propertyIds, propertyNames, 8),
   ]);
+
+  // Low ratings worth a second look, from the recent feedback sample.
+  const lowRatings = feedback.recent.filter((f) => f.rating != null && f.rating <= 2).length;
 
   const hostName = (ctx.profile.full_name ?? '').split(' ')[0] ?? '';
 
@@ -87,7 +97,14 @@ export default async function DashboardHome() {
         </div>
       )}
 
+      <AttentionStrip openEscalations={escCount} openServiceRequests={svcCount} lowRatings={lowRatings} />
+
       <ValueMetricsGrid metrics={metrics} activeStaysHref={activeStaysHref} knowledgeItemsHref={knowledgeItemsHref} />
+
+      <div className="dash-insights-row">
+        <ActivityTrendCard trend={trend} />
+        <TopTopicsCard topics={topics} brainHref={knowledgeItemsHref} />
+      </div>
 
       <div className="dash-two-col">
         <div className="dash-col-main">
@@ -141,7 +158,8 @@ export default async function DashboardHome() {
           )}
         </div>
 
-        <div className="dash-col-side">
+        <div className="dash-col-side" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <ActivityFeedCard events={feed} />
           <GuestFeedbackPanel feedback={feedback} />
         </div>
       </div>

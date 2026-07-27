@@ -35,16 +35,13 @@ export function DashboardNav({ unread, notifications }: { unread: number; notifi
           {LINKS.map((l) => {
             const active = l.href === '/dashboard' ? pathname === l.href : pathname.startsWith(l.href);
             return (
+              // Styling lives entirely in globals.css (.dash-tab) — inline styles would
+              // beat the :hover/:focus-visible rules and kill the hover affordance.
               <Link
                 key={l.href}
                 href={l.href}
                 className={`dash-tab${active ? ' dash-tab-active' : ''}`}
-                style={{
-                  padding: '.4rem .75rem', borderRadius: 'var(--radius-md)', fontSize: '.9rem', fontWeight: 600,
-                  color: active ? 'var(--teal)' : 'var(--text-muted)',
-                  background: active ? 'var(--surface-2)' : 'transparent',
-                  transition: 'color var(--tr), background var(--tr)',
-                }}
+                aria-current={active ? 'page' : undefined}
               >
                 {l.label}
               </Link>

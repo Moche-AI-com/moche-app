@@ -44,6 +44,11 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  // Re-sync from the server after revalidatePath pushes fresh props, otherwise
+  // local state would keep serving a stale snapshot for the rest of the session.
+  useEffect(() => { setItems(initialItems); }, [initialItems]);
+  useEffect(() => { setUnread(initialUnread); }, [initialUnread]);
+
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
@@ -61,10 +66,17 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
 
   function handleItemClick(item: NotificationItem) {
     if (!item.read_at) {
+      // Optimistic update, rolled back if the server rejects it so the UI never
+      // claims a notification was read when it wasn't.
       setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n)));
       setUnread((u) => Math.max(0, u - 1));
       startTransition(() => {
-        void markNotificationReadAction(item.id);
+        void markNotificationReadAction(item.id).then((res) => {
+          if (!res?.ok) {
+            setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: null } : n)));
+            setUnread((u) => u + 1);
+          }
+        });
       });
     }
     setOpen(false);
@@ -72,10 +84,17 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
   }
 
   function handleMarkAllRead() {
+    const prevItems = items;
+    const prevUnread = unread;
     setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
     setUnread(0);
     startTransition(() => {
-      void markAllNotificationsReadAction();
+      void markAllNotificationsReadAction().then((res) => {
+        if (!res?.ok) {
+          setItems(prevItems);
+          setUnread(prevUnread);
+        }
+      });
     });
   }
 
@@ -149,7 +168,11 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
                       padding: '.75rem 1rem',
                       border: 'none',
                       borderBottom: '1px solid var(--border)',
-                      background: isUnread ? 'var(--surface-2)' : 'transparent',
+                      // Unread rows need a tint that reads against the .card surface
+                      // (--surface-2 is the card background, so it was invisible) plus
+                      // a teal rail matching the /dashboard/notifications page.
+                      borderLeft: isUnread ? '3px solid var(--teal)' : '3px solid transparent',
+                      background: isUnread ? 'color-mix(in srgb, var(--teal) 8%, transparent)' : 'transparent',
                       cursor: 'pointer',
                     }}
                   >
@@ -159,7 +182,20 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: 'block', fontSize: '.85rem', fontWeight: isUnread ? 600 : 500 }}>{item.title}</span>
                       {item.body && (
-                        <span className="muted" style={{ display: 'block', fontSize: '.78rem', marginTop: '.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span
+                          className="muted"
+                          style={{
+                            fontSize: '.78rem',
+                            marginTop: '.15rem',
+                            // Clamp to 2 whole lines instead of a single nowrap line —
+                            // nowrap+ellipsis cut words mid-token ("doo…", "cod…").
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
                           {item.body}
                         </span>
                       )}
