@@ -68,6 +68,10 @@ export function AddressAutocomplete({
   const boxRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Holds the text we just wrote into the field from a chosen suggestion, so the
+  // lookup effect skips it instead of immediately re-querying and reopening the
+  // dropdown with unrelated matches.
+  const chosenRef = useRef<string | null>(null);
 
   // Close the dropdown on outside click.
   useEffect(() => {
@@ -82,6 +86,10 @@ export function AddressAutocomplete({
     if (manual) return;
     const q = query.trim();
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (chosenRef.current !== null && chosenRef.current === q) {
+      chosenRef.current = null;
+      return;
+    }
     if (q.length < 3) {
       setSuggestions([]);
       setOpen(false);
@@ -133,11 +141,17 @@ export function AddressAutocomplete({
     if (s.country) setField(targets.country, s.country);
     setLat(String(s.lat));
     setLng(String(s.lng));
-    setQuery(s.line1 ?? s.label);
+    const chosenText = s.line1 ?? s.label;
+    chosenRef.current = chosenText.trim();
+    abortRef.current?.abort();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setQuery(chosenText);
     setConfirmed(true);
     setNotice(null);
+    setSuggestions([]);
     setOpen(false);
     setActive(-1);
+    setLoading(false);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {

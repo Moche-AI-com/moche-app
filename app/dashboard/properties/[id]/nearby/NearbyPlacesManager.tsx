@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { Star, EyeOff, Eye, RefreshCw, StickyNote, MapPin, Phone, Globe, Navigation } from 'lucide-react';
+import { Star, EyeOff, Eye, RefreshCw, StickyNote, MapPin, Phone, Globe, Navigation, Info } from 'lucide-react';
 import StaticMapPreview from '@/components/StaticMapPreview';
 import { directionsUrl } from '@/lib/local/static-map';
 import {
@@ -139,6 +139,10 @@ export function NearbyPlacesManager({
 
   const availableCategories = CATEGORY_ORDER.filter((cat) => visible.some((p) => p.category === cat));
 
+  // Rows saved before the richer place data existed have no contact details yet.
+  const needsEnrichment =
+    initialPlaces.length > 0 && !initialPlaces.some((p) => p.phone || p.url || p.address);
+
   return (
     <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1.5rem' }}>
       <section className="card" style={{ padding: '1rem' }}>
@@ -157,6 +161,11 @@ export function NearbyPlacesManager({
         {!hasCoords && (
           <p style={{ color: 'var(--coral, #c0392b)', fontSize: '.85rem', marginTop: '.6rem', display: 'flex', alignItems: 'center', gap: '.35rem' }}>
             <MapPin size={14} /> Set the property location in Settings → Address first.
+          </p>
+        )}
+        {hasCoords && canEdit && needsEnrichment && !refreshState.ok && (
+          <p className="muted" style={{ fontSize: '.82rem', marginTop: '.6rem', display: 'flex', alignItems: 'center', gap: '.35rem' }}>
+            <Info size={14} /> Refresh to pull in phone numbers, websites, and street addresses for these places.
           </p>
         )}
         {refreshState.error && (
