@@ -188,5 +188,6 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     isEmergency: answer.isEmergency,
     serviceRequestCreated: maintenance.created,
     suggestions: answer.suggestions,
+    places: answer.places,
   });
 }

@@ -6,10 +6,20 @@ import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
   ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
   AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, Wrench,
-  Paperclip, Loader2, CheckCircle2, type LucideIcon,
+  Paperclip, Loader2, CheckCircle2, Phone, Globe, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
+import { formatDistance } from '@/lib/local/distance';
+
+// Client-safe mirror of the label map in lib/guest/concierge.ts (that module is
+// server-only, so its constant is not importable here). Keep the two in sync.
+const NEARBY_CATEGORY_LABEL: Record<string, string> = {
+  restaurant: 'Restaurant', cafe: 'Cafe', bar: 'Bar/Pub', grocery: 'Grocery',
+  pharmacy: 'Pharmacy', hospital: 'Hospital', tourist_attraction: 'Attraction',
+  golf_course: 'Golf course', convenience_store: 'Convenience store', bakery: 'Bakery',
+  park: 'Park', gas_station: 'Gas station',
+};
 
 // Luxury concierge palette (per Feature 3 brief). Fixed dark base + gold accent so the
 // portal reads as a high-end hotel experience regardless of per-property brand colors.
@@ -114,11 +124,36 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+interface ChatPlaceRef {
+  id: string;
+  name: string;
+  category: string;
+}
+
+// Shape returned by GET /api/guest/[slug]/places/[id] — every link here is server-
+// constructed from verified DB fields, never from the model's own text (WS-5).
+interface PlaceDetail {
+  id: string;
+  name: string;
+  category: string;
+  address: string | null;
+  rating: number | null;
+  reviewCount: number | null;
+  priceLevel: number | null;
+  distanceM: number | null;
+  hostNote: string | null;
+  hostFavorite: boolean;
+  mapsUrl: string | null;
+  websiteUrl: string | null;
+  telHref: string | null;
+}
+
 interface ChatEntry {
   role: 'guest' | 'assistant' | 'host';
   content: string;
   escalated?: boolean;
   isEmergency?: boolean;
+  places?: ChatPlaceRef[];
 }
 
 export interface ReviewNudgeConfig { enabled: boolean; auto: boolean; url: string | null }
@@ -555,6 +590,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const [srPendingMedia, setSrPendingMedia] = useState<string[]>([]);
   const [srUploading, setSrUploading] = useState(false);
   const srFileInputRef = useRef<HTMLInputElement>(null);
+  // WS-5 — place-detail bottom sheet. `placeDetail` is fetched fresh from the server
+  // (never rendered from the model's chat text) so links shown here are always verified.
+  const [placeDetailId, setPlaceDetailId] = useState<string | null>(null);
+  const [placeDetail, setPlaceDetail] = useState<PlaceDetail | null>(null);
+  const [placeDetailLoading, setPlaceDetailLoading] = useState(false);
+  const [placeDetailError, setPlaceDetailError] = useState<string | null>(null);
   // Portal guard: overlays must render into document.body (see anySheetOpen effect below)
   // to escape the transformed .gp-rise ancestor, which would otherwise trap position:fixed
   // and make bottom sheets appear below the tapped card instead of pinned to the viewport.
@@ -580,7 +621,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 
   // Lock body scroll while a bottom sheet is open so the underlying portal can't scroll
   // behind the sheet on mobile (a common bottom-sheet UX defect). Restored on close.
-  const anySheetOpen = !!activeCategory || hostComposerOpen || srOpen;
+  const anySheetOpen = !!activeCategory || hostComposerOpen || srOpen || !!placeDetailId;
   useEffect(() => {
     if (!anySheetOpen || typeof document === 'undefined') return;
     const prev = document.body.style.overflow;
@@ -619,7 +660,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'I could not answer just now.');
-      setEntries((e) => [...e, { role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency }]);
+      const places: ChatPlaceRef[] = Array.isArray(json.places)
+        ? json.places
+            .filter((p: unknown): p is ChatPlaceRef => !!p && typeof p === 'object' && typeof (p as ChatPlaceRef).id === 'string')
+            .slice(0, 4)
+        : [];
+      setEntries((e) => [...e, { role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency, places }]);
       setSuggestions(Array.isArray(json.suggestions) ? json.suggestions.slice(0, 3) : []);
     } catch (e) {
       setEntries((prev) => [...prev, { role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
@@ -781,6 +827,34 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     setSrInput('');
     setSrError(null);
     setSrPendingMedia([]);
+  }
+
+  // WS-5 — open the place-detail sheet and fetch the server-verified record for the
+  // tapped chip. Host preview has no guest session, so it degrades to a friendly
+  // "not verified" message rather than hitting the session-gated guest endpoint.
+  const openPlaceDetail = useCallback((id: string) => {
+    setPlaceDetailId(id);
+    setPlaceDetail(null);
+    setPlaceDetailError(null);
+    if (hostPreview) {
+      setPlaceDetailError('Place details are not available in host preview.');
+      return;
+    }
+    setPlaceDetailLoading(true);
+    fetch(`/api/guest/${slug}/places/${id}`)
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok || !json.verified) throw new Error('not_verified');
+        setPlaceDetail(json.place as PlaceDetail);
+      })
+      .catch(() => setPlaceDetailError("We couldn't verify this place right now."))
+      .finally(() => setPlaceDetailLoading(false));
+  }, [hostPreview, slug]);
+
+  function closePlaceDetail() {
+    setPlaceDetailId(null);
+    setPlaceDetail(null);
+    setPlaceDetailError(null);
   }
 
   // Hydrate prior conversation history on mount so a returning guest (new tab, reload,
@@ -952,6 +1026,27 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                   )}
                   <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
                 </div>
+                {m.places && m.places.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem', marginTop: '.4rem' }}>
+                    {m.places.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => openPlaceDetail(p.id)}
+                        className="gp-place-chip"
+                        data-testid={`place-chip-${p.id}`}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '.3rem', border: `1px solid ${GOLD}55`,
+                          background: 'rgba(201,169,110,0.1)', color: 'inherit', borderRadius: 999,
+                          padding: '.32rem .65rem .32rem .55rem', fontSize: '.78rem', cursor: 'pointer', lineHeight: 1.2,
+                        }}
+                      >
+                        <MapPin size={12} aria-hidden style={{ color: GOLD, flexShrink: 0 }} />
+                        <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {m.escalated && <div style={{ fontSize: '.72rem', opacity: 0.6, marginTop: '.25rem' }}>Sent to your host — they&apos;ll follow up.</div>}
               </div>
             </div>
@@ -1249,6 +1344,103 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         document.body,
       )}
 
+      {mounted && !!placeDetailId && createPortal(
+        <div className="gp-sheet-scrim" onClick={closePlaceDetail} data-testid="place-detail-overlay">
+          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Place details" data-testid="place-detail-panel">
+            <div className="gp-sheet-grip" aria-hidden />
+            <div className="gp-sheet-head">
+              <span className="gp-cat-icon gp-sheet-badge"><MapPin size={22} aria-hidden /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="gp-serif gp-sheet-title">{placeDetail?.name ?? 'Place details'}</div>
+                {placeDetail && (
+                  <div className="gp-sheet-sub">
+                    {placeDetail.hostFavorite ? 'Host favorite' : NEARBY_CATEGORY_LABEL[placeDetail.category] ?? placeDetail.category}
+                    {typeof placeDetail.distanceM === 'number' && ` \u00b7 ${formatDistance(placeDetail.distanceM)}`}
+                  </div>
+                )}
+              </div>
+              <button onClick={closePlaceDetail} className="gp-sheet-close" data-testid="button-close-place-detail" aria-label="Close">
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem', padding: '.6rem .2rem .2rem' }}>
+              {placeDetailLoading && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '1.2rem 0' }}>
+                  <Loader2 size={20} aria-hidden className="gp-spin" />
+                </div>
+              )}
+
+              {placeDetailError && (
+                <div style={alertErr} data-testid="place-detail-error">{placeDetailError}</div>
+              )}
+
+              {placeDetail && !placeDetailLoading && (
+                <>
+                  {placeDetail.hostNote && (
+                    <div style={{ fontSize: '.88rem', lineHeight: 1.5, background: 'rgba(201,169,110,0.08)', border: `1px solid ${GOLD}33`, borderRadius: 12, padding: '.6rem .75rem' }}>
+                      <span style={{ fontWeight: 600, color: GOLD }}>Host note: </span>{placeDetail.hostNote}
+                    </div>
+                  )}
+                  {placeDetail.address && (
+                    <div style={{ fontSize: '.86rem', opacity: 0.85, display: 'flex', alignItems: 'flex-start', gap: '.4rem' }}>
+                      <MapPin size={14} aria-hidden style={{ flexShrink: 0, marginTop: 2, color: GOLD }} />
+                      <span>{placeDetail.address}</span>
+                    </div>
+                  )}
+                  {(placeDetail.rating != null || placeDetail.priceLevel != null) && (
+                    <div style={{ fontSize: '.86rem', opacity: 0.85 }}>
+                      {placeDetail.rating != null && `\u2605 ${placeDetail.rating.toFixed(1)}`}
+                      {placeDetail.rating != null && placeDetail.reviewCount != null && ` (${placeDetail.reviewCount})`}
+                      {placeDetail.rating != null && placeDetail.priceLevel != null && '  \u00b7  '}
+                      {placeDetail.priceLevel != null && '$'.repeat(Math.max(1, placeDetail.priceLevel))}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                    {placeDetail.mapsUrl && (
+                      <a
+                        href={placeDetail.mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="gp-bell-send"
+                        data-testid="button-place-detail-maps"
+                        style={{ height: 'auto', padding: '.6rem .95rem', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: '.4rem', fontWeight: 600, textDecoration: 'none' }}
+                      >
+                        <MapPin size={15} aria-hidden /> Open in Maps
+                      </a>
+                    )}
+                    {placeDetail.telHref && (
+                      <a
+                        href={placeDetail.telHref}
+                        className="gp-sheet-close"
+                        data-testid="button-place-detail-call"
+                        style={{ width: 'auto', height: 'auto', padding: '.6rem .95rem', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: '.4rem', textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <Phone size={15} aria-hidden /> Call
+                      </a>
+                    )}
+                    {placeDetail.websiteUrl && (
+                      <a
+                        href={placeDetail.websiteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="gp-sheet-close"
+                        data-testid="button-place-detail-website"
+                        style={{ width: 'auto', height: 'auto', padding: '.6rem .95rem', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: '.4rem', textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <Globe size={15} aria-hidden /> Website
+                      </a>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {/* Global (not scoped) so the portaled bottom sheets rendered into document.body
           still receive these styles. All selectors are gp-* prefixed — no collision risk. */}
       <style jsx global>{`
@@ -1361,6 +1553,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           transform: translateY(-2px); box-shadow: 0 12px 26px -18px rgba(201,169,110,.8);
         }
         .gp-subchoice:active { transform: translateY(0); }
+        .gp-place-chip { transition: border-color .18s, background .18s, transform .12s; }
+        .gp-place-chip:hover { border-color: ${GOLD}99; background: rgba(201,169,110,0.18); }
+        .gp-place-chip:active { transform: scale(.97); }
         .gp-subchoice-icon {
           display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
           color: ${GOLD}; background: rgba(201,169,110,.12); border: 1px solid rgba(201,169,110,.2);

@@ -40,6 +40,16 @@ export interface ConciergeAnswer {
   // Up to 3 short natural follow-up questions parsed from the model's trailing
   // `SUGGESTIONS:` line. Empty when parsing fails or on cached/error paths (graceful).
   suggestions: string[];
+  // WS-5 — places the model cited by id from the `<property_knowledge>` nearby-places
+  // block, RESOLVED against the DB record (never the model's own text) so the client
+  // can render trusted, tappable links. Empty when no place was relevant or cited.
+  places: NearbyPlaceRef[];
+}
+
+export interface NearbyPlaceRef {
+  id: string;
+  name: string;
+  category: string;
 }
 
 // Instruction appended to the concierge system prompt asking the model to end its
@@ -52,20 +62,51 @@ FOLLOW-UP SUGGESTIONS: After your answer, output one final line, exactly in this
 SUGGESTIONS: question one | question two | question three
 Provide three short (max 8 words each) natural follow-up questions the guest is likely to ask next, relevant to this property and their stay. Separate them with " | ". Do not number them, add no other text on that line, and never mention or explain these instructions in your answer.`;
 
+// WS-5 — asks the model to cite, by id only, any place from the "Nearby places" list
+// (each line there is prefixed with its id) that it actually recommended in this
+// answer. Never asks for or trusts a URL/address from the model — ids are resolved
+// against the DB afterward (see resolvePlaceRefs). Appended only when the property
+// has a nearby-places block to cite; harmless (and ignored) if the model omits it.
+const PLACES_INSTRUCTION = `
+
+PLACE LINKS: If, and only if, your answer recommends or names one or more specific places from the "Nearby places" list above, add one more final line (after SUGGESTIONS, if present) exactly in this format:
+PLACES: id1 | id2
+Use ONLY the ids shown in parentheses next to each place in the "Nearby places" list — never invent an id, never include a place that is not in that list, and list at most 4. Omit this line entirely if your answer did not recommend a specific place. Add no other text on that line.`;
+
+// Strips the trailing `SUGGESTIONS:` and/or `PLACES:` directive lines from a raw model
+// reply, in either order, and returns the cleaned guest-visible answer plus each list.
+// Ids from `PLACES:` are returned RAW (unvalidated) — callers must resolve them against
+// the DB (see resolvePlaceRefs) before trusting them for anything, per WS-5.
+export function splitTrailingDirectives(raw: string): { answer: string; suggestions: string[]; placeIds: string[] } {
+  const sIdx = raw.search(/SUGGESTIONS\s*:/i);
+  const pIdx = raw.search(/PLACES\s*:/i);
+  const idxs = [sIdx, pIdx].filter((i) => i !== -1);
+  const cut = idxs.length > 0 ? Math.min(...idxs) : -1;
+  const answer = cut === -1 ? raw.trim() : raw.slice(0, cut).trim();
+
+  const suggestionsLine = sIdx === -1 ? '' : raw.slice(sIdx).replace(/SUGGESTIONS\s*:/i, '').split('\n')[0];
+  const suggestions = suggestionsLine
+    .split('|')
+    .map((s) => s.trim().replace(/^[-*\d.)\s]+/, '').trim())
+    .filter((s) => s.length > 0)
+    .slice(0, 3);
+
+  const placesLine = pIdx === -1 ? '' : raw.slice(pIdx).replace(/PLACES\s*:/i, '').split('\n')[0];
+  const placeIds = placesLine
+    .split('|')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .slice(0, 4);
+
+  return { answer, suggestions, placeIds };
+}
+
 // Split a raw model reply into the guest-visible answer and the parsed follow-up
 // suggestions. The model is asked to end with `SUGGESTIONS: a | b | c`; we strip that
 // line from the visible text and return up to 3 cleaned items. Returns an empty list
 // when the line is absent or malformed so callers can rely on the field always existing.
 export function splitSuggestions(raw: string): { answer: string; suggestions: string[] } {
-  const idx = raw.search(/SUGGESTIONS\s*:/i);
-  if (idx === -1) return { answer: raw.trim(), suggestions: [] };
-  const answer = raw.slice(0, idx).trim();
-  const line = raw.slice(idx).replace(/SUGGESTIONS\s*:/i, '').split('\n')[0];
-  const suggestions = line
-    .split('|')
-    .map((s) => s.trim().replace(/^[-*\d.)\s]+/, '').trim())
-    .filter((s) => s.length > 0)
-    .slice(0, 3);
+  const { answer, suggestions } = splitTrailingDirectives(raw);
   return { answer, suggestions };
 }
 
@@ -207,28 +248,48 @@ const NEARBY_CATEGORY_LABEL: Record<string, string> = {
 };
 
 
-// Build a concise, host-curated local-places block for the concierge. Hierarchy:
-// host-starred first (with the host's notes), then the rest of the non-hidden set.
-// Hidden places are excluded entirely. Returns '' when there is nothing to add so
-// the base prompt is unchanged for properties without nearby data.
-async function buildNearbyPlacesContext(admin: Admin, propertyId: string): Promise<string> {
+export interface NearbyPlaceRow {
+  id: string;
+  category: string;
+  name: string | null;
+  host_notes: string | null;
+  host_starred: boolean;
+  rating: number | null;
+  distance_m: number | null;
+}
+
+// Fetch the guest-visible (non-hidden) nearby-places set once per turn. Shared by the
+// prompt-context builder and the id-citation resolver below so a single query backs
+// both the model's context AND the server-trusted validation of what it cites (WS-5).
+async function fetchNearbyPlaces(admin: Admin, propertyId: string): Promise<NearbyPlaceRow[]> {
   const { data, error } = await admin
     .from('nearby_places')
-    .select('category, name, host_notes, host_starred, rating, distance_m')
+    .select('id, category, name, host_notes, host_starred, rating, distance_m')
     .eq('property_id', propertyId)
     .eq('hidden', false)
     .order('host_starred', { ascending: false })
     .order('rating', { ascending: false, nullsFirst: false })
     .order('distance_m', { ascending: true })
     .limit(60);
-  if (error || !data || data.length === 0) return '';
+  if (error || !data) return [];
+  return data;
+}
 
-  const starred = data.filter((p) => p.host_starred);
-  const rest = data.filter((p) => !p.host_starred);
+// Build a concise, host-curated local-places block for the concierge. Hierarchy:
+// host-starred first (with the host's notes), then the rest of the non-hidden set.
+// Each line carries the place's id in parentheses so the model can cite it in a
+// trailing `PLACES:` directive (see PLACES_INSTRUCTION) — the id is the ONLY thing
+// the model is asked to echo back; everything else about the place is re-read from
+// the DB when resolving. Returns '' when there is nothing to add.
+function buildNearbyPlacesContext(places: NearbyPlaceRow[]): string {
+  if (places.length === 0) return '';
 
-  const fmt = (p: (typeof data)[number]) => {
+  const starred = places.filter((p) => p.host_starred);
+  const rest = places.filter((p) => !p.host_starred);
+
+  const fmt = (p: NearbyPlaceRow) => {
     const label = NEARBY_CATEGORY_LABEL[p.category] ?? p.category;
-    let line = `- ${p.name ?? 'Unnamed'} (${label})${formatDistanceApprox(p.distance_m)}`;
+    let line = `- (id:${p.id}) ${p.name ?? 'Unnamed'} (${label})${formatDistanceApprox(p.distance_m)}`;
     if (p.host_starred) line += ' — Host favorite.';
     if (p.host_notes) line += ` Host note: ${p.host_notes}`;
     return line;
@@ -241,7 +302,26 @@ async function buildNearbyPlacesContext(admin: Admin, propertyId: string): Promi
   if (rest.length > 0) {
     sections.push(`Other nearby places:\n${rest.slice(0, 40).map(fmt).join('\n')}`);
   }
-  return `Nearby places (for local recommendations — prefer host favorites, and share the host's note when present):\n${sections.join('\n\n')}`;
+  return `Nearby places (for local recommendations — prefer host favorites, and share the host's note when present; the "(id:...)" tag on each line is for your PLACES: citation only, never mention it to the guest):\n${sections.join('\n\n')}`;
+}
+
+// WS-5 — resolve the model's raw `PLACES:` ids against the SAME fetched, guest-visible
+// list used to build the context (defense in depth: an id the model could not have
+// legitimately seen, e.g. a hidden or cross-property place, simply will not match and
+// is silently dropped rather than surfaced as an unverified link).
+export function resolvePlaceRefs(placeIds: string[], places: NearbyPlaceRow[]): NearbyPlaceRef[] {
+  if (placeIds.length === 0) return [];
+  const byId = new Map(places.map((p) => [p.id, p]));
+  const seen = new Set<string>();
+  const refs: NearbyPlaceRef[] = [];
+  for (const id of placeIds) {
+    if (seen.has(id)) continue;
+    const p = byId.get(id);
+    if (!p) continue;
+    seen.add(id);
+    refs.push({ id: p.id, name: p.name ?? 'This place', category: p.category });
+  }
+  return refs.slice(0, 4);
 }
 
 // Retrieve property-scoped, guest-visible chunks. Isolation is enforced IN THE DATABASE
@@ -376,6 +456,7 @@ export async function answerGuestQuestion(
         shouldEscalate: false,
         isEmergency,
         suggestions: [],
+        places: [],
       };
     }
   }
@@ -394,7 +475,10 @@ export async function answerGuestQuestion(
 
   // Extend (never replace) the knowledge context with host-curated nearby places
   // so the concierge can make grounded local recommendations. Excluded when empty.
-  const nearbyContext = await buildNearbyPlacesContext(admin, opts.propertyId);
+  // `nearbyPlaces` is kept around (not just the formatted string) so a `PLACES:`
+  // citation from the model can be resolved against it later (WS-5).
+  const nearbyPlaces = await fetchNearbyPlaces(admin, opts.propertyId);
+  const nearbyContext = buildNearbyPlacesContext(nearbyPlaces);
   const context = [chunkContext, nearbyContext].filter(Boolean).join('\n\n');
 
   let intent: IntentType = 'information';
@@ -424,7 +508,10 @@ export async function answerGuestQuestion(
     : buildSystemPrompt(opts.propertyName, context, cfg);
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: systemPrompt + SUGGESTIONS_INSTRUCTION },
+    {
+      role: 'system',
+      content: systemPrompt + SUGGESTIONS_INSTRUCTION + (nearbyPlaces.length > 0 ? PLACES_INSTRUCTION : ''),
+    },
     ...opts.history.slice(-6),
     { role: 'user', content: opts.question },
   ];
@@ -463,14 +550,17 @@ export async function answerGuestQuestion(
     return {
       text: "I'm having trouble answering right now. I've flagged this for your host.",
       confidence: 0, intent, model: 'error',
-      sources: [], shouldEscalate: true, isEmergency, suggestions: [],
+      sources: [], shouldEscalate: true, isEmergency, suggestions: [], places: [],
     };
   }
 
-  // Strip the trailing SUGGESTIONS line before scoring, caching, and returning so the
-  // guest never sees the machine directive and it never pollutes the answer cache.
-  const { answer: cleanText, suggestions } = splitSuggestions(text);
+  // Strip the trailing SUGGESTIONS/PLACES lines before scoring, caching, and returning
+  // so the guest never sees the machine directives and they never pollute the answer
+  // cache. The model's place ids are resolved against the DB-backed list, never trusted
+  // as-is (WS-5) — an id it could not have legitimately seen simply drops silently.
+  const { answer: cleanText, suggestions, placeIds } = splitTrailingDirectives(text);
   text = cleanText;
+  const places = resolvePlaceRefs(placeIds, nearbyPlaces);
 
   const confidence = scoreConfidence(chunks, text, nodes[0]?.similarity ?? 0);
   const shouldEscalate = confidence < threshold;
@@ -509,5 +599,6 @@ export async function answerGuestQuestion(
     shouldEscalate,
     isEmergency,
     suggestions,
+    places,
   };
 }
