@@ -8,7 +8,7 @@ import { log } from '@/lib/log';
 // unless a host forces it. Place data is slow-moving, and caching in our own
 // table means guest traffic never fans out to a third-party API.
 export const NEARBY_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
-const NEARBY_RADIUS_M = 2000;
+export const NEARBY_RADIUS_M = 2000;
 const PER_CATEGORY_LIMIT = 15;
 
 export interface RefreshResult {

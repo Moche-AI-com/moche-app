@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Star, EyeOff, Eye, RefreshCw, StickyNote, MapPin, Phone, Globe, Navigation, Info } from 'lucide-react';
 import StaticMapPreview from '@/components/StaticMapPreview';
 import { directionsUrl } from '@/lib/local/static-map';
+import { formatDistance } from '@/lib/local/distance';
 import {
   refreshNearbyPlacesAction,
   updateNearbyPlaceAction,
@@ -57,12 +58,6 @@ const linkStyle: React.CSSProperties = {
   color: 'var(--teal-deep, #0f766e)',
   textDecoration: 'none',
 };
-
-function metersToFriendly(m: number | null): string | null {
-  if (m == null) return null;
-  if (m < 950) return `${Math.round(m / 50) * 50} m`;
-  return `${(m / 1000).toFixed(1)} km`;
-}
 
 function RefreshButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
@@ -303,7 +298,7 @@ function PlaceCard({
 }) {
   const [, action] = useFormState<NearbyActionState, FormData>(updateNearbyPlaceAction, {});
   const [noteOpen, setNoteOpen] = useState(false);
-  const dist = metersToFriendly(place.distance_m);
+  const dist = formatDistance(place.distance_m);
 
   return (
     <div className="card" style={{ padding: '.75rem 1rem', opacity: place.hidden ? 0.6 : 1 }}>

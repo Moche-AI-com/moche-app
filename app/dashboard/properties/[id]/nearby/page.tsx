@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { isNearbyStale, refreshNearbyPlaces } from '@/lib/local/nearby';
+import { isNearbyStale, refreshNearbyPlaces, NEARBY_RADIUS_M } from '@/lib/local/nearby';
+import { formatRadiusMiles } from '@/lib/local/distance';
 import { geoProvider } from '@/lib/local/geo';
 import { NearbyPlacesManager } from './NearbyPlacesManager';
 
@@ -34,7 +35,7 @@ export default async function NearbyPlacesPage({ params }: { params: { id: strin
       </Link>
       <h1 style={{ marginTop: '.5rem' }}>Nearby places</h1>
       <p className="muted" style={{ maxWidth: 640 }}>
-        Auto-discovered within ~2&nbsp;km of your property using{' '}
+        Auto-discovered within ~{formatRadiusMiles(NEARBY_RADIUS_M)} of your property using{' '}
         {geoProvider() === 'mapbox' ? 'Mapbox place data' : 'free OpenStreetMap data'}. Star the places
         you love, add a note, or hide the ones you don&apos;t. Your concierge recommends starred places
         first (with your notes) and never mentions hidden ones.

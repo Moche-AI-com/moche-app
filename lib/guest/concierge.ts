@@ -8,6 +8,7 @@ import { log } from '@/lib/log';
 import { logAiUsage } from '@/lib/ai/usage';
 import { normalizeQuestion, getBrainVersion, lookupCachedAnswer, cacheAnswer } from '@/lib/brain/cache';
 import { NODE_TYPES, type NodeType } from '@/lib/normalizer';
+import { formatDistanceApprox } from '@/lib/local/distance';
 
 type Admin = SupabaseClient<Database>;
 type IntentType = Database['public']['Enums']['intent_type'];
@@ -205,10 +206,6 @@ const NEARBY_CATEGORY_LABEL: Record<string, string> = {
   park: 'Park', gas_station: 'Gas station',
 };
 
-function nearbyDistance(m: number | null): string {
-  if (m == null) return '';
-  return m < 950 ? ` (~${Math.round(m / 50) * 50} m)` : ` (~${(m / 1000).toFixed(1)} km)`;
-}
 
 // Build a concise, host-curated local-places block for the concierge. Hierarchy:
 // host-starred first (with the host's notes), then the rest of the non-hidden set.
@@ -231,7 +228,7 @@ async function buildNearbyPlacesContext(admin: Admin, propertyId: string): Promi
 
   const fmt = (p: (typeof data)[number]) => {
     const label = NEARBY_CATEGORY_LABEL[p.category] ?? p.category;
-    let line = `- ${p.name ?? 'Unnamed'} (${label})${nearbyDistance(p.distance_m)}`;
+    let line = `- ${p.name ?? 'Unnamed'} (${label})${formatDistanceApprox(p.distance_m)}`;
     if (p.host_starred) line += ' — Host favorite.';
     if (p.host_notes) line += ` Host note: ${p.host_notes}`;
     return line;

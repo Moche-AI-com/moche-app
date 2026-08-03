@@ -9,6 +9,7 @@ import { log } from '@/lib/log';
 import { bumpBrainVersion } from '@/lib/brain/cache';
 import type { LocalPoi } from '@/lib/local/osm';
 import { discoverLocalIntelViaProvider } from '@/lib/local/geo';
+import { formatDistanceAway } from '@/lib/local/distance';
 import { reindexBrainItem } from '@/app/dashboard/properties/[id]/brain/actions';
 
 export interface RecActionState {
@@ -28,12 +29,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   pharmacy: 'Pharmacy',
   hospital: 'Hospital / Urgent care',
 };
-
-function metersToFriendly(m: number | null): string | null {
-  if (m == null) return null;
-  if (m < 950) return `${Math.round(m / 50) * 50} m away`;
-  return `${(m / 1000).toFixed(1)} km away`;
-}
 
 // ---------------------------------------------------------------------------
 // C3 — Discover nearby places from FREE OSM sources and STAGE them for review.
@@ -81,10 +76,10 @@ export async function discoverLocalIntelAction(
       category: poi.category,
       address: poi.address,
       url: poi.url,
-      distance_note: metersToFriendly(poi.distanceMeters),
+      distance_note: formatDistanceAway(poi.distanceMeters),
       description: [
         CATEGORY_LABEL[poi.category] ?? poi.category,
-        poi.distanceMeters != null ? metersToFriendly(poi.distanceMeters) : null,
+        formatDistanceAway(poi.distanceMeters),
         poi.phone ? `Phone ${poi.phone}` : null,
       ].filter(Boolean).join(' · '),
       visibility: 'guest' as const,
