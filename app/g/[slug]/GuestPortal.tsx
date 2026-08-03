@@ -119,7 +119,7 @@ interface ChatEntry {
 }
 
 export interface ReviewNudgeConfig { enabled: boolean; auto: boolean; url: string | null }
-export interface UpsellOffer {
+export interface ExtraOffer {
   id: string;
   title: string;
   description: string | null;
@@ -166,7 +166,7 @@ export function GuestPortal(props: {
   hostPreview: boolean;
   guestName: string | null;
   reviewNudge: ReviewNudgeConfig;
-  upsellOffers: UpsellOffer[];
+  extraOffers: ExtraOffer[];
 }) {
   const [verified, setVerified] = useState(props.initialVerified);
   const [guestName, setGuestName] = useState(props.guestName);
@@ -236,7 +236,7 @@ export function GuestPortal(props: {
             propertyName={props.propertyName}
             guestName={guestName}
             reviewNudge={props.reviewNudge}
-            upsellOffers={props.upsellOffers}
+            extraOffers={props.extraOffers}
           />
         )}
 
@@ -515,7 +515,7 @@ function playChime() {
   }
 }
 
-function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, reviewNudge, upsellOffers }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null; reviewNudge: ReviewNudgeConfig; upsellOffers: UpsellOffer[] }) {
+function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, reviewNudge, extraOffers }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null; reviewNudge: ReviewNudgeConfig; extraOffers: ExtraOffer[] }) {
   const [entries, setEntries] = useState<ChatEntry[]>([
     { role: 'assistant', content: `Hi${guestName ? ` ${guestName}` : ''}! I'm your concierge for ${propertyName}. Tap a category below for instant answers — or ask me anything.` },
   ]);
@@ -796,10 +796,10 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         ))}
       </div>
 
-      {/* Add-on: Enhancements — host-configured upsell offers. Tapping a CTA routes
+      {/* Add-on: Extras — host-configured guest extras. Tapping a CTA routes
           through the existing escalation + notify() path so the host is alerted. */}
-      {upsellOffers.length > 0 && (
-        <UpsellSection slug={slug} offers={upsellOffers} hostPreview={hostPreview} />
+      {extraOffers.length > 0 && (
+        <ExtrasSection slug={slug} offers={extraOffers} hostPreview={hostPreview} />
       )}
 
       {/* Direct line to the host. Deliberately relocated ABOVE the chat (out of the
@@ -1210,12 +1210,12 @@ function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => 
   );
 }
 
-// Add-on: Enhancements — host-configured upsell offers rendered as frosted cards.
+// Add-on: Extras — host-configured guest extras rendered as frosted cards.
 // Tapping the CTA routes through the EXISTING escalation + notify() path (the same
 // mechanism the chat route uses for low-confidence questions) so the host is alerted
 // in-app, by email, and (Pro+, consented) by SMS. No new guest channel is invented.
 // Guest visibility is intentionally NOT gated — the host creating an offer is the opt-in.
-function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: UpsellOffer[]; hostPreview: boolean }) {
+function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: ExtraOffer[]; hostPreview: boolean }) {
   // Per-offer request state so each card independently reflects idle/sending/done.
   const [state, setState] = useState<Record<string, 'idle' | 'busy' | 'done' | 'error'>>({});
 
@@ -1225,7 +1225,7 @@ function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: Up
     if (hostPreview) { setState((s) => ({ ...s, [offerId]: 'done' })); return; }
     setState((s) => ({ ...s, [offerId]: 'busy' }));
     try {
-      const res = await fetch(`/api/guest/${slug}/upsell-request`, {
+      const res = await fetch(`/api/guest/${slug}/extras-request`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ offerId }),
       });
@@ -1237,7 +1237,7 @@ function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: Up
   }, [hostPreview, slug, state]);
 
   return (
-    <section style={{ marginTop: '1.5rem' }} data-testid="upsell-section">
+    <section style={{ marginTop: '1.5rem' }} data-testid="extras-section">
       {/* Premium banner — drops to a gold-tinted dark gradient if the asset is absent. */}
       <PremiumImage
         src="/premium/enhancements-banner.jpg"
@@ -1245,7 +1245,7 @@ function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: Up
         aspectRatio="21 / 6"
         radius={16}
         sizes="(max-width: 720px) 100vw, 720px"
-        className="gp-upsell-banner"
+        className="gp-extra-banner"
       >
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', padding: '.9rem 1.1rem', background: 'linear-gradient(to top, rgba(13,15,20,.75), transparent 70%)' }}>
           <span className="gp-serif" style={{ fontSize: '1.25rem', color: '#fbf7ef' }}>Elevate your stay</span>
@@ -1254,12 +1254,12 @@ function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: Up
       <div style={{ fontSize: '.72rem', opacity: 0.5, margin: '.7rem .15rem .6rem', textTransform: 'uppercase', letterSpacing: '.14em' }}>
         Add to your stay
       </div>
-      <div className="gp-upsells">
+      <div className="gp-extras">
         {offers.map((offer) => {
           const st = state[offer.id] ?? 'idle';
           const done = st === 'done';
           return (
-            <div key={offer.id} style={{ ...cardStyle, padding: '1.15rem' }} className="gp-card" data-testid={`upsell-offer-${offer.id}`}>
+            <div key={offer.id} style={{ ...cardStyle, padding: '1.15rem' }} className="gp-card" data-testid={`extra-offer-${offer.id}`}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
                 <span className="gp-serif" style={{ fontSize: '1.15rem', color: '#fbf7ef', lineHeight: 1.2 }}>{offer.title}</span>
                 {offer.price_text && (
@@ -1271,9 +1271,9 @@ function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: Up
               )}
               <button
                 onClick={() => request(offer.id)}
-                className="gp-upsell-cta"
+                className="gp-extra-cta"
                 disabled={st === 'busy' || done}
-                data-testid={`button-upsell-request-${offer.id}`}
+                data-testid={`button-extra-request-${offer.id}`}
               >
                 {done ? (
                   <><Check size={15} aria-hidden /> Requested</>
@@ -1284,7 +1284,7 @@ function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: Up
                 )}
               </button>
               {st === 'error' && (
-                <div style={{ ...alertErr, marginTop: '.7rem', marginBottom: 0 }} data-testid={`upsell-error-${offer.id}`}>
+                <div style={{ ...alertErr, marginTop: '.7rem', marginBottom: 0 }} data-testid={`extra-error-${offer.id}`}>
                   Couldn&apos;t send that just now. Please try again.
                 </div>
               )}
@@ -1298,17 +1298,17 @@ function UpsellSection({ slug, offers, hostPreview }: { slug: string; offers: Up
         })}
       </div>
       <style jsx>{`
-        .gp-upsells { display: grid; grid-template-columns: 1fr; gap: .6rem; }
-        @media (min-width: 520px) { .gp-upsells { grid-template-columns: repeat(2, 1fr); } }
-        .gp-upsell-cta {
+        .gp-extras { display: grid; grid-template-columns: 1fr; gap: .6rem; }
+        @media (min-width: 520px) { .gp-extras { grid-template-columns: repeat(2, 1fr); } }
+        .gp-extra-cta {
           display: inline-flex; align-items: center; gap: .4rem; padding: .6rem 1rem;
           border-radius: 999px; cursor: pointer; font-size: .85rem; font-weight: 600;
           color: #1a1206; border: none; background: linear-gradient(145deg, #e7d3a6, ${GOLD});
           transition: transform .18s, box-shadow .18s, opacity .18s;
         }
-        .gp-upsell-cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 26px -14px rgba(201,169,110,.9); }
-        .gp-upsell-cta:disabled { opacity: .7; cursor: default; }
-        @media (prefers-reduced-motion: reduce) { .gp-upsell-cta:hover:not(:disabled) { transform: none; } }
+        .gp-extra-cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 26px -14px rgba(201,169,110,.9); }
+        .gp-extra-cta:disabled { opacity: .7; cursor: default; }
+        @media (prefers-reduced-motion: reduce) { .gp-extra-cta:hover:not(:disabled) { transform: none; } }
       `}</style>
     </section>
   );

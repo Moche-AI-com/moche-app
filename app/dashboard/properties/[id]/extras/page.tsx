@@ -1,17 +1,17 @@
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { UpsellManager, type UpsellRow } from './UpsellManager';
+import { ExtrasManager, type ExtraRow } from './ExtrasManager';
 
 export const dynamic = 'force-dynamic';
 
-export default async function UpsellsPage({ params }: { params: { id: string } }) {
+export default async function ExtrasPage({ params }: { params: { id: string } }) {
   const access = await requirePropertyAccess(params.id);
   const { property } = access;
   const supabase = createClient();
 
   const { data: offers } = await supabase
-    .from('upsell_offers')
+    .from('guest_extras')
     .select('id, title, description, price_text, cta_label, active, sort_order')
     .eq('property_id', property.id)
     .order('sort_order', { ascending: true })
@@ -21,7 +21,7 @@ export default async function UpsellsPage({ params }: { params: { id: string } }
     <div>
       <Link href={`/dashboard/properties/${property.id}`} className="muted" style={{ fontSize: '.85rem' }}>← {property.display_name}</Link>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0 1.5rem' }}>Enhancements</h1>
-      <UpsellManager propertyId={property.id} offers={(offers ?? []) as UpsellRow[]} />
+      <ExtrasManager propertyId={property.id} offers={(offers ?? []) as ExtraRow[]} />
     </div>
   );
 }

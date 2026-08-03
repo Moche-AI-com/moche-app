@@ -204,8 +204,8 @@ export const guestNotifyConsentSchema = z.object({
   consent: z.literal(true),
 });
 
-// Add-on — host-configurable upsell offer (CRUD from the dashboard).
-export const upsellOfferSchema = z.object({
+// Add-on — host-configurable guest extra (CRUD from the dashboard).
+export const extraOfferSchema = z.object({
   title: z.string().trim().min(1, 'Give the offer a title.').max(120),
   description: z.string().trim().max(1000).optional().or(z.literal('')),
   priceText: z.string().trim().max(60).optional().or(z.literal('')),
@@ -214,8 +214,8 @@ export const upsellOfferSchema = z.object({
   sortOrder: z.number().int().min(0).max(9999).default(0),
 });
 
-// Add-on — guest taps an upsell CTA; routes through the existing escalation path.
-export const guestUpsellRequestSchema = z.object({
+// Add-on — guest requests an extra; routes through the existing escalation path.
+export const guestExtraRequestSchema = z.object({
   offerId: z.string().uuid(),
 });
 

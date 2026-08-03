@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
-import { guestUpsellRequestSchema } from '@/lib/validation';
+import { guestExtraRequestSchema } from '@/lib/validation';
 import { notify } from '@/lib/notify';
 import { signEscalationLinkToken } from '@/lib/crypto';
 import { publicEnv } from '@/lib/env';
@@ -11,7 +11,7 @@ import { log } from '@/lib/log';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Add-on — a guest taps "Request" on an upsell offer. We DO NOT invent a new
+// Add-on — a guest taps "Request" on an extra. We DO NOT invent a new
 // channel: this reuses the EXISTING escalation + notify() path (the same one the
 // chat route uses for low-confidence questions), so the host is alerted in-app,
 // by email, and (Pro+, consented) by SMS, and can answer via the magic link.
@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
-  const parsed = guestUpsellRequestSchema.safeParse(payload);
+  const parsed = guestExtraRequestSchema.safeParse(payload);
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
 
   const admin = createAdminClient();
@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
 
   // The offer must belong to this property and be active.
   const { data: offer } = await admin
-    .from('upsell_offers')
+    .from('guest_extras')
     .select('id, title, price_text, active, property_id')
     .eq('id', parsed.data.offerId)
     .eq('property_id', session.propertyId)
@@ -92,8 +92,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     actionUrl: answerUrl,
   });
 
-  log.info('guest_upsell_request', { escalationId: escId });
-  await capture('upsell_requested', session.propertyId, { property_id: session.propertyId });
+  log.info('guest_extra_request', { escalationId: escId });
+  await capture('extra_requested', session.propertyId, { property_id: session.propertyId });
 
   return NextResponse.json({ ok: true });
 }

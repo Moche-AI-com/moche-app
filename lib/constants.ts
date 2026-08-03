@@ -140,7 +140,7 @@ export interface PropertyModules {
   local_recs: boolean;
   maintenance_reports: boolean;
   review_nudge: boolean;
-  upsell: boolean;
+  extras: boolean;
 }
 
 export const DEFAULT_MODULES: PropertyModules = {
@@ -149,7 +149,7 @@ export const DEFAULT_MODULES: PropertyModules = {
   local_recs: true,
   maintenance_reports: true,
   review_nudge: false,
-  upsell: false,
+  extras: false,
 };
 
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.55;

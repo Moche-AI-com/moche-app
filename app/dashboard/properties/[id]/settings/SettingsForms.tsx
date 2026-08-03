@@ -23,7 +23,7 @@ const MODULE_LABELS: { key: string; label: string; hint: string }[] = [
   { key: 'local_recs', label: 'Local recommendations', hint: 'Curated nearby food, coffee, and things to do.' },
   { key: 'maintenance_reports', label: 'Maintenance reports', hint: 'Let guests flag issues; opens a service request for you.' },
   { key: 'review_nudge', label: 'Review nudge', hint: 'Gently invite happy guests to leave a review.' },
-  { key: 'upsell', label: 'Upsells', hint: 'Offer late checkout, mid-stay cleans, and extras.' },
+  { key: 'extras', label: 'Extras', hint: 'Offer late checkout, mid-stay cleans, and other add-ons.' },
 ];
 
 const TONE_PRESETS = [

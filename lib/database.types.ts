@@ -14,7 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      upsell_offers: {
+      guest_extras: {
         Row: {
           active: boolean
           created_at: string
@@ -50,7 +50,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "upsell_offers_property_id_fkey"
+            foreignKeyName: "guest_extras_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
