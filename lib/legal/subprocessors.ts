@@ -161,4 +161,16 @@ export const SUBPROCESSORS: Subprocessor[] = [
     retention: 'Run logs and payloads retained per Trigger.dev account settings',
     active: true,
   },
+  {
+    vendor: 'Amazon Web Services (S3)',
+    purpose:
+      'Private object storage for host-uploaded files and images, accessed only via short-lived presigned URLs so bytes never transit our app servers',
+    dataProcessed:
+      'Property-related images and documents the host uploads. Objects are stored under a per-property key prefix; no object is publicly accessible (all public access blocked, TLS-only bucket policy, server-side encryption at rest).',
+    region: 'US (us-east-2)',
+    dpaUrl: 'https://aws.amazon.com/service-terms/',
+    transferMechanism: 'SCCs',
+    retention: 'Objects retained until deleted by the host or removed per bucket lifecycle policy (noncurrent versions expire after 90 days)',
+    active: true,
+  },
 ];

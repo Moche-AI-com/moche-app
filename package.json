@@ -13,6 +13,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1101.0",
+    "@aws-sdk/s3-request-presigner": "^3.1101.0",
     "@sentry/nextjs": "^8.55.2",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.45.4",

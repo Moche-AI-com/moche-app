@@ -109,6 +109,13 @@ export const serverEnv = {
   // One-time price for the optional onboarding/activation fee (added to first checkout
   // when ACTIVATION_FEE_ENABLED is true). Empty when the fee is waived.
   stripeActivationPriceId: process.env.STRIPE_PRICE_ACTIVATION ?? '',
+
+  // AWS S3 — private object storage. Presigned PUT/GET only; bytes never transit
+  // the app server. SERVER ONLY. Never prefix with NEXT_PUBLIC_.
+  awsRegion: process.env.AWS_REGION ?? 'us-east-2',
+  s3Bucket: process.env.S3_BUCKET ?? '',
+  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
+  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
 };
 
 export function hasServiceRole(): boolean {
