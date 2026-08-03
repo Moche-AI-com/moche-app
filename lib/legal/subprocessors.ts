@@ -150,4 +150,15 @@ export const SUBPROCESSORS: Subprocessor[] = [
     retention: 'Per PostHog project retention settings',
     active: true,
   },
+  {
+    vendor: 'Trigger.dev',
+    purpose: 'Background job orchestration (async task execution and retries outside the request/response cycle)',
+    dataProcessed:
+      'Task payloads we choose to send. Jobs are designed to carry row/record ids only, never guest PII directly — the job re-reads any needed data from Supabase using the service role at execution time.',
+    region: 'US',
+    dpaUrl: 'https://trigger.dev/legal/privacy',
+    transferMechanism: 'SCCs',
+    retention: 'Run logs and payloads retained per Trigger.dev account settings',
+    active: true,
+  },
 ];

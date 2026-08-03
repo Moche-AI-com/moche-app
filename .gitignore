@@ -150,3 +150,6 @@ next-env.d.ts
 
 # Local ops notes containing account identifiers — never commit
 TWILIO-A2P-RESUBMISSION.md
+
+# Trigger.dev CLI build cache
+.trigger

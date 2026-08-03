@@ -87,8 +87,8 @@ export const LEGAL_DOCS: LegalDocMeta[] = [
     slug: 'subprocessors',
     title: 'Subprocessors',
     navLabel: 'Subprocessors',
-    version: 'v1.1.0',
-    lastUpdated: '2026-07-27',
+    version: 'v1.2.0',
+    lastUpdated: '2026-08-03',
     summary: 'The third-party services that process data on our behalf, their purpose, region, and safeguards.',
   },
   {
