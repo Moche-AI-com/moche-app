@@ -102,6 +102,15 @@ export async function revokeStayAction(formData: FormData): Promise<void> {
     .update({ status: 'revoked', revoked_at: new Date().toISOString() } as never)
     .eq('stay_id', stayId)
     .eq('property_id', propertyId);
+  // Cancelling the stay also revokes any visit code minted for it (WS-1 lifecycle: fails
+  // closed on reservation cancellation, not just on checkout or manual code revoke).
+  await supabase
+    .from('guest_access_links')
+    .update({ code_revoked_at: new Date().toISOString() } as never)
+    .eq('stay_id', stayId)
+    .eq('property_id', propertyId)
+    .not('code_hash', 'is', null)
+    .is('code_revoked_at', null);
 
   await audit(supabase, {
     action: 'stay.revoked',

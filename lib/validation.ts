@@ -162,6 +162,12 @@ export const guestRedeemSchema = z.object({
   token: z.string().trim().min(16).max(512),
 });
 
+// Guest visit-code confirm (second factor on a stay link, WS-1).
+export const guestCodeConfirmSchema = z.object({
+  token: z.string().trim().min(16).max(512),
+  code: z.string().trim().regex(/^\d{4}$/, 'Enter the 4-digit code'),
+});
+
 // Host mints a stay or property access link.
 export const linkMintSchema = z.object({
   kind: z.enum(['stay', 'property']),

@@ -203,3 +203,16 @@ export const PROPERTY_LINK_TTL_DAYS = 90;
 export const STAY_LINK_DEFAULT_MAX_REDEMPTIONS = 12;
 // Reusable property QR is posted in the home — high cap, still bounded + rate-limited.
 export const PROPERTY_LINK_DEFAULT_MAX_REDEMPTIONS = 500;
+
+// Guest visit codes (WS-1): mandatory 4-digit second factor on new stay links.
+// The unguessable token in the stay URL is factor one; the code is factor two —
+// never the sole secret (10,000 combos alone is trivially brute-forceable).
+export const VISIT_CODE_LENGTH = 4;
+export const VISIT_CODE_MAX_ATTEMPTS = 5;
+export const VISIT_CODE_CONFIRM_MAX_PER_IP_PER_HOUR = 20;
+// Code (and the session it establishes) auto-revokes at checkout + this grace
+// window, so late questions still work for a bounded window. Deliberately
+// shorter than DEFAULT_GRACE_PERIOD_HOURS (24h, used by the legacy OTP/no-code
+// paths) per spec's explicit 4h default for this feature. Per-property host
+// override is not built in this pass — MVP default only.
+export const VISIT_CODE_GRACE_PERIOD_HOURS = 4;

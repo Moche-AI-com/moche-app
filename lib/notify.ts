@@ -22,7 +22,8 @@ interface NotifyParams {
 }
 
 // Host notification kinds that fan out to email.
-const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance', 'billing']);
+// 'system' added for WS-1 visit-code lockout alerts (repeated failed attempts).
+const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance', 'billing', 'system']);
 // Host notification kinds that MAY fan out to SMS (subject to all gates below).
 const SMS_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance']);
 

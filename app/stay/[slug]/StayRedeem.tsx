@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { KeyRound, Loader2 } from 'lucide-react';
 
-type Phase = 'redeeming' | 'error';
+type Phase = 'redeeming' | 'error' | 'code' | 'submitting-code' | 'code-error';
 
 export function StayRedeem(props: {
   slug: string;
@@ -12,6 +13,7 @@ export function StayRedeem(props: {
   token: string;
 }) {
   const [phase, setPhase] = useState<Phase>('redeeming');
+  const [code, setCode] = useState('');
   const ran = useRef(false);
   const accent = props.brandAccent || '#33E6D4';
 
@@ -35,9 +37,14 @@ export function StayRedeem(props: {
           setPhase('error');
           return;
         }
-        // Either a session was set (kind=stay) or the guest must do OTP (kind=property /
-        // require_otp). In both cases the portal at /g/{slug} shows the right next step:
-        // verified → concierge; otherwise → verify gate with the property pre-resolved.
+        // Three outcomes: a session was already set (legacy stay link, no code) → go
+        // straight in; the link needs its 4-digit visit code (WS-1, the default going
+        // forward) → prompt here; or the guest must do OTP (kind=property) → the portal
+        // at /g/{slug} shows the verify gate with the property pre-resolved.
+        if (json?.requireCode) {
+          setPhase('code');
+          return;
+        }
         window.location.replace(`/g/${props.slug}`);
       } catch {
         setPhase('error');
@@ -45,6 +52,25 @@ export function StayRedeem(props: {
     }
     void redeem();
   }, [props.slug, props.token]);
+
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    setPhase('submitting-code');
+    try {
+      const res = await fetch(`/api/guest/${props.slug}/auth/code/confirm`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: props.token, code }),
+      });
+      if (!res.ok) {
+        setPhase('code-error');
+        return;
+      }
+      window.location.replace(`/g/${props.slug}`);
+    } catch {
+      setPhase('code-error');
+    }
+  }
 
   return (
     <div
@@ -69,7 +95,64 @@ export function StayRedeem(props: {
         <div style={{ fontWeight: 600, fontSize: '1.15rem', marginBottom: '.5rem' }}>{props.propertyName}</div>
 
         {phase === 'redeeming' ? (
-          <p style={{ opacity: 0.7, fontSize: '.9rem' }}>Unlocking your concierge…</p>
+          <p style={{ opacity: 0.7, fontSize: '.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.5rem' }}>
+            <Loader2 size={16} className="animate-spin" /> Unlocking your concierge…
+          </p>
+        ) : phase === 'code' || phase === 'submitting-code' || phase === 'code-error' ? (
+          <form onSubmit={submitCode}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem', color: accent, marginBottom: '.75rem' }}>
+              <KeyRound size={18} />
+              <span style={{ fontSize: '.85rem', fontWeight: 600 }}>Enter your 4-digit visit code</span>
+            </div>
+            <p style={{ opacity: 0.65, fontSize: '.82rem', marginBottom: '1rem' }}>
+              Your host sent this along with the link. It confirms you’re the guest for this stay.
+            </p>
+            <input
+              autoFocus
+              inputMode="numeric"
+              pattern="\d*"
+              maxLength={4}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              disabled={phase === 'submitting-code'}
+              style={{
+                width: '100%',
+                textAlign: 'center',
+                fontSize: '1.6rem',
+                letterSpacing: '0.5rem',
+                fontWeight: 700,
+                padding: '.75rem',
+                borderRadius: 10,
+                border: `1px solid ${phase === 'code-error' ? '#ff6b6b' : 'rgba(255,255,255,0.18)'}`,
+                background: 'rgba(255,255,255,0.05)',
+                color: 'inherit',
+                marginBottom: '.75rem',
+              }}
+            />
+            {phase === 'code-error' && (
+              <p style={{ color: '#ff8a8a', fontSize: '.82rem', marginBottom: '.75rem' }}>
+                That code is invalid or has expired. Check with your host if this keeps happening.
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={code.length !== 4 || phase === 'submitting-code'}
+              style={{
+                width: '100%',
+                padding: '.75rem 1.25rem',
+                borderRadius: 10,
+                background: accent,
+                color: '#04121a',
+                fontWeight: 700,
+                border: 'none',
+                fontSize: '.9rem',
+                opacity: code.length !== 4 ? 0.5 : 1,
+                cursor: code.length !== 4 ? 'default' : 'pointer',
+              }}
+            >
+              {phase === 'submitting-code' ? 'Checking\u2026' : 'Unlock concierge'}
+            </button>
+          </form>
         ) : (
           <div>
             <p style={{ opacity: 0.85, fontSize: '.9rem', marginBottom: '1rem' }}>

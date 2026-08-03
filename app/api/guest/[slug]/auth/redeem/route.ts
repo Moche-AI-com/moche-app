@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { guestRedeemSchema } from '@/lib/validation';
-import { hashSessionToken, generateSessionToken, hashIp } from '@/lib/crypto';
+import { hashSessionToken } from '@/lib/crypto';
 import { guestSessionCookieOptions } from '@/lib/guest/session';
+import { createStaySessionFromLink } from '@/lib/guest/stay-session';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { DEFAULT_GRACE_PERIOD_HOURS, LINK_REDEEM_MAX_PER_IP_PER_HOUR } from '@/lib/constants';
 import { log } from '@/lib/log';
@@ -51,7 +52,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   const tokenHash = hashSessionToken(token);
   const { data: link } = await admin
     .from('guest_access_links')
-    .select('id, property_id, stay_id, kind, expires_at, consumed_at, max_redemptions, redemption_count, require_otp, revoked_at')
+    .select(
+      'id, property_id, stay_id, kind, expires_at, consumed_at, max_redemptions, redemption_count, require_otp, revoked_at, code_hash, code_expires_at, code_revoked_at'
+    )
     .eq('property_id', property.id)
     .eq('token_hash', tokenHash)
     .maybeSingle();
@@ -69,46 +72,32 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     return NextResponse.json({ ok: true, requireOtp: true, propertyResolved: true });
   }
 
-  // Stay link, no OTP: the host vouched by minting it. Mirror verify/confirm exactly.
   if (!link.stay_id) return NextResponse.json(GENERIC_FAIL, { status: 400 });
   const { data: stay } = await admin
     .from('stays').select('id, check_out, status, deleted_at').eq('id', link.stay_id).maybeSingle();
   if (!stay || stay.deleted_at || stay.status === 'revoked') return NextResponse.json(GENERIC_FAIL, { status: 400 });
 
-  const expiresAt = new Date(new Date(stay.check_out).getTime() + DEFAULT_GRACE_PERIOD_HOURS * 60 * 60 * 1000);
-  const sessionToken = generateSessionToken();
-  const sessionTokenHash = hashSessionToken(sessionToken);
-  const ipHash = hashIp(ip);
+  // Stay link WITH a code (WS-1, the default for links minted going forward): the
+  // token alone never creates a session. A revoked or expired code fails closed
+  // entirely (no fallback to token-only access) — the guest needs the host to
+  // regenerate. Only a link that never had a code (minted pre-WS-1) skips this.
+  if (link.code_hash) {
+    const codeRevokedOrExpired =
+      !!link.code_revoked_at || (!!link.code_expires_at && new Date(link.code_expires_at) < new Date());
+    if (codeRevokedOrExpired) return NextResponse.json(GENERIC_FAIL, { status: 400 });
+    return NextResponse.json({ ok: true, requireCode: true });
+  }
 
-  const { error: sessErr } = await admin.from('guest_access_sessions').insert({
-    property_id: property.id,
-    stay_id: stay.id,
-    session_token_hash: sessionTokenHash,
-    status: 'verified',
-    verified_at: new Date().toISOString(),
-    expires_at: expiresAt.toISOString(),
-    ip_hash: ipHash,
-    user_agent: (req.headers.get('user-agent') ?? '').slice(0, 300),
-  } as never);
-  if (sessErr) {
-    log.warn('guest_link_session_create_failed', { error: sessErr.message });
+  // Legacy stay link minted before WS-1 (no code was ever issued): the host vouched
+  // by minting it. Mirrors verify/confirm's session shape exactly.
+  const expiresAt = new Date(new Date(stay.check_out).getTime() + DEFAULT_GRACE_PERIOD_HOURS * 60 * 60 * 1000);
+  const created = await createStaySessionFromLink(admin, { propertyId: property.id, link, req, ip, expiresAt });
+  if (!created) {
     return NextResponse.json({ error: 'Could not start your session. Please try again.' }, { status: 500 });
   }
 
-  // Mark the stay active if within window.
-  if (stay.status === 'upcoming') {
-    await admin.from('stays').update({ status: 'active' } as never).eq('id', stay.id);
-  }
-
-  // Count the redemption; consume the stay link if it has hit its cap.
-  const nextCount = link.redemption_count + 1;
-  await admin.from('guest_access_links').update({
-    redemption_count: nextCount,
-    ...(nextCount >= link.max_redemptions ? { consumed_at: new Date().toISOString() } : {}),
-  } as never).eq('id', link.id);
-
   // Set the opaque httpOnly session cookie. Only the token hash is stored server-side.
-  cookies().set({ ...guestSessionCookieOptions(expiresAt), value: sessionToken });
+  cookies().set({ ...guestSessionCookieOptions(created.expiresAt), value: created.sessionToken });
 
   return NextResponse.json({ ok: true });
 }

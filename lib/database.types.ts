@@ -557,6 +557,11 @@ export type Database = {
       }
       guest_access_links: {
         Row: {
+          code_attempt_count: number
+          code_expires_at: string | null
+          code_first_used_at: string | null
+          code_hash: string | null
+          code_revoked_at: string | null
           consumed_at: string | null
           created_at: string
           created_by: string | null
@@ -572,6 +577,11 @@ export type Database = {
           token_hash: string
         }
         Insert: {
+          code_attempt_count?: number
+          code_expires_at?: string | null
+          code_first_used_at?: string | null
+          code_hash?: string | null
+          code_revoked_at?: string | null
           consumed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -587,6 +597,11 @@ export type Database = {
           token_hash: string
         }
         Update: {
+          code_attempt_count?: number
+          code_expires_at?: string | null
+          code_first_used_at?: string | null
+          code_hash?: string | null
+          code_revoked_at?: string | null
           consumed_at?: string | null
           created_at?: string
           created_by?: string | null

@@ -44,6 +44,23 @@ export function verifyOtp(code: string, contactHash: string, storedHash: string)
   return safeEqualHex(hashOtp(code, contactHash), storedHash);
 }
 
+// --- Guest visit codes (WS-1) ---------------------------------------------
+// 4-digit second factor on a stay link. Bound to the issuing link id (not the
+// guest contact — there is no contact on this flow) so a leaked hash can't be
+// replayed against a different link.
+
+export function generateVisitCode(): string {
+  return String(randomInt(0, 10_000)).padStart(4, '0');
+}
+
+export function hashVisitCode(code: string, linkId: string): string {
+  return sha256(`${serverEnv.guestContactSalt}:visit-code:${linkId}:${code}`);
+}
+
+export function verifyVisitCode(code: string, linkId: string, storedHash: string): boolean {
+  return safeEqualHex(hashVisitCode(code, linkId), storedHash);
+}
+
 // --- Session tokens ------------------------------------------------------
 
 export function generateSessionToken(): string {

@@ -118,10 +118,13 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
 // Per-stay magic link: skips OTP (the host vouches by generating it), redeems straight
 // into a verified session. Shows the URL + QR once; the raw token is never retrievable later.
 function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: string }) {
-  const [minted, setMinted] = useState<{ url: string; qrDataUrl: string } | null>(null);
+  const [minted, setMinted] = useState<{ url: string; qrDataUrl: string; linkId: string; code: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeErr, setCodeErr] = useState<string | null>(null);
+  const [revoked, setRevoked] = useState(false);
 
   async function mint() {
     setBusy(true); setErr(null);
@@ -132,10 +135,38 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not create the link.');
-      setMinted({ url: json.url, qrDataUrl: json.qrDataUrl });
+      setMinted({ url: json.url, qrDataUrl: json.qrDataUrl, linkId: json.linkId, code: json.code ?? null });
+      setRevoked(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not create the link.');
     } finally { setBusy(false); }
+  }
+
+  async function regenerateCode() {
+    if (!minted) return;
+    setCodeBusy(true); setCodeErr(null);
+    try {
+      const res = await fetch(`/api/host/properties/${propertyId}/links/${minted.linkId}/regenerate-code`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not regenerate the code.');
+      setMinted({ ...minted, code: json.code });
+      setRevoked(false);
+    } catch (e) {
+      setCodeErr(e instanceof Error ? e.message : 'Could not regenerate the code.');
+    } finally { setCodeBusy(false); }
+  }
+
+  async function revokeCode() {
+    if (!minted) return;
+    setCodeBusy(true); setCodeErr(null);
+    try {
+      const res = await fetch(`/api/host/properties/${propertyId}/links/${minted.linkId}/revoke-code`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not revoke the code.');
+      setRevoked(true);
+    } catch (e) {
+      setCodeErr(e instanceof Error ? e.message : 'Could not revoke the code.');
+    } finally { setCodeBusy(false); }
   }
 
   if (minted) {
@@ -154,9 +185,39 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
             </div>
           </div>
         </div>
+
+        {minted.code && !revoked && (
+          <div style={{ marginTop: '.6rem', padding: '.5rem .6rem', borderRadius: 8, background: 'var(--bg-2, rgba(255,255,255,0.04))', border: '1px solid var(--teal-deep)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem' }}>
+              <div>
+                <div className="faint" style={{ fontSize: '.65rem' }}>Visit code (required — shown once)</div>
+                <div style={{ fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 700, letterSpacing: '.25rem' }}>{minted.code}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '.3rem' }}>
+                <button className="btn btn-ghost btn-sm" onClick={regenerateCode} disabled={codeBusy} data-testid={`button-regen-code-${stayId}`}>
+                  {codeBusy ? '…' : 'Regenerate'}
+                </button>
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} onClick={revokeCode} disabled={codeBusy} data-testid={`button-revoke-code-${stayId}`}>
+                  Revoke
+                </button>
+              </div>
+            </div>
+            {codeErr && <p style={{ color: 'var(--coral)', fontSize: '.68rem', marginTop: '.3rem' }}>{codeErr}</p>}
+          </div>
+        )}
+        {revoked && (
+          <div style={{ marginTop: '.6rem', padding: '.5rem .6rem', borderRadius: 8, border: '1px solid var(--coral)' }}>
+            <p style={{ fontSize: '.72rem', color: 'var(--coral)' }}>Code revoked — the guest can no longer unlock the concierge with this link.</p>
+            <button className="btn btn-ghost btn-sm" onClick={regenerateCode} disabled={codeBusy} style={{ marginTop: '.3rem' }}>
+              {codeBusy ? '…' : 'Issue a new code'}
+            </button>
+          </div>
+        )}
+
         <p className="faint" style={{ fontSize: '.68rem', marginTop: '.4rem' }}>
-          Shown once — copy it now. Share with your whole party: anyone who opens it goes
-          straight into the concierge, no email or phone verification needed.
+          {minted.code
+            ? 'Shown once — copy the link and code now. Share both with your whole party: opening the link asks for this 4-digit code before the concierge unlocks.'
+            : 'Shown once — copy it now. Share with your whole party: anyone who opens it goes straight into the concierge, no email or phone verification needed.'}
         </p>
       </div>
     );
@@ -168,7 +229,7 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
         {busy ? 'Creating…' : 'Create shareable guest link'}
       </button>
       <p className="faint" style={{ fontSize: '.68rem', marginTop: '.25rem', maxWidth: 320 }}>
-        One tap-to-enter link for the whole party — skips verification for every guest.
+        One link for the whole party — comes with a 4-digit visit code guests enter once to unlock the concierge.
       </p>
       {err && <p style={{ color: 'var(--coral)', fontSize: '.72rem', marginTop: '.25rem' }}>{err}</p>}
     </div>
