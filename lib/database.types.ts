@@ -14,126 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      guest_extras: {
-        Row: {
-          active: boolean
-          created_at: string
-          cta_label: string | null
-          description: string | null
-          id: string
-          price_text: string | null
-          property_id: string
-          sort_order: number
-          title: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          cta_label?: string | null
-          description?: string | null
-          id?: string
-          price_text?: string | null
-          property_id: string
-          sort_order?: number
-          title: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          cta_label?: string | null
-          description?: string | null
-          id?: string
-          price_text?: string | null
-          property_id?: string
-          sort_order?: number
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "guest_extras_property_id_fkey"
-            columns: ["property_id"]
-            isOneToOne: false
-            referencedRelation: "properties"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_feedback: {
-        Row: {
-          comment: string | null
-          created_at: string
-          guest_session_id: string | null
-          host_account_id: string | null
-          id: string
-          page: string | null
-          property_id: string | null
-          rating: number | null
-          source: string
-        }
-        Insert: {
-          comment?: string | null
-          created_at?: string
-          guest_session_id?: string | null
-          host_account_id?: string | null
-          id?: string
-          page?: string | null
-          property_id?: string | null
-          rating?: number | null
-          source: string
-        }
-        Update: {
-          comment?: string | null
-          created_at?: string
-          guest_session_id?: string | null
-          host_account_id?: string | null
-          id?: string
-          page?: string | null
-          property_id?: string | null
-          rating?: number | null
-          source?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_feedback_property_id_fkey"
-            columns: ["property_id"]
-            isOneToOne: false
-            referencedRelation: "properties"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_feedback_host_account_id_fkey"
-            columns: ["host_account_id"]
-            isOneToOne: false
-            referencedRelation: "host_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_feedback_guest_session_id_fkey"
-            columns: ["guest_session_id"]
-            isOneToOne: false
-            referencedRelation: "guest_access_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      app_settings: {
-        Row: {
-          key: string
-          updated_at: string
-          value: Json
-        }
-        Insert: {
-          key: string
-          updated_at?: string
-          value: Json
-        }
-        Update: {
-          key?: string
-          updated_at?: string
-          value?: Json
-        }
-        Relationships: []
-      }
       ai_usage: {
         Row: {
           cache_hit: boolean
@@ -228,59 +108,23 @@ export type Database = {
           },
         ]
       }
-      property_knowledge_nodes: {
+      app_settings: {
         Row: {
-          content: string
-          created_at: string
-          data: Json
-          embedding: string | null
-          id: string
-          node_type: string
-          property_id: string
-          source_brain_item_id: string | null
-          title: string
+          key: string
           updated_at: string
+          value: Json
         }
         Insert: {
-          content: string
-          created_at?: string
-          data?: Json
-          embedding?: string | null
-          id?: string
-          node_type: string
-          property_id: string
-          source_brain_item_id?: string | null
-          title: string
+          key: string
           updated_at?: string
+          value: Json
         }
         Update: {
-          content?: string
-          created_at?: string
-          data?: Json
-          embedding?: string | null
-          id?: string
-          node_type?: string
-          property_id?: string
-          source_brain_item_id?: string | null
-          title?: string
+          key?: string
           updated_at?: string
+          value?: Json
         }
-        Relationships: [
-          {
-            foreignKeyName: "property_knowledge_nodes_property_id_fkey"
-            columns: ["property_id"]
-            isOneToOne: false
-            referencedRelation: "properties"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "property_knowledge_nodes_source_brain_item_id_fkey"
-            columns: ["source_brain_item_id"]
-            isOneToOne: false
-            referencedRelation: "brain_items"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       audit_logs: {
         Row: {
@@ -850,6 +694,50 @@ export type Database = {
           },
         ]
       }
+      guest_extras: {
+        Row: {
+          active: boolean
+          created_at: string
+          cta_label: string | null
+          description: string | null
+          id: string
+          price_text: string | null
+          property_id: string
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          cta_label?: string | null
+          description?: string | null
+          id?: string
+          price_text?: string | null
+          property_id: string
+          sort_order?: number
+          title: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          cta_label?: string | null
+          description?: string | null
+          id?: string
+          price_text?: string | null
+          property_id?: string
+          sort_order?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_extras_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guest_identities: {
         Row: {
           contact_hash: string
@@ -942,77 +830,6 @@ export type Database = {
           },
         ]
       }
-      legal_documents: {
-        Row: {
-          created_at: string
-          effective_date: string
-          id: string
-          sha256: string | null
-          slug: string
-          version: string
-        }
-        Insert: {
-          created_at?: string
-          effective_date: string
-          id?: string
-          sha256?: string | null
-          slug: string
-          version: string
-        }
-        Update: {
-          created_at?: string
-          effective_date?: string
-          id?: string
-          sha256?: string | null
-          slug?: string
-          version?: string
-        }
-        Relationships: []
-      }
-      legal_acceptances: {
-        Row: {
-          accepted_at: string
-          context: string
-          document_slug: string
-          document_version: string
-          host_account_id: string | null
-          id: string
-          ip: string | null
-          user_agent: string | null
-          user_id: string
-        }
-        Insert: {
-          accepted_at?: string
-          context?: string
-          document_slug: string
-          document_version: string
-          host_account_id?: string | null
-          id?: string
-          ip?: string | null
-          user_agent?: string | null
-          user_id: string
-        }
-        Update: {
-          accepted_at?: string
-          context?: string
-          document_slug?: string
-          document_version?: string
-          host_account_id?: string | null
-          id?: string
-          ip?: string | null
-          user_agent?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "legal_acceptances_host_account_id_fkey"
-            columns: ["host_account_id"]
-            isOneToOne: false
-            referencedRelation: "host_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       host_accounts: {
         Row: {
           created_at: string
@@ -1050,6 +867,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      host_otp_challenges: {
+        Row: {
+          attempts: number
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          max_attempts: number
+          phone_last4: string | null
+          purpose: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          max_attempts?: number
+          phone_last4?: string | null
+          purpose?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_attempts?: number
+          phone_last4?: string | null
+          purpose?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       ingestion_jobs: {
         Row: {
@@ -1117,6 +973,77 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      legal_acceptances: {
+        Row: {
+          accepted_at: string
+          context: string
+          document_slug: string
+          document_version: string
+          host_account_id: string | null
+          id: string
+          ip: unknown
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          context?: string
+          document_slug: string
+          document_version: string
+          host_account_id?: string | null
+          id?: string
+          ip?: unknown
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          context?: string
+          document_slug?: string
+          document_version?: string
+          host_account_id?: string | null
+          id?: string
+          ip?: unknown
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_acceptances_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_documents: {
+        Row: {
+          created_at: string
+          effective_date: string
+          id: string
+          sha256: string | null
+          slug: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          effective_date: string
+          id?: string
+          sha256?: string | null
+          slug: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          effective_date?: string
+          id?: string
+          sha256?: string | null
+          slug?: string
+          version?: string
+        }
+        Relationships: []
       }
       message_feedback: {
         Row: {
@@ -1217,6 +1144,86 @@ export type Database = {
           },
           {
             foreignKeyName: "messages_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nearby_places: {
+        Row: {
+          address: string | null
+          category: string
+          created_at: string
+          distance_m: number | null
+          hidden: boolean
+          host_notes: string | null
+          host_starred: boolean
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string | null
+          phone: string | null
+          photo_ref: string | null
+          place_id: string | null
+          price_level: number | null
+          property_id: string
+          rating: number | null
+          refreshed_at: string
+          review_count: number | null
+          source: string | null
+          url: string | null
+        }
+        Insert: {
+          address?: string | null
+          category: string
+          created_at?: string
+          distance_m?: number | null
+          hidden?: boolean
+          host_notes?: string | null
+          host_starred?: boolean
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          phone?: string | null
+          photo_ref?: string | null
+          place_id?: string | null
+          price_level?: number | null
+          property_id: string
+          rating?: number | null
+          refreshed_at?: string
+          review_count?: number | null
+          source?: string | null
+          url?: string | null
+        }
+        Update: {
+          address?: string | null
+          category?: string
+          created_at?: string
+          distance_m?: number | null
+          hidden?: boolean
+          host_notes?: string | null
+          host_starred?: boolean
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          phone?: string | null
+          photo_ref?: string | null
+          place_id?: string | null
+          price_level?: number | null
+          property_id?: string
+          rating?: number | null
+          refreshed_at?: string
+          review_count?: number | null
+          source?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nearby_places_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
@@ -1330,6 +1337,64 @@ export type Database = {
           },
         ]
       }
+      product_feedback: {
+        Row: {
+          comment: string | null
+          created_at: string
+          guest_session_id: string | null
+          host_account_id: string | null
+          id: string
+          page: string | null
+          property_id: string | null
+          rating: number | null
+          source: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          guest_session_id?: string | null
+          host_account_id?: string | null
+          id?: string
+          page?: string | null
+          property_id?: string | null
+          rating?: number | null
+          source: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          guest_session_id?: string | null
+          host_account_id?: string | null
+          id?: string
+          page?: string | null
+          property_id?: string | null
+          rating?: number | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_feedback_guest_session_id_fkey"
+            columns: ["guest_session_id"]
+            isOneToOne: false
+            referencedRelation: "guest_access_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_feedback_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_feedback_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1384,45 +1449,6 @@ export type Database = {
           terms_accepted_at?: string | null
           two_factor_enabled?: boolean
           updated_at?: string
-        }
-        Relationships: []
-      }
-      host_otp_challenges: {
-        Row: {
-          attempts: number
-          code_hash: string
-          consumed_at: string | null
-          created_at: string
-          expires_at: string
-          id: string
-          max_attempts: number
-          phone_last4: string | null
-          purpose: string
-          user_id: string
-        }
-        Insert: {
-          attempts?: number
-          code_hash: string
-          consumed_at?: string | null
-          created_at?: string
-          expires_at: string
-          id?: string
-          max_attempts?: number
-          phone_last4?: string | null
-          purpose?: string
-          user_id: string
-        }
-        Update: {
-          attempts?: number
-          code_hash?: string
-          consumed_at?: string | null
-          created_at?: string
-          expires_at?: string
-          id?: string
-          max_attempts?: number
-          phone_last4?: string | null
-          purpose?: string
-          user_id?: string
         }
         Relationships: []
       }
@@ -1512,86 +1538,6 @@ export type Database = {
           },
         ]
       }
-      nearby_places: {
-        Row: {
-          address: string | null
-          category: string
-          created_at: string
-          distance_m: number | null
-          hidden: boolean
-          host_notes: string | null
-          host_starred: boolean
-          id: string
-          lat: number | null
-          lng: number | null
-          name: string | null
-          photo_ref: string | null
-          place_id: string | null
-          price_level: number | null
-          property_id: string
-          phone: string | null
-          rating: number | null
-          refreshed_at: string
-          review_count: number | null
-          source: string | null
-          url: string | null
-        }
-        Insert: {
-          address?: string | null
-          category: string
-          created_at?: string
-          distance_m?: number | null
-          hidden?: boolean
-          host_notes?: string | null
-          host_starred?: boolean
-          id?: string
-          lat?: number | null
-          lng?: number | null
-          name?: string | null
-          photo_ref?: string | null
-          place_id?: string | null
-          price_level?: number | null
-          property_id: string
-          phone?: string | null
-          rating?: number | null
-          refreshed_at?: string
-          review_count?: number | null
-          source?: string | null
-          url?: string | null
-        }
-        Update: {
-          address?: string | null
-          category?: string
-          created_at?: string
-          distance_m?: number | null
-          hidden?: boolean
-          host_notes?: string | null
-          host_starred?: boolean
-          id?: string
-          lat?: number | null
-          lng?: number | null
-          name?: string | null
-          photo_ref?: string | null
-          place_id?: string | null
-          price_level?: number | null
-          property_id?: string
-          phone?: string | null
-          rating?: number | null
-          refreshed_at?: string
-          review_count?: number | null
-          source?: string | null
-          url?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "nearby_places_property_id_fkey"
-            columns: ["property_id"]
-            isOneToOne: false
-            referencedRelation: "properties"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       property_brain_versions: {
         Row: {
           property_id: string
@@ -1661,6 +1607,60 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      property_knowledge_nodes: {
+        Row: {
+          content: string
+          created_at: string
+          data: Json
+          embedding: string | null
+          id: string
+          node_type: string
+          property_id: string
+          source_brain_item_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          data?: Json
+          embedding?: string | null
+          id?: string
+          node_type: string
+          property_id: string
+          source_brain_item_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          data?: Json
+          embedding?: string | null
+          id?: string
+          node_type?: string
+          property_id?: string
+          source_brain_item_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_knowledge_nodes_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_knowledge_nodes_source_brain_item_id_fkey"
+            columns: ["source_brain_item_id"]
+            isOneToOne: false
+            referencedRelation: "brain_items"
             referencedColumns: ["id"]
           },
         ]
@@ -2178,7 +2178,13 @@ export type Database = {
         | "safety"
         | "emergency"
         | "other"
-      member_role: "owner" | "co_host"
+      member_role:
+        | "owner"
+        | "co_host"
+        | "property_manager"
+        | "maintenance"
+        | "cleaner"
+        | "viewer"
       notification_kind:
         | "escalation"
         | "maintenance"
@@ -2378,7 +2384,14 @@ export const Constants = {
         "emergency",
         "other",
       ],
-      member_role: ["owner", "co_host"],
+      member_role: [
+        "owner",
+        "co_host",
+        "property_manager",
+        "maintenance",
+        "cleaner",
+        "viewer",
+      ],
       notification_kind: [
         "escalation",
         "maintenance",

@@ -22,6 +22,9 @@ export interface SessionContext {
   user: User;
   profile: Profile;
   account: HostAccount;
+  // Internal founder/staff claim (profiles.is_admin). Set only via service
+  // role -- see prevent_is_admin_self_update trigger in supabase-migrations-RBAC.sql.
+  isFounder: boolean;
 }
 
 // Loads the signed-in user, their profile, and the host account they own.
@@ -52,15 +55,23 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
       .limit(1)
       .maybeSingle();
     if (!viaMember) return null;
-    return { user, profile, account: viaMember };
+    return { user, profile, account: viaMember, isFounder: !!profile.is_admin };
   }
 
-  return { user, profile, account };
+  return { user, profile, account, isFounder: !!profile.is_admin };
 });
 
 export async function requireSession(): Promise<SessionContext> {
   const ctx = await getSessionContext();
   if (!ctx) redirect('/login');
+  return ctx;
+}
+
+// Pure guard, deliberately not built on the cached getSessionContext so it
+// can be unit-tested against plain constructed objects. Reserved for WS-8
+// (HQ console) route/action gating -- no caller yet in this PR.
+export function requireFounder(ctx: SessionContext | null): SessionContext {
+  if (!ctx || !ctx.isFounder) redirect('/dashboard');
   return ctx;
 }
 
