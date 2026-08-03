@@ -11,6 +11,7 @@ import type { LocalPoi } from '@/lib/local/osm';
 import { discoverLocalIntelViaProvider } from '@/lib/local/geo';
 import { formatDistanceAway } from '@/lib/local/distance';
 import { reindexBrainItem } from '@/app/dashboard/properties/[id]/brain/actions';
+import { CURATION_TAG_LABEL } from '@/lib/local/categories';
 
 export interface RecActionState {
   error?: string;
@@ -138,6 +139,15 @@ export async function updateRecommendationAction(
     const w = parseInt(String(formData.get('priority_weight') ?? '0'), 10);
     patch.priority_weight = Number.isFinite(w) ? Math.max(-10, Math.min(10, w)) : 0;
   }
+  if (formData.has('tags')) {
+    const tags = formData.getAll('tags').map(String).filter((t) => t in CURATION_TAG_LABEL);
+    patch.tags = Array.from(new Set(tags));
+  }
+  if (formData.has('price_level')) {
+    const raw = String(formData.get('price_level') ?? '');
+    const lvl = raw === '' ? null : parseInt(raw, 10);
+    patch.price_level = lvl != null && Number.isFinite(lvl) ? Math.max(1, Math.min(4, lvl)) : null;
+  }
   if (Object.keys(patch).length === 0) return { ok: true };
 
   const admin = createAdminClient();
@@ -216,6 +226,19 @@ export async function deleteRecommendationAction(formData: FormData): Promise<vo
 // deleted) into a single guest-visible Brain item so the concierge naturally
 // retrieves it. host_preference + priority_weight shape ordering and wording,
 // which is how the concierge "respects" host curation without a bespoke path.
+//
+// WS-6 curation-state -> retrieval wiring (see lib/local/curation.ts for the
+// authoritative state derivation this mirrors):
+//   - rejected (hidden=true)   -> excluded by the .eq('hidden', false) filter
+//     below. Hard-excluded from retrieval regardless of approved/preference.
+//   - unreviewed (!approved)   -> excluded by the .eq('approved', true) filter
+//     below. Never reaches guests until a host acts on it.
+//   - favorite (loved)         -> retrieval-BOOSTED: sorted first (prefRank
+//     below) and annotated "Host favorite." in the projected text, which
+//     increases the odds the concierge's retrieval step surfaces it and
+//     signals the LLM to prefer it when several options are relevant.
+//   - approved (neutral/disliked, visible) -> included, unboosted, sorted
+//     after favorites by priority_weight then name.
 // ---------------------------------------------------------------------------
 const PROJECTION_TITLE = 'Local recommendations (host-curated)';
 

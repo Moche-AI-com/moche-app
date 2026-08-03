@@ -7,6 +7,7 @@ import { Star, EyeOff, Eye, RefreshCw, StickyNote, MapPin, Phone, Globe, Navigat
 import StaticMapPreview from '@/components/StaticMapPreview';
 import { directionsUrl } from '@/lib/local/static-map';
 import { formatDistance } from '@/lib/local/distance';
+import { NEARBY_CATEGORIES, NEARBY_CATEGORY_LABEL_PLURAL } from '@/lib/local/categories';
 import {
   refreshNearbyPlacesAction,
   updateNearbyPlaceAction,
@@ -34,22 +35,8 @@ interface Place {
   source: string | null;
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-  restaurant: 'Restaurants',
-  cafe: 'Cafes',
-  bar: 'Bars & pubs',
-  grocery: 'Groceries',
-  pharmacy: 'Pharmacies',
-  hospital: 'Hospitals',
-  tourist_attraction: 'Attractions',
-  golf_course: 'Golf courses',
-  convenience_store: 'Convenience stores',
-  bakery: 'Bakeries',
-  park: 'Parks',
-  gas_station: 'Gas stations',
-};
-
-const CATEGORY_ORDER = Object.keys(CATEGORY_LABEL);
+const CATEGORY_LABEL = NEARBY_CATEGORY_LABEL_PLURAL;
+const CATEGORY_ORDER: string[] = [...NEARBY_CATEGORIES];
 
 const linkStyle: React.CSSProperties = {
   display: 'inline-flex',

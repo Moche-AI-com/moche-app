@@ -9,6 +9,7 @@ import { logAiUsage } from '@/lib/ai/usage';
 import { normalizeQuestion, getBrainVersion, lookupCachedAnswer, cacheAnswer } from '@/lib/brain/cache';
 import { NODE_TYPES, type NodeType } from '@/lib/normalizer';
 import { formatDistanceApprox } from '@/lib/local/distance';
+import { NEARBY_CATEGORY_LABEL } from '@/lib/local/categories';
 
 type Admin = SupabaseClient<Database>;
 type IntentType = Database['public']['Enums']['intent_type'];
@@ -239,14 +240,6 @@ ${chunkContext || '(no additional knowledge available for this property yet)'}
 }
 
 const EMERGENCY_PATTERNS = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|intruder|burglar|bleeding|unconscious|heart attack|can'?t breathe|emergency|ambulance|assault)\b/i;
-
-const NEARBY_CATEGORY_LABEL: Record<string, string> = {
-  restaurant: 'Restaurant', cafe: 'Cafe', bar: 'Bar/Pub', grocery: 'Grocery',
-  pharmacy: 'Pharmacy', hospital: 'Hospital', tourist_attraction: 'Attraction',
-  golf_course: 'Golf course', convenience_store: 'Convenience store', bakery: 'Bakery',
-  park: 'Park', gas_station: 'Gas station',
-};
-
 
 export interface NearbyPlaceRow {
   id: string;

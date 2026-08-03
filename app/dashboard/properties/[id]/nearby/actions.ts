@@ -7,6 +7,7 @@ import { requirePropertyAccess, requireSession } from '@/lib/auth/guards';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import { refreshNearbyPlaces } from '@/lib/local/nearby';
+import { CURATION_TAG_LABEL } from '@/lib/local/categories';
 
 export interface NearbyActionState {
   error?: string;
@@ -64,7 +65,15 @@ export async function updateNearbyPlaceAction(
   if (formData.has('host_starred')) patch.host_starred = formData.get('host_starred') === 'true';
   if (formData.has('hidden')) patch.hidden = formData.get('hidden') === 'true';
   if (formData.has('host_notes')) patch.host_notes = String(formData.get('host_notes') ?? '').slice(0, 500) || null;
+  if (formData.has('tags')) {
+    const raw = formData.getAll('tags').map((t) => String(t));
+    patch.tags = Array.from(new Set(raw.filter((t) => t in CURATION_TAG_LABEL)));
+  }
   if (Object.keys(patch).length === 0) return { ok: true };
+  // Any curation touch (star, hide, note, tag) marks the place reviewed — this is
+  // what lets the UI and the coverage indicator distinguish "never looked at" from
+  // "host has seen this and left it as-is."
+  patch.reviewed_at = new Date().toISOString();
 
   const admin = createAdminClient();
   const { error } = await admin

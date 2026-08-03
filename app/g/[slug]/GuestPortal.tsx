@@ -11,15 +11,7 @@ import {
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
 import { formatDistance } from '@/lib/local/distance';
-
-// Client-safe mirror of the label map in lib/guest/concierge.ts (that module is
-// server-only, so its constant is not importable here). Keep the two in sync.
-const NEARBY_CATEGORY_LABEL: Record<string, string> = {
-  restaurant: 'Restaurant', cafe: 'Cafe', bar: 'Bar/Pub', grocery: 'Grocery',
-  pharmacy: 'Pharmacy', hospital: 'Hospital', tourist_attraction: 'Attraction',
-  golf_course: 'Golf course', convenience_store: 'Convenience store', bakery: 'Bakery',
-  park: 'Park', gas_station: 'Gas station',
-};
+import { NEARBY_CATEGORY_LABEL } from '@/lib/local/categories';
 
 // Luxury concierge palette (per Feature 3 brief). Fixed dark base + gold accent so the
 // portal reads as a high-end hotel experience regardless of per-property brand colors.

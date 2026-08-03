@@ -70,3 +70,23 @@ export function formatDistanceAway(metres: number | null | undefined): string | 
 export function formatRadiusMiles(metres: number): string {
   return `${(metres / METRES_PER_MILE).toFixed(1)} miles`;
 }
+
+/**
+ * Great-circle distance in metres between two lat/lng points. Client-safe
+ * (no `server-only` import) so UI components can compute a live distance
+ * for rows that only carry lat/lng, not a precomputed distance_m — e.g. the
+ * `recommendations` table (WS-6), where distance is derived client-side from
+ * propertyLat/propertyLng rather than stored. `lib/local/osm.ts` and
+ * `lib/local/mapbox.ts` each carry their own private haversine for
+ * server-side POI discovery; this is the one client components should import.
+ */
+export function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h = sinLat * sinLat + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * sinLng * sinLng;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}

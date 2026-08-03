@@ -1187,7 +1187,9 @@ export type Database = {
           rating: number | null
           refreshed_at: string
           review_count: number | null
+          reviewed_at: string | null
           source: string | null
+          tags: string[]
           url: string | null
         }
         Insert: {
@@ -1210,7 +1212,9 @@ export type Database = {
           rating?: number | null
           refreshed_at?: string
           review_count?: number | null
+          reviewed_at?: string | null
           source?: string | null
+          tags?: string[]
           url?: string | null
         }
         Update: {
@@ -1233,7 +1237,9 @@ export type Database = {
           rating?: number | null
           refreshed_at?: string
           review_count?: number | null
+          reviewed_at?: string | null
           source?: string | null
+          tags?: string[]
           url?: string | null
         }
         Relationships: [
@@ -1817,8 +1823,10 @@ export type Database = {
           lat: number | null
           lng: number | null
           name: string
+          price_level: number | null
           priority_weight: number
           property_id: string
+          tags: string[]
           url: string | null
           visibility: Database["public"]["Enums"]["brain_visibility"]
         }
@@ -1839,8 +1847,10 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name: string
+          price_level?: number | null
           priority_weight?: number
           property_id: string
+          tags?: string[]
           url?: string | null
           visibility?: Database["public"]["Enums"]["brain_visibility"]
         }
@@ -1861,8 +1871,10 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name?: string
+          price_level?: number | null
           priority_weight?: number
           property_id?: string
+          tags?: string[]
           url?: string | null
           visibility?: Database["public"]["Enums"]["brain_visibility"]
         }

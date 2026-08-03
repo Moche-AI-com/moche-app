@@ -11,7 +11,7 @@ export default async function RecommendationsPage({ params }: { params: { id: st
 
   const { data: recs } = await supabase
     .from('recommendations')
-    .select('id, name, category, address, url, distance_note, description, host_note, host_preference, priority_weight, approved, hidden, ai_source, lat, lng')
+    .select('id, name, category, address, url, distance_note, description, host_note, host_preference, priority_weight, approved, hidden, ai_source, lat, lng, tags, price_level')
     .eq('property_id', params.id)
     .is('deleted_at', null)
     .order('approved', { ascending: true })
