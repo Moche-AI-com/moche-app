@@ -31,6 +31,19 @@ export const serverEnv = {
   aiEmbedModel: process.env.AI_EMBED_MODEL ?? 'text-embedding-3-small',
   aiChatModel: process.env.AI_CHAT_MODEL ?? 'gpt-4o-mini',
 
+  // Dev-only local model provider (PR #5). 'ollama' routes getAIProvider() to a local
+  // Ollama instance instead of OpenAI/dev-fallback. Ignored in production regardless of
+  // value — isProductionRuntime() always wins in lib/ai/index.ts, so this can never
+  // select Ollama on a real deploy even if someone sets it by mistake.
+  aiDevProvider: process.env.AI_DEV_PROVIDER ?? '',
+  ollamaBaseUrl: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1',
+  ollamaChatModel: process.env.OLLAMA_CHAT_MODEL ?? 'llama3.1',
+  // No local Ollama embed model ships at the locked EMBED_DIM (1536) out of the box
+  // (nomic-embed-text=768, mxbai-embed-large=1024). embed() will throw a clear error
+  // unless OLLAMA_EMBED_MODEL is pointed at a model/adapter that actually emits 1536
+  // dims. Chat/generate is unaffected — this only gates embed().
+  ollamaEmbedModel: process.env.OLLAMA_EMBED_MODEL ?? 'nomic-embed-text',
+
   // OpenRouter model-routing toggle. OFF by default: with no key set, routedCompletion()
   // uses the existing OpenAI provider and behaves identically to today. When a key is
   // present, eligible tasks are routed to OpenRouter (PII redacted before the external call).
