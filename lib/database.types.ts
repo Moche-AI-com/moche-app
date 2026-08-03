@@ -1878,46 +1878,76 @@ export type Database = {
       }
       service_requests: {
         Row: {
+          access_instructions: string | null
           assigned_contact_id: string | null
           conversation_id: string | null
           created_at: string
           description: string
+          guest_availability: string | null
           id: string
+          interview_status: string
+          interview_transcript: Json
+          likely_causes: Json
+          location_note: string | null
+          media_urls: Json
           property_id: string
           resolution_notes: string | null
+          safety_flags: Json
           service_type: Database["public"]["Enums"]["service_type"]
           status: Database["public"]["Enums"]["service_status"]
           stay_id: string | null
+          suggested_parts: Json
+          summary: string | null
           timeline: Json
           updated_at: string
           urgency: Database["public"]["Enums"]["urgency_level"]
         }
         Insert: {
+          access_instructions?: string | null
           assigned_contact_id?: string | null
           conversation_id?: string | null
           created_at?: string
           description: string
+          guest_availability?: string | null
           id?: string
+          interview_status?: string
+          interview_transcript?: Json
+          likely_causes?: Json
+          location_note?: string | null
+          media_urls?: Json
           property_id: string
           resolution_notes?: string | null
+          safety_flags?: Json
           service_type?: Database["public"]["Enums"]["service_type"]
           status?: Database["public"]["Enums"]["service_status"]
           stay_id?: string | null
+          suggested_parts?: Json
+          summary?: string | null
           timeline?: Json
           updated_at?: string
           urgency?: Database["public"]["Enums"]["urgency_level"]
         }
         Update: {
+          access_instructions?: string | null
           assigned_contact_id?: string | null
           conversation_id?: string | null
           created_at?: string
           description?: string
+          guest_availability?: string | null
           id?: string
+          interview_status?: string
+          interview_transcript?: Json
+          likely_causes?: Json
+          location_note?: string | null
+          media_urls?: Json
           property_id?: string
           resolution_notes?: string | null
+          safety_flags?: Json
           service_type?: Database["public"]["Enums"]["service_type"]
           status?: Database["public"]["Enums"]["service_status"]
           stay_id?: string | null
+          suggested_parts?: Json
+          summary?: string | null
           timeline?: Json
           updated_at?: string
           urgency?: Database["public"]["Enums"]["urgency_level"]

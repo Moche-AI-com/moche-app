@@ -191,6 +191,29 @@ export const guestServiceRequestSchema = z.object({
   urgency: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
 });
 
+// WS-7 — guest "Report an issue" adaptive interview (distinct from the form-shaped
+// schema above, which is unused). The guest's very first message; safety triage
+// and the AI interview both operate on this same free-text field.
+export const guestServiceRequestStartSchema = z.object({
+  message: z.string().trim().min(1, 'Please describe what is going on.').max(2000),
+});
+
+// A guest's answer to one interview question — always free text, even when the
+// question offered multiple-choice options (the guest's choice text IS the message).
+export const guestServiceRequestMessageSchema = z.object({
+  message: z.string().trim().min(1, 'Please share an answer.').max(1000),
+  // S3 object keys from prior /upload presign calls the guest wants attached
+  // to this report. Never trust the URL itself, only the key (scoped server-side).
+  mediaKeys: z.array(z.string().trim().min(1).max(300)).max(5).optional(),
+});
+
+// Guest photo/video upload for an in-progress service request report.
+export const guestServiceRequestUploadSchema = z.object({
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']),
+  contentLengthBytes: z.number().int().positive().max(25 * 1024 * 1024),
+  fileName: z.string().trim().min(1).max(200).optional(),
+});
+
 // Host phone verification + optional login 2FA (Feature 4a).
 export const hostPhoneSchema = z.object({
   phone: z.string().trim().min(7, 'Enter a valid phone number.').max(40),

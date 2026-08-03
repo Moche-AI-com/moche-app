@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
   ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
-  AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, type LucideIcon,
+  AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, Wrench,
+  Paperclip, Loader2, CheckCircle2, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
@@ -23,6 +24,8 @@ const FOCUS_INPUT = '__FOCUS_INPUT__';
 // can type their own issue, which is sent to the host as a manual escalation (rather
 // than firing a canned question at the AI concierge).
 const MESSAGE_HOST = '__MESSAGE_HOST__';
+// Opens the structured "Report an issue" interview panel instead of sending a chat message.
+const SERVICE_REQUEST = '__SERVICE_REQUEST__';
 
 interface SubChoice { label: string; query: string }
 interface Category { key: string; label: string; Icon: LucideIcon; subtitle: string; choices: SubChoice[] }
@@ -102,7 +105,7 @@ const CATEGORIES: Category[] = [
   {
     key: 'request', label: 'Request', Icon: ConciergeBell, subtitle: 'Ask the host for help',
     choices: [
-      { label: 'Report an Issue', query: 'I need to report an issue with the property.' },
+      { label: 'Report an Issue', query: SERVICE_REQUEST },
       { label: 'Request Supplies', query: 'Could I request some extra supplies?' },
       { label: 'Maintenance Help', query: 'Something needs maintenance — can you help?' },
       { label: 'Message the Host', query: MESSAGE_HOST },
@@ -540,6 +543,18 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const [hostMsg, setHostMsg] = useState('');
   const [hostSending, setHostSending] = useState(false);
   const [hostComposerError, setHostComposerError] = useState<string | null>(null);
+  // "Report an issue" interview panel (WS-7): a guided, turn-by-turn safety-triaged
+  // interview, distinct from the free-text "Message the host" composer above.
+  const [srOpen, setSrOpen] = useState(false);
+  const [srTurns, setSrTurns] = useState<{ role: 'guest' | 'assistant'; text: string; choices?: string[] | null }[]>([]);
+  const [srTicketId, setSrTicketId] = useState<string | null>(null);
+  const [srStatus, setSrStatus] = useState<'idle' | 'in_progress' | 'completed' | 'safety_escalated'>('idle');
+  const [srInput, setSrInput] = useState('');
+  const [srBusy, setSrBusy] = useState(false);
+  const [srError, setSrError] = useState<string | null>(null);
+  const [srPendingMedia, setSrPendingMedia] = useState<string[]>([]);
+  const [srUploading, setSrUploading] = useState(false);
+  const srFileInputRef = useRef<HTMLInputElement>(null);
   // Portal guard: overlays must render into document.body (see anySheetOpen effect below)
   // to escape the transformed .gp-rise ancestor, which would otherwise trap position:fixed
   // and make bottom sheets appear below the tapped card instead of pinned to the viewport.
@@ -565,7 +580,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 
   // Lock body scroll while a bottom sheet is open so the underlying portal can't scroll
   // behind the sheet on mobile (a common bottom-sheet UX defect). Restored on close.
-  const anySheetOpen = !!activeCategory || hostComposerOpen;
+  const anySheetOpen = !!activeCategory || hostComposerOpen || srOpen;
   useEffect(() => {
     if (!anySheetOpen || typeof document === 'undefined') return;
     const prev = document.body.style.overflow;
@@ -675,6 +690,99 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     }
   }, [hostSending, hostPreview, slug]);
 
+  // "Report an issue" interview (WS-7). startServiceRequest fires the guest's first
+  // free-text description; continueServiceRequest answers a follow-up question.
+  // Both share response handling since /start and /message return the same shape.
+  const handleSrTurn = useCallback((json: { id?: string; status: string; question?: string; choices?: string[] | null; guestMessage?: string; report?: { summary: string } }) => {
+    if (json.id) setSrTicketId(json.id);
+    setSrStatus(json.status as typeof srStatus);
+    if (json.status === 'safety_escalated') {
+      setSrTurns((t) => [...t, { role: 'assistant', text: json.guestMessage ?? 'We have flagged this for your host right away.' }]);
+    } else if (json.status === 'completed') {
+      setSrTurns((t) => [...t, { role: 'assistant', text: json.report?.summary ?? 'Got it — your report has been sent to your host.' }]);
+    } else if (json.question) {
+      setSrTurns((t) => [...t, { role: 'assistant', text: json.question!, choices: json.choices ?? null }]);
+    }
+  }, []);
+
+  const startServiceRequest = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || srBusy) return;
+    setSrTurns((t) => [...t, { role: 'guest', text: trimmed }]);
+    setSrInput('');
+    setSrBusy(true);
+    setSrError(null);
+    try {
+      const res = await fetch(`/api/guest/${slug}/service-request/start`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: trimmed }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not submit your report.');
+      handleSrTurn(json);
+    } catch (e) {
+      setSrError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setSrBusy(false);
+    }
+  }, [slug, srBusy, handleSrTurn]);
+
+  const continueServiceRequest = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || srBusy || !srTicketId) return;
+    setSrTurns((t) => [...t, { role: 'guest', text: trimmed }]);
+    setSrInput('');
+    setSrBusy(true);
+    setSrError(null);
+    const mediaKeys = srPendingMedia;
+    setSrPendingMedia([]);
+    try {
+      const res = await fetch(`/api/guest/${slug}/service-request/${srTicketId}/message`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message: trimmed, ...(mediaKeys.length ? { mediaKeys } : {}) }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not save your answer.');
+      handleSrTurn(json);
+    } catch (e) {
+      setSrError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setSrBusy(false);
+    }
+  }, [slug, srBusy, srTicketId, srPendingMedia, handleSrTurn]);
+
+  const attachSrMedia = useCallback(async (file: File) => {
+    if (!srTicketId || srUploading || srPendingMedia.length >= 5) return;
+    setSrUploading(true);
+    setSrError(null);
+    try {
+      const presignRes = await fetch(`/api/guest/${slug}/service-request/${srTicketId}/upload`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contentType: file.type, contentLengthBytes: file.size, fileName: file.name }),
+      });
+      const presigned = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presigned.error ?? 'Could not attach that file.');
+      const putRes = await fetch(presigned.url, { method: 'PUT', headers: { 'content-type': file.type }, body: file });
+      if (!putRes.ok) throw new Error('Upload failed. Please try again.');
+      setSrPendingMedia((keys) => [...keys, presigned.key]);
+    } catch (e) {
+      setSrError(e instanceof Error ? e.message : 'Could not attach that file.');
+    } finally {
+      setSrUploading(false);
+    }
+  }, [slug, srTicketId, srUploading, srPendingMedia.length]);
+
+  function closeServiceRequest() {
+    setSrOpen(false);
+    setSrTurns([]);
+    setSrTicketId(null);
+    setSrStatus('idle');
+    setSrInput('');
+    setSrError(null);
+    setSrPendingMedia([]);
+  }
+
   // Hydrate prior conversation history on mount so a returning guest (new tab, reload,
   // came back later) sees their earlier messages AND any host reply — not just a fresh
   // greeting. Without this, the two-way loop only worked within one uninterrupted session.
@@ -745,6 +853,11 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       setHostComposerError(null);
       setHostMsg('');
       setTimeout(() => setHostComposerOpen(true), 60);
+      return;
+    }
+    if (choice.query === SERVICE_REQUEST) {
+      closeServiceRequest();
+      setTimeout(() => setSrOpen(true), 60);
       return;
     }
     send(choice.query);
@@ -1010,6 +1123,132 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         document.body,
       )}
 
+      {/* "Report an issue" interview panel (WS-7): a guided, turn-by-turn intake distinct
+          from the free-text "Message the host" composer above. Safety triage on the
+          server can short-circuit straight to a "we've alerted your host" message. */}
+      {mounted && srOpen && createPortal(
+        <div className="gp-sheet-scrim" onClick={() => !srBusy && closeServiceRequest()} data-testid="service-request-overlay">
+          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Report an issue" data-testid="service-request-panel">
+            <div className="gp-sheet-grip" aria-hidden />
+            <div className="gp-sheet-head">
+              <span className="gp-cat-icon gp-sheet-badge"><Wrench size={22} aria-hidden /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="gp-serif gp-sheet-title">Report an issue</div>
+                <div className="gp-sheet-sub">
+                  {srStatus === 'idle' && 'Tell us what\u2019s wrong \u2014 we\u2019ll ask a couple of quick follow-ups.'}
+                  {srStatus === 'in_progress' && 'Just a couple more details.'}
+                  {srStatus === 'completed' && 'Sent to your host.'}
+                  {srStatus === 'safety_escalated' && 'Your host has been alerted right away.'}
+                </div>
+              </div>
+              <button onClick={() => !srBusy && closeServiceRequest()} className="gp-sheet-close" data-testid="button-close-service-request" aria-label="Close">
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem', padding: '.25rem .2rem .2rem', maxHeight: '46vh', overflowY: 'auto' }}>
+              {srTurns.map((turn, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: turn.role === 'guest' ? 'flex-end' : 'flex-start' }}>
+                  <div style={turn.role === 'guest' ? bubbleGuest : bubbleAssistant}>{turn.text}</div>
+                </div>
+              ))}
+              {srBusy && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={bubbleAssistant}><Loader2 size={14} aria-hidden className="gp-spin" /></div>
+                </div>
+              )}
+            </div>
+
+            {srStatus === 'completed' || srStatus === 'safety_escalated' ? (
+              <div style={{ padding: '.6rem .2rem .2rem' }}>
+                <div style={alertOk} data-testid="service-request-confirmation">
+                  <CheckCircle2 size={14} aria-hidden style={{ marginRight: '.35rem', verticalAlign: '-2px' }} />
+                  {srStatus === 'completed' ? 'Your report has been sent to your host.' : 'Your host has been notified right away.'}
+                </div>
+                <button type="button" onClick={closeServiceRequest} className="gp-bell-send" style={{ width: '100%', height: 'auto', padding: '.7rem 1rem', borderRadius: 12 }} data-testid="button-close-service-request-done">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => { e.preventDefault(); if (!srInput.trim()) return; srTicketId ? continueServiceRequest(srInput) : startServiceRequest(srInput); }}
+                style={{ display: 'flex', flexDirection: 'column', gap: '.6rem', padding: '.6rem .2rem .2rem' }}
+              >
+                {srError && <div style={alertErr}>{srError}</div>}
+
+                {!!srTurns.length && srTurns[srTurns.length - 1]?.choices?.length ? (
+                  <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+                    {srTurns[srTurns.length - 1]!.choices!.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        disabled={srBusy}
+                        onClick={() => continueServiceRequest(c)}
+                        className="gp-subchoice"
+                        data-testid={`service-request-choice-${c}`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-end' }}>
+                  <textarea
+                    autoFocus
+                    value={srInput}
+                    onChange={(e) => setSrInput(e.target.value)}
+                    rows={srTurns.length === 0 ? 4 : 2}
+                    maxLength={srTicketId ? 1000 : 2000}
+                    disabled={srBusy}
+                    placeholder={srTicketId ? 'Type your answer\u2026' : "For example: The kitchen faucet won't stop dripping."}
+                    data-testid="input-service-request"
+                    style={mutedInputStyle}
+                  />
+                </div>
+
+                {srTicketId && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+                    <input
+                      ref={srFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+                      style={{ display: 'none' }}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) attachSrMedia(f); e.target.value = ''; }}
+                      data-testid="input-service-request-media"
+                    />
+                    <button
+                      type="button"
+                      className="gp-sheet-close"
+                      disabled={srUploading || srPendingMedia.length >= 5}
+                      onClick={() => srFileInputRef.current?.click()}
+                      aria-label="Attach a photo"
+                      data-testid="button-attach-service-request-media"
+                    >
+                      {srUploading ? <Loader2 size={16} aria-hidden className="gp-spin" /> : <Paperclip size={16} aria-hidden />}
+                    </button>
+                    {srPendingMedia.length > 0 && (
+                      <span className="faint" style={{ fontSize: '.76rem' }}>{srPendingMedia.length} attached</span>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="gp-bell-send"
+                  disabled={srBusy || !srInput.trim()}
+                  data-testid="button-send-service-request"
+                  style={{ width: '100%', height: 'auto', padding: '.75rem 1rem', borderRadius: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '.45rem', fontWeight: 600 }}
+                >
+                  <Send size={16} aria-hidden /> {srBusy ? 'Sending\u2026' : (srTicketId ? 'Send answer' : 'Send report')}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {/* Global (not scoped) so the portaled bottom sheets rendered into document.body
           still receive these styles. All selectors are gp-* prefixed — no collision risk. */}
       <style jsx global>{`
@@ -1134,6 +1373,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         }
         .gp-subchoice-alt .gp-subchoice-icon { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); color: #ece7dd; }
         @keyframes gpPulse { 0% { box-shadow: 0 0 0 0 ${GOLD}66; } 70% { box-shadow: 0 0 0 6px ${GOLD}00; } 100% { box-shadow: 0 0 0 0 ${GOLD}00; } }
+        .gp-spin { animation: gpSpin .8s linear infinite; }
+        @keyframes gpSpin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .gp-spin { animation: none; } }
         @keyframes gpBlink { 0%, 60%, 100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
         @keyframes gpMsg { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         @keyframes gpFade { from { opacity: 0; } to { opacity: 1; } }
