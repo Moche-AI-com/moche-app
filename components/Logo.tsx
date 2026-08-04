@@ -82,6 +82,10 @@ export function Logo({
         // The mark plus wordmark computes to ~31px tall; hold the 44px minimum
         // touch target since this is a navigation link on every surface.
         minHeight: 44,
+        // In a tight flex row (the marketing header at 390px) the wordmark
+        // would otherwise break after the hyphen and stack "AI" underneath.
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
       }}
     >
       <DomeMark size={size} variant={variant} />
