@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 /**
- * Moche.AI bell-igloo mark — single source of truth.
+ * Moche-AI bell-igloo mark — single source of truth.
  *
  * Design: an igloo/dome built from nested concentric arcs with an arched entrance,
  * topped by a coral "push-to-ring" service-bell button on a short stem — the igloo
@@ -70,7 +70,7 @@ export function Logo({
     <Link
       href={href}
       className="brand"
-      aria-label="Moche.AI home"
+      aria-label="Moche-AI home"
       style={{
         display: 'inline-flex',
         alignItems: 'center',

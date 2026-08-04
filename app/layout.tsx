@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'Moche.AI — Your Property Brain',
+  title: 'Moche-AI — Your Property Brain',
   description:
     'The in-stay AI guest concierge for short-term rental hosts. Each property gets a Property Brain that answers guest questions instantly.',
   robots: { index: false, follow: false },

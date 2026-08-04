@@ -81,7 +81,7 @@ function SignupForm() {
                 <MessageSquare size={14} aria-hidden="true" /> Text me guest &amp; property alerts (optional)
               </span>
               <br />
-              I agree to receive account and guest-related SMS/WhatsApp messages from Moche.AI at the phone
+              I agree to receive account and guest-related SMS/WhatsApp messages from Moche-AI at the phone
               number I verify in settings. Message frequency varies. Message &amp; data rates may apply.
               Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. See our{' '}
               <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="gradient-text">Privacy Policy</Link>{' '}and{' '}

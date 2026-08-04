@@ -1,6 +1,6 @@
 # Third-Party Licenses & Attributions
 
-Moche.AI is built with open-source software and third-party AI models. This file
+Moche-AI is built with open-source software and third-party AI models. This file
 records attributions and license notices. It backs the public
 [`/legal/open-source`](app/legal/open-source/page.tsx) page.
 

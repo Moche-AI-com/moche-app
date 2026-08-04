@@ -1,6 +1,6 @@
 # AI Governance Register
 
-Internal record of the AI systems in Moche.AI: purpose, data flows, oversight
+Internal record of the AI systems in Moche-AI: purpose, data flows, oversight
 points, and risk classification. Supports EU AI Act readiness and periodic review.
 
 ## 1. System inventory

@@ -22,7 +22,7 @@ import { log } from '@/lib/log';
 
 type AdminClient = SupabaseClient<Database>;
 
-const EMAIL_FROM = 'Moche.AI <noreply@moche-ai.com>';
+const EMAIL_FROM = 'Moche-AI <noreply@moche-ai.com>';
 const SUPPORT_EMAIL = 'hostspark.org@gmail.com';
 
 // Inline bell-igloo brand mark (mirrors components/Logo.tsx DomeMark), sized for
@@ -90,7 +90,7 @@ function renderAuthEmail(opts: {
       </td></tr>
       <tr><td style="padding:8px 32px 28px 32px;border-top:1px solid rgba(157,176,198,0.12);">
         <p style="margin:16px 0 4px 0;font-size:12px;line-height:1.6;color:#5F7793;">Need help? Reach us at <a href="mailto:${SUPPORT_EMAIL}" style="color:#7C8CFF;">${SUPPORT_EMAIL}</a>.</p>
-        <p style="margin:0;font-size:12px;line-height:1.6;color:#5F7793;">Moche.AI · Built in Somerville, MA</p>
+        <p style="margin:0;font-size:12px;line-height:1.6;color:#5F7793;">Moche-AI · Built in Somerville, MA</p>
       </td></tr>
     </table>
   </td></tr>
@@ -108,7 +108,7 @@ function renderAuthEmail(opts: {
     outro.replace(/<[^>]+>/g, ''),
     '',
     `Need help? ${SUPPORT_EMAIL}`,
-    'Moche.AI · Built in Somerville, MA',
+    'Moche-AI · Built in Somerville, MA',
   ].join('\n');
 
   return { html, text };
@@ -171,15 +171,15 @@ export async function createUserAndSendConfirmation(
     `&type=signup`;
 
   const { html, text } = renderAuthEmail({
-    preheader: 'Confirm your email to activate your Moche.AI host account.',
+    preheader: 'Confirm your email to activate your Moche-AI host account.',
     heading: 'Confirm your email',
-    intro: 'Welcome to Moche.AI. Confirm your email address to activate your host account and start building your Property Brain.',
+    intro: 'Welcome to Moche-AI. Confirm your email address to activate your host account and start building your Property Brain.',
     buttonLabel: 'Confirm my email',
     url: confirmUrl,
-    outro: 'This link expires in 24 hours. If you did not create a Moche.AI account, you can safely ignore this email.',
+    outro: 'This link expires in 24 hours. If you did not create a Moche-AI account, you can safely ignore this email.',
   });
 
-  const sent = await send(params.email, 'Confirm your Moche.AI email', html, text);
+  const sent = await send(params.email, 'Confirm your Moche-AI email', html, text);
   if (!sent) return { ok: false, reason: 'email_send_failed' };
   return { ok: true, userId: data.user.id };
 }
@@ -216,13 +216,13 @@ export async function sendPasswordReset(
     `&next=${encodeURIComponent(next)}`;
 
   const { html, text } = renderAuthEmail({
-    preheader: 'Reset your Moche.AI password.',
+    preheader: 'Reset your Moche-AI password.',
     heading: 'Reset your password',
-    intro: 'We received a request to reset the password for your Moche.AI host account. Click below to choose a new password.',
+    intro: 'We received a request to reset the password for your Moche-AI host account. Click below to choose a new password.',
     buttonLabel: 'Reset my password',
     url: confirmUrl,
     outro: 'This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email — your password will not change.',
   });
 
-  await send(params.email, 'Reset your Moche.AI password', html, text);
+  await send(params.email, 'Reset your Moche-AI password', html, text);
 }

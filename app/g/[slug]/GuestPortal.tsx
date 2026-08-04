@@ -157,7 +157,7 @@ export interface ExtraOffer {
   cta_label: string | null;
 }
 
-/** Moche.AI dome/bell mark — inlined so the brand-scoped portal needs no external CSS. */
+/** Moche-AI dome/bell mark — inlined so the brand-scoped portal needs no external CSS. */
 function DomeMark({ size = 40 }: { size?: number }) {
   const gid = 'gpBrandGrad';
   return (
@@ -272,7 +272,7 @@ export function GuestPortal(props: {
 
         <footer className="gp-footer">
           <DomeMark size={14} />
-          <span>Powered by Moche.AI · Your host verifies access. We never share your details.</span>
+          <span>Powered by Moche-AI · Your host verifies access. We never share your details.</span>
         </footer>
       </div>
 
@@ -1579,7 +1579,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 // TCPA / consent fine print shown at the point of opt-in. Mirrors the host-side notice.
 const GUEST_NOTIFY_FINE_PRINT =
   'By tapping Notify me you agree to receive a one-time automated message (SMS or email) from ' +
-  'Moche.AI when your host replies. Message & data rates may apply. Reply STOP to opt out. ' +
+  'Moche-AI when your host replies. Message & data rates may apply. Reply STOP to opt out. ' +
   'Consent is not a condition of any service.';
 
 // 4c — inline soft-gate. Captures a contact + explicit consent and posts to the

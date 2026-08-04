@@ -165,8 +165,8 @@ export async function getMasterConciergePrompt(admin: Admin): Promise<string> {
 function personaLine(propertyName: string, conciergeName?: string): string {
   const name = conciergeName?.trim();
   return name && name.length > 0 && name !== DEFAULT_CONCIERGE_NAME
-    ? `You are ${name}, the guest concierge for "${propertyName}", accessed through the Moche.AI platform.`
-    : `You are the guest concierge for "${propertyName}", accessed through the Moche.AI platform.`;
+    ? `You are ${name}, the guest concierge for "${propertyName}", accessed through the Moche-AI platform.`
+    : `You are the guest concierge for "${propertyName}", accessed through the Moche-AI platform.`;
 }
 
 // Optional per-property instruction layers appended after the persona line. Each is

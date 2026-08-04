@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss';
 
-// Palette mirrors the Moche.AI landing design system (glacier navy + aurora teal + coral).
+// Palette mirrors the Moche-AI landing design system (glacier navy + aurora teal + coral).
 const config: Config = {
   darkMode: ['class', '[data-theme="dark"]'],
   content: [

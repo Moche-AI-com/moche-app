@@ -27,7 +27,7 @@ const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['e
 // Host notification kinds that MAY fan out to SMS (subject to all gates below).
 const SMS_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance']);
 
-const EMAIL_FROM = 'Moche.AI <noreply@moche-ai.com>';
+const EMAIL_FROM = 'Moche-AI <noreply@moche-ai.com>';
 
 // Sends an SMS via the Twilio Messages REST API using native fetch.
 // Auth is resolved by resolveTwilioAuth (API-Key first, Auth-Token fallback). The
@@ -160,7 +160,7 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
     const url = p.link ? `${publicEnv.appUrl}${p.link}` : '';
     const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
     const text = `${p.body ?? p.title}${action}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
-    await sendHostEmail(contact.email, `Moche.AI: ${p.title}`, text);
+    await sendHostEmail(contact.email, `Moche-AI: ${p.title}`, text);
   }
 
   // 3. Host SMS fan-out (escalation + maintenance only, all gates must pass).
@@ -171,7 +171,7 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
     if (ent.smsEscalation && resolveTwilioAuth()) {
       // Keep it short; never include guest PII beyond the already-truncated title.
       // Append the answer magic link when present so the host can reply from the SMS.
-      const msg = p.actionUrl ? `Moche.AI: ${p.title} Answer: ${p.actionUrl}` : `Moche.AI: ${p.title}`;
+      const msg = p.actionUrl ? `Moche-AI: ${p.title} Answer: ${p.actionUrl}` : `Moche-AI: ${p.title}`;
       await sendSms(contact.phone, msg);
     }
   }
@@ -180,7 +180,7 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
 // Sends a host phone-verification / login 2FA OTP over SMS, reusing the same Twilio
 // fetch path as every other SMS here (no second client). The full code is NEVER logged.
 export async function sendHostOtp(phone: string, code: string): Promise<boolean> {
-  return sendSms(phone, `Moche.AI verification code: ${code}\n\nExpires in 10 minutes. Never share this code. Reply STOP to opt out.`);
+  return sendSms(phone, `Moche-AI verification code: ${code}\n\nExpires in 10 minutes. Never share this code. Reply STOP to opt out.`);
 }
 
 // Best-effort guest ping when a host answers an escalation. Only ever called after an
@@ -196,7 +196,7 @@ export async function notifyGuestReply(p: { contact: string; propertyName: strin
         `Good news — your host just replied to your question about ${p.propertyName}.\n\nOpen your concierge to read it: ${p.portalUrl}`,
       );
     } else {
-      await sendSms(p.contact, `Moche.AI: Your host replied to your question. Open your concierge: ${p.portalUrl} Reply STOP to opt out.`);
+      await sendSms(p.contact, `Moche-AI: Your host replied to your question. Open your concierge: ${p.portalUrl} Reply STOP to opt out.`);
     }
   } catch {
     /* best-effort — never block the answer flow */
@@ -224,7 +224,7 @@ export async function notifyGuestOtp(p: { contact: string; code: string; devFall
     const { error } = await resend.emails.send({
       from: EMAIL_FROM,
       to: p.contact,
-      subject: 'Your Moche.AI verification code',
+      subject: 'Your Moche-AI verification code',
       text: `Your verification code is: ${p.code}\n\nThis code expires in 10 minutes. Do not share it with anyone.`,
     });
     if (error) {
@@ -243,7 +243,7 @@ export async function notifyGuestOtp(p: { contact: string; code: string; devFall
     const body = new URLSearchParams({
       To: p.contact,
       From: auth.fromNumber,
-      Body: `Your Moche.AI verification code is: ${p.code}\n\nExpires in 10 minutes. Never share this code.`,
+      Body: `Your Moche-AI verification code is: ${p.code}\n\nExpires in 10 minutes. Never share this code.`,
     });
 
     const res = await fetch(

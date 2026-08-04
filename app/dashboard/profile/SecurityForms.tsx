@@ -14,7 +14,7 @@ import {
 
 // TCPA disclosure shown at the point of consent (opt-in checkbox + toggles).
 const TCPA_FINE_PRINT =
-  'By enabling SMS alerts you consent to receive automated operational text messages from Moche.AI ' +
+  'By enabling SMS alerts you consent to receive automated operational text messages from Moche-AI ' +
   '(e.g. guest escalations and login codes). Message frequency varies. Message & data rates may apply. ' +
   'Reply STOP to opt out at any time; reply HELP for help. Consent is not a condition of purchase.';
 

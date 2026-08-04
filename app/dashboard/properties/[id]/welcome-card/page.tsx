@@ -76,7 +76,7 @@ export default async function WelcomeCardPage({ params }: { params: { id: string
           border: '1px solid #e6e9ef',
         }}
       >
-        <div style={{ fontSize: '.8rem', letterSpacing: '.18em', textTransform: 'uppercase', color: '#12B5AD', fontWeight: 700 }}>Moche.AI</div>
+        <div style={{ fontSize: '.8rem', letterSpacing: '.18em', textTransform: 'uppercase', color: '#12B5AD', fontWeight: 700 }}>Moche-AI</div>
         <h1 style={{ fontSize: '1.9rem', margin: '.6rem 0 .2rem', color: '#0b1220' }}>Welcome to {property.display_name}</h1>
         {location && <p style={{ color: '#5b6472', fontSize: '.9rem', marginBottom: '1.5rem' }}>{location}</p>}
 

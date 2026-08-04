@@ -47,7 +47,7 @@ export async function submitHostFeedbackAction(_prev: HostFeedbackState, formDat
     const hostName = ctx.profile.full_name ?? 'A host';
     const stars = '★'.repeat(rating) + '☆'.repeat(Math.max(0, 5 - rating));
     const lines = [
-      `${hostName} left ${rating}/5 feedback on Moche.AI.`,
+      `${hostName} left ${rating}/5 feedback on Moche-AI.`,
       '',
       `Rating:  ${stars} (${rating}/5)`,
       `Host:    ${hostName} <${hostEmail}>`,

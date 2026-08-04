@@ -34,7 +34,7 @@ export function FeedbackControl() {
             <form action={formAction} data-testid="form-host-feedback">
               <input type="hidden" name="rating" value={rating} />
               <input type="hidden" name="page" value="dashboard" />
-              <p className="muted" style={{ fontSize: '.82rem', marginBottom: '.6rem' }}>How&apos;s Moche.AI working for you?</p>
+              <p className="muted" style={{ fontSize: '.82rem', marginBottom: '.6rem' }}>How&apos;s Moche-AI working for you?</p>
               <div style={{ display: 'flex', gap: '.15rem', marginBottom: '.6rem' }} onMouseLeave={() => setHover(0)}>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button

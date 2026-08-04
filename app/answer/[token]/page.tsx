@@ -29,7 +29,7 @@ export default async function AnswerLinkPage({ params }: { params: { token: stri
     <main className="wrap" style={{ maxWidth: 640, margin: '0 auto', padding: '3rem 1.25rem 4rem' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: '.35rem' }}>Answer your guest</h1>
       <p className="muted" style={{ fontSize: '.9rem', marginBottom: '1.5rem' }}>
-        A secure one-time link from Moche.AI. Your reply is sent to the guest and saved to your Property Brain.
+        A secure one-time link from Moche-AI. Your reply is sent to the guest and saved to your Property Brain.
       </p>
 
       {!verified || question === null ? (

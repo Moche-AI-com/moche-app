@@ -26,7 +26,7 @@ Stripe status vs. `subscriptions` row).
 
 ## Customer comms template
 
-> Hi {name}, we had trouble processing your latest Moche.AI payment, so your account
+> Hi {name}, we had trouble processing your latest Moche-AI payment, so your account
 > is in a short grace period. Your guest concierge is still running for now. Please
 > update your card in Dashboard → Billing to avoid interruption. Reply here if you'd
 > like a hand.
