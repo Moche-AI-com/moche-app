@@ -1,0 +1,435 @@
+/*
+ * Styles scoped to the marketing landing page only (CSS Module -- no changes
+ * to app/globals.css, which is owned by other work). Reuses the app's design
+ * tokens (--teal, --coral, --iris, --surface, --border, spacing, radius,
+ * etc.) already defined globally so the page matches the rest of the product.
+ *
+ * Mobile-first: base rules target small viewports, min-width media queries
+ * layer on desktop refinements. Motion is limited to transform/opacity and
+ * gated behind prefers-reduced-motion.
+ */
+
+/* ---------- Header ---------- */
+
+.landingHeader {
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.landingHeaderInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.landingHeaderNav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The shared .btn-sm size computes to ~38px, under the 44px minimum touch
+   target. Raised only inside the marketing header so global button sizing --
+   and every dashboard surface that depends on it -- stays untouched. */
+.landingHeaderNav :global(.btn-sm),
+.landingHeaderNav :global(button) {
+  min-height: 44px;
+}
+
+.landingHeaderLink {
+  display: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+  padding: 0.5rem 0.25rem;
+  min-height: 44px;
+  align-items: center;
+}
+.landingHeaderLink:hover {
+  color: var(--text);
+}
+
+@media (min-width: 640px) {
+  .landingHeaderLink {
+    display: inline-flex;
+  }
+}
+
+/* ---------- Hero ---------- */
+
+.heroSection {
+  padding-top: clamp(2.5rem, 8vw, 6rem);
+  padding-bottom: clamp(2.5rem, 6vw, 4rem);
+}
+
+.heroSectionInner {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .heroSectionInner {
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 3rem;
+  }
+}
+
+.heroSectionCopy {
+  min-width: 0;
+  max-width: 60ch;
+}
+
+.heroSectionMedia {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  max-width: 460px;
+  border-radius: var(--radius-lg);
+  overflow: clip;
+  border: 1px solid var(--border);
+  justify-self: center;
+}
+
+@media (min-width: 1024px) {
+  .heroSectionMedia {
+    justify-self: end;
+  }
+}
+
+.heroSectionImage {
+  object-fit: cover;
+}
+
+.heroSectionTitle {
+  font-size: clamp(2.2rem, 7vw, 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 1.1rem 0 1.1rem;
+}
+
+.heroSectionSubtitle {
+  color: var(--text-muted);
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.5;
+  max-width: 55ch;
+  margin: 0 0 1.75rem;
+}
+
+.heroSectionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+/* ---------- Shared section heading ---------- */
+
+.sectionHeading {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  letter-spacing: -0.01em;
+  margin: 0 0 1.75rem;
+  max-width: 42ch;
+}
+
+/* ---------- Benefits ---------- */
+
+.benefitsSection {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--border);
+}
+
+.benefitsSectionGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .benefitsSectionGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .benefitsSectionGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.benefitsSectionCard {
+  padding: 1.5rem 1.35rem;
+  min-width: 0;
+}
+
+.benefitsSectionTitle {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+  min-width: 0;
+}
+
+/* ---------- Demo video slot ---------- */
+
+.demoVideoSection {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--border);
+}
+
+.demoVideoSectionFrame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 900px;
+  border-radius: var(--radius-lg);
+  overflow: clip;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  isolation: isolate;
+}
+
+.demoVideoSectionPoster {
+  object-fit: cover;
+  filter: saturate(0.85) brightness(0.7);
+}
+
+.demoVideoSectionOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  z-index: 1;
+}
+
+.demoVideoSectionPlay {
+  width: 64px;
+  height: 64px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, white 35%, transparent);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  color: white;
+  display: grid;
+  place-items: center;
+  cursor: not-allowed;
+  transition: transform 200ms var(--ease-out, ease);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .demoVideoSectionPlay:hover {
+    transform: scale(1.05);
+  }
+}
+
+.demoVideoSectionCaption {
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: color-mix(in srgb, black 35%, transparent);
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- Gallery ---------- */
+
+.gallerySection {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--border);
+}
+
+.gallerySectionGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+@media (min-width: 768px) {
+  /* Editorial composition: a tall portrait cell holds column one across both
+     upper rows, two cells stack beside it, and the fourth becomes a full-width
+     band. Four images resolve into a deliberate shape with no ragged gap. */
+  .gallerySectionGrid {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: minmax(190px, 1fr) minmax(190px, 1fr) minmax(150px, 0.6fr);
+  }
+
+  .gallerySectionCellWide {
+    grid-column: 1 / -1;
+    min-height: 150px;
+  }
+}
+
+.gallerySectionCell {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: clip;
+  min-height: 220px;
+  border: 1px solid var(--border);
+}
+
+@media (min-width: 768px) {
+  .gallerySectionCellTall {
+    grid-row: span 2;
+  }
+}
+
+.gallerySectionImage {
+  object-fit: cover;
+}
+
+/* ---------- CTA ---------- */
+
+.ctaSection {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--border);
+}
+
+.ctaSectionGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .ctaSectionGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .ctaSectionGrid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.ctaSectionCard {
+  padding: 1.35rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* Five cards across at >=1024px leaves each button narrower than its longest
+   label ("Ask about founding pricing" overflowed). Let the label wrap onto a
+   second line and centre it, rather than clipping approved copy. */
+.ctaSectionCard :global(.btn) {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  min-height: 44px;
+  height: auto;
+  padding-block: 0.6rem;
+}
+
+.ctaSectionTitle {
+  font-size: 1rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.ctaSectionDetail {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+/* ---------- Pricing ---------- */
+
+.pricingSection {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--border);
+}
+
+.pricingSectionIntro {
+  max-width: 65ch;
+  margin: -0.75rem 0 1.75rem;
+}
+
+.pricingSectionGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .pricingSectionGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .pricingSectionGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .pricingSectionGrid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+.pricingSectionCard {
+  padding: 1.35rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.pricingSectionCardContact {
+  justify-content: space-between;
+}
+
+.pricingSectionTier {
+  font-size: 1.05rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.pricingSectionProperties {
+  font-size: 0.82rem;
+  margin: 0 0 0.5rem;
+  min-width: 0;
+}
+
+.pricingSectionPrice {
+  margin: 0;
+}
+
+.pricingSectionAmount {
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.pricingSectionConversations {
+  font-size: 0.82rem;
+  margin: 0.15rem 0 0;
+}
+
+.pricingSectionAnnual {
+  font-size: 0.75rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+/* ---------- Footer ---------- */
+
+.landingFooter {
+  padding-block: 2.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.landingFooterTagline {
+  font-size: 0.85rem;
+  margin: 0.75rem 0 0;
+}

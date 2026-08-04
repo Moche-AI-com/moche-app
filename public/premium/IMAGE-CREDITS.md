@@ -1,0 +1,30 @@
+# Image Credits — `public/premium/`
+
+All images on this page are sourced from [Pexels](https://www.pexels.com), used under the
+[Pexels License](https://www.pexels.com/license/) (free for commercial use, no attribution
+required — attribution given below anyway as good practice). Downloaded directly via `curl`
+from `images.pexels.com` and re-encoded to WebP with `cwebp` to keep file sizes small.
+
+## Images added by this task (landing page rebuild)
+
+| File | Source | Photographer | Dimensions | Size |
+|---|---|---|---|---|
+| `str-hero-beachhouse.webp` | [pexels.com/photo/19130093](https://www.pexels.com/photo/a-beach-house-with-palm-trees-and-the-ocean-in-the-background-19130093/) | Jonathan Borba | 1600×2400 | ~229 KB |
+| `str-video-poster-kitchen.webp` | [pexels.com/photo/4617771](https://www.pexels.com/photo/modern-room-interior-4617771/) | Andrea Davis | 1600×1067 | ~134 KB |
+| `str-gallery-cliffside-cottage.webp` | [pexels.com/photo/27912226](https://www.pexels.com/photo/a-house-on-the-beach-with-the-white-cliffs-of-dorset-in-the-background-27912226/) | Stephan Leuzinger | 1200×1600 | ~265 KB |
+| `str-gallery-cozy-cabin.webp` | [pexels.com/photo/29973813](https://www.pexels.com/photo/cozy-cabin-interior-with-natural-light-29973813/) | (Pexels contributor) | 1400×1867 | ~184 KB |
+| `str-gallery-pool-deck.webp` | [pexels.com/photo/8134744](https://www.pexels.com/photo/backyard-swimming-pool-under-blue-sky-8134744/) | Max Vakhtbovycn | 1600×934 | ~163 KB |
+| `str-gallery-key-handoff.webp` | [pexels.com/photo/8112184](https://www.pexels.com/photo/a-person-handing-the-keys-8112184/) | Pavel Danilyuk | 1600×1068 | ~51 KB |
+
+License terms (Pexels): free to use for commercial and noncommercial purposes, no attribution
+required, modification permitted. See https://www.pexels.com/license/ for full terms.
+
+## Pre-existing images in this directory (not added by this task — left untouched)
+
+`enhancements-banner.jpg`, `extras-empty.jpg`, `portal-hero.jpg` — owned by other work in
+progress on this project; not modified, sourced, or credited by this task.
+
+## Retired — do not use
+
+`aurora-bg.webp` and `intelligence-layer.webp` (previously under `public/assets/img/`) are
+retired per product direction and were intentionally not reused for the new landing page.

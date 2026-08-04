@@ -37,7 +37,19 @@ export function LegalLinks({
       }}
     >
       {docs.map((d) => (
-        <Link key={d.slug} href={`/legal/${d.slug}`} className="muted" style={{ textDecoration: 'none' }}>
+        <Link
+          key={d.slug}
+          href={`/legal/${d.slug}`}
+          className="muted"
+          // Text is small by design in a dense legal row, but the hit area must
+          // still clear the 44px minimum touch target on mobile.
+          style={{
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            minHeight: 44,
+          }}
+        >
           {d.navLabel}
         </Link>
       ))}

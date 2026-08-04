@@ -31,13 +31,10 @@ export async function middleware(request: NextRequest) {
   const isProtected = path.startsWith('/dashboard');
   const isAuthPage = ['/login', '/signup'].some((p) => path === p);
 
-  // Root: anonymous visitors see the marketing landing page (static HTML in /public);
-  // authenticated hosts fall through to app/page.tsx, which redirects to /dashboard.
-  if (path === '/' && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/landing.html';
-    return NextResponse.rewrite(url);
-  }
+  // NOTE: app/page.tsx is now the real homepage for all visitors (anonymous and
+  // authenticated). The previous rewrite to the static public/landing.html
+  // marketing page has been removed; that file remains on disk as an archive
+  // but is no longer served at "/".
 
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
