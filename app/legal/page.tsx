@@ -6,8 +6,9 @@ export default function LegalIndexPage() {
     <div>
       <h1 style={{ fontSize: 'clamp(1.7rem,4vw,2.4rem)', marginBottom: '.5rem' }}>Legal Center</h1>
       <p className="muted" style={{ marginBottom: '1.75rem', fontSize: '.95rem' }}>
-        The agreements, policies, and disclosures that govern your use of Moche.AI. Documents
-        below are drafts pending final legal review — see the banner on each page.
+        The agreements, policies, and disclosures that govern your use of Moche-AI. Each document
+        shows its current version and effective date. Material changes require your renewed
+        acceptance before continued use.
       </p>
       <div style={{ display: 'grid', gap: '.75rem' }}>
         {LEGAL_DOCS.map((d) => (

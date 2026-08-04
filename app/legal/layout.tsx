@@ -5,8 +5,8 @@ import { LEGAL_DOCS } from '@/lib/legal/registry';
 import { LegalLinks } from '@/components/legal/LegalLinks';
 
 export const metadata: Metadata = {
-  title: 'Legal Center — Moche.AI',
-  description: 'Terms, privacy, security, and compliance documents for Moche.AI.',
+  title: 'Legal Center — Moche-AI',
+  description: 'Terms, privacy, security, and compliance documents for Moche-AI.',
   robots: { index: true, follow: true },
 };
 
@@ -34,7 +34,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
       `}</style>
 
       <header className="wrap legal-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 72 }}>
-        <Link href="/" aria-label="Moche.AI home"><Logo /></Link>
+        <Link href="/" aria-label="Moche-AI home"><Logo /></Link>
         <Link href="/" className="btn btn-ghost btn-sm">Back to site</Link>
       </header>
 

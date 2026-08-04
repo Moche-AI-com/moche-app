@@ -1,5 +1,4 @@
 import { LegalDocHeader } from '@/components/legal/LegalDocHeader';
-import { AttorneyReview } from '@/components/legal/AttorneyReview';
 import { SubprocessorTable } from '@/components/legal/SubprocessorTable';
 
 export default function DpaPage() {
@@ -7,15 +6,13 @@ export default function DpaPage() {
     <article>
       <LegalDocHeader slug="dpa" />
 
-      <AttorneyReview topic="Entire Data Processing Addendum">
-        <p>
-          This DPA is a template pending legal review. It forms part of the{' '}
-          <a href="/legal/terms">Terms of Service</a> and applies where Moche.AI processes personal
-          data on a customer&rsquo;s behalf (GDPR Art. 28). By accepting during signup or checkout,
-          the customer (&ldquo;Controller&rdquo;) and Moche.AI (&ldquo;Processor&rdquo;) agree to
-          these terms.
-        </p>
-      </AttorneyReview>
+      <p>
+        This Data Processing Addendum (&ldquo;DPA&rdquo;) forms part of the{' '}
+        <a href="/legal/terms">Terms of Service</a> and applies where Moche-AI processes personal
+        data on a customer&rsquo;s behalf (GDPR Art. 28). By accepting during signup or checkout,
+        the customer (&ldquo;Controller&rdquo;) and Moche-AI (&ldquo;Processor&rdquo;) agree to
+        these terms.
+      </p>
 
       <h2>1. Roles &amp; scope</h2>
       <p>
@@ -35,14 +32,12 @@ export default function DpaPage() {
       </ul>
 
       <h2 id="breach">3. Breach notification</h2>
-      <AttorneyReview topic="Breach-notification timing">
-        <p>
-          The Processor will notify the Controller <strong>without undue delay and in any event
-          within 72 hours</strong> of becoming aware of a personal-data breach affecting the
-          Controller&rsquo;s data, with the information reasonably available. See our{' '}
-          <a href="/legal/security">Security Overview</a> and internal security-incident runbook.
-        </p>
-      </AttorneyReview>
+      <p>
+        The Processor will notify the Controller <strong>without undue delay and in any event
+        within 72 hours</strong> of becoming aware of a personal-data breach affecting the
+        Controller&rsquo;s data, with the information reasonably available. See our{' '}
+        <a href="/legal/security">Security Overview</a> and internal security-incident runbook.
+      </p>
 
       <h2>4. Subprocessors</h2>
       <p>
@@ -53,23 +48,19 @@ export default function DpaPage() {
       </p>
 
       <h2 id="transfers">5. International transfers</h2>
-      <AttorneyReview topic="Transfer mechanism">
-        <p>
-          For transfers outside the EEA/UK, the parties incorporate the EU{' '}
-          <strong>Standard Contractual Clauses</strong> and the{' '}
-          <strong>UK IDTA/Addendum</strong>, with the Processor as &ldquo;data importer&rdquo; where
-          applicable.
-        </p>
-      </AttorneyReview>
+      <p>
+        For transfers outside the EEA/UK, the parties incorporate the EU{' '}
+        <strong>Standard Contractual Clauses</strong> and the{' '}
+        <strong>UK IDTA/Addendum</strong>, with the Processor as &ldquo;data importer&rdquo; where
+        applicable.
+      </p>
 
       <h2 id="ccpa">6. CCPA service-provider terms</h2>
-      <AttorneyReview topic="CCPA service-provider status">
-        <p>
-          To the extent the CCPA/CPRA applies, Moche.AI acts as a <strong>service provider</strong>:
-          we do not sell or share personal information and do not retain, use, or disclose it except
-          to provide the Service or as permitted by the CCPA.
-        </p>
-      </AttorneyReview>
+      <p>
+        To the extent the CCPA/CPRA applies, Moche-AI acts as a <strong>service provider</strong>:
+        we do not sell or share personal information and do not retain, use, or disclose it except
+        to provide the Service or as permitted by the CCPA.
+      </p>
 
       <h2>Schedule 1 — Processing details</h2>
       <table>

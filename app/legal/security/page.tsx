@@ -1,5 +1,4 @@
 import { LegalDocHeader } from '@/components/legal/LegalDocHeader';
-import { AttorneyReview } from '@/components/legal/AttorneyReview';
 
 export default function SecurityPage() {
   return (
@@ -31,7 +30,7 @@ export default function SecurityPage() {
       <h2>Data protection &amp; AI routing</h2>
       <ul>
         <li><strong>PII redaction</strong> is applied to content before it is sent to any external model router (<code>lib/ai/redaction.ts</code>).</li>
-        <li>Where an external router is used, we request <strong>Zero-Data-Retention</strong>; the external path is off by default.</li>
+        <li>Model requests are routed through the OpenRouter gateway; we request <strong>Zero-Data-Retention</strong> and opt out of provider model training. See the <a href="/legal/ai-policy">AI Disclosure &amp; Use Policy</a> for the current model-per-task register.</li>
         <li>Payment card data is handled solely by Stripe (PCI-DSS) and never stored by us.</li>
       </ul>
 
@@ -61,13 +60,17 @@ export default function SecurityPage() {
         <a href="/legal/subprocessors">Subprocessors</a> page.
       </p>
 
-      <AttorneyReview topic="Forward-looking / roadmap controls">
-        <p>
-          Any control described as planned, in progress, or roadmap (e.g., formal third-party
-          certification, penetration-test cadence commitments) must be reviewed before being stated
-          publicly, to avoid implying a certification or assurance we do not currently hold.
-        </p>
-      </AttorneyReview>
+      <h2>Certifications &amp; assurance</h2>
+      <p>
+        Every control described on this page reflects a capability that exists in the product
+        today. We <strong>do not currently hold</strong> a SOC&nbsp;2, ISO&nbsp;27001, or comparable
+        third-party certification, and we make no third-party audit or penetration-test assurance.
+        Where we describe a control as <em>aligned with</em> a framework, we mean our program is
+        modeled on that framework&rsquo;s control families &mdash; not that it has been independently
+        attested. If you require a certification or completed security questionnaire, contact us via{' '}
+        <a href="/legal/support">Support &amp; Data Rights</a> and we will tell you honestly what we
+        can and cannot provide.
+      </p>
     </article>
   );
 }
