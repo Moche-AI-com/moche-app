@@ -31,7 +31,7 @@ Related registers: [model-license-register.md](./model-license-register.md),
 | Model AUP flow-down (Llama 3) | `/legal/acceptable-use`, `/legal/open-source` | `THIRD_PARTY_LICENSES.md`; `model-license-register.md` | — |
 | Liability cap = trailing 12 months; MA governing law (Terms == MSA) | `/legal/terms`, `/legal/msa` | Contract text (attorney review) | — |
 
-## Documents pending attorney review
+## Published documents — clause inventory
 
 Clauses wrapped in `<AttorneyReview>` render a visible `[ATTORNEY REVIEW REQUIRED]`
 banner. See the PR description for the consolidated list.

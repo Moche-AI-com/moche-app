@@ -6,7 +6,7 @@ export default function SupportPage() {
       <LegalDocHeader slug="support" />
 
       <p>
-        We&rsquo;re here to help hosts and guests get the most out of Moche.AI. This page explains
+        We&rsquo;re here to help hosts and guests get the most out of Moche-AI. This page explains
         how to reach us, our response targets, and how to exercise your data rights.
       </p>
 

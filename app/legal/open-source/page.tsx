@@ -6,7 +6,7 @@ export default function OpenSourcePage() {
       <LegalDocHeader slug="open-source" />
 
       <p>
-        Moche.AI is built with open-source software and AI models. We are grateful to the
+        Moche-AI is built with open-source software and AI models. We are grateful to the
         communities behind them and provide the attributions and license notices below. A complete
         machine-readable list is maintained in{' '}
         <code>THIRD_PARTY_LICENSES.md</code> in our source repository.

@@ -6,7 +6,7 @@ export default function CookiesPage() {
       <LegalDocHeader slug="cookies" />
 
       <p>
-        This policy describes the cookies and similar technologies used by Moche.AI and how consent
+        This policy describes the cookies and similar technologies used by Moche-AI and how consent
         is handled. It supplements our <a href="/legal/privacy">Privacy Policy</a>.
       </p>
 

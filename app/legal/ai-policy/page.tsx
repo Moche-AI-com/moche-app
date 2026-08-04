@@ -1,5 +1,4 @@
 import { LegalDocHeader } from '@/components/legal/LegalDocHeader';
-import { AttorneyReview } from '@/components/legal/AttorneyReview';
 
 export default function AiPolicyPage() {
   return (
@@ -7,24 +6,22 @@ export default function AiPolicyPage() {
       <LegalDocHeader slug="ai-policy" />
 
       <p>
-        This policy explains how the Moche.AI guest concierge works, what it can and cannot do, and
+        This policy explains how the Moche-AI guest concierge works, what it can and cannot do, and
         how it behaves when it is unsure. It is written for guests as well as hosts, consistent with
         EU AI Act Art.&nbsp;50 transparency expectations.
       </p>
 
       <h2>1. You are talking to an AI</h2>
-      <AttorneyReview topic="AI transparency &amp; no-advice disclaimer">
-        <p>
-          The concierge is an <strong>artificial-intelligence assistant</strong>, not a human. It
-          answers questions about the property using information the host has provided. Its answers
-          may be imperfect and are <strong>not</strong> professional medical, legal, financial, or
-          safety advice.
-        </p>
-        <p>
-          <strong>In an emergency, contact local emergency services (911 in the US, 112 in the
-          EU/UK) or the host directly</strong> — do not wait for the assistant.
-        </p>
-      </AttorneyReview>
+      <p>
+        The concierge is an <strong>artificial-intelligence assistant</strong>, not a human. It
+        answers questions about the property using information the host has provided. Its answers
+        may be imperfect and are <strong>not</strong> professional medical, legal, financial, or
+        safety advice.
+      </p>
+      <p>
+        <strong>In an emergency, contact local emergency services (911 in the US, 112 in the
+        EU/UK) or the host directly</strong> — do not wait for the assistant.
+      </p>
 
       <h2>2. Grounded answers</h2>
       <p>

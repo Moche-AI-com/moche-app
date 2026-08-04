@@ -20,7 +20,12 @@ export const publicEnv = {
 
 // Server-only. Accessing these on the client returns undefined by design.
 export const serverEnv = {
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+  // Accepts either name. The Vercel<->Supabase integration provisions SUPABASE_SECRET_KEY
+  // (the modern `sb_secret_...` format), while hand-configured deploys use the legacy
+  // SUPABASE_SERVICE_ROLE_KEY JWT. Both are full-privilege, RLS-bypassing credentials and
+  // are interchangeable as a bearer token, so read whichever is actually populated instead
+  // of failing closed when only the integration-managed one is set.
+  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '',
   guestContactSalt: process.env.GUEST_CONTACT_SALT ?? 'dev-salt-change-me',
   guestVerifyDevFallback: bool(process.env.GUEST_VERIFY_DEV_FALLBACK, false),
   turnstileSecret: process.env.TURNSTILE_SECRET_KEY ?? '',
