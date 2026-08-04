@@ -1,435 +1,643 @@
-/*
- * Styles scoped to the marketing landing page only (CSS Module -- no changes
- * to app/globals.css, which is owned by other work). Reuses the app's design
- * tokens (--teal, --coral, --iris, --surface, --border, spacing, radius,
- * etc.) already defined globally so the page matches the rest of the product.
- *
- * Mobile-first: base rules target small viewports, min-width media queries
- * layer on desktop refinements. Motion is limited to transform/opacity and
- * gated behind prefers-reduced-motion.
- */
+/* ==========================================================================
+   Marketing homepage styles.
 
-/* ---------- Header ---------- */
+   Ground rules kept throughout this file:
+   - Only transform and opacity are animated. Nothing here can trigger layout.
+   - Mobile-first: base rules are the phone layout, min-width queries add to it.
+   - Every interactive target clears 44px.
+   - Colour comes from the shared tokens only, so the page inverts correctly
+     when the visitor switches to dark mode.
+   ========================================================================== */
 
-.landingHeader {
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(8px);
+/* ---- Shared -------------------------------------------------------------- */
+
+.sectionHeading {
+  font-size: clamp(1.6rem, 3.6vw, 2.35rem);
+  letter-spacing: -0.025em;
+  margin-bottom: 0.85rem;
 }
 
-.landingHeaderInner {
+.eyebrow {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 0.8rem;
+}
+
+/* ---- Header -------------------------------------------------------------- */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.headerInner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
+  gap: 1rem;
+  min-height: 64px;
 }
 
-.landingHeaderNav {
+.headerNav {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
-/* The shared .btn-sm size computes to ~38px, under the 44px minimum touch
-   target. Raised only inside the marketing header so global button sizing --
-   and every dashboard surface that depends on it -- stays untouched. */
-.landingHeaderNav :global(.btn-sm),
-.landingHeaderNav :global(button) {
+/* The global .btn-sm is 38px tall, which is fine inside dense dashboard rows
+   but under the touch minimum here. Scoped so other surfaces are unaffected. */
+.headerBtn {
   min-height: 44px;
 }
 
-.landingHeaderLink {
-  display: none;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  text-decoration: none;
-  padding: 0.5rem 0.25rem;
-  min-height: 44px;
-  align-items: center;
-}
-.landingHeaderLink:hover {
-  color: var(--text);
-}
+/* Below ~500px the wordmark, the theme toggle, and two buttons cannot all fit
+   on one row without either wrapping the "Start free trial" label or shrinking
+   it below the touch minimum. The mark alone still identifies the brand, and
+   the full wordmark is repeated in the footer. */
+@media (max-width: 500px) {
+  .headerInner :global(.brand) > span:last-child {
+    display: none;
+  }
 
-@media (min-width: 640px) {
-  .landingHeaderLink {
-    display: inline-flex;
+  /* Without the wordmark the link collapses to the 28px mark, which is under
+     the touch minimum. */
+  .headerInner :global(.brand) {
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .headerBtn {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  .headerNav {
+    gap: 0.3rem;
   }
 }
 
-/* ---------- Hero ---------- */
+/* ---- Hero ---------------------------------------------------------------- */
 
-.heroSection {
-  padding-top: clamp(2.5rem, 8vw, 6rem);
+.hero {
+  padding-top: clamp(3rem, 8vw, 5.5rem);
   padding-bottom: clamp(2.5rem, 6vw, 4rem);
+  overflow: hidden;
 }
 
-.heroSectionInner {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
-  align-items: center;
+.heroCopy {
+  max-width: 52rem;
 }
 
-@media (min-width: 1024px) {
-  .heroSectionInner {
-    grid-template-columns: 1.1fr 0.9fr;
-    gap: 3rem;
-  }
+.heroTitle {
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  margin-bottom: 1.1rem;
+  text-wrap: balance;
 }
 
-.heroSectionCopy {
-  min-width: 0;
-  max-width: 60ch;
-}
-
-.heroSectionMedia {
-  position: relative;
-  aspect-ratio: 4 / 5;
-  width: 100%;
-  max-width: 460px;
-  border-radius: var(--radius-lg);
-  overflow: clip;
-  border: 1px solid var(--border);
-  justify-self: center;
-}
-
-@media (min-width: 1024px) {
-  .heroSectionMedia {
-    justify-self: end;
-  }
-}
-
-.heroSectionImage {
-  object-fit: cover;
-}
-
-.heroSectionTitle {
-  font-size: clamp(2.2rem, 7vw, 4rem);
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  margin: 1.1rem 0 1.1rem;
-}
-
-.heroSectionSubtitle {
+.heroSubtitle {
+  font-size: clamp(1.05rem, 1.9vw, 1.3rem);
+  line-height: 1.55;
   color: var(--text-muted);
-  font-size: clamp(1rem, 2vw, 1.2rem);
-  line-height: 1.5;
-  max-width: 55ch;
-  margin: 0 0 1.75rem;
+  max-width: 38rem;
+  margin-bottom: 1.75rem;
 }
 
-.heroSectionActions {
+.heroActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.85rem;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
-/* ---------- Shared section heading ---------- */
-
-.sectionHeading {
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
-  letter-spacing: -0.01em;
-  margin: 0 0 1.75rem;
-  max-width: 42ch;
+.heroTrialNote {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+  max-width: 32rem;
 }
 
-/* ---------- Benefits ---------- */
+/* Photography band. On phones it is a snap-scrolling filmstrip, which reads as
+   a gallery you can flick through rather than a squashed grid. From 900px up
+   the frames sit in one asymmetric row -- the uneven column weights are what
+   stop it looking like a stock three-up card strip. */
+.heroStrip {
+  margin-top: clamp(2.25rem, 5vw, 3.5rem);
+}
 
-.benefitsSection {
-  padding-block: clamp(2rem, 5vw, 3.5rem);
+.heroStripTrack {
+  display: flex;
+  gap: 0.7rem;
+  list-style: none;
+  margin: 0;
+  padding: 0 clamp(1.1rem, 4vw, 2.5rem);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.heroStripTrack::-webkit-scrollbar {
+  display: none;
+}
+
+.heroStripCell {
+  position: relative;
+  flex: 0 0 74%;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  scroll-snap-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.heroStripImage {
+  object-fit: cover;
+  transition: transform 700ms var(--ease-out);
+}
+
+@media (min-width: 900px) {
+  .heroStripTrack {
+    overflow: visible;
+    gap: 0.85rem;
+    padding-left: clamp(1.1rem, 4vw, 2.5rem);
+    padding-right: clamp(1.1rem, 4vw, 2.5rem);
+  }
+
+  .heroStripCell {
+    flex: var(--frame-weight, 1) 1 0;
+    aspect-ratio: auto;
+    height: clamp(240px, 27vw, 380px);
+  }
+}
+
+/* Pointer-only: a hover zoom on a touch device just leaves the image stuck
+   in its zoomed state after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  .heroStripCell:hover .heroStripImage {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroStripImage {
+    transition: none;
+  }
+  .heroStripCell:hover .heroStripImage {
+    transform: none;
+  }
+}
+
+/* ---- Benefits ------------------------------------------------------------ */
+
+.benefits {
+  padding-block: clamp(3rem, 7vw, 5rem);
   border-top: 1px solid var(--border);
 }
 
-.benefitsSectionGrid {
+.benefitsGrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 0.85rem;
+  margin-top: 2rem;
 }
 
 @media (min-width: 640px) {
-  .benefitsSectionGrid {
-    grid-template-columns: repeat(2, 1fr);
+  .benefitsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.1rem;
   }
 }
 
-@media (min-width: 1024px) {
-  .benefitsSectionGrid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-.benefitsSectionCard {
-  padding: 1.5rem 1.35rem;
-  min-width: 0;
-}
-
-.benefitsSectionTitle {
-  font-size: 1.05rem;
-  margin: 0 0 0.5rem;
-  min-width: 0;
-}
-
-/* ---------- Demo video slot ---------- */
-
-.demoVideoSection {
-  padding-block: clamp(2rem, 5vw, 3.5rem);
-  border-top: 1px solid var(--border);
-}
-
-.demoVideoSectionFrame {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  width: 100%;
-  max-width: 900px;
-  border-radius: var(--radius-lg);
-  overflow: clip;
-  border: 1px solid var(--border);
+.benefitsCard {
   background: var(--surface);
-  isolation: isolate;
-}
-
-.demoVideoSectionPoster {
-  object-fit: cover;
-  filter: saturate(0.85) brightness(0.7);
-}
-
-.demoVideoSectionOverlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  z-index: 1;
-}
-
-.demoVideoSectionPlay {
-  width: 64px;
-  height: 64px;
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, white 35%, transparent);
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
-  color: white;
-  display: grid;
-  place-items: center;
-  cursor: not-allowed;
-  transition: transform 200ms var(--ease-out, ease);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .demoVideoSectionPlay:hover {
-    transform: scale(1.05);
-  }
-}
-
-.demoVideoSectionCaption {
-  color: white;
-  font-size: 0.85rem;
-  font-weight: 600;
-  background: color-mix(in srgb, black 35%, transparent);
-  padding: 0.3rem 0.75rem;
-  border-radius: var(--radius-sm);
-}
-
-/* ---------- Gallery ---------- */
-
-.gallerySection {
-  padding-block: clamp(2rem, 5vw, 3.5rem);
-  border-top: 1px solid var(--border);
-}
-
-.gallerySectionGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-}
-
-@media (min-width: 768px) {
-  /* Editorial composition: a tall portrait cell holds column one across both
-     upper rows, two cells stack beside it, and the fourth becomes a full-width
-     band. Four images resolve into a deliberate shape with no ragged gap. */
-  .gallerySectionGrid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: minmax(190px, 1fr) minmax(190px, 1fr) minmax(150px, 0.6fr);
-  }
-
-  .gallerySectionCellWide {
-    grid-column: 1 / -1;
-    min-height: 150px;
-  }
-}
-
-.gallerySectionCell {
-  position: relative;
-  border-radius: var(--radius-lg);
-  overflow: clip;
-  min-height: 220px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.35rem, 2.6vw, 1.9rem);
+  box-shadow: var(--shadow-md);
+  transition:
+    transform var(--tr),
+    border-color var(--tr),
+    box-shadow var(--tr);
 }
 
-@media (min-width: 768px) {
-  .gallerySectionCellTall {
-    grid-row: span 2;
+.benefitsIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--teal) 12%, transparent);
+  color: var(--teal);
+  margin-bottom: 1rem;
+}
+
+.benefitsTitle {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .benefitsCard:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-lg);
   }
 }
 
-.gallerySectionImage {
-  object-fit: cover;
-}
+/* ---- Founding band ------------------------------------------------------- */
 
-/* ---------- CTA ---------- */
-
-.ctaSection {
-  padding-block: clamp(2rem, 5vw, 3.5rem);
+.founding {
+  padding-block: clamp(3rem, 7vw, 5rem);
   border-top: 1px solid var(--border);
 }
 
-.ctaSectionGrid {
+.foundingPanel {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
 }
 
-@media (min-width: 640px) {
-  .ctaSectionGrid {
-    grid-template-columns: repeat(2, 1fr);
+@media (min-width: 960px) {
+  .foundingPanel {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: stretch;
   }
 }
 
-@media (min-width: 1024px) {
-  .ctaSectionGrid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-}
-
-.ctaSectionCard {
-  padding: 1.35rem 1.2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.foundingCopy {
+  padding: clamp(1.6rem, 3.5vw, 3rem);
   min-width: 0;
 }
 
-/* Five cards across at >=1024px leaves each button narrower than its longest
-   label ("Ask about founding pricing" overflowed). Let the label wrap onto a
-   second line and centre it, rather than clipping approved copy. */
-.ctaSectionCard :global(.btn) {
+.foundingTitle {
+  font-size: clamp(1.6rem, 3.4vw, 2.35rem);
+  letter-spacing: -0.025em;
+  margin-bottom: 0.85rem;
+}
+
+.foundingList {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.foundingListItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.foundingCheck {
+  flex: 0 0 auto;
+  margin-top: 0.18rem;
+  color: var(--teal);
+}
+
+.foundingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.9rem;
+}
+
+/* Long CTA labels must wrap inside the button instead of spilling out of it. */
+.foundingActions :global(.btn) {
   white-space: normal;
   text-align: center;
   line-height: 1.25;
   min-height: 44px;
   height: auto;
-  padding-block: 0.6rem;
 }
 
-.ctaSectionTitle {
-  font-size: 1rem;
-  margin: 0;
-  min-width: 0;
-}
-
-.ctaSectionDetail {
+.foundingTrial {
   font-size: 0.85rem;
-  line-height: 1.4;
-  flex-grow: 1;
-  min-width: 0;
+  line-height: 1.5;
+  margin-top: 1.1rem;
+  max-width: 34rem;
 }
 
-/* ---------- Pricing ---------- */
+.foundingMedia {
+  position: relative;
+  min-height: 240px;
+  order: -1;
+  background: var(--surface-2);
+}
 
-.pricingSection {
-  padding-block: clamp(2rem, 5vw, 3.5rem);
+@media (min-width: 960px) {
+  .foundingMedia {
+    order: 0;
+    min-height: 100%;
+  }
+}
+
+.foundingImage {
+  object-fit: cover;
+}
+
+/* ---- Pricing ------------------------------------------------------------- */
+
+.pricing {
+  padding-block: clamp(3rem, 7vw, 5rem);
   border-top: 1px solid var(--border);
 }
 
-.pricingSectionIntro {
-  max-width: 65ch;
-  margin: -0.75rem 0 1.75rem;
+.pricingIntro {
+  max-width: 46rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
-.pricingSectionGrid {
+.pricingGrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 0.85rem;
+  margin-top: 2.25rem;
 }
 
-@media (min-width: 640px) {
-  .pricingSectionGrid {
-    grid-template-columns: repeat(2, 1fr);
+@media (min-width: 560px) {
+  .pricingGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 1024px) {
-  .pricingSectionGrid {
-    grid-template-columns: repeat(3, 1fr);
+@media (min-width: 1000px) {
+  .pricingGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
   }
 }
 
-@media (min-width: 1280px) {
-  .pricingSectionGrid {
-    grid-template-columns: repeat(6, 1fr);
-  }
-}
-
-.pricingSectionCard {
-  padding: 1.35rem 1.2rem;
+.pricingCard {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.3rem, 2.4vw, 1.6rem);
+  box-shadow: var(--shadow-md);
   min-width: 0;
+  transition:
+    transform var(--tr),
+    border-color var(--tr),
+    box-shadow var(--tr);
 }
 
-.pricingSectionCardContact {
-  justify-content: space-between;
+.pricingCardPopular {
+  border-color: var(--teal);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px var(--teal);
 }
 
-.pricingSectionTier {
-  font-size: 1.05rem;
-  margin: 0;
-  min-width: 0;
-}
-
-.pricingSectionProperties {
-  font-size: 0.82rem;
-  margin: 0 0 0.5rem;
-  min-width: 0;
-}
-
-.pricingSectionPrice {
-  margin: 0;
-}
-
-.pricingSectionAmount {
-  font-size: 1.9rem;
+.pricingFlag {
+  position: absolute;
+  top: -0.7rem;
+  left: clamp(1.3rem, 2.4vw, 1.6rem);
+  padding: 0.15rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
 }
 
-.pricingSectionConversations {
+.pricingTier {
+  font-size: 1.15rem;
+  margin-bottom: 0.2rem;
+}
+
+.pricingProperties {
+  font-size: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+
+.pricingPrice {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin-bottom: 0.45rem;
+}
+
+.pricingAmount {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.pricingConversations {
+  font-size: 0.85rem;
+}
+
+.pricingAnnual {
   font-size: 0.82rem;
-  margin: 0.15rem 0 0;
+  margin-bottom: 1.15rem;
 }
 
-.pricingSectionAnnual {
-  font-size: 0.75rem;
-  margin: 0.35rem 0 0.75rem;
+.pricingContactDetail {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 1.15rem;
 }
 
-/* ---------- Footer ---------- */
+/* Pushes every card's button to the bottom edge so the row of CTAs lines up
+   even though the cards above them have different amounts of text. */
+.pricingCta {
+  margin-top: auto;
+  min-height: 44px;
+}
 
-.landingFooter {
-  padding-block: 2.5rem;
+.pricingCardContact {
+  justify-content: flex-start;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pricingCard:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-lg);
+  }
+  .pricingCardPopular:hover {
+    border-color: var(--teal);
+  }
+}
+
+/* ---- FAQ ----------------------------------------------------------------- */
+
+.faq {
+  padding-block: clamp(3rem, 7vw, 5rem);
   border-top: 1px solid var(--border);
 }
 
-.landingFooterTagline {
+.faqList {
+  margin-top: 2rem;
+  max-width: 52rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.faqItem {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--tr),
+    box-shadow var(--tr);
+}
+
+.faqItem[open] {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.faqSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1.15rem;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faqSummary::-webkit-details-marker {
+  display: none;
+}
+
+.faqChevron {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-muted);
+  transition: transform 220ms var(--ease-out);
+}
+
+.faqItem[open] .faqChevron {
+  transform: rotate(180deg);
+}
+
+.faqAnswer {
+  padding: 0 1.15rem 1.15rem;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  max-width: 46rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .faqItem:hover {
+    border-color: var(--border-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .faqChevron {
+    transition: none;
+  }
+}
+
+/* ---- Footer -------------------------------------------------------------- */
+
+.footer {
+  padding-block: clamp(2.5rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.footerTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding-bottom: 1.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.footerBrand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.footerTagline {
   font-size: 0.85rem;
-  margin: 0.75rem 0 0;
+}
+
+/* Quiet closing nudge. Deliberately a text link rather than a third filled
+   button: the page already carries a primary CTA in the header, the hero, the
+   founding band, and every pricing card. */
+.footerCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  /* --teal-deep rather than --teal: on the footer's tinted --bg-2 the lighter
+     teal lands at 4.46:1, just under the 4.5:1 minimum for body-size text. */
+  color: var(--teal-deep);
+  border-bottom: 1px solid transparent;
+  transition:
+    transform var(--tr),
+    border-color var(--tr);
+}
+
+.footerCta svg {
+  transition: transform var(--tr);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .footerCta:hover {
+    border-color: var(--teal-deep);
+  }
+  .footerCta:hover svg {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footerCta,
+  .footerCta svg {
+    transition: none;
+  }
+}
+
+.footerLegal {
+  margin-top: 1.1rem;
+}
+
+.footerCopyright {
+  font-size: 0.82rem;
+  margin-top: 0.6rem;
 }

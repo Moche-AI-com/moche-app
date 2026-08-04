@@ -1,37 +1,52 @@
+import { Clock, Star, MessageSquare, Brain } from 'lucide-react';
+import { Reveal } from './Reveal';
 import styles from './landing.module.css';
 
+// Outcome-led, per the product language rules: each title is a result the host
+// gets, not a feature the software has.
 const BENEFITS = [
   {
+    Icon: Clock,
     title: 'Save hours every week',
-    detail: 'Answer routine guest questions automatically so your team can focus on the stays that need a human.',
+    detail:
+      'Routine guest questions get answered for you, so your team only steps in for the stays that actually need a person.',
   },
   {
+    Icon: Star,
     title: 'Increase feedback and reviews',
-    detail: 'Nudge guests toward leaving a review at the right moment in their stay, every time.',
+    detail:
+      'Guests get nudged toward leaving a review at the right moment in their stay, on every single booking.',
   },
   {
+    Icon: MessageSquare,
     title: 'Answer guest questions instantly',
-    detail: 'Guests get accurate answers about check-in, Wi-Fi, and house rules the moment they ask, day or night.',
+    detail:
+      'Check-in, Wi-Fi, parking, house rules. Accurate answers arrive the moment a guest asks, day or night.',
   },
   {
+    Icon: Brain,
     title: 'Never lose property knowledge again',
-    detail: 'Every detail about a property lives in one place instead of scattered notes, texts, and memory.',
+    detail:
+      'Every detail about every property lives in one place instead of scattered notes, old texts, and memory.',
   },
 ] as const;
 
 export function Benefits() {
   return (
-    <section className={styles.benefitsSection} aria-labelledby="benefits-heading">
+    <section className={styles.benefits} aria-labelledby="benefits-heading">
       <div className="wrap">
-        <h2 id="benefits-heading" className={styles.sectionHeading}>
+        <Reveal as="h2" id="benefits-heading" className={styles.sectionHeading}>
           Built for the way hosts actually work
-        </h2>
-        <div className={styles.benefitsSectionGrid}>
-          {BENEFITS.map((benefit) => (
-            <div key={benefit.title} className={`card ${styles.benefitsSectionCard}`}>
-              <h3 className={styles.benefitsSectionTitle}>{benefit.title}</h3>
-              <p className="muted">{benefit.detail}</p>
-            </div>
+        </Reveal>
+        <div className={styles.benefitsGrid}>
+          {BENEFITS.map(({ Icon, title, detail }, i) => (
+            <Reveal key={title} delay={i * 70} className={styles.benefitsCard}>
+              <span className={styles.benefitsIcon} aria-hidden>
+                <Icon size={20} strokeWidth={1.75} />
+              </span>
+              <h3 className={styles.benefitsTitle}>{title}</h3>
+              <p className="muted">{detail}</p>
+            </Reveal>
           ))}
         </div>
       </div>

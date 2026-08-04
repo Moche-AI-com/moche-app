@@ -3,27 +3,22 @@ import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import styles from './landing.module.css';
 
-// Simple top nav for the marketing page. Kept intentionally light -- no mobile
-// drawer, no scroll-hide behaviour -- to avoid re-introducing the animated
-// complexity that lived in the retired public/landing.html.
+// The Pricing and Gallery anchor links were removed deliberately. On a page
+// this short they only sent people to a section they were going to scroll past
+// anyway, and they crowded the two things the header is actually for: signing
+// in, and starting a trial.
 export function LandingHeader() {
   return (
-    <header className={styles.landingHeader}>
-      <div className={`wrap ${styles.landingHeaderInner}`}>
+    <header className={styles.header}>
+      <div className={`wrap ${styles.headerInner}`}>
         <Logo href="/" size={28} />
-        <nav aria-label="Primary" className={styles.landingHeaderNav}>
-          <a href="#pricing" className={styles.landingHeaderLink}>
-            Pricing
-          </a>
-          <a href="#gallery" className={styles.landingHeaderLink}>
-            Gallery
-          </a>
+        <nav aria-label="Primary" className={styles.headerNav}>
           <ThemeToggle />
-          <Link href="/login" className="btn btn-ghost btn-sm">
+          <Link href="/login" className={`btn btn-ghost btn-sm ${styles.headerBtn}`}>
             Sign in
           </Link>
-          <Link href="/signup" className="btn btn-primary btn-sm">
-            Sign up
+          <Link href="/signup" className={`btn btn-primary btn-sm ${styles.headerBtn}`}>
+            Start free trial
           </Link>
         </nav>
       </div>

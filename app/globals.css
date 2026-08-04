@@ -3,8 +3,11 @@
 @tailwind utilities;
 
 /* ============================================================
-   MOCHE.AI — design tokens (mirrored from landing-design-system.css)
-   Dark is the brand default. Light + system supported via [data-theme].
+   MOCHE-AI — design tokens
+   Light (soft cream) is the default. Dark is opt-in via [data-theme='dark']
+   and persisted in localStorage by <ThemeToggle>. A blocking inline script in
+   app/layout.tsx applies the stored choice before first paint, so the default
+   below is what an unknown visitor sees with no flash.
    ============================================================ */
 :root {
   --font-display: 'Clash Display', 'General Sans', system-ui, sans-serif;
@@ -28,7 +31,40 @@
   :root { --pad-card: 1.15rem; --gap-section: 1.15rem; }
 }
 
-[data-theme='dark'], :root {
+/* ---- Light: the default -------------------------------------------------
+   Warm cream rather than cool grey. Accent colours here are deliberately
+   darker than their dark-mode twins: #0FA79A teal on white is only 2.98:1,
+   which fails as text. Every value below clears 4.5:1 on --bg or --surface. */
+[data-theme='light'], :root {
+  --bg:#FAF7F1;
+  --bg-2:#F2EDE4;
+  --surface:#FFFFFF;
+  --surface-2:#F7F3EC;
+  --surface-glass: rgba(255,255,255,.72);
+  --border: rgba(46,40,32,.13);
+  --border-strong: rgba(46,40,32,.24);
+  --chart-track: rgba(46,40,32,.10);
+  --text:#131C28;
+  --text-muted:#4E5A68;
+  --text-faint:#66717E;
+  --teal:#0A7A72;
+  --teal-deep:#08605A;
+  --teal-vivid:#0FA79A;
+  --iris:#4655D6;
+  --coral:#C2410C;
+  --coral-soft:#9A3412;
+  --grad: linear-gradient(115deg,#0A7A72 0%, #1F7FB8 50%, #4655D6 100%);
+  --grad-warm: linear-gradient(115deg,#0A7A72 0%,#C2410C 120%);
+  --glow-teal: rgba(15,167,154,.20);
+  --shadow-lg: 0 30px 70px -26px rgba(74,58,36,.26);
+  --shadow-md: 0 14px 34px -18px rgba(74,58,36,.20);
+  --btn-primary-bg:#0A7A72;
+  --btn-primary-bg-hover:#08605A;
+  --btn-primary-fg:#FFFFFF;
+  --btn-coral-fg:#FFFFFF;
+}
+
+[data-theme='dark'] {
   --bg:#070C14;
   --bg-2:#0A121F;
   --surface:#0E1826;
@@ -38,7 +74,7 @@
   --border-strong: rgba(120,160,210,.28);
   --text:#EAF1FA;
   --text-muted:#9DB0C6;
-  --text-faint:#5F7793;
+  --text-faint:#6F87A3;
   --teal:#33E6D4;
   --teal-deep:#12B5AD;
   --iris:#7C8CFF;
@@ -52,30 +88,11 @@
   /* Chart bar track for zero-activity days. Needs its own token: surface-2 is
      too close to surface on the card background to read as a bar slot. */
   --chart-track: rgba(120,160,210,.13);
-}
-
-[data-theme='light'] {
-  --bg:#F4F7FB;
-  --bg-2:#EAF0F7;
-  --surface:#FFFFFF;
-  --surface-2:#F3F7FC;
-  --surface-glass: rgba(255,255,255,.7);
-  --border: rgba(20,50,90,.12);
-  --border-strong: rgba(20,50,90,.22);
-  --chart-track: rgba(20,50,90,.10);
-  --text:#0C1B2E;
-  --text-muted:#4A5E76;
-  --text-faint:#8394A8;
-  --teal:#0FA79A;
-  --teal-deep:#0B8C82;
-  --iris:#5566E6;
-  --coral:#F26A3D;
-  --coral-soft:#F58A5F;
-  --grad: linear-gradient(115deg,#0FA79A 0%, #2E8FCf 50%, #5566E6 100%);
-  --grad-warm: linear-gradient(115deg,#0FA79A 0%,#F26A3D 120%);
-  --glow-teal: rgba(15,167,154,.22);
-  --shadow-lg: 0 30px 70px -24px rgba(20,50,90,.28);
-  --shadow-md: 0 16px 38px -18px rgba(20,50,90,.22);
+  --teal-vivid:#33E6D4;
+  --btn-primary-bg:#33E6D4;
+  --btn-primary-bg-hover:#12B5AD;
+  --btn-primary-fg:#04121A;
+  --btn-coral-fg:#1A0A04;
 }
 
 @layer base {
@@ -207,6 +224,36 @@
   .rise-in:nth-child(6) { animation-delay: .27s; }
   @keyframes riseIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
+  /* ---- Scroll reveal --------------------------------------------------
+     Driven by IntersectionObserver in <Reveal>, never a scroll listener.
+     Only opacity + transform animate, so nothing triggers layout.
+     --reveal-delay is set per instance for stagger. */
+  .reveal {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+    transition:
+      opacity 620ms var(--ease-out) var(--reveal-delay, 0ms),
+      transform 620ms var(--ease-out) var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+  .reveal[data-shown='true'] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    will-change: auto;
+  }
+
+  /* Reduced motion: content must still be visible, so the end state is
+     applied unconditionally and only the movement is removed. */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal,
+    .reveal[data-shown='true'] {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+    .rise-in { animation: none; opacity: 1; }
+  }
+
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
     font-family: var(--font-body); font-weight: 600; font-size: .95rem;
@@ -218,11 +265,11 @@
   .btn-sm { padding: .5rem 1rem; font-size: .85rem; }
   .btn-lg { padding: .95rem 1.7rem; font-size: 1.05rem; }
   .btn-block { width: 100%; }
-  .btn-primary { background: var(--teal); color: #04121a; box-shadow: 0 6px 22px -6px var(--glow-teal); }
-  .btn-primary:hover:not(:disabled) { transform: translateY(-1px); background: var(--teal-deep); }
+  .btn-primary { background: var(--btn-primary-bg); color: var(--btn-primary-fg); box-shadow: 0 6px 22px -6px var(--glow-teal); }
+  .btn-primary:hover:not(:disabled) { transform: translateY(-1px); background: var(--btn-primary-bg-hover); }
   .btn-ghost { background: var(--surface-glass); color: var(--text); border-color: var(--border-strong); backdrop-filter: blur(10px); }
   .btn-ghost:hover:not(:disabled) { border-color: var(--teal); }
-  .btn-coral { background: var(--coral); color: #1a0a04; }
+  .btn-coral { background: var(--coral); color: var(--btn-coral-fg); }
   .btn-coral:hover:not(:disabled) { background: var(--coral-soft); }
   .btn-danger { background: transparent; color: var(--coral); border-color: var(--coral); }
 
