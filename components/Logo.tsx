@@ -79,11 +79,14 @@ export function Logo({
         fontWeight: 600,
         fontSize: '1.3rem',
         letterSpacing: '-.02em',
+        // The mark plus wordmark computes to ~31px tall; hold the 44px minimum
+        // touch target since this is a navigation link on every surface.
+        minHeight: 44,
       }}
     >
       <DomeMark size={size} variant={variant} />
       <span>
-        Moche<span className="gradient-text">.AI</span>
+        Moche-<span className="gradient-text">AI</span>
       </span>
     </Link>
   );

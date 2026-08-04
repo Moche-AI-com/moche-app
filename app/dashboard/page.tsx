@@ -8,23 +8,54 @@ import { loadValueMetrics, loadGuestFeedback } from '@/lib/dashboard/overview';
 import { loadActivityTrend, loadTopTopics, loadActivityFeed } from '@/lib/dashboard/insights';
 import { ValueHero, ValueMetricsGrid, GuestFeedbackPanel } from './DashboardOverview';
 import { AttentionStrip, ActivityTrendCard, TopTopicsCard, ActivityFeedCard } from './DashboardInsights';
+import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
+import { ExtrasRequestsCard, type ExtrasRequestRow } from '@/components/dashboard/ExtrasRequestsCard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardHome() {
+// Guest "Enhancement request:" escalations are how Extras requests actually land today
+// (see app/api/guest/[slug]/extras-request/route.ts — it reuses the escalations pipeline
+// rather than a dedicated table). This prefix is the only signal that distinguishes an
+// Extras request from an ordinary guest question inside that same table.
+const EXTRAS_REQUEST_PREFIX = 'Enhancement request:';
+
+export default async function DashboardHome({
+  searchParams,
+}: {
+  searchParams: { property?: string };
+}) {
   const ctx = await requireSession();
   const supabase = createClient();
   const accountId = ctx.account.id;
 
-  const [{ data: properties }, { data: openEsc }, { data: services }, ent] = await Promise.all([
+  // RLS decides what this query can ever return — a non-admin member simply never
+  // receives a row for a property they don't belong to, admin-ness or not. We only
+  // additionally scope by host_account_id to match the account-level query every
+  // other dashboard page already uses (see app/dashboard/properties/page.tsx,
+  // app/dashboard/escalations/page.tsx, app/dashboard/service-requests/page.tsx).
+  const [{ data: allProperties }, { data: openEsc }, { data: services }, ent] = await Promise.all([
     supabase.from('properties').select('id, display_name, slug, status').eq('host_account_id', accountId).is('deleted_at', null),
     supabase.from('escalations').select('id, property_id').eq('status', 'open'),
-    supabase.from('service_requests').select('id').in('status', ['new', 'acknowledged', 'in_progress']),
+    supabase.from('service_requests').select('id, property_id').in('status', ['new', 'acknowledged', 'in_progress']),
     getEntitlements(supabase, accountId),
   ]);
 
-  const propertyIds = (properties ?? []).map((p) => p.id);
-  const propertyNames = new Map<string, string>((properties ?? []).map((p) => [p.id, p.display_name as string]));
+  const allPropertyIds = (allProperties ?? []).map((p) => p.id);
+  // The property filter is a URL search param (?property=<id>) so it survives a
+  // refresh and is shareable. Only ever honored when it names a property this
+  // query already returned — i.e. one RLS actually allowed — so the filter can
+  // narrow the view but never widen it beyond what the user can see.
+  const requestedFilter = searchParams.property ?? null;
+  const activeFilter = requestedFilter && allPropertyIds.includes(requestedFilter) ? requestedFilter : null;
+
+  const properties = activeFilter ? (allProperties ?? []).filter((p) => p.id === activeFilter) : allProperties;
+  const propertyIds = activeFilter ? [activeFilter] : allPropertyIds;
+  const propertyNames = new Map<string, string>((allProperties ?? []).map((p) => [p.id, p.display_name as string]));
+
+  // Scope the two portfolio-wide counts to the active filter (computed from the
+  // already-fetched, RLS-scoped rows rather than a second round trip).
+  const scopedOpenEsc = activeFilter ? (openEsc ?? []).filter((e) => e.property_id === activeFilter) : openEsc;
+  const scopedServices = activeFilter ? (services ?? []).filter((s) => s.property_id === activeFilter) : services;
 
   // Active stays + per-property brain health across all accessible properties.
   let activeStays = 0;
@@ -73,13 +104,16 @@ export default async function DashboardHome() {
   const avgBrainHealthPct = healthScores.length > 0 ? Math.round(healthScores.reduce((a, b) => a + b, 0) / healthScores.length) : null;
   const propertiesNeedingAttention = healthScores.filter((h) => h < 60).length;
 
-  const escCount = openEsc?.length ?? 0;
-  const svcCount = services?.length ?? 0;
+  const escCount = scopedOpenEsc?.length ?? 0;
+  const svcCount = scopedServices?.length ?? 0;
 
-  // Value metrics, guest AI feedback, and the insight panels. All admin-scoped to
-  // this host's own property IDs and all best-effort — a failure in any one of
-  // them degrades to an empty state instead of blanking the dashboard.
-  const [metrics, feedback, trend, topics, feed] = await Promise.all([
+  // Value metrics, guest AI feedback, the insight panels, and Extras requests.
+  // All admin-scoped to this host's own property IDs and all best-effort — a
+  // failure in any one of them degrades to an empty state instead of blanking
+  // the dashboard. Extras requests have no dedicated table (see the
+  // EXTRAS_REQUEST_PREFIX comment above) so they're read straight out of
+  // `escalations`, the same table/RLS the Escalations page already uses.
+  const [metrics, feedback, trend, topics, feed, extrasEscalations] = await Promise.all([
     loadValueMetrics(supabase, propertyIds, {
       activeStays,
       openEscalations: escCount,
@@ -90,10 +124,38 @@ export default async function DashboardHome() {
     loadActivityTrend(supabase, propertyIds, 14),
     loadTopTopics(supabase, propertyIds, 5),
     loadActivityFeed(supabase, propertyIds, propertyNames, 8),
+    propertyIds.length > 0
+      ? supabase
+          .from('escalations')
+          .select('id, property_id, status')
+          .in('property_id', propertyIds)
+          .ilike('question', `${EXTRAS_REQUEST_PREFIX}%`)
+      : Promise.resolve({ data: [] as { id: string; property_id: string; status: string }[] }),
   ]);
 
   // Low ratings worth a second look, from the recent feedback sample.
   const lowRatings = feedback.recent.filter((f) => f.rating != null && f.rating <= 2).length;
+
+  // Group Extras requests per property for the summary card.
+  const extrasByProperty = new Map<string, { count: number; openCount: number }>();
+  for (const row of extrasEscalations.data ?? []) {
+    const pid = row.property_id as string;
+    const entry = extrasByProperty.get(pid) ?? { count: 0, openCount: 0 };
+    entry.count += 1;
+    if (row.status === 'open') entry.openCount += 1;
+    extrasByProperty.set(pid, entry);
+  }
+  const extrasRequestRows: ExtrasRequestRow[] = (properties ?? [])
+    .map((p) => {
+      const entry = extrasByProperty.get(p.id) ?? { count: 0, openCount: 0 };
+      return {
+        propertyId: p.id,
+        propertyName: p.display_name as string,
+        count: entry.count,
+        openCount: entry.openCount,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
 
   const hostName = (ctx.profile.full_name ?? '').split(' ')[0] ?? '';
 
@@ -104,9 +166,12 @@ export default async function DashboardHome() {
   const activeStaysHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/stays` : '/dashboard/properties';
   const knowledgeItemsHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/brain` : '/dashboard/properties';
 
+  const filterOptions = (allProperties ?? []).map((p) => ({ id: p.id, name: p.display_name as string }));
+
   return (
     <div className="dash-overview">
-      <div className="dash-topbar">
+      <div className="dash-topbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+        <PropertyFilter properties={filterOptions} activeId={activeFilter} basePath="/dashboard" />
         <Link href="/dashboard/properties/new" className="btn dash-newbtn">
           <span className="dash-newbtn-icon" aria-hidden>
             <Plus size={14} aria-hidden />
@@ -201,6 +266,7 @@ export default async function DashboardHome() {
 
         <div className="dash-col-side" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-section)' }}>
           <ActivityFeedCard events={feed} />
+          <ExtrasRequestsCard rows={extrasRequestRows} />
           <GuestFeedbackPanel feedback={feedback} />
         </div>
       </div>

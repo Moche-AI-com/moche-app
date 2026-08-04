@@ -6,7 +6,7 @@ import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
   ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
   AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, Wrench,
-  Paperclip, Loader2, CheckCircle2, Phone, Globe, type LucideIcon,
+  Paperclip, Loader2, CheckCircle2, Phone, Globe, ShoppingCart, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
@@ -68,12 +68,14 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    // Change 4: this category is for genuine questions about housekeeping only.
+    // Concrete requests-for-a-thing (fresh towels, a mid-stay clean) were moved out
+    // of these conversational chips — guests now reach them through the Extras card
+    // or the Report an issue / Request Supplies flow instead.
     key: 'housekeeping', label: 'Housekeeping', Icon: Sparkles, subtitle: 'Comfort & supplies',
     choices: [
-      { label: 'Fresh Towels', query: 'Could I get fresh towels?' },
       { label: 'Toiletries', query: 'Where can I find extra toiletries and essentials?' },
       { label: 'Trash & Recycling', query: 'How does the trash and recycling work?' },
-      { label: 'Cleaning Request', query: 'Can I request a mid-stay cleaning?' },
       { label: 'Laundry', query: 'Is there a washer, dryer, or laundry service?' },
     ],
   },
@@ -104,16 +106,22 @@ const CATEGORIES: Category[] = [
       { label: 'Type my own question', query: FOCUS_INPUT },
     ],
   },
-  {
-    key: 'request', label: 'Request', Icon: ConciergeBell, subtitle: 'Ask the host for help',
-    choices: [
-      { label: 'Report an Issue', query: SERVICE_REQUEST },
-      { label: 'Request Supplies', query: 'Could I request some extra supplies?' },
-      { label: 'Maintenance Help', query: 'Something needs maintenance — can you help?' },
-      { label: 'Message the Host', query: MESSAGE_HOST },
-      { label: 'Something Else', query: FOCUS_INPUT },
-    ],
-  },
+  // Change 4: the old 'Request' category mixed genuine questions with concrete
+  // requests-for-a-thing (supplies, maintenance, reporting an issue). Those now live
+  // in the dedicated Extras card and the Report an issue card below the grid, and
+  // "Message the Host" already has its own persistent link — so this conversational
+  // tile has been retired rather than deleted-and-forgotten (kept here, commented,
+  // per the "nothing is deleted" rule, in case a future question-only variant is needed).
+  // {
+  //   key: 'request', label: 'Request', Icon: ConciergeBell, subtitle: 'Ask the host for help',
+  //   choices: [
+  //     { label: 'Report an Issue', query: SERVICE_REQUEST },
+  //     { label: 'Request Supplies', query: 'Could I request some extra supplies?' },
+  //     { label: 'Maintenance Help', query: 'Something needs maintenance — can you help?' },
+  //     { label: 'Message the Host', query: MESSAGE_HOST },
+  //     { label: 'Something Else', query: FOCUS_INPUT },
+  //   ],
+  // },
 ];
 
 interface ChatPlaceRef {
@@ -588,6 +596,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const [placeDetail, setPlaceDetail] = useState<PlaceDetail | null>(null);
   const [placeDetailLoading, setPlaceDetailLoading] = useState(false);
   const [placeDetailError, setPlaceDetailError] = useState<string | null>(null);
+  // Change 2 — Extras now lives in its own card; this toggles the offers list open/closed.
+  const [extrasOpen, setExtrasOpen] = useState(false);
+  const extrasRef = useRef<HTMLDivElement>(null);
   // Portal guard: overlays must render into document.body (see anySheetOpen effect below)
   // to escape the transformed .gp-rise ancestor, which would otherwise trap position:fixed
   // and make bottom sheets appear below the tapped card instead of pinned to the viewport.
@@ -975,11 +986,52 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         ))}
       </div>
 
+      {/* Change 2 & 3 — Extras and "Report an issue" each get their own clearly-tappable
+          card (same visual family as the category grid above), instead of Extras being
+          a long inline list guests stumble into and the service-request flow hiding
+          behind a small bell button. Existing request/interview behaviour is unchanged;
+          these cards only change how guests *reach* it. */}
+      <div className="gp-req-row" data-testid="requests-row">
+        {extraOffers.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setExtrasOpen((o) => {
+                const next = !o;
+                if (next) setTimeout(() => extrasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+                return next;
+              });
+            }}
+            className="gp-cat gp-card gp-req-card"
+            data-testid="card-extras"
+            aria-expanded={extrasOpen}
+          >
+            <span className="gp-cat-icon"><ShoppingCart size={22} aria-hidden /></span>
+            <span className="gp-serif gp-cat-label">Extras</span>
+            <span className="gp-cat-sub">Add something to your stay</span>
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => { closeServiceRequest(); setTimeout(() => setSrOpen(true), 60); }}
+          className="gp-cat gp-card gp-req-card"
+          data-testid="card-report-issue"
+        >
+          <span className="gp-cat-icon"><Wrench size={22} aria-hidden /></span>
+          <span className="gp-serif gp-cat-label">Report an issue</span>
+          <span className="gp-cat-sub">Maintenance or service request</span>
+        </button>
+      </div>
+
       {/* Add-on: Extras — host-configured guest extras. Tapping a CTA routes
-          through the existing escalation + notify() path so the host is alerted. */}
-      {extraOffers.length > 0 && (
-        <ExtrasSection slug={slug} offers={extraOffers} hostPreview={hostPreview} />
+          through the existing escalation + notify() path so the host is alerted.
+          Now revealed by the "Extras" card above rather than always inline. */}
+      {extraOffers.length > 0 && extrasOpen && (
+        <div ref={extrasRef}>
+          <ExtrasSection slug={slug} offers={extraOffers} hostPreview={hostPreview} />
+        </div>
       )}
+
 
       {/* Direct line to the host. Deliberately relocated ABOVE the chat (out of the
           thumb zone near the send bell) and given a confirm-style composer so guests
@@ -992,9 +1044,6 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       >
         <UserRound size={15} aria-hidden /> Message your host directly
       </button>
-
-      {/* Persistent AI disclosure (EU AI Act Art. 50). */}
-      <div style={{ marginTop: '1.25rem' }}><AiDisclosure variant="banner" /></div>
 
       <div ref={chatRef} style={{ scrollMarginTop: '1rem' }}>
         <div ref={scrollRef} style={{ ...cardStyle, maxHeight: '48dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '.85rem', padding: '1.1rem' }} data-testid="chat-view">
@@ -1089,6 +1138,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       {asked && !busy && guestMsgCount >= 2 && (
         <FeedbackWidget state={feedbackState} onRate={submitFeedback} />
       )}
+
+      {/* Persistent AI disclosure (EU AI Act Art. 50) — a compact, always-visible line
+          with an expandable "How this works" detail, placed right next to the chat
+          input where guests are about to type. Never hidden behind hover; the toggle
+          is a real focusable button with visible text at all times. */}
+      <div style={{ marginTop: '1.1rem' }}><AiDisclosure variant="banner" /></div>
 
       {/* De-emphasized free-text input — kept available but secondary to the cards.
           The send action is the concierge service bell: tapping it rings the concierge
@@ -1459,6 +1514,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         }
         .gp-cat-label { font-size: 1.12rem; font-weight: 600; line-height: 1.1; color: #f3ede1; }
         .gp-cat-sub { font-size: .72rem; opacity: .55; }
+        /* Change 2 & 3 — Extras / Report-an-issue cards: same visual family as .gp-cat
+           (via shared classNames) but laid out as a standalone row so they read as their
+           own clearly-tappable surfaces rather than part of the conversational grid. */
+        .gp-req-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; margin-top: .9rem; }
+        .gp-req-row:has(.gp-req-card:only-child) { grid-template-columns: 1fr; }
+        .gp-req-card { min-height: 44px; }
         .gp-pills { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .85rem; animation: gpFade .4s ease both; }
         .gp-pill {
           padding: .5rem .9rem; border-radius: 999px; cursor: pointer; color: #ece7dd;
