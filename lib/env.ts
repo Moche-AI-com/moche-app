@@ -27,9 +27,21 @@ export const serverEnv = {
 
   aiDevFallback: bool(process.env.AI_DEV_FALLBACK, false),
   aiApiKey: process.env.AI_API_KEY ?? '',
-  aiBaseUrl: process.env.AI_BASE_URL ?? 'https://api.openai.com/v1',
+  // Defaults point at OpenRouter, not a provider directly. Rationale: an unset
+  // AI_BASE_URL previously fell through to api.openai.com with a bare `gpt-4o-mini`,
+  // which silently bypassed the router — the cause of the untracked OpenAI spend seen
+  // in ai_usage before 2026-08-04. Defaulting to the router makes a missing env var a
+  // routing no-op instead of a policy violation.
+  aiBaseUrl: process.env.AI_BASE_URL ?? 'https://openrouter.ai/api/v1',
+  aiChatModel: process.env.AI_CHAT_MODEL ?? 'google/gemini-2.5-flash',
+
+  // Embeddings need their own base URL + key because OpenRouter is a chat-completions
+  // router and does not expose an /embeddings endpoint. Chat goes to the router;
+  // embeddings go straight to the embedding provider. Both default sensibly, and both
+  // fall back to the shared AI_* values so existing single-provider setups keep working.
+  aiEmbedBaseUrl: process.env.AI_EMBED_BASE_URL ?? process.env.AI_BASE_URL ?? 'https://api.openai.com/v1',
+  aiEmbedApiKey: process.env.AI_EMBED_API_KEY ?? process.env.AI_API_KEY ?? '',
   aiEmbedModel: process.env.AI_EMBED_MODEL ?? 'text-embedding-3-small',
-  aiChatModel: process.env.AI_CHAT_MODEL ?? 'gpt-4o-mini',
 
   // Dev-only local model provider (PR #5). 'ollama' routes getAIProvider() to a local
   // Ollama instance instead of OpenAI/dev-fallback. Ignored in production regardless of
@@ -50,7 +62,9 @@ export const serverEnv = {
   openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
   // Legacy/default model slug. Still honored as the fallback default for any tier that
   // does not have its own override set below (keeps existing single-model config working).
-  openrouterModel: process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
+  // Defaults to Gemini 2.5 Flash, not gpt-4o-mini: the approved routing policy is
+  // Gemini 2.5 Flash -> Claude Haiku, and an unset var should land on policy.
+  openrouterModel: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash',
   openrouterBaseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
 
   // Per-tier model slugs. Each task type maps to a cost/quality-appropriate model.

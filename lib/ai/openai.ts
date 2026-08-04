@@ -8,13 +8,24 @@ import { fallbackClassifyIntent } from './fallback';
 // OpenAI-style adapter. Works with any OpenAI-compatible endpoint via AI_BASE_URL.
 // Reads AI_API_KEY, AI_EMBED_MODEL (1536-dim default), AI_CHAT_MODEL.
 
+// Chat completions go to AI_BASE_URL (the OpenRouter endpoint in production).
 async function post(path: string, body: unknown): Promise<Response> {
-  const url = `${serverEnv.aiBaseUrl.replace(/\/$/, '')}${path}`;
+  return postTo(serverEnv.aiBaseUrl, serverEnv.aiApiKey, path, body);
+}
+
+// Embeddings go to AI_EMBED_BASE_URL, which is a separate provider because OpenRouter
+// routes chat completions only and has no /embeddings endpoint.
+async function postEmbed(path: string, body: unknown): Promise<Response> {
+  return postTo(serverEnv.aiEmbedBaseUrl, serverEnv.aiEmbedApiKey, path, body);
+}
+
+async function postTo(baseUrl: string, apiKey: string, path: string, body: unknown): Promise<Response> {
+  const url = `${baseUrl.replace(/\/$/, '')}${path}`;
   return fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${serverEnv.aiApiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
     // Reasonable timeout guard via AbortController.
@@ -26,7 +37,7 @@ async function embedWithUsageImpl(texts: string[]): Promise<EmbedResult> {
   if (texts.length === 0) {
     return { vectors: [], model: serverEnv.aiEmbedModel, totalTokens: 0 };
   }
-  const res = await post('/embeddings', {
+  const res = await postEmbed('/embeddings', {
     model: serverEnv.aiEmbedModel,
     input: texts,
   });
