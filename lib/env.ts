@@ -6,6 +6,21 @@ function bool(v: string | undefined, def = false): boolean {
   return v === 'true' || v === '1';
 }
 
+// A Supabase full-privilege credential is either a legacy service_role JWT (`eyJ...`) or a
+// modern secret key (`sb_secret_...`). Anything else is a misconfiguration, not a credential.
+function looksLikeSupabaseSecret(v: string | undefined): boolean {
+  if (!v) return false;
+  return v.startsWith('eyJ') || v.startsWith('sb_secret_');
+}
+
+function resolveServiceRoleKey(): string {
+  const primary = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (looksLikeSupabaseSecret(primary)) return primary!;
+  const integration = process.env.SUPABASE_SECRET_KEY;
+  if (looksLikeSupabaseSecret(integration)) return integration!;
+  return '';
+}
+
 export const publicEnv = {
   appUrl: process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,7 +40,13 @@ export const serverEnv = {
   // SUPABASE_SERVICE_ROLE_KEY JWT. Both are full-privilege, RLS-bypassing credentials and
   // are interchangeable as a bearer token, so read whichever is actually populated instead
   // of failing closed when only the integration-managed one is set.
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '',
+  //
+  // The fallback is format-guarded on purpose. SUPABASE_SECRET_KEY is a generic-sounding
+  // name that is easy to misfill with an unrelated vendor secret; silently sending a
+  // Stripe or Resend key to Supabase as a bearer token would surface as opaque 401s from
+  // every admin-client call. Requiring the credential to actually look like a Supabase
+  // secret turns that misconfiguration into a clean "no service role" state instead.
+  serviceRoleKey: resolveServiceRoleKey(),
   guestContactSalt: process.env.GUEST_CONTACT_SALT ?? 'dev-salt-change-me',
   guestVerifyDevFallback: bool(process.env.GUEST_VERIFY_DEV_FALLBACK, false),
   turnstileSecret: process.env.TURNSTILE_SECRET_KEY ?? '',
