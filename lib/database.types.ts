@@ -2105,6 +2105,7 @@ export type Database = {
           current_period_end: string | null
           host_account_id: string
           id: string
+          is_read_only: boolean
           plan: string | null
           quantity: number
           status: Database["public"]["Enums"]["subscription_status"]
@@ -2112,6 +2113,7 @@ export type Database = {
           stripe_price_id: string | null
           stripe_subscription_id: string | null
           trial_end: string | null
+          trial_property_limit: number
           updated_at: string
         }
         Insert: {
@@ -2120,6 +2122,7 @@ export type Database = {
           current_period_end?: string | null
           host_account_id: string
           id?: string
+          is_read_only?: boolean
           plan?: string | null
           quantity?: number
           status?: Database["public"]["Enums"]["subscription_status"]
@@ -2127,6 +2130,7 @@ export type Database = {
           stripe_price_id?: string | null
           stripe_subscription_id?: string | null
           trial_end?: string | null
+          trial_property_limit?: number
           updated_at?: string
         }
         Update: {
@@ -2135,6 +2139,7 @@ export type Database = {
           current_period_end?: string | null
           host_account_id?: string
           id?: string
+          is_read_only?: boolean
           plan?: string | null
           quantity?: number
           status?: Database["public"]["Enums"]["subscription_status"]
@@ -2142,6 +2147,7 @@ export type Database = {
           stripe_price_id?: string | null
           stripe_subscription_id?: string | null
           trial_end?: string | null
+          trial_property_limit?: number
           updated_at?: string
         }
         Relationships: [
@@ -2159,6 +2165,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_conversation_usage: {
+        Args: { p_host_account_id: string; p_since: string }
+        Returns: number
+      }
       bump_brain_version: { Args: { p_property_id: string }; Returns: number }
       can_access_property: { Args: { prop: string }; Returns: boolean }
       can_edit_property: { Args: { prop: string }; Returns: boolean }

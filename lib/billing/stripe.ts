@@ -1,7 +1,7 @@
 import 'server-only';
 import Stripe from 'stripe';
 import { serverEnv } from '@/lib/env';
-import type { PlanId, BillingInterval } from '@/lib/constants';
+import { PLANS, type PlanId, type BillingInterval } from '@/lib/constants';
 
 // Thrown when Stripe is not configured (STRIPE_SECRET_KEY missing). Callers should
 // translate this into a clean 503 { error } rather than a 500 — billing is an
@@ -47,11 +47,21 @@ export function priceIdFor(planId: PlanId, interval: BillingInterval): string | 
 }
 
 // Reverse lookup: map a Stripe price ID back to our plan id (for the webhook).
+//
+// This deliberately iterates plan ids rather than splitting the env key on '_'.
+// Plan ids now contain underscores (growth_lower, growth_upper), so key.split('_')[0]
+// would have resolved 'growth_lower_monthly' to the plan id 'growth', which does not
+// exist, and the webhook would have written a plan value the entitlement lookup
+// could never match.
 export function planFromPriceId(priceId: string | null | undefined): PlanId | null {
   if (!priceId) return null;
-  for (const [key, value] of Object.entries(serverEnv.stripePrices)) {
-    if (value && value === priceId) {
-      return key.split('_')[0] as PlanId;
+  const intervals: BillingInterval[] = ['monthly', 'annual'];
+  for (const planId of Object.keys(PLANS) as PlanId[]) {
+    for (const interval of intervals) {
+      const key = `${planId}_${interval}` as PriceKey;
+      if (serverEnv.stripePrices[key] && serverEnv.stripePrices[key] === priceId) {
+        return planId;
+      }
     }
   }
   return null;
