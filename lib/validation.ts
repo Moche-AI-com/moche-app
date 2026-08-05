@@ -261,6 +261,13 @@ export const extraOfferSchema = z.object({
   ctaLabel: z.string().trim().max(40).optional().or(z.literal('')),
   active: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(9999).default(0),
+  // Fixed vocabulary shared with lib/guest/extras.ts and the table's CHECK
+  // constraint. Empty means uncategorized, which the guest portal buckets
+  // under "More" rather than hiding.
+  category: z.enum(['arrival', 'comfort', 'food', 'experiences', 'transport', 'more']).optional().or(z.literal('')),
+  isFavorite: z.boolean().default(false),
+  // Advisory per-request ceiling. Empty means the app default.
+  maxQuantity: z.number().int().min(1).max(10).optional().nullable(),
 });
 
 // Add-on — guest requests an extra; routes through the existing escalation path.

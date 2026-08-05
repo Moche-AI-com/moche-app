@@ -50,9 +50,14 @@ export default async function GuestPortalPage({ params }: { params: { slug: stri
       .maybeSingle(),
     admin
       .from('guest_extras')
-      .select('id, title, description, price_text, cta_label')
+      .select('id, title, description, price_text, cta_label, category, is_favorite, max_quantity')
       .eq('property_id', property.id)
       .eq('active', true)
+      // Matches the guest-facing order in lib/guest/extras.ts (P5-06). The app
+      // re-sorts anyway, so this is an index-friendly head start, not the source
+      // of truth. sort_order stays as the host's tiebreaker within a category.
+      .order('is_favorite', { ascending: false })
+      .order('category', { ascending: true, nullsFirst: false })
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true }),
   ]);

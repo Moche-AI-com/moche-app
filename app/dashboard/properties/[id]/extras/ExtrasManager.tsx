@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useFormState } from 'react-dom';
 import { Plus, Pencil, Trash2, GripVertical } from 'lucide-react';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
+import { EXTRAS_CATEGORIES, extraCategory, extraQuantityCeiling, normalizeExtraCategory } from '@/lib/guest/extras';
 import { PremiumImage } from '@/components/PremiumImage';
 import {
   createExtraAction, updateExtraAction, toggleExtraAction, deleteExtraAction,
@@ -18,6 +19,9 @@ export interface ExtraRow {
   cta_label: string | null;
   active: boolean;
   sort_order: number;
+  category: string | null;
+  is_favorite: boolean;
+  max_quantity: number | null;
 }
 
 export function ExtrasManager({ propertyId, offers }: { propertyId: string; offers: ExtraRow[] }) {
@@ -68,9 +72,16 @@ export function ExtrasManager({ propertyId, offers }: { propertyId: string; offe
                       <strong style={{ fontSize: '.98rem' }}>{offer.title}</strong>
                       {offer.price_text && <span className="badge badge-teal">{offer.price_text}</span>}
                       <span className={`badge ${offer.active ? 'badge-teal' : 'badge-coral'}`}>{offer.active ? 'Active' : 'Paused'}</span>
+                      <span className="badge">{extraCategory(normalizeExtraCategory(offer.category)).label}</span>
+                      {offer.is_favorite && (
+                        <span className="badge badge-teal" data-testid={`extra-featured-${offer.id}`}>Featured</span>
+                      )}
                     </div>
                     {offer.description && <p className="muted" style={{ fontSize: '.85rem', margin: '.35rem 0 0' }}>{offer.description}</p>}
-                    <p className="faint" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>CTA: {offer.cta_label || 'Request'}</p>
+                    <p className="faint" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>
+                      CTA: {offer.cta_label || 'Request'}
+                      {offer.max_quantity ? ` · Max ${offer.max_quantity} per request` : ''}
+                    </p>
                   </div>
                   <div style={{ display: 'flex', gap: '.35rem', flexShrink: 0 }}>
                     <form action={toggleExtraAction}>
@@ -134,6 +145,47 @@ function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string
           <input name="sortOrder" type="number" className="input" defaultValue={offer?.sort_order ?? 0} min={0} max={9999} data-testid="input-extra-sort" />
         </div>
       </div>
+
+      <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginTop: '.75rem' }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <label className="label">Category</label>
+          <select
+            name="category"
+            className="select"
+            defaultValue={offer?.category ?? ''}
+            data-testid="select-extra-category"
+          >
+            <option value="">Uncategorized (shows under &ldquo;More&rdquo;)</option>
+            {EXTRAS_CATEGORIES.filter((c) => c.id !== 'more').map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+          <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+            Guests browse by category first, so grouping helps once you have more than a few.
+          </p>
+        </div>
+        <div style={{ width: 150 }}>
+          <label className="label">Max per request</label>
+          <input
+            name="maxQuantity"
+            type="number"
+            className="input"
+            defaultValue={offer?.max_quantity ?? ''}
+            min={1}
+            max={10}
+            placeholder="Any"
+            data-testid="input-extra-max-quantity"
+          />
+          <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+            Leave blank for up to {extraQuantityCeiling(null)}.
+          </p>
+        </div>
+      </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '.85rem 0 0', fontSize: '.88rem', cursor: 'pointer' }}>
+        <input type="checkbox" name="isFavorite" defaultChecked={offer?.is_favorite ?? false} data-testid="checkbox-extra-favorite" />
+        <span>Feature this first in the guest list</span>
+      </label>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '.85rem 0', fontSize: '.88rem', cursor: 'pointer' }}>
         <input type="checkbox" name="active" defaultChecked={offer ? offer.active : true} data-testid="checkbox-extra-active" />

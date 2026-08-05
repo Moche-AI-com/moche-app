@@ -1,17 +1,22 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
   ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
   AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, Wrench,
-  Paperclip, Loader2, CheckCircle2, Phone, Globe, ShoppingCart, type LucideIcon,
+  Paperclip, Loader2, CheckCircle2, Phone, Globe, ShoppingCart, ChevronLeft, ChevronRight,
+  Minus, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
 import { formatDistance } from '@/lib/local/distance';
 import { NEARBY_CATEGORY_LABEL } from '@/lib/local/categories';
+import {
+  clampExtraQuantity, extraQuantityCeiling, groupExtrasByCategory, quantityAdvisory,
+  DEFAULT_EXTRA_QUANTITY, type ExtrasGroup,
+} from '@/lib/guest/extras';
 
 // Luxury concierge palette (per Feature 3 brief). Fixed dark base + gold accent so the
 // portal reads as a high-end hotel experience regardless of per-property brand colors.
@@ -163,6 +168,10 @@ export interface ExtraOffer {
   description: string | null;
   price_text: string | null;
   cta_label: string | null;
+  category: string | null;
+  is_favorite: boolean;
+  /** Advisory per-request ceiling set by the host; null means the app default. */
+  max_quantity: number | null;
 }
 
 /** Moche-AI dome/bell mark — inlined so the brand-scoped portal needs no external CSS. */
@@ -1705,18 +1714,51 @@ function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => 
 // in-app, by email, and (Pro+, consented) by SMS. No new guest channel is invented.
 // Guest visibility is intentionally NOT gated — the host creating an offer is the opt-in.
 function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: ExtraOffer[]; hostPreview: boolean }) {
-  // Per-offer request state so each card independently reflects idle/sending/done.
+  // Per-offer request state so each offer independently reflects idle/sending/done.
+  // Preserved from the previous inline-list version: a guest who requested one
+  // extra should still see it marked as requested after browsing elsewhere.
   const [state, setState] = useState<Record<string, 'idle' | 'busy' | 'done' | 'error'>>({});
 
-  const request = useCallback(async (offerId: string) => {
-    if (state[offerId] === 'busy' || state[offerId] === 'done') return;
+  // Grouped once per offer list. Ordering is `is_favorite DESC, category ASC,
+  // name ASC`, applied in lib/guest/extras.ts so it cannot drift from the tests.
+  const groups = useMemo(() => groupExtrasByCategory(offers), [offers]);
+  const singleGroup = groups.length === 1;
+
+  // Navigation: tiles -> item list -> detail. With only one category there is
+  // nothing to choose, so the tile step is skipped entirely rather than shown as
+  // a lone button a guest has to tap for no reason.
+  const [openCategory, setOpenCategory] = useState<string | null>(singleGroup ? groups[0].category.id : null);
+  const [openOfferId, setOpenOfferId] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(DEFAULT_EXTRA_QUANTITY);
+  const [note, setNote] = useState('');
+
+  const activeGroup: ExtrasGroup<ExtraOffer> | null =
+    groups.find((g) => g.category.id === openCategory) ?? null;
+  const openOffer = openOfferId ? offers.find((o) => o.id === openOfferId) ?? null : null;
+
+  const openDetail = useCallback((offer: ExtraOffer) => {
+    setOpenOfferId(offer.id);
+    setQuantity(DEFAULT_EXTRA_QUANTITY);
+    setNote('');
+    // Clear a stale error so a retry starts from a clean panel.
+    setState((s) => (s[offer.id] === 'error' ? { ...s, [offer.id]: 'idle' } : s));
+  }, []);
+
+  const request = useCallback(async (offer: ExtraOffer, qty: number, message: string) => {
+    const offerId = offer.id;
+    if (state[offerId] === 'busy') return;
+    const safeQty = clampExtraQuantity(qty, offer.max_quantity);
     // Host preview is read-only — reflect success without creating a real escalation.
     if (hostPreview) { setState((s) => ({ ...s, [offerId]: 'done' })); return; }
     setState((s) => ({ ...s, [offerId]: 'busy' }));
     try {
       const res = await fetch(`/api/guest/${slug}/extras-request`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ offerId }),
+        body: JSON.stringify({
+          offerId,
+          quantity: safeQty,
+          ...(message.trim() ? { note: message.trim().slice(0, 1000) } : {}),
+        }),
       });
       if (!res.ok) throw new Error();
       setState((s) => ({ ...s, [offerId]: 'done' }));
@@ -1724,6 +1766,9 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
       setState((s) => ({ ...s, [offerId]: 'error' }));
     }
   }, [hostPreview, slug, state]);
+
+  const detailState = openOffer ? state[openOffer.id] ?? 'idle' : 'idle';
+  const ceiling = openOffer ? extraQuantityCeiling(openOffer.max_quantity) : 1;
 
   return (
     <section style={{ marginTop: '1.5rem' }} data-testid="extras-section">
@@ -1740,64 +1785,241 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
           <span className="gp-serif" style={{ fontSize: '1.25rem', color: '#fbf7ef' }}>Elevate your stay</span>
         </div>
       </PremiumImage>
+
+      {/* Breadcrumb-style back control. One step back at a time so the guest is
+          never dropped out of the flow by a single tap. */}
+      {(openOffer || (activeGroup && !singleGroup)) && (
+        <button
+          type="button"
+          className="gp-extra-back"
+          onClick={() => { if (openOffer) setOpenOfferId(null); else setOpenCategory(null); }}
+          data-testid="button-extras-back"
+        >
+          <ChevronLeft size={15} aria-hidden />
+          {openOffer ? (activeGroup?.category.label ?? 'Extras') : 'All extras'}
+        </button>
+      )}
+
       <div style={{ fontSize: '.72rem', opacity: 0.5, margin: '.7rem .15rem .6rem', textTransform: 'uppercase', letterSpacing: '.14em' }}>
-        Add to your stay
+        {openOffer ? 'Request an extra' : activeGroup ? activeGroup.category.label : 'Browse by category'}
       </div>
-      <div className="gp-extras">
-        {offers.map((offer) => {
-          const st = state[offer.id] ?? 'idle';
-          const done = st === 'done';
-          return (
-            <div key={offer.id} style={{ ...cardStyle, padding: '1.15rem' }} className="gp-card" data-testid={`extra-offer-${offer.id}`}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
-                <span className="gp-serif" style={{ fontSize: '1.15rem', color: '#fbf7ef', lineHeight: 1.2 }}>{offer.title}</span>
-                {offer.price_text && (
-                  <span style={{ color: GOLD, fontWeight: 600, fontSize: '.85rem', flexShrink: 0 }}>{offer.price_text}</span>
-                )}
+
+      {/* --- Step 3: detail + quantity ------------------------------------ */}
+      {openOffer ? (
+        <div style={{ ...cardStyle, padding: '1.15rem' }} className="gp-card" data-testid={`extra-detail-${openOffer.id}`}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
+            <span className="gp-serif" style={{ fontSize: '1.25rem', color: '#fbf7ef', lineHeight: 1.2 }}>{openOffer.title}</span>
+            {openOffer.price_text && (
+              <span style={{ color: GOLD, fontWeight: 600, fontSize: '.9rem', flexShrink: 0 }}>{openOffer.price_text}</span>
+            )}
+          </div>
+          {openOffer.description && (
+            <p style={{ opacity: 0.7, fontSize: '.88rem', margin: '.45rem 0 0', lineHeight: 1.5 }}>{openOffer.description}</p>
+          )}
+
+          {detailState === 'done' ? (
+            <div data-testid={`extra-confirmation-${openOffer.id}`} style={{ marginTop: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', color: GOLD, fontWeight: 600, fontSize: '.9rem' }}>
+                <CheckCircle2 size={18} aria-hidden /> Request sent
               </div>
-              {offer.description && (
-                <p style={{ opacity: 0.7, fontSize: '.85rem', margin: '.4rem 0 .9rem', lineHeight: 1.45 }}>{offer.description}</p>
-              )}
+              <p style={{ opacity: 0.7, fontSize: '.85rem', margin: '.45rem 0 .9rem', lineHeight: 1.45 }}>
+                Your host has it and will follow up to confirm availability and the price. Nothing has been charged.
+              </p>
               <button
-                onClick={() => request(offer.id)}
+                type="button"
                 className="gp-extra-cta"
-                disabled={st === 'busy' || done}
-                data-testid={`button-extra-request-${offer.id}`}
+                onClick={() => { setOpenOfferId(null); if (!singleGroup) setOpenCategory(null); }}
+                data-testid="button-extras-browse-more"
               >
-                {done ? (
-                  <><Check size={15} aria-hidden /> Requested</>
-                ) : st === 'busy' ? (
-                  'Sending…'
-                ) : (
-                  <><Plus size={15} aria-hidden /> {offer.cta_label || 'Request'}</>
-                )}
+                Browse more extras
               </button>
-              {st === 'error' && (
-                <div style={{ ...alertErr, marginTop: '.7rem', marginBottom: 0 }} data-testid={`extra-error-${offer.id}`}>
+            </div>
+          ) : (
+            <>
+              <div className="gp-qty-row">
+                <span className="gp-qty-label" id={`qty-label-${openOffer.id}`}>How many?</span>
+                <div className="gp-qty" role="group" aria-labelledby={`qty-label-${openOffer.id}`}>
+                  <button
+                    type="button"
+                    className="gp-qty-btn"
+                    onClick={() => setQuantity((q) => clampExtraQuantity(q - 1, openOffer.max_quantity))}
+                    disabled={quantity <= DEFAULT_EXTRA_QUANTITY || detailState === 'busy'}
+                    aria-label="Decrease quantity"
+                    data-testid="button-extra-qty-down"
+                  >
+                    <Minus size={16} aria-hidden />
+                  </button>
+                  <output className="gp-qty-value" aria-live="polite" data-testid="extra-qty-value">{quantity}</output>
+                  <button
+                    type="button"
+                    className="gp-qty-btn"
+                    onClick={() => setQuantity((q) => clampExtraQuantity(q + 1, openOffer.max_quantity))}
+                    disabled={quantity >= ceiling || detailState === 'busy'}
+                    aria-label="Increase quantity"
+                    data-testid="button-extra-qty-up"
+                  >
+                    <Plus size={16} aria-hidden />
+                  </button>
+                </div>
+              </div>
+              {quantity >= ceiling && (
+                <p style={{ fontSize: '.74rem', opacity: 0.55, margin: '.5rem 0 0' }} data-testid="extra-qty-ceiling">
+                  {ceiling} is the most you can request here. Ask your host in chat if you need more.
+                </p>
+              )}
+
+              <label className="gp-qty-label" htmlFor={`extra-note-${openOffer.id}`} style={{ display: 'block', margin: '1rem 0 .4rem' }}>
+                Anything your host should know? (optional)
+              </label>
+              <textarea
+                id={`extra-note-${openOffer.id}`}
+                className="gp-extra-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={1000}
+                rows={2}
+                placeholder="Timing, preferences, allergies…"
+                disabled={detailState === 'busy'}
+                data-testid="input-extra-note"
+              />
+
+              <p style={{ fontSize: '.78rem', opacity: 0.6, margin: '.7rem 0 .9rem', lineHeight: 1.45 }} data-testid="extra-advisory">
+                {quantityAdvisory(quantity)}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => request(openOffer, quantity, note)}
+                className="gp-extra-cta"
+                disabled={detailState === 'busy'}
+                data-testid={`button-extra-request-${openOffer.id}`}
+              >
+                {detailState === 'busy' ? 'Sending…' : (<><Plus size={15} aria-hidden /> {openOffer.cta_label || 'Request'}</>)}
+              </button>
+
+              {detailState === 'error' && (
+                <div style={{ ...alertErr, marginTop: '.8rem', marginBottom: 0 }} data-testid={`extra-error-${openOffer.id}`}>
                   Couldn&apos;t send that just now. Please try again.
                 </div>
               )}
-              {done && (
-                <div style={{ fontSize: '.74rem', opacity: 0.65, marginTop: '.55rem' }}>
-                  Sent to your host — they&apos;ll follow up to confirm.
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            </>
+          )}
+        </div>
+      ) : activeGroup ? (
+        /* --- Step 2: items in the chosen category ----------------------- */
+        <div className="gp-extras" data-testid={`extras-items-${activeGroup.category.id}`}>
+          {activeGroup.items.map((offer) => {
+            const st = state[offer.id] ?? 'idle';
+            return (
+              <button
+                key={offer.id}
+                type="button"
+                onClick={() => openDetail(offer)}
+                style={{ ...cardStyle, padding: '1.05rem', textAlign: 'left', width: '100%', cursor: 'pointer' }}
+                className="gp-card gp-extra-item"
+                data-testid={`extra-offer-${offer.id}`}
+              >
+                <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
+                  <span className="gp-serif" style={{ fontSize: '1.1rem', color: '#fbf7ef', lineHeight: 1.2 }}>{offer.title}</span>
+                  {offer.price_text && (
+                    <span style={{ color: GOLD, fontWeight: 600, fontSize: '.85rem', flexShrink: 0 }}>{offer.price_text}</span>
+                  )}
+                </span>
+                {offer.description && (
+                  <span style={{ display: 'block', opacity: 0.65, fontSize: '.83rem', margin: '.35rem 0 0', lineHeight: 1.45 }}>{offer.description}</span>
+                )}
+                <span className="gp-extra-item-foot">
+                  {st === 'done' ? (
+                    <><Check size={14} aria-hidden /> Requested</>
+                  ) : (
+                    <>{offer.cta_label || 'Request'} <ChevronRight size={14} aria-hidden /></>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        /* --- Step 1: category tiles ------------------------------------- */
+        <div className="gp-extras" data-testid="extras-categories">
+          {groups.map((group) => {
+            const requested = group.items.filter((i) => (state[i.id] ?? 'idle') === 'done').length;
+            return (
+              <button
+                key={group.category.id}
+                type="button"
+                onClick={() => setOpenCategory(group.category.id)}
+                style={{ ...cardStyle, padding: '1.05rem', textAlign: 'left', width: '100%', cursor: 'pointer' }}
+                className="gp-card gp-extra-item"
+                data-testid={`extras-category-${group.category.id}`}
+              >
+                <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
+                  <span className="gp-serif" style={{ fontSize: '1.1rem', color: '#fbf7ef', lineHeight: 1.2 }}>{group.category.label}</span>
+                  <span style={{ opacity: 0.5, fontSize: '.78rem', flexShrink: 0 }}>
+                    {group.items.length} {group.items.length === 1 ? 'option' : 'options'}
+                  </span>
+                </span>
+                <span style={{ display: 'block', opacity: 0.65, fontSize: '.83rem', margin: '.35rem 0 0', lineHeight: 1.45 }}>{group.category.hint}</span>
+                <span className="gp-extra-item-foot">
+                  {requested > 0 ? (<><Check size={14} aria-hidden /> {requested} requested</>) : (<>Browse <ChevronRight size={14} aria-hidden /></>)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <style jsx>{`
         .gp-extras { display: grid; grid-template-columns: 1fr; gap: .6rem; }
         @media (min-width: 520px) { .gp-extras { grid-template-columns: repeat(2, 1fr); } }
+        .gp-extra-item { display: block; }
+        .gp-extra-item-foot {
+          display: inline-flex; align-items: center; gap: .3rem; margin-top: .75rem;
+          font-size: .8rem; font-weight: 600; color: ${GOLD};
+        }
+        .gp-extra-back {
+          display: inline-flex; align-items: center; gap: .25rem; margin-top: .85rem;
+          min-height: 44px; padding: .5rem .75rem .5rem .4rem; border: none; background: none;
+          color: inherit; opacity: .7; font-size: .82rem; font-weight: 600; cursor: pointer;
+        }
+        .gp-extra-back:hover { opacity: 1; }
+        .gp-qty-row {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 1rem; margin-top: 1.1rem; flex-wrap: wrap;
+        }
+        .gp-qty-label { font-size: .82rem; opacity: .75; font-weight: 600; }
+        .gp-qty {
+          display: inline-flex; align-items: center; gap: .25rem;
+          border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: .2rem;
+        }
+        .gp-qty-btn {
+          width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+          display: grid; place-items: center; color: inherit;
+          background: rgba(255,255,255,.06); transition: background .18s, opacity .18s;
+        }
+        .gp-qty-btn:hover:not(:disabled) { background: rgba(255,255,255,.12); }
+        .gp-qty-btn:disabled { opacity: .35; cursor: default; }
+        .gp-qty-value {
+          min-width: 2.25rem; text-align: center; font-size: 1rem; font-weight: 700;
+          color: #fbf7ef; font-variant-numeric: tabular-nums;
+        }
+        .gp-extra-note {
+          width: 100%; box-sizing: border-box; padding: .65rem .8rem; font: inherit;
+          font-size: .88rem; color: #fbf7ef; border-radius: 12px; resize: vertical;
+          border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04);
+        }
+        .gp-extra-note:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 1px; }
         .gp-extra-cta {
           display: inline-flex; align-items: center; gap: .4rem; padding: .6rem 1rem;
-          border-radius: 999px; cursor: pointer; font-size: .85rem; font-weight: 600;
+          min-height: 44px; border-radius: 999px; cursor: pointer; font-size: .85rem; font-weight: 600;
           color: #1a1206; border: none; background: linear-gradient(145deg, #e7d3a6, ${GOLD});
           transition: transform .18s, box-shadow .18s, opacity .18s;
         }
         .gp-extra-cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 26px -14px rgba(201,169,110,.9); }
         .gp-extra-cta:disabled { opacity: .7; cursor: default; }
-        @media (prefers-reduced-motion: reduce) { .gp-extra-cta:hover:not(:disabled) { transform: none; } }
+        @media (prefers-reduced-motion: reduce) {
+          .gp-extra-cta:hover:not(:disabled) { transform: none; }
+        }
       `}</style>
     </section>
   );
