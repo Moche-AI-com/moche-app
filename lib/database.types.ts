@@ -2198,7 +2198,6 @@ export type Database = {
           title: string
         }[]
       }
-      property_account: { Args: { prop: string }; Returns: string }
     }
     Enums: {
       access_status: "pending" | "verified" | "expired" | "revoked"

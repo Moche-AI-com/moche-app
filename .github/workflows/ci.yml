@@ -1,0 +1,90 @@
+name: CI
+
+# WHY THIS EXISTS
+# ---------------
+# Before this file, the repository had no .github directory at all: zero
+# automated checks ran on any push or pull request. Lint, typecheck, and the 16
+# existing Vitest suites only ever ran if someone remembered to run them
+# locally. That is how the SECURITY DEFINER grant drift fixed in
+# supabase-migrations-P0-SECURITY.sql went unnoticed.
+#
+# Jobs run in parallel because they are independent. Each one is cheap; failing
+# fast on the wrong thing is worse than spending 30 extra seconds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref. Saves minutes on rapid-fire pushes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # package.json declares "node": ">=22.0.0". Pin the major here so CI cannot
+  # silently drift onto a version the project does not support.
+  NODE_VERSION: '22'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+        env:
+          # Deliberately fake values. lib/env.ts reads every secret lazily, so a
+          # production build only needs these to be present and plausibly
+          # shaped, never valid. Real secrets must NEVER be exposed to a
+          # pull_request-triggered workflow, because a fork PR can read them.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          # Sentry: skip upload rather than fail on a missing auth token.
+          SENTRY_SUPPRESS_TURBOPACK_WARNING: '1'
