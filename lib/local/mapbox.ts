@@ -37,6 +37,7 @@ import { NEARBY_CATEGORIES } from '@/lib/local/osm';
 
 const GEOCODE_V6 = 'https://api.mapbox.com/search/geocode/v6/forward';
 const SEARCHBOX_CATEGORY = 'https://api.mapbox.com/search/searchbox/v1/category';
+const SEARCHBOX_FORWARD = 'https://api.mapbox.com/search/searchbox/v1/forward';
 
 // Attributes we ask for on POI lookups: phone / website / opening hours.
 const ATTRIBUTE_SETS = 'basic,visit';
@@ -403,6 +404,102 @@ export async function mapboxNearbyPlaces(opts: {
     out.push(...mapped.slice(0, perCat));
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Free-text POI search, used only as the fallback tier of the hybrid Local
+// search (backlog P4-13). It is deliberately NOT wired into any guest path:
+// this runs on a host action, behind a rate limit, and only when the property's
+// own Local data returns fewer than LOCAL_SEARCH_MIN_RESULTS matches. Results
+// are returned for display and labelled as provider suggestions; nothing is
+// written to our tables here.
+// ---------------------------------------------------------------------------
+export interface MapboxPoiHit {
+  key: string;
+  name: string;
+  /** Mapbox's own category string, lower-cased. Mapped by the caller. */
+  providerCategory: string | null;
+  address: string | null;
+  distanceMeters: number | null;
+  lat: number;
+  lng: number;
+  url: string | null;
+  phone: string | null;
+}
+
+export async function mapboxSearchPois(opts: {
+  query: string;
+  lat: number;
+  lng: number;
+  radiusMeters?: number;
+  limit?: number;
+}): Promise<MapboxPoiHit[]> {
+  const token = mapboxToken();
+  const q = opts.query.trim();
+  if (!token || q.length < 2) return [];
+
+  const radius = opts.radiusMeters ?? 8000;
+  const limit = Math.min(Math.max(opts.limit ?? 6, 1), 10);
+
+  const params = new URLSearchParams({
+    q,
+    access_token: token,
+    proximity: `${opts.lng},${opts.lat}`,
+    bbox: bboxFor(opts.lat, opts.lng, radius),
+    limit: String(limit),
+    types: 'poi',
+    attribute_sets: ATTRIBUTE_SETS,
+  });
+
+  try {
+    const res = await fetch(`${SEARCHBOX_FORWARD}?${params}`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(8000),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      log.warn('mapbox_poi_search_failed', { status: res.status });
+      return [];
+    }
+    const json = (await res.json()) as {
+      features?: Array<{
+        properties?: SbFeature['properties'] & {
+          poi_category?: string[];
+          poi_category_ids?: string[];
+        };
+      }>;
+    };
+
+    const seen = new Set<string>();
+    const out: MapboxPoiHit[] = [];
+    for (const f of json.features ?? []) {
+      const p = f.properties;
+      const name = p?.name?.trim();
+      const lat = p?.coordinates?.latitude;
+      const lng = p?.coordinates?.longitude;
+      if (!name || typeof lat !== 'number' || typeof lng !== 'number') continue;
+      const key = p?.mapbox_id ?? `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        key,
+        name,
+        providerCategory: (p?.poi_category_ids?.[0] ?? p?.poi_category?.[0] ?? null)?.toLowerCase() ?? null,
+        address: p?.address ?? p?.full_address ?? null,
+        distanceMeters: typeof p?.distance === 'number'
+          ? Math.round(p.distance)
+          : Math.round(haversineMeters(opts.lat, opts.lng, lat, lng)),
+        lat,
+        lng,
+        url: p?.metadata?.website ?? null,
+        phone: p?.metadata?.phone ?? null,
+      });
+    }
+    return out;
+  } catch (e) {
+    log.warn('mapbox_poi_search_error', { error: String(e) });
+    return [];
+  }
 }
 
 function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
