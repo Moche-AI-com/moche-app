@@ -226,7 +226,7 @@
    hundred milliseconds. Frames fan out from a near-centred stack. */
 @media (prefers-reduced-motion: no-preference) {
   .heroFanFrame {
-    animation: fanIn 760ms var(--ease-out) both;
+    animation: fanIn 760ms var(--ease-out) backwards;
     animation-delay: calc(40ms + var(--fan-i) * 55ms);
   }
 }
@@ -252,7 +252,7 @@
   @media (prefers-reduced-motion: no-preference) {
     .heroFanFrame {
       animation:
-        fanIn 760ms var(--ease-out) both,
+        fanIn 760ms var(--ease-out) backwards,
         fanDrift 1s linear both;
       animation-delay: calc(40ms + var(--fan-i) * 55ms), 0s;
       animation-timeline: auto, scroll(root block);
@@ -267,6 +267,63 @@
   }
   to {
     translate: 0 calc(var(--fan-rank, 0) * -14px - 6px);
+  }
+}
+
+/* Hovering a frame borrows the pricing rail's grammar so the two interactions
+   read as the same system: the pointed-at thing comes forward in full colour
+   and everything around it recedes. The frame lifts, straightens most of the
+   way out of its tilt, and rises above its neighbours -- the tilt is what makes
+   the arc read as a stack of prints, so releasing it is what makes one feel
+   picked up out of that stack. Gated behind a fine pointer: on touch there is
+   no hover, and leaving it ungated leaves frames stuck in the lifted state
+   after a tap. Fill mode on the entrance is `backwards`, not `both`, so the
+   finished keyframe stops outranking these transforms. The dimming is keyed off
+   `:has()` rather than `.heroFan:hover`, because the outer frames hang outside
+   their container's box: pointing at one of those never puts the pointer inside
+   .heroFan, so an ancestor :hover would silently do nothing there. */
+@media (hover: hover) and (pointer: fine) {
+  .heroFanFrame {
+    transition:
+      filter 300ms var(--ease-out),
+      box-shadow 420ms var(--ease-out);
+  }
+
+  .heroFan:has(.heroFanFrame:hover) .heroFanFrame,
+  .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame {
+    filter: saturate(0.72) opacity(0.72);
+  }
+
+  .heroFan:has(.heroFanFrame:hover) .heroFanFrame:hover,
+  .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame:focus-visible {
+    filter: saturate(1.02) opacity(1);
+    box-shadow: var(--shadow-lg);
+    z-index: 9;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .heroFanFrame {
+      transition:
+        transform 420ms var(--ease-out),
+        filter 300ms var(--ease-out),
+        box-shadow 420ms var(--ease-out);
+    }
+
+    .heroFan:has(.heroFanFrame:hover) .heroFanFrame:hover,
+    .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame:focus-visible {
+      transform: translate(-50%, -14px) rotate(calc(var(--fan-rot) * 0.3)) scale(1.055);
+    }
+
+    /* The image drifts the opposite way to the frame, so the crop opens
+       slightly as the frame rises instead of the whole thing scaling as one
+       flat sticker. */
+    .heroFanFrame:hover .heroFanImage {
+      transform: scale(1.06);
+    }
+
+    .heroFanImage {
+      transition: transform 520ms var(--ease-out);
+    }
   }
 }
 
