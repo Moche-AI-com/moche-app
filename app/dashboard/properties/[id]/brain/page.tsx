@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, computeCardHealth, BRAIN_CARDS, type CardKey } from '@/lib/brain/health';
+import { computeReadiness } from '@/lib/brain/readiness';
 import { BRAIN_CATEGORY_LABELS } from '@/lib/constants';
 import type { BrainCategory } from '@/lib/constants';
 import { BrainManager } from './BrainManager';
@@ -21,7 +22,7 @@ export default async function BrainPage({
   const access = await requirePropertyAccess(params.id);
   const supabase = createClient();
 
-  const [{ data: items }, { data: settings }, { count: recCount }, { count: emergencyContacts }, { count: primaryContacts }] =
+  const [{ data: items }, { data: settings }, { count: recCount }, { count: emergencyContacts }, { count: primaryContacts }, { count: pendingReviews }] =
     await Promise.all([
       supabase
         .from('brain_items')
@@ -34,6 +35,9 @@ export default async function BrainPage({
       supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', params.id).is('deleted_at', null),
       supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('is_emergency', true),
       supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('is_primary', true),
+      // Pending AI drafts count toward readiness: a property whose Brain is
+      // full but whose queue is untouched is not actually reviewed.
+      supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('status', 'pending'),
     ]);
 
   const brainItems = (items ?? []).map((i) => ({ category: i.category, status: i.status, deleted_at: i.deleted_at, visibility: i.visibility }));
@@ -46,6 +50,13 @@ export default async function BrainPage({
     primaryContactCount: primaryContacts ?? 0,
     hasSettings: !!settings,
     confidenceThresholdSet: !!settings && typeof settings.confidence_threshold === 'number',
+  });
+
+  const readiness = computeReadiness({
+    health: cardHealth,
+    pendingReviews: pendingReviews ?? 0,
+    propertyId: params.id,
+    published: !!access.property.published_at,
   });
 
   // Optional card filter: when a card is opened, scope the editor list + add form to that card's categories.
@@ -75,6 +86,7 @@ export default async function BrainPage({
         propertyName={access.property.display_name}
         propertySlug={access.property.slug}
         health={cardHealth}
+        readiness={readiness}
         canEdit={access.can.editBrain}
         graphItems={(items ?? []).map((i) => ({
           id: i.id,
