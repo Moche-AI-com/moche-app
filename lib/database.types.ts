@@ -811,10 +811,13 @@ export type Database = {
       guest_extras: {
         Row: {
           active: boolean
+          category: string | null
           created_at: string
           cta_label: string | null
           description: string | null
           id: string
+          is_favorite: boolean
+          max_quantity: number | null
           price_text: string | null
           property_id: string
           sort_order: number
@@ -822,10 +825,13 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          category?: string | null
           created_at?: string
           cta_label?: string | null
           description?: string | null
           id?: string
+          is_favorite?: boolean
+          max_quantity?: number | null
           price_text?: string | null
           property_id: string
           sort_order?: number
@@ -833,10 +839,13 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          category?: string | null
           created_at?: string
           cta_label?: string | null
           description?: string | null
           id?: string
+          is_favorite?: boolean
+          max_quantity?: number | null
           price_text?: string | null
           property_id?: string
           sort_order?: number
