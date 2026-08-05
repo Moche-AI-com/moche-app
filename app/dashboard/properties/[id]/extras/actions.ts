@@ -28,6 +28,9 @@ export async function createExtraAction(_prev: ExtraFormState, formData: FormDat
     ctaLabel: formData.get('ctaLabel') || '',
     active: formData.get('active') === 'on',
     sortOrder: Number(formData.get('sortOrder') ?? 0) || 0,
+    category: formData.get('category') || '',
+    isFavorite: formData.get('isFavorite') === 'on',
+    maxQuantity: Number(formData.get('maxQuantity') ?? 0) || null,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the offer details.' };
   const d = parsed.data;
@@ -41,6 +44,9 @@ export async function createExtraAction(_prev: ExtraFormState, formData: FormDat
     cta_label: d.ctaLabel ? d.ctaLabel : 'Request',
     active: d.active,
     sort_order: d.sortOrder,
+    category: d.category ? d.category : null,
+    is_favorite: d.isFavorite,
+    max_quantity: d.maxQuantity ?? null,
   } as never);
 
   if (error) {
@@ -72,6 +78,9 @@ export async function updateExtraAction(_prev: ExtraFormState, formData: FormDat
     ctaLabel: formData.get('ctaLabel') || '',
     active: formData.get('active') === 'on',
     sortOrder: Number(formData.get('sortOrder') ?? 0) || 0,
+    category: formData.get('category') || '',
+    isFavorite: formData.get('isFavorite') === 'on',
+    maxQuantity: Number(formData.get('maxQuantity') ?? 0) || null,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the offer details.' };
   const d = parsed.data;
@@ -86,6 +95,9 @@ export async function updateExtraAction(_prev: ExtraFormState, formData: FormDat
       cta_label: d.ctaLabel ? d.ctaLabel : 'Request',
       active: d.active,
       sort_order: d.sortOrder,
+      category: d.category ? d.category : null,
+      is_favorite: d.isFavorite,
+      max_quantity: d.maxQuantity ?? null,
     } as never)
     .eq('id', offerId)
     .eq('property_id', propertyId);
