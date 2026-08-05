@@ -6,30 +6,38 @@ checked, what the evidence was, and what a human still has to do. Anything under
 
 ## Hosting / deploy state
 
-**Checked:** `vercel projects ls` and `vercel ls` against the `moche-ai` team
-scope, using the project's Vercel token.
+**Two Vercel projects exist and both deploy successfully:** `moche-app` and
+`moche-app-aqbb`, both under the `moche-ai` team, both wired to this repository
+as GitHub commit checks. `push_env_to_aqbb.sh` in the repo root pushes env vars
+to the `-aqbb` project and forces `APP_URL` / `NEXT_PUBLIC_APP_URL` to
+`https://www.moche-ai.com`.
 
-**Result:** the team has **zero projects and zero deployments**. There is no
-personal-scope alternative (Vercel rejects a personal account as a CLI scope for
-this token). The application is therefore **not deployed anywhere on Vercel
-today**.
+### A tooling discrepancy worth knowing about
 
-Consequences worth being explicit about, because they are easy to get wrong:
+`vercel projects ls --scope moche-ai` and `vercel ls`, run with the
+agent-provided `VERCEL_TOKEN`, both reported **zero projects and zero
+deployments**. That is wrong, and it was only caught because the GitHub checks on
+PR #16 showed two Vercel deployments reporting back.
 
-- Merging to `main` does **not** publish anything. There is no Git integration to
-  trigger, so `main` is the production *source of truth* but not a live site.
-- The backlog tickets that ask us to "confirm the deployed branch" and "confirm
-  Vercel project config" (P0-04, P0-05) have no subject to confirm. They are not
-  done and not skipped; they are **not yet applicable**. They become real work at
-  the moment a project is created.
-- Environment variables have never been set in a Vercel project. Every secret in
-  `.env.example` will need to be populated at project-creation time. The build
-  will succeed without them (`lib/env.ts` reads everything lazily) and then fail
-  at runtime, which is the worst failure shape. Populate them before sending
-  traffic.
+So the token can authenticate (`vercel whoami` and `vercel teams ls` both
+succeed and resolve the `moche-ai` team) but cannot enumerate that team's
+projects. Most likely an access-scope limitation on the token itself.
 
-**Owner: human.** Creating the Vercel project, linking the GitHub repo, choosing
-the production branch, and setting environment variables.
+**Practical rule: do not trust `vercel projects ls` with this token as evidence
+that something does not exist.** Read the deployment checks on a PR, or the
+dashboard, instead.
+
+### Still open
+
+Two projects deploying the same repo is ambiguous. Which one owns
+`www.moche-ai.com`, and whether the other is a leftover, needs a decision. Two
+live projects on one repo means two sets of env vars drifting apart, and
+`push_env_to_aqbb.sh` existing at all suggests that drift has already been felt.
+
+**Owner: human.** Confirming which project is production, retiring or clearly
+labelling the other, and confirming the production branch and env vars on the
+survivor. `lib/env.ts` reads every secret lazily, so a missing var produces a
+successful build and a runtime failure, which is the worst failure shape.
 
 ## Supabase auth: leaked-password protection
 
