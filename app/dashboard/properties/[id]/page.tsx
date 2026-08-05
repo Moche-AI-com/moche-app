@@ -18,14 +18,28 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
   const { property, can } = access;
   const supabase = createClient();
 
-  const [{ data: items }, { data: settings }, { count: stayCount }, { count: openEsc }] = await Promise.all([
+  const [
+    { data: items },
+    { data: settings },
+    { count: stayCount },
+    { count: openEsc },
+    { count: curatedCount },
+    { count: discoveredCount },
+  ] = await Promise.all([
     supabase.from('brain_items').select('category, status, deleted_at, visibility').eq('property_id', property.id),
     supabase.from('property_settings').select('*').eq('property_id', property.id).maybeSingle(),
     supabase.from('stays').select('id', { count: 'exact', head: true }).eq('property_id', property.id).is('deleted_at', null),
     supabase.from('escalations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('status', 'open'),
+    // Both local sources are counted so the Local tile reflects everything the
+    // concierge can recommend, not just the auto-discovered half.
+    supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('approved', true).eq('hidden', false).is('deleted_at', null),
+    supabase.from('nearby_places').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('hidden', false),
   ]);
 
   const health = computeBrainHealth(items ?? []);
+  // Upper bound, not the merged total: dedupe happens at read time in
+  // lib/local/merge and would cost two full table reads to reproduce here.
+  const localCount = (curatedCount ?? 0) + (discoveredCount ?? 0);
   const prompts = gapPrompts(health);
   const portalUrl = `${publicEnv.appUrl}/g/${property.slug}`;
 
@@ -89,7 +103,7 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
         <Tile href={`/dashboard/properties/${property.id}/brain`} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
         <Tile href={`/dashboard/properties/${property.id}/stays`} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
         <Tile href={`/dashboard/escalations?property=${property.id}`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
-        <Tile href={`/dashboard/properties/${property.id}/nearby`} title="Nearby places" value="Discover" sub="Auto-found local spots" />
+        <Tile href={`/dashboard/properties/${property.id}/local`} title="Local" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras" value="Manage" sub="Add-ons guests can request" />}
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} title="Settings" value="Configure" sub="Branding, tone, modules" />}
       </div>

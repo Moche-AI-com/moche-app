@@ -23,13 +23,14 @@ export default async function RecommendationsPage({ params }: { params: { id: st
 
   return (
     <div>
-      <Link href={`/dashboard/properties/${params.id}/brain`} className="muted" style={{ fontSize: '.85rem' }}>
-        ← Brain
+      <Link href={`/dashboard/properties/${params.id}/local`} className="muted" style={{ fontSize: '.85rem' }}>
+        ← Local
       </Link>
-      <h1 style={{ marginTop: '.5rem' }}>Local recommendations</h1>
+      <h1 style={{ marginTop: '.5rem' }}>Your picks</h1>
       <p className="muted" style={{ maxWidth: 640 }}>
-        Find nearby places automatically, then curate what your guests see. Approved places (and your
-        favorites first) are shared with the concierge. Hidden places are never shown.
+        The places you personally send guests to. Approved picks are shared with your concierge, which
+        offers your favorites first. Unapproved and hidden picks are never mentioned.{' '}
+        <Link href={`/dashboard/properties/${params.id}/local`}>See everything guests can be told →</Link>
       </p>
       <RecommendationsManager
         propertyId={params.id}
