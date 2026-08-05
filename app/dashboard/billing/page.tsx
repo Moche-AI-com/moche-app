@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
@@ -32,6 +33,14 @@ function formatDate(iso: string): string {
 
 export default async function BillingPage() {
   const ctx = await requireSession();
+
+  // Only the account owner manages billing. The checkout, portal, and refund
+  // APIs already return 403 for everyone else, so this is not the security
+  // boundary — it exists so an invited co-host who deep-links here gets sent
+  // somewhere useful instead of a page of buttons that would all fail, and so
+  // account spend stays with the person who owns it.
+  if (ctx.account.owner_id !== ctx.user.id) redirect('/dashboard');
+
   const supabase = createClient();
   const [ent, gate, usage] = await Promise.all([
     getEntitlements(supabase, ctx.account.id),
