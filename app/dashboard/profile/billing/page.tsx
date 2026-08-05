@@ -1,14 +1,13 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
-import { getConversationUsage } from '@/lib/billing/usage';
 import {
   PLANS,
   SALES_EMAIL,
   FOUNDING_TRIAL_DAYS,
   FOUNDING_TRIAL_PROPERTY_LIMIT,
-  CONVERSATION_OVERAGE_USD,
   type PlanId,
 } from '@/lib/constants';
 import { serverEnv } from '@/lib/env';
@@ -31,7 +30,7 @@ function formatDate(iso: string): string {
   });
 }
 
-export default async function BillingPage() {
+export default async function ProfileBillingPage() {
   const ctx = await requireSession();
 
   // Only the account owner manages billing. The checkout, portal, and refund
@@ -39,13 +38,15 @@ export default async function BillingPage() {
   // boundary — it exists so an invited co-host who deep-links here gets sent
   // somewhere useful instead of a page of buttons that would all fail, and so
   // account spend stays with the person who owns it.
-  if (ctx.account.owner_id !== ctx.user.id) redirect('/dashboard');
+  // The profile shell already hides this section from a non-owner; this is the
+  // real check, and it sends them somewhere useful instead of a page of buttons
+  // whose APIs would every one of them return 403.
+  if (ctx.account.owner_id !== ctx.user.id) redirect('/dashboard/profile');
 
   const supabase = createClient();
-  const [ent, gate, usage] = await Promise.all([
+  const [ent, gate] = await Promise.all([
     getEntitlements(supabase, ctx.account.id),
     canCreateProperty(supabase, ctx.account.id),
-    getConversationUsage(supabase, ctx.account.id),
   ]);
 
   const billingConfigured = !!serverEnv.stripeSecretKey;
@@ -55,7 +56,7 @@ export default async function BillingPage() {
   return (
     <div>
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.8rem' }}>Billing &amp; plan</h1>
+        <h2 style={{ fontSize: '1.15rem', marginTop: 0 }}>Billing and plan</h2>
         <p className="muted" style={{ fontSize: '.9rem' }}>
           {ent.trialing
             ? `You're on your Founding Member month, with top-tier features unlocked.`
@@ -102,45 +103,6 @@ export default async function BillingPage() {
               <BillingActions mode="refund" configured={billingConfigured} />
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {/* Pooled conversation usage. usage.used is -1 when the count could not be read,
-          which must not render as "0 conversations used" — that would look like a
-          working meter reporting no activity. */}
-      {ent.active && usage.allowance > 0 ? (
-        <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
-          <strong style={{ fontSize: '.95rem' }}>Guest conversations this period</strong>
-          {usage.used < 0 ? (
-            <p className="muted" style={{ fontSize: '.85rem', margin: '.35rem 0 0' }}>
-              Usage is temporarily unavailable. Your concierge is unaffected.
-            </p>
-          ) : (
-            <>
-              <p style={{ margin: '.35rem 0 .5rem', fontSize: '.9rem' }}>
-                {usage.used.toLocaleString()} of {usage.allowance.toLocaleString()} included
-                {usage.percentUsed !== null ? ` (${usage.percentUsed}%)` : ''}
-              </p>
-              <div
-                aria-hidden="true"
-                style={{ height: 6, borderRadius: 999, background: 'var(--border, #e5e7eb)', overflow: 'hidden' }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${Math.min(100, usage.percentUsed ?? 0)}%`,
-                    background: 'var(--teal)',
-                    borderRadius: 999,
-                  }}
-                />
-              </div>
-              <p className="faint" style={{ fontSize: '.78rem', margin: '.5rem 0 0' }}>
-                Pooled across every property on your account. Beyond your allowance,
-                conversations are ${CONVERSATION_OVERAGE_USD.toFixed(2)} each. We slow the
-                concierge down rather than cutting your guests off.
-              </p>
-            </>
-          )}
         </div>
       ) : null}
 
@@ -215,6 +177,10 @@ export default async function BillingPage() {
       </div>
 
       <p className="faint" style={{ fontSize: '.78rem', marginTop: '1.25rem' }}>
+        Watching your allowance? See <Link href="/dashboard/profile/usage">Usage</Link>.
+      </p>
+
+      <p className="faint" style={{ fontSize: '.78rem', marginTop: '.5rem' }}>
         No setup fees. Cancel anytime. Annual plans include two months free. Prices in USD.
         Conversation allowances are pooled across your whole account, not per property.
       </p>
