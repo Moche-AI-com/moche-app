@@ -246,6 +246,12 @@ export const extraOfferSchema = z.object({
 // Add-on — guest requests an extra; routes through the existing escalation path.
 export const guestExtraRequestSchema = z.object({
   offerId: z.string().uuid(),
+  // Advisory only, and optional so the existing one-tap request path keeps
+  // working byte-for-byte. Upper bound matches the extras_orders CHECK
+  // constraint (1..20) so a bad client is rejected here with a clean 400
+  // instead of as a database constraint violation.
+  quantity: z.number().int().min(1).max(20).optional(),
+  note: z.string().trim().max(1000).optional(),
 });
 
 // Add-on — one-tap product feedback (guest path, via admin client).
