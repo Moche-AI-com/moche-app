@@ -47,7 +47,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       <PostHogIdentify userId={ctx.user.id} email={ctx.profile.email} />
       {outstanding.length > 0 ? <ReacceptanceGate slugs={outstanding} /> : null}
-      <DashboardNav unread={count ?? 0} notifications={recentNotifications ?? []} />
+      <DashboardNav
+        unread={count ?? 0}
+        notifications={recentNotifications ?? []}
+        isOwner={ctx.account.owner_id === ctx.user.id}
+      />
       <main className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>{children}</main>
       <FeedbackControl />
     </div>

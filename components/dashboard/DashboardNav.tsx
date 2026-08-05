@@ -7,19 +7,34 @@ import { logoutAction } from '@/app/(auth)/actions';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { NotificationBell, type NotificationItem } from '@/components/dashboard/NotificationBell';
 
-const LINKS = [
+// `ownerOnly` links are hidden from invited members (co-hosts, cleaners,
+// managers). This is presentation only: hiding a tab is a courtesy so the nav
+// reflects what the person can actually do, NOT a security boundary. The route
+// itself still guards, and RLS still guards under that.
+const LINKS: Array<{ href: string; label: string; ownerOnly?: boolean }> = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/dashboard/properties', label: 'Properties' },
   { href: '/dashboard/escalations', label: 'Escalations' },
   { href: '/dashboard/service-requests', label: 'Service' },
-  { href: '/dashboard/billing', label: 'Billing' },
+  { href: '/dashboard/reports', label: 'Reports' },
+  { href: '/dashboard/billing', label: 'Billing', ownerOnly: true },
   { href: '/dashboard/profile', label: 'Profile' },
 ];
 
-export function DashboardNav({ unread, notifications }: { unread: number; notifications: NotificationItem[] }) {
+export function DashboardNav({
+  unread,
+  notifications,
+  isOwner = true,
+}: {
+  unread: number;
+  notifications: NotificationItem[];
+  /** Defaults to true so an omitted prop can never silently hide a real owner's billing tab. */
+  isOwner?: boolean;
+}) {
   const pathname = usePathname();
+  const links = LINKS.filter((l) => !l.ownerOnly || isOwner);
   return (
-    <header style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 50 }}>
+    <header className="dash-nav" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 50 }}>
       <div className="wrap dash-nav-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64, gap: '1rem' }}>
         <div className="dash-nav-brandrow" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Logo href="/dashboard" size={32} />
@@ -32,7 +47,7 @@ export function DashboardNav({ unread, notifications }: { unread: number; notifi
           </div>
         </div>
         <nav className="dash-nav-links" style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap' }}>
-          {LINKS.map((l) => {
+          {links.map((l) => {
             const active = l.href === '/dashboard' ? pathname === l.href : pathname.startsWith(l.href);
             return (
               // Styling lives entirely in globals.css (.dash-tab) — inline styles would

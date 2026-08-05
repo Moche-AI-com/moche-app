@@ -934,3 +934,100 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
 
 /* Static map preview embedded under the address autocomplete field. */
 .address-map-preview { margin-top: .6rem; }
+
+/* ── Screen-reader-only utility ─────────────────────────────────────────── */
+/* Clip rather than display:none so assistive tech still announces it. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ── Reports hub ────────────────────────────────────────────────────────── */
+.report-list { display: flex; flex-direction: column; gap: .5rem; }
+.report-list-row {
+  display: flex; align-items: center; justify-content: space-between; gap: .85rem;
+  padding: .8rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.report-list-title {
+  margin: 0; font-size: .93rem; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.report-list-meta { margin: .2rem 0 0; font-size: .78rem; color: var(--text-faint); }
+
+/* Small icon-only affordance next to a ticket's status badge. 44px minimum hit
+   area is delivered by padding + margin offset, so the target is accessible on
+   touch without visually inflating the row. */
+.sr-print-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: .5rem; margin: -.5rem; border-radius: 8px;
+  color: var(--text-faint); transition: color var(--tr), background var(--tr);
+}
+.sr-print-link:hover, .sr-print-link:focus-visible { color: var(--text); background: var(--surface-2, rgba(127,127,127,.12)); }
+
+/* ── Printable report sheet ─────────────────────────────────────────────── */
+.report-sheet { max-width: 46rem; margin: 0 auto; }
+.report-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1.5rem; }
+.report-head { border-bottom: 2px solid var(--border-strong); padding-bottom: 1rem; margin-bottom: 1.25rem; }
+.report-kicker {
+  margin: 0; font-size: .72rem; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.report-title { font-size: 1.6rem; line-height: 1.25; margin: .35rem 0 .3rem; }
+.report-sub { margin: 0; font-size: .92rem; color: var(--text-muted); }
+.report-flags {
+  border: 1px solid var(--coral); border-left-width: 4px; border-radius: 8px;
+  padding: .7rem .9rem; margin-bottom: 1.25rem; font-size: .88rem; color: var(--text);
+}
+.report-meta { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: .88rem; }
+.report-meta th, .report-meta td { text-align: left; padding: .42rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.report-meta th { width: 11rem; font-weight: 600; color: var(--text-faint); }
+.report-meta td { color: var(--text); }
+.report-section { margin-bottom: 1.4rem; }
+.report-section h2 {
+  font-size: .78rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-faint); margin: 0 0 .45rem;
+}
+.report-section p { margin: 0; font-size: .93rem; line-height: 1.6; white-space: pre-wrap; }
+.report-section ul, .report-section ol { margin: 0; padding-left: 1.15rem; font-size: .93rem; line-height: 1.65; }
+.report-timeline { list-style: none; padding: 0; }
+.report-timeline li { display: flex; gap: .75rem; padding: .35rem 0; border-bottom: 1px solid var(--border); }
+.report-timeline li:last-child { border-bottom: 0; }
+.report-timeline-when { flex: 0 0 10.5rem; color: var(--text-faint); font-size: .82rem; }
+.report-foot {
+  display: flex; justify-content: space-between; gap: .75rem; margin-top: 2rem;
+  padding-top: .75rem; border-top: 1px solid var(--border);
+  font-size: .74rem; color: var(--text-faint);
+}
+
+@media (max-width: 640px) {
+  .report-meta th { width: auto; }
+  .report-timeline li { flex-direction: column; gap: .15rem; }
+  .report-timeline-when { flex: none; }
+  .report-list-row { flex-direction: column; align-items: flex-start; }
+}
+
+/* ── Print ──────────────────────────────────────────────────────────────── */
+@media print {
+  /* Force light rendering: printers ignore background colours by default, so a
+     dark-mode report would otherwise print light-grey text on white paper. */
+  :root, [data-theme='dark'] {
+    --bg: #fff; --surface: #fff; --text: #000; --text-muted: #333;
+    --text-faint: #555; --border: #ccc; --border-strong: #000;
+  }
+  html, body { background: #fff !important; color: #000 !important; }
+
+  /* Dashboard chrome is navigation, not content. */
+  nav, .dash-nav, .report-toolbar, .feedback-control, [data-testid='feedback-control'] { display: none !important; }
+
+  main.wrap { padding: 0 !important; max-width: none !important; }
+  .report-sheet { max-width: none; margin: 0; }
+
+  /* Never split a section or a table row across two sheets of paper. */
+  .report-section, .report-timeline li, .report-meta tr { break-inside: avoid; page-break-inside: avoid; }
+  .report-head { break-after: avoid; page-break-after: avoid; }
+  .report-section h2 { break-after: avoid; page-break-after: avoid; }
+
+  a { text-decoration: none; color: #000 !important; }
+  @page { margin: 16mm; }
+}

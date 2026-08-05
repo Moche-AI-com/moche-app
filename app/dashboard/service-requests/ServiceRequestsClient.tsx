@@ -1,10 +1,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Sparkles, AlertTriangle, ChevronDown, ChevronUp, Image as ImageIcon,
-  MapPin, Wrench, KeyRound, Clock3, UserRound, CheckCircle2,
+  MapPin, Wrench, KeyRound, Clock3, UserRound, CheckCircle2, Printer, Archive,
 } from 'lucide-react';
+import { LifecycleToggle, type LifecycleView } from '@/components/dashboard/LifecycleToggle';
+
+// Which statuses the database projects to lifecycle_status = 'archived'.
+// Kept in one place so the optimistic client-side filter below cannot disagree
+// with supabase-migrations-LIFECYCLE.sql's generated column.
+const ARCHIVED_STATUSES = ['resolved', 'closed'];
+const isArchived = (status: string) => ARCHIVED_STATUSES.includes(status);
 
 export interface ServiceTicket {
   id: string;
@@ -15,6 +23,7 @@ export interface ServiceTicket {
   urgency: string;
   resolution_notes: string | null;
   created_at: string;
+  archived_at?: string | null;
   location_note: string | null;
   likely_causes: unknown;
   suggested_parts: unknown;
@@ -176,6 +185,20 @@ function TicketCard({
             {ticket.urgency}
           </span>
           <span className={`badge ${STATUS_BADGE[ticket.status] ?? ''}`}>{STATUS_LABEL[ticket.status] ?? ticket.status}</span>
+          {/* Opens the print-optimised report in a new tab rather than printing
+              this page, so the host gets the full record (timeline, causes,
+              parts, resolution) instead of a screenshot of a collapsed card. */}
+          <Link
+            href={`/dashboard/reports/service-request/${ticket.id}`}
+            target="_blank"
+            rel="noopener"
+            className="sr-print-link"
+            title="Open printable report"
+            aria-label={`Open printable report for ${ticket.service_type.replace(/_/g, ' ')} request`}
+            data-testid="service-request-print"
+          >
+            <Printer size={13} aria-hidden />
+          </Link>
         </span>
       </div>
 
@@ -310,12 +333,15 @@ function TicketCard({
 }
 
 export function ServiceRequestsClient({
-  tickets, propertyNames, properties, contacts,
+  tickets, propertyNames, properties, contacts, view, activeCount, pastCount,
 }: {
   tickets: ServiceTicket[];
   propertyNames: Record<string, string>;
   properties: PropertyOption[];
   contacts: PropertyContactOption[];
+  view: LifecycleView;
+  activeCount: number;
+  pastCount: number;
 }) {
   const [rows, setRows] = useState(tickets);
   const canResolveMap = useMemo(() => new Map(properties.map((p) => [p.id, p.canResolve])), [properties]);
@@ -329,20 +355,38 @@ export function ServiceRequestsClient({
     return map;
   }, [contacts]);
 
-  // Active first (grouped by not-done), then sorted by urgency severity, then newest first.
+  // The server already filtered to this view, but a host who resolves a ticket
+  // while standing on the Active tab expects it to leave the list immediately
+  // rather than sit there looking unresolved until the next refresh. Re-applying
+  // the view predicate client-side gives that without a round trip.
+  const inView = useMemo(
+    () => rows.filter((s) => (view === 'past' ? isArchived(s.status) : !isArchived(s.status))),
+    [rows, view],
+  );
+
+  // Past is a record, so it reads newest-resolved first and urgency is no longer
+  // an ordering concern. Active is triage, so urgency leads.
   const sorted = useMemo(
     () =>
-      [...rows].sort((a, b) => {
-        const aActive = !['resolved', 'closed'].includes(a.status);
-        const bActive = !['resolved', 'closed'].includes(b.status);
-        if (aActive !== bActive) return aActive ? -1 : 1;
+      [...inView].sort((a, b) => {
+        if (view === 'past') {
+          const at = new Date(a.archived_at ?? a.created_at).getTime();
+          const bt = new Date(b.archived_at ?? b.created_at).getTime();
+          return bt - at;
+        }
         const rankDiff = (URGENCY_RANK[a.urgency] ?? 9) - (URGENCY_RANK[b.urgency] ?? 9);
         if (rankDiff !== 0) return rankDiff;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }),
-    [rows],
+    [inView, view],
   );
-  const active = rows.filter((s) => !['resolved', 'closed'].includes(s.status));
+
+  // Counts come from the server so they describe the whole account, not just
+  // the 100 rows on this page. Adjust for optimistic moves so the pill and the
+  // list never contradict each other.
+  const moved = rows.filter((s) => (view === 'past' ? !isArchived(s.status) : isArchived(s.status))).length;
+  const shownActive = view === 'active' ? Math.max(0, activeCount - moved) : activeCount + moved;
+  const shownPast = view === 'past' ? Math.max(0, pastCount - moved) : pastCount + moved;
 
   function patchTicket(id: string, patch: Partial<ServiceTicket>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -353,14 +397,42 @@ export function ServiceRequestsClient({
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.8rem' }}>Service requests</h1>
         <p className="muted" style={{ fontSize: '.9rem' }}>
-          Maintenance, cleaning, and safety issues raised by guests or the concierge. {active.length} active.
+          {view === 'past'
+            ? 'Resolved and closed requests, newest first. Kept as a record you can print or reopen.'
+            : 'Maintenance, cleaning, and safety issues raised by guests or the concierge, most urgent first.'}
         </p>
       </div>
 
+      <LifecycleToggle
+        basePath="/dashboard/service-requests"
+        view={view}
+        activeCount={shownActive}
+        pastCount={shownPast}
+        ariaLabel="Filter service requests by status"
+      />
+
       {sorted.length === 0 ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
-          <Sparkles size={22} aria-hidden style={{ color: 'var(--teal)', marginBottom: '.6rem' }} />
-          <p className="muted">No service requests yet. When a guest reports a problem, it&rsquo;s routed here with a type and urgency so you can act fast.</p>
+          {view === 'past' ? (
+            <>
+              <Archive size={22} aria-hidden style={{ color: 'var(--text-faint)', marginBottom: '.6rem' }} />
+              <p className="muted">Nothing archived yet. Requests move here once you mark them resolved or closed.</p>
+            </>
+          ) : (
+            <>
+              <Sparkles size={22} aria-hidden style={{ color: 'var(--teal)', marginBottom: '.6rem' }} />
+              <p className="muted">
+                {pastCount > 0
+                  ? 'Nothing needs your attention right now. Everything has been resolved.'
+                  : 'No service requests yet. When a guest reports a problem, it\u2019s routed here with a type and urgency so you can act fast.'}
+              </p>
+            </>
+          )}
+          {view === 'active' && pastCount > 0 && (
+            <Link href="/dashboard/service-requests?view=past" className="btn btn-ghost btn-sm" style={{ marginTop: '.9rem' }}>
+              <Archive size={13} aria-hidden /> View {pastCount} archived
+            </Link>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
