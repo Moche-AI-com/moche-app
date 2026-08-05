@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { Printer, Archive, FileText } from 'lucide-react';
+import { Printer, Archive, FileText, Sparkles } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
+import { EXTRAS_ORDER_STATUS_LABEL, type ExtrasOrderStatus } from '@/lib/dashboard/extras-orders';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,9 +46,10 @@ export default async function ReportsPage({
 
   let requests: Array<{ id: string; property_id: string; service_type: string; status: string; urgency: string; created_at: string; archived_at: string | null; summary: string | null; description: string }> = [];
   let stays: Array<{ id: string; property_id: string; guest_display_name: string | null; check_in: string | null; check_out: string | null; status: string; archived_at: string | null }> = [];
+  let extras: Array<{ id: string; property_id: string; item_title: string; item_price_text: string | null; quantity: number; status: ExtrasOrderStatus; created_at: string; archived_at: string | null }> = [];
 
   if (scopeIds.length) {
-    const [reqRes, stayRes] = await Promise.all([
+    const [reqRes, stayRes, extrasRes] = await Promise.all([
       supabase
         .from('service_requests')
         .select('id, property_id, service_type, status, urgency, created_at, archived_at, summary, description')
@@ -63,12 +65,20 @@ export default async function ReportsPage({
         .eq('lifecycle_status', 'archived')
         .order('check_out', { ascending: false, nullsFirst: false })
         .limit(200),
+      supabase
+        .from('extras_orders')
+        .select('id, property_id, item_title, item_price_text, quantity, status, created_at, archived_at')
+        .in('property_id', scopeIds)
+        .eq('lifecycle_status', 'archived')
+        .order('archived_at', { ascending: false, nullsFirst: false })
+        .limit(200),
     ]);
     requests = reqRes.data ?? [];
     stays = stayRes.data ?? [];
+    extras = (extrasRes.data ?? []) as typeof extras;
   }
 
-  const empty = requests.length === 0 && stays.length === 0;
+  const empty = requests.length === 0 && stays.length === 0 && extras.length === 0;
 
   return (
     <div>
@@ -85,7 +95,8 @@ export default async function ReportsPage({
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
           <Archive size={22} aria-hidden style={{ color: 'var(--text-faint)', marginBottom: '.6rem' }} />
           <p className="muted">
-            Nothing archived yet. Once you resolve a service request or a stay checks out, it appears here as a printable record.
+            Nothing archived yet. Once you resolve a service request, complete an extra, or a stay checks out, it appears
+            here as a printable record.
           </p>
         </div>
       ) : (
@@ -114,6 +125,37 @@ export default async function ReportsPage({
                       data-testid="report-print-link"
                     >
                       <Printer size={13} aria-hidden /> Report
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section style={{ marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
+              <Sparkles size={16} aria-hidden /> Completed extras
+              <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({extras.length})</span>
+            </h2>
+            {extras.length === 0 ? (
+              <p className="muted" style={{ fontSize: '.88rem' }}>No completed extras yet.</p>
+            ) : (
+              <div className="report-list">
+                {extras.map((e) => (
+                  <div key={e.id} className="report-list-row" data-testid="report-extra-row">
+                    <div style={{ minWidth: 0 }}>
+                      <p className="report-list-title">
+                        {e.item_title}
+                        {e.quantity > 1 && <span className="faint"> &times;{e.quantity}</span>}
+                      </p>
+                      <p className="report-list-meta">
+                        {propNames.get(e.property_id) ?? 'Property'}
+                        {e.item_price_text ? ` \u00b7 ${e.item_price_text}` : ''} &middot;{' '}
+                        {EXTRAS_ORDER_STATUS_LABEL[e.status] ?? e.status} {fmtDate(e.archived_at ?? e.created_at)}
+                      </p>
+                    </div>
+                    <Link href="/dashboard/extras?view=past" className="btn btn-ghost btn-sm">
+                      Open
                     </Link>
                   </div>
                 ))}

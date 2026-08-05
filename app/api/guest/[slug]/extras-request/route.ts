@@ -12,9 +12,18 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Add-on — a guest taps "Request" on an extra. We DO NOT invent a new
-// channel: this reuses the EXISTING escalation + notify() path (the same one the
-// chat route uses for low-confidence questions), so the host is alerted in-app,
-// by email, and (Pro+, consented) by SMS, and can answer via the magic link.
+// notification channel: this reuses the EXISTING escalation + notify() path (the
+// same one the chat route uses for low-confidence questions), so the host is
+// alerted in-app, by email, and (Pro+, consented) by SMS, and can answer via the
+// magic link.
+//
+// It ALSO writes an `extras_orders` row. The escalation is the alert; the order
+// is the durable record. Without it a host who dismisses the notification has
+// nothing to come back to, there is no requested/fulfilled/declined state, and
+// extras never reach the Reports hub. The order write is best-effort and
+// non-blocking: if it fails the guest still gets a successful request and the
+// host still gets the alert, because losing the notification would be the worse
+// failure of the two.
 export async function POST(req: Request, { params }: { params: { slug: string } }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
@@ -48,8 +57,13 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     return NextResponse.json({ error: 'That enhancement is no longer available.' }, { status: 404 });
   }
 
+  const quantity = parsed.data.quantity ?? 1;
+  const guestNote = parsed.data.note?.trim() || null;
+
   const priceSuffix = offer.price_text ? ` (${offer.price_text})` : '';
-  const question = `Enhancement request: ${offer.title}${priceSuffix}. Guest would like to add this to their stay.`;
+  const qtySuffix = quantity > 1 ? ` x${quantity}` : '';
+  const notePart = guestNote ? ` Guest note: "${guestNote}"` : '';
+  const question = `Enhancement request: ${offer.title}${qtySuffix}${priceSuffix}. Guest would like to add this to their stay.${notePart}`;
 
   // Get-or-create the conversation for this stay (same shape as the chat route)
   // so the request is threaded and visible to the host.
@@ -92,7 +106,27 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     actionUrl: answerUrl,
   });
 
-  log.info('guest_extra_request', { escalationId: escId });
+  // Durable order record. item_title / item_price_text are SNAPSHOTS: a later
+  // catalog edit must not rewrite what this guest was quoted.
+  const { error: orderError } = await admin.from('extras_orders').insert({
+    property_id: session.propertyId,
+    stay_id: session.stayId,
+    conversation_id: conversationId,
+    escalation_id: escId ?? null,
+    extra_id: offer.id,
+    item_title: offer.title,
+    item_price_text: offer.price_text ?? null,
+    quantity,
+    guest_note: guestNote,
+    status: 'requested',
+  } as never);
+  if (orderError) {
+    // Deliberately not a 500: the host has already been alerted, so failing the
+    // guest's request here would be a worse outcome than a missing queue row.
+    log.warn('extras_order_insert_failed', { escalationId: escId, error: orderError.message });
+  }
+
+  log.info('guest_extra_request', { escalationId: escId, quantity });
   await capture('extra_requested', session.propertyId, { property_id: session.propertyId });
 
   return NextResponse.json({ ok: true });

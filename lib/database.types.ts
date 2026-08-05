@@ -555,6 +555,105 @@ export type Database = {
           },
         ]
       }
+      extras_orders: {
+        Row: {
+          archived_at: string | null
+          conversation_id: string | null
+          created_at: string
+          escalation_id: string | null
+          extra_id: string | null
+          guest_note: string | null
+          host_note: string | null
+          id: string
+          item_price_text: string | null
+          item_title: string
+          lifecycle_status:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
+          property_id: string
+          quantity: number
+          status: Database["public"]["Enums"]["extras_order_status"]
+          stay_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          escalation_id?: string | null
+          extra_id?: string | null
+          guest_note?: string | null
+          host_note?: string | null
+          id?: string
+          item_price_text?: string | null
+          item_title: string
+          lifecycle_status?:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
+          property_id: string
+          quantity?: number
+          status?: Database["public"]["Enums"]["extras_order_status"]
+          stay_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          escalation_id?: string | null
+          extra_id?: string | null
+          guest_note?: string | null
+          host_note?: string | null
+          id?: string
+          item_price_text?: string | null
+          item_title?: string
+          lifecycle_status?:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
+          property_id?: string
+          quantity?: number
+          status?: Database["public"]["Enums"]["extras_order_status"]
+          stay_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extras_orders_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_orders_escalation_id_fkey"
+            columns: ["escalation_id"]
+            isOneToOne: false
+            referencedRelation: "escalations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_orders_extra_id_fkey"
+            columns: ["extra_id"]
+            isOneToOne: false
+            referencedRelation: "guest_extras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_orders_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_orders_stay_id_fkey"
+            columns: ["stay_id"]
+            isOneToOne: false
+            referencedRelation: "stays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guest_access_links: {
         Row: {
           code_attempt_count: number
@@ -2251,6 +2350,12 @@ export type Database = {
       consent_kind: "terms" | "privacy" | "marketing" | "guest_comms"
       conversation_role: "guest" | "assistant" | "host" | "system"
       escalation_status: "open" | "answered" | "resolved" | "dismissed"
+      extras_order_status:
+        | "requested"
+        | "confirmed"
+        | "fulfilled"
+        | "declined"
+        | "cancelled"
       feedback_value: "helpful" | "not_helpful"
       host_preference: "loved" | "neutral" | "disliked"
       ingestion_kind: "document" | "url"
@@ -2457,6 +2562,13 @@ export const Constants = {
       consent_kind: ["terms", "privacy", "marketing", "guest_comms"],
       conversation_role: ["guest", "assistant", "host", "system"],
       escalation_status: ["open", "answered", "resolved", "dismissed"],
+      extras_order_status: [
+        "requested",
+        "confirmed",
+        "fulfilled",
+        "declined",
+        "cancelled",
+      ],
       feedback_value: ["helpful", "not_helpful"],
       host_preference: ["loved", "neutral", "disliked"],
       ingestion_kind: ["document", "url"],
