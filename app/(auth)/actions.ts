@@ -43,11 +43,12 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     accountName: formData.get('accountName') || undefined,
     acceptTerms: formData.get('acceptTerms') === 'on',
     smsOptIn: formData.get('smsOptIn') === 'on',
+    phone: formData.get('phone') || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Please check your details.' };
   }
-  const { email, password, fullName, accountName, smsOptIn } = parsed.data;
+  const { email, password, fullName, accountName, smsOptIn, phone } = parsed.data;
 
   // Account creation + confirmation email both require the service-role client
   // (Supabase's built-in SMTP sender is disabled in favour of our Resend transport).
@@ -85,10 +86,16 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   const userAgent = h.get('user-agent');
 
   // A2P 10DLC: record explicit SMS/WhatsApp opt-in only when actively given.
+  // The number is stored unverified — sending is still gated on the phone
+  // verification step in Dashboard -> Settings.
   if (smsOptIn) {
     const { error: consentError } = await admin
       .from('profiles')
-      .update({ sms_opt_in: true, sms_opt_in_at: new Date().toISOString() })
+      .update({
+        sms_opt_in: true,
+        sms_opt_in_at: new Date().toISOString(),
+        ...(phone ? { phone } : {}),
+      })
       .eq('id', result.userId);
     if (consentError) log.warn('sms_opt_in_persist_failed', { reason: consentError.message });
   }

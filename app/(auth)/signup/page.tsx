@@ -81,13 +81,26 @@ function SignupForm() {
                 <MessageSquare size={14} aria-hidden="true" /> Text me guest &amp; property alerts (optional)
               </span>
               <br />
-              I agree to receive account and guest-related SMS/WhatsApp messages from Moche-AI at the phone
-              number I verify in settings. Message frequency varies. Message &amp; data rates may apply.
+              I agree to receive recurring account and guest-related SMS/WhatsApp messages from Moche-AI at the
+              mobile number I enter below. Message frequency varies. Message &amp; data rates may apply.
               Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. See our{' '}
               <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="gradient-text">Privacy Policy</Link>{' '}and{' '}
               <Link href="/legal/terms" target="_blank" rel="noopener noreferrer" className="gradient-text">Terms</Link>.
             </span>
           </label>
+          <div className="field" style={{ marginTop: '.75rem', marginBottom: 0 }}>
+            <label className="label" htmlFor="phone">Mobile phone number <span className="faint">(required only if you check the box above)</span></label>
+            <input
+              className="input"
+              id="phone"
+              name="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="+1 (555) 123-4567"
+              data-testid="signup-phone"
+            />
+          </div>
         </div>
 
         <SubmitButton>Create account</SubmitButton>

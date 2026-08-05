@@ -14,6 +14,18 @@ export const signupSchema = z.object({
   // true when the host actively checks the (unchecked) box. Stored as a
   // consent flag; texting is further gated on a later phone-verification step.
   smsOptIn: z.boolean().optional().default(false),
+  // Mobile number collected on the same page as the consent checkbox (A2P 10DLC
+  // reviewers require a visible phone field in the opt-in flow). Optional unless
+  // the host actually opts in to messaging.
+  phone: z.string().trim().max(40).optional().or(z.literal('')),
+}).superRefine((val, ctx) => {
+  if (val.smsOptIn && (val.phone ?? '').replace(/\D/g, '').length < 10) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['phone'],
+      message: 'Enter the mobile number where you want to receive text messages.',
+    });
+  }
 });
 
 export const loginSchema = z.object({
