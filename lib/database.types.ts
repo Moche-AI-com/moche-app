@@ -1891,6 +1891,7 @@ export type Database = {
       service_requests: {
         Row: {
           access_instructions: string | null
+          archived_at: string | null
           assigned_contact_id: string | null
           conversation_id: string | null
           created_at: string
@@ -1899,6 +1900,9 @@ export type Database = {
           id: string
           interview_status: string
           interview_transcript: Json
+          lifecycle_status:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
           likely_causes: Json
           location_note: string | null
           media_urls: Json
@@ -1916,6 +1920,7 @@ export type Database = {
         }
         Insert: {
           access_instructions?: string | null
+          archived_at?: string | null
           assigned_contact_id?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -1924,6 +1929,9 @@ export type Database = {
           id?: string
           interview_status?: string
           interview_transcript?: Json
+          lifecycle_status?:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
           likely_causes?: Json
           location_note?: string | null
           media_urls?: Json
@@ -1941,6 +1949,7 @@ export type Database = {
         }
         Update: {
           access_instructions?: string | null
+          archived_at?: string | null
           assigned_contact_id?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -1949,6 +1958,9 @@ export type Database = {
           id?: string
           interview_status?: string
           interview_transcript?: Json
+          lifecycle_status?:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
           likely_causes?: Json
           location_note?: string | null
           media_urls?: Json
@@ -1997,6 +2009,7 @@ export type Database = {
       }
       stays: {
         Row: {
+          archived_at: string | null
           booking_reference: string | null
           check_in: string
           check_out: string
@@ -2011,11 +2024,15 @@ export type Database = {
           guest_identity_id: string | null
           host_notes: string | null
           id: string
+          lifecycle_status:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
           property_id: string
           status: Database["public"]["Enums"]["stay_status"]
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           booking_reference?: string | null
           check_in: string
           check_out: string
@@ -2030,11 +2047,15 @@ export type Database = {
           guest_identity_id?: string | null
           host_notes?: string | null
           id?: string
+          lifecycle_status?:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
           property_id: string
           status?: Database["public"]["Enums"]["stay_status"]
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           booking_reference?: string | null
           check_in?: string
           check_out?: string
@@ -2049,6 +2070,9 @@ export type Database = {
           guest_identity_id?: string | null
           host_notes?: string | null
           id?: string
+          lifecycle_status?:
+            | Database["public"]["Enums"]["lifecycle_state"]
+            | null
           property_id?: string
           status?: Database["public"]["Enums"]["stay_status"]
           updated_at?: string
@@ -2244,6 +2268,7 @@ export type Database = {
         | "safety"
         | "emergency"
         | "other"
+      lifecycle_state: "active" | "archived"
       member_role:
         | "owner"
         | "co_host"
@@ -2450,6 +2475,7 @@ export const Constants = {
         "emergency",
         "other",
       ],
+      lifecycle_state: ["active", "archived"],
       member_role: [
         "owner",
         "co_host",
