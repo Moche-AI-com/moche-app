@@ -9,7 +9,13 @@ import { logAiUsage } from '@/lib/ai/usage';
 import { normalizeQuestion, getBrainVersion, lookupCachedAnswer, cacheAnswer } from '@/lib/brain/cache';
 import { NODE_TYPES, type NodeType } from '@/lib/normalizer';
 import { formatDistanceApprox } from '@/lib/local/distance';
-import { NEARBY_CATEGORY_LABEL } from '@/lib/local/categories';
+import {
+  localCategoryLabel,
+  mergeLocalPlaces,
+  type CuratedRecInput,
+  type DiscoveredPlaceInput,
+  type MergedLocalPlace,
+} from '@/lib/local/merge';
 
 type Admin = SupabaseClient<Database>;
 type IntentType = Database['public']['Enums']['intent_type'];
@@ -251,21 +257,52 @@ export interface NearbyPlaceRow {
   distance_m: number | null;
 }
 
-// Fetch the guest-visible (non-hidden) nearby-places set once per turn. Shared by the
-// prompt-context builder and the id-citation resolver below so a single query backs
-// both the model's context AND the server-trusted validation of what it cites (WS-5).
-async function fetchNearbyPlaces(admin: Admin, propertyId: string): Promise<NearbyPlaceRow[]> {
-  const { data, error } = await admin
-    .from('nearby_places')
-    .select('id, category, name, host_notes, host_starred, rating, distance_m')
-    .eq('property_id', propertyId)
-    .eq('hidden', false)
-    .order('host_starred', { ascending: false })
-    .order('rating', { ascending: false, nullsFirst: false })
-    .order('distance_m', { ascending: true })
-    .limit(60);
-  if (error || !data) return [];
-  return data;
+// Fetch the guest-visible local-places set once per turn, from BOTH systems:
+// auto-discovered `nearby_places` and host-authored `recommendations`. Merged and
+// ranked by lib/local/merge (see that file for why both tables survive).
+//
+// Reading `recommendations` here is what makes the recommendations manager's
+// promise to the host true - approved curated places reach the concierge.
+//
+// Shared by the prompt-context builder and the id-citation resolver below so a
+// single fetch backs both the model's context AND the server-trusted validation
+// of what it cites (WS-5). Either query failing degrades to the other source
+// rather than dropping local recommendations entirely.
+async function fetchLocalPlaces(admin: Admin, propertyId: string): Promise<MergedLocalPlace[]> {
+  const [discoveredRes, curatedRes] = await Promise.all([
+    admin
+      .from('nearby_places')
+      .select('id, category, name, host_notes, host_starred, hidden, rating, distance_m')
+      .eq('property_id', propertyId)
+      .eq('hidden', false)
+      .order('host_starred', { ascending: false })
+      .order('rating', { ascending: false, nullsFirst: false })
+      .order('distance_m', { ascending: true })
+      .limit(60),
+    admin
+      .from('recommendations')
+      .select('id, name, category, host_preference, approved, hidden, host_note, description, distance_note, priority_weight')
+      .eq('property_id', propertyId)
+      .eq('approved', true)
+      .eq('hidden', false)
+      .is('deleted_at', null)
+      // Highest priority first so the dedupe pass keeps the row the host
+      // weighted most heavily on a curated-vs-curated name collision.
+      .order('priority_weight', { ascending: false })
+      .order('name', { ascending: true })
+      .limit(60),
+  ]);
+
+  if (discoveredRes.error) log.warn('concierge.local.discovered_failed', { propertyId, error: discoveredRes.error.message });
+  if (curatedRes.error) log.warn('concierge.local.curated_failed', { propertyId, error: curatedRes.error.message });
+
+  const discovered = (discoveredRes.data ?? []) as DiscoveredPlaceInput[];
+  const curated = (curatedRes.data ?? []) as CuratedRecInput[];
+  if (discovered.length === 0 && curated.length === 0) return [];
+
+  // Cap the merged set so a portfolio host with a large curated list cannot
+  // crowd the rest of the prompt out of the context window.
+  return mergeLocalPlaces(curated, discovered).slice(0, 60);
 }
 
 // Build a concise, host-curated local-places block for the concierge. Hierarchy:
@@ -274,16 +311,24 @@ async function fetchNearbyPlaces(admin: Admin, propertyId: string): Promise<Near
 // trailing `PLACES:` directive (see PLACES_INSTRUCTION) — the id is the ONLY thing
 // the model is asked to echo back; everything else about the place is re-read from
 // the DB when resolving. Returns '' when there is nothing to add.
-function buildNearbyPlacesContext(places: NearbyPlaceRow[]): string {
+function buildNearbyPlacesContext(places: MergedLocalPlace[]): string {
   if (places.length === 0) return '';
 
   const starred = places.filter((p) => p.host_starred);
   const rest = places.filter((p) => !p.host_starred);
 
-  const fmt = (p: NearbyPlaceRow) => {
-    const label = NEARBY_CATEGORY_LABEL[p.category] ?? p.category;
-    let line = `- (id:${p.id}) ${p.name ?? 'Unnamed'} (${label})${formatDistanceApprox(p.distance_m)}`;
+  const fmt = (p: MergedLocalPlace) => {
+    const label = localCategoryLabel(p.category);
+    // Prefer the measured distance; fall back to the host's own phrasing
+    // ("about a 10 min drive") when only a curated row exists for this place.
+    const distance = p.distance_m !== null
+      ? formatDistanceApprox(p.distance_m)
+      : p.distanceNote
+        ? ` (${p.distanceNote})`
+        : '';
+    let line = `- (id:${p.id}) ${p.name ?? 'Unnamed'} (${label})${distance}`;
     if (p.host_starred) line += ' — Host favorite.';
+    if (p.detail) line += ` ${p.detail}`;
     if (p.host_notes) line += ` Host note: ${p.host_notes}`;
     return line;
   };
@@ -302,7 +347,7 @@ function buildNearbyPlacesContext(places: NearbyPlaceRow[]): string {
 // list used to build the context (defense in depth: an id the model could not have
 // legitimately seen, e.g. a hidden or cross-property place, simply will not match and
 // is silently dropped rather than surfaced as an unverified link).
-export function resolvePlaceRefs(placeIds: string[], places: NearbyPlaceRow[]): NearbyPlaceRef[] {
+export function resolvePlaceRefs(placeIds: string[], places: NearbyPlaceRow[] | MergedLocalPlace[]): NearbyPlaceRef[] {
   if (placeIds.length === 0) return [];
   const byId = new Map(places.map((p) => [p.id, p]));
   const seen = new Set<string>();
@@ -470,7 +515,7 @@ export async function answerGuestQuestion(
   // so the concierge can make grounded local recommendations. Excluded when empty.
   // `nearbyPlaces` is kept around (not just the formatted string) so a `PLACES:`
   // citation from the model can be resolved against it later (WS-5).
-  const nearbyPlaces = await fetchNearbyPlaces(admin, opts.propertyId);
+  const nearbyPlaces = await fetchLocalPlaces(admin, opts.propertyId);
   const nearbyContext = buildNearbyPlacesContext(nearbyPlaces);
   const context = [chunkContext, nearbyContext].filter(Boolean).join('\n\n');
 
