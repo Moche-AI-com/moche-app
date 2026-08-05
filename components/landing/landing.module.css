@@ -380,6 +380,160 @@
   margin: 0 auto;
 }
 
+/* ---- Who it serves / compatibility band --------------------------------- */
+
+/* Slim on purpose. The previous incarnation of this content was two full
+   sections -- a marquee band and a compatibility section with its own heading,
+   logo row and two-sentence note -- to say two things a host decides in about
+   four seconds. Merged, unboxed, and sized down so it reads as a caption to
+   the hero rather than a section competing with it. */
+.who {
+  padding-block: clamp(1.75rem, 4vw, 2.75rem);
+  text-align: center;
+  /* Shares the hero's surface rather than introducing a third tone between the
+     hero and the benefits, which would read as stripes now that there are no
+     dividers. Continuing the hero's background is what makes this land as a
+     caption to it. */
+  background: var(--surface-2);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.whoLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 0.9rem;
+}
+
+/* Masked at both edges so items enter and leave rather than popping at a hard
+   boundary -- the edge is what makes a marquee read as cheap. */
+.marquee {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.marqueeTrack {
+  display: flex;
+  width: max-content;
+}
+
+.marqueeGroup {
+  display: flex;
+  align-items: center;
+  gap: clamp(1.5rem, 3.5vw, 2.75rem);
+  margin: 0;
+  padding: 0 clamp(0.75rem, 1.75vw, 1.375rem);
+  list-style: none;
+}
+
+.marqueeGroup li {
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* A separator between items instead of characters in the markup, so the list
+   stays a list and the loop seam has no orphaned dot. */
+.marqueeGroup li + li::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-right: clamp(1.5rem, 3.5vw, 2.75rem);
+  border-radius: 50%;
+  background: var(--teal);
+  vertical-align: 0.32em;
+}
+
+/* The animation is opt-in: with reduced motion the track simply sits still and
+   shows the first several types, which still answers the question. Two
+   identical groups translated by exactly half the track makes the loop seam
+   invisible. */
+@media (prefers-reduced-motion: no-preference) {
+  .marqueeTrack {
+    animation: marqueeScroll 42s linear infinite;
+  }
+
+  /* Slow rather than stop on hover. A hard stop reads as a bug; deceleration
+     reads as the page noticing the cursor. */
+  .marquee:hover .marqueeTrack,
+  .marquee:focus-within .marqueeTrack {
+    animation-duration: 110s;
+  }
+}
+
+@keyframes marqueeScroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.compat {
+  margin-top: clamp(1.85rem, 3.5vw, 2.25rem);
+}
+
+.compatLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 0.85rem;
+}
+
+.compatLogos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem clamp(1.25rem, 3.5vw, 2.5rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compatLogos li {
+  font-family: var(--font-display);
+  font-size: clamp(0.98rem, 1.8vw, 1.15rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-faint);
+  white-space: nowrap;
+  transition: color 220ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .compatLogos li:hover {
+    color: var(--text-muted);
+  }
+}
+
+.compatNote {
+  max-width: 34rem;
+  margin: 1rem auto 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+  text-wrap: pretty;
+}
+
 /* ---- Benefits ------------------------------------------------------------ */
 
 /* Unboxed on purpose. Four bordered, shadowed cards holding two-line

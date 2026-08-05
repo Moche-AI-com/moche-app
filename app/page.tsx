@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getUser } from '@/lib/auth/guards';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { Hero } from '@/components/landing/Hero';
+import { WhoStrip } from '@/components/landing/WhoStrip';
 import { Benefits } from '@/components/landing/Benefits';
 import { System } from '@/components/landing/System';
 import { FoundingBand } from '@/components/landing/FoundingBand';
@@ -64,6 +65,7 @@ export default async function Home() {
     <main>
       <LandingHeader />
       <Hero />
+      <WhoStrip />
       <Benefits />
       <System />
       <FoundingBand />
