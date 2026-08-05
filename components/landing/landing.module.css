@@ -2,11 +2,17 @@
    Marketing homepage styles.
 
    Ground rules kept throughout this file:
-   - Only transform and opacity are animated. Nothing here can trigger layout.
+   - Only transform and opacity are animated, with one deliberate, documented
+     exception: the pricing rail animates flex-grow (see ---- Pricing).
    - Mobile-first: base rules are the phone layout, min-width queries add to it.
    - Every interactive target clears 44px.
    - Colour comes from the shared tokens only, so the page inverts correctly
      when the visitor switches to dark mode.
+   - No horizontal rules between sections. Sections are separated by whitespace
+     alone; a 1px line every 400px of scroll read as clutter and made the page
+     look like a stack of unrelated panels rather than one document. Spacing is
+     the only divider now, so section padding is doing real work -- do not trim
+     it without replacing the separation some other way.
    ========================================================================== */
 
 /* ---- Shared -------------------------------------------------------------- */
@@ -58,6 +64,42 @@
   min-height: 44px;
 }
 
+/* Scroll progress, sitting on the header's own bottom edge so it costs no
+   extra height. Driven entirely by a CSS scroll-driven animation: no scroll
+   listener, no JS, nothing to run on the main thread. Browsers without
+   animation-timeline never show it, which is the correct fallback -- it is
+   decoration, not information. */
+.headerProgress {
+  display: none;
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .headerProgress {
+      display: block;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--teal), var(--teal-vivid));
+      transform-origin: 0 50%;
+      scale: 0 1;
+      animation: headerProgress linear both;
+      animation-timeline: scroll(root block);
+    }
+  }
+}
+
+@keyframes headerProgress {
+  from {
+    scale: 0 1;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
 /* Below ~500px the wordmark, the theme toggle, and two buttons cannot all fit
    on one row without either wrapping the "Start free trial" label or shrinking
    it below the touch minimum. The mark alone still identifies the brand, and
@@ -87,18 +129,159 @@
 
 /* ---- Hero ---------------------------------------------------------------- */
 
+/* Gallery-led, arc layout. The photography fans overhead and the copy sits
+   under it on the centre line, so the frames flank the headline instead of
+   competing with it for the same vertical space.
+   The fan stays in normal flow -- it reserves its own height, and the copy is
+   pulled up into the bottom of the arc with a negative margin rather than the
+   hero carrying a hand-tuned padding that has to be kept in sync with it. */
 .hero {
-  padding-top: clamp(3rem, 8vw, 5.5rem);
-  padding-bottom: clamp(2.5rem, 6vw, 4rem);
+  padding-top: clamp(1.75rem, 4vw, 3rem);
+  padding-bottom: clamp(1rem, 3vw, 2.25rem);
   overflow: hidden;
 }
 
+.heroFan {
+  position: relative;
+  width: min(1220px, 100%);
+  height: clamp(150px, 24vw, 300px);
+  margin: 0 auto;
+}
+
+/* Each frame carries its own --fan-x / --fan-y / --fan-rot. --fan-x and
+   --fan-y are percentages, so they resolve against .heroFan rather than
+   against the frame's own box, which keeps the arc's proportions identical at
+   every width instead of drifting with the card size. */
+.heroFanFrame {
+  position: absolute;
+  top: var(--fan-y);
+  left: calc(50% + var(--fan-x));
+  width: clamp(74px, 11.5vw, 168px);
+  aspect-ratio: 3 / 4;
+  border-radius: clamp(9px, 1.1vw, 16px);
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-md);
+  transform: translate(-50%, 0) rotate(var(--fan-rot));
+  z-index: calc(4 - var(--fan-rank, 0));
+}
+
+/* The centre frame is upright, largest, and on top: it is the one the eye
+   lands on before it reads the headline underneath. */
+.heroFanFrame[data-rank='0'] {
+  width: clamp(88px, 13vw, 192px);
+}
+
+.heroFanImage {
+  object-fit: cover;
+  object-position: var(--fan-pos, 50% 50%);
+}
+
+/* Under 700px seven frames at a legible size cannot sit side by side without
+   overlapping into an unreadable smear, so the arc thins from the outside in
+   rather than shrinking every frame past the point of being a photograph. */
+@media (max-width: 700px) {
+  .heroFanFrame[data-rank='3'] {
+    display: none;
+  }
+
+  /* The arc gets proportionally taller as it narrows, and the copy stops being
+     pulled up into it: on a phone the headline is three or four lines starting
+     right under the fan, and a few pixels of overlap there reads as a bug
+     rather than as depth. */
+  .heroFan {
+    height: clamp(180px, 46vw, 260px);
+  }
+
+  .heroCopy {
+    margin-top: clamp(0.75rem, 3vw, 1.5rem);
+  }
+
+  .heroFanFrame {
+    width: clamp(78px, 19vw, 122px);
+  }
+
+  .heroFanFrame[data-rank='0'] {
+    width: clamp(90px, 22vw, 140px);
+  }
+}
+
+@media (max-width: 430px) {
+  .heroFanFrame[data-rank='2'] {
+    display: none;
+  }
+
+  .heroFanFrame {
+    width: clamp(88px, 26vw, 128px);
+  }
+
+  .heroFanFrame[data-rank='0'] {
+    width: clamp(104px, 31vw, 150px);
+  }
+}
+
+/* The entrance plays from CSS with no JS involved, the same reasoning as the
+   [data-eager] reveals in globals.css: the hero is the first screen, and
+   gating it on hydration leaves the top of the page visibly empty for a few
+   hundred milliseconds. Frames fan out from a near-centred stack. */
+@media (prefers-reduced-motion: no-preference) {
+  .heroFanFrame {
+    animation: fanIn 760ms var(--ease-out) both;
+    animation-delay: calc(40ms + var(--fan-i) * 55ms);
+  }
+}
+
+@keyframes fanIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 22px) rotate(calc(var(--fan-rot) * 0.35)) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) rotate(var(--fan-rot));
+  }
+}
+
+/* Scroll parallax: the outer frames travel further than the centre, which is
+   what makes the arc read as having depth rather than being a flat decal.
+   Animated via the `translate` property, NOT `transform` -- transform already
+   holds the frame's fixed position and rotation, and the two would overwrite
+   each other. Progressive enhancement: browsers without scroll-driven
+   animations get the static arc and lose nothing they can name. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .heroFanFrame {
+      animation:
+        fanIn 760ms var(--ease-out) both,
+        fanDrift 1s linear both;
+      animation-delay: calc(40ms + var(--fan-i) * 55ms), 0s;
+      animation-timeline: auto, scroll(root block);
+      animation-range: normal, 0 80vh;
+    }
+  }
+}
+
+@keyframes fanDrift {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 calc(var(--fan-rank, 0) * -14px - 6px);
+  }
+}
+
 .heroCopy {
-  max-width: 52rem;
+  position: relative;
+  /* Above the frames: the outermost pair hangs below the fan's own box and
+     would otherwise sit on top of the headline. */
+  z-index: 5;
+  max-width: 48rem;
+  margin-top: calc(-1 * clamp(0.5rem, 2vw, 2rem));
+  text-align: center;
 }
 
 .heroTitle {
-  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  font-size: clamp(2.4rem, 6.4vw, 4.25rem);
   line-height: 1.02;
   letter-spacing: -0.035em;
   margin-bottom: 1.1rem;
@@ -106,161 +289,188 @@
 }
 
 .heroSubtitle {
-  font-size: clamp(1.05rem, 1.9vw, 1.3rem);
+  font-size: clamp(1.02rem, 1.8vw, 1.22rem);
   line-height: 1.55;
   color: var(--text-muted);
-  max-width: 38rem;
-  margin-bottom: 1.75rem;
+  max-width: 34rem;
+  margin: 0 auto 1.75rem;
+  text-wrap: pretty;
 }
 
 .heroActions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
 
 .heroTrialNote {
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   line-height: 1.5;
   color: var(--text-faint);
-  max-width: 32rem;
-}
-
-/* Photography band. On phones it is a snap-scrolling filmstrip, which reads as
-   a gallery you can flick through rather than a squashed grid. From 900px up
-   the frames sit in one asymmetric row -- the uneven column weights are what
-   stop it looking like a stock three-up card strip. */
-.heroStrip {
-  margin-top: clamp(2.25rem, 5vw, 3.5rem);
-}
-
-.heroStripTrack {
-  display: flex;
-  gap: 0.7rem;
-  list-style: none;
-  margin: 0;
-  padding: 0 clamp(1.1rem, 4vw, 2.5rem);
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.heroStripTrack::-webkit-scrollbar {
-  display: none;
-}
-
-.heroStripCell {
-  position: relative;
-  flex: 0 0 74%;
-  aspect-ratio: 4 / 5;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  scroll-snap-align: center;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-
-.heroStripImage {
-  object-fit: cover;
-  transition: transform 700ms var(--ease-out);
-}
-
-@media (min-width: 900px) {
-  .heroStripTrack {
-    overflow: visible;
-    gap: 0.85rem;
-    padding-left: clamp(1.1rem, 4vw, 2.5rem);
-    padding-right: clamp(1.1rem, 4vw, 2.5rem);
-  }
-
-  .heroStripCell {
-    flex: var(--frame-weight, 1) 1 0;
-    aspect-ratio: auto;
-    height: clamp(240px, 27vw, 380px);
-  }
-}
-
-/* Pointer-only: a hover zoom on a touch device just leaves the image stuck
-   in its zoomed state after a tap. */
-@media (hover: hover) and (pointer: fine) {
-  .heroStripCell:hover .heroStripImage {
-    transform: scale(1.06);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .heroStripImage {
-    transition: none;
-  }
-  .heroStripCell:hover .heroStripImage {
-    transform: none;
-  }
+  max-width: 30rem;
+  margin: 0 auto;
 }
 
 /* ---- Benefits ------------------------------------------------------------ */
 
+/* Unboxed on purpose. Four bordered, shadowed cards holding two-line
+   paragraphs turned the least surprising claims on the page into its densest
+   block. Without the chrome the four titles scan as a row and the detail line
+   is available to whoever wants it. */
 .benefits {
-  padding-block: clamp(3rem, 7vw, 5rem);
-  border-top: 1px solid var(--border);
+  padding-block: clamp(3rem, 7vw, 5.5rem);
 }
 
 .benefitsGrid {
+  list-style: none;
+  margin: clamp(1.75rem, 4vw, 2.5rem) 0 0;
+  padding: 0;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.85rem;
-  margin-top: 2rem;
+  gap: clamp(1.6rem, 3vw, 2rem);
 }
 
-@media (min-width: 640px) {
+@media (min-width: 620px) {
   .benefitsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.1rem;
+    gap: 2rem 2.5rem;
   }
 }
 
-.benefitsCard {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: clamp(1.35rem, 2.6vw, 1.9rem);
-  box-shadow: var(--shadow-md);
-  transition:
-    transform var(--tr),
-    border-color var(--tr),
-    box-shadow var(--tr);
+@media (min-width: 1040px) {
+  .benefitsGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.9rem;
+  }
+}
+
+.benefitsItem {
+  min-width: 0;
 }
 
 .benefitsIcon {
-  display: inline-grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--teal) 12%, transparent);
+  display: block;
   color: var(--teal);
-  margin-bottom: 1rem;
+  margin-bottom: 0.7rem;
 }
 
 .benefitsTitle {
-  font-size: 1.2rem;
-  margin-bottom: 0.5rem;
+  font-size: 1.02rem;
+  letter-spacing: -0.012em;
+  margin-bottom: 0.3rem;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .benefitsCard:hover {
-    transform: translateY(-4px);
-    border-color: var(--border-strong);
-    box-shadow: var(--shadow-lg);
+.benefitsDetail {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 24rem;
+  text-wrap: pretty;
+}
+
+/* ---- System / how it works ----------------------------------------------- */
+
+.system {
+  padding-block: clamp(3rem, 7vw, 5.5rem);
+  background: var(--bg-2);
+}
+
+.steps {
+  list-style: none;
+  margin: clamp(1.75rem, 4vw, 2.5rem) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(1.75rem, 3.5vw, 2.25rem);
+}
+
+@media (min-width: 860px) {
+  .steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2.5rem;
   }
+}
+
+.step {
+  min-width: 0;
+}
+
+.stepNum {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--teal);
+  margin-bottom: 0.6rem;
+}
+
+.stepTitle {
+  font-size: 1.12rem;
+  letter-spacing: -0.015em;
+  margin-bottom: 0.4rem;
+}
+
+.stepDetail {
+  font-size: 0.92rem;
+  line-height: 1.62;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.partsHeading {
+  margin-top: clamp(2.75rem, 6vw, 4.25rem);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.parts {
+  margin: 1.35rem 0 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.3rem 2.5rem;
+}
+
+@media (min-width: 620px) {
+  .parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1040px) {
+  .parts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.part {
+  min-width: 0;
+}
+
+.partTitle {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.partDetail {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  text-wrap: pretty;
 }
 
 /* ---- Founding band ------------------------------------------------------- */
 
 .founding {
-  padding-block: clamp(3rem, 7vw, 5rem);
-  border-top: 1px solid var(--border);
+  padding-block: clamp(3rem, 7vw, 5.5rem);
 }
 
 .foundingPanel {
@@ -359,8 +569,7 @@
 /* ---- Pricing ------------------------------------------------------------- */
 
 .pricing {
-  padding-block: clamp(3rem, 7vw, 5rem);
-  border-top: 1px solid var(--border);
+  padding-block: clamp(3rem, 7vw, 5.5rem);
 }
 
 .pricingIntro {
@@ -369,7 +578,10 @@
   line-height: 1.6;
 }
 
-.pricingGrid {
+/* Base state: a plain stacked grid. This is what phones, tablets, and any
+   coarse-pointer device get at every width, and it is the only state that has
+   to work without hover. The expanding rail below is an enhancement on top. */
+.pricingTrack {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.85rem;
@@ -377,48 +589,45 @@
 }
 
 @media (min-width: 560px) {
-  .pricingGrid {
+  .pricingTrack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1000px) {
-  .pricingGrid {
+  .pricingTrack {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
   }
 }
 
-.pricingCard {
+.pricingPanel {
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: 1rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: clamp(1.3rem, 2.4vw, 1.6rem);
+  padding: clamp(1.2rem, 2.2vw, 1.5rem);
   box-shadow: var(--shadow-md);
   min-width: 0;
-  transition:
-    transform var(--tr),
-    border-color var(--tr),
-    box-shadow var(--tr);
 }
 
-.pricingCardPopular {
+.pricingPanel[data-featured] {
   border-color: var(--teal);
-  box-shadow:
-    var(--shadow-lg),
-    0 0 0 1px var(--teal);
 }
 
 .pricingFlag {
-  position: absolute;
-  top: -0.7rem;
-  left: clamp(1.3rem, 2.4vw, 1.6rem);
+  display: none;
+}
+
+.pricingFlag[data-visible] {
+  display: inline-block;
+  margin-bottom: 0.55rem;
   padding: 0.15rem 0.6rem;
   border-radius: 9999px;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -426,73 +635,225 @@
   color: var(--btn-primary-fg);
 }
 
-.pricingTier {
-  font-size: 1.15rem;
-  margin-bottom: 0.2rem;
+.pricingRail {
+  min-width: 0;
 }
 
-.pricingProperties {
-  font-size: 0.85rem;
-  margin-bottom: 0.9rem;
+.pricingTier {
+  font-size: 1.05rem;
+  letter-spacing: -0.015em;
+  margin-bottom: 0.15rem;
 }
 
 .pricingPrice {
   display: flex;
   align-items: baseline;
-  gap: 0.25rem;
-  margin-bottom: 0.45rem;
+  gap: 0.2rem;
 }
 
 .pricingAmount {
   font-family: var(--font-display);
-  font-size: 2.4rem;
+  font-size: 2.1rem;
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1;
 }
 
-.pricingConversations {
-  font-size: 0.85rem;
+.pricingPer,
+.pricingProperties {
+  color: var(--text-muted);
 }
 
-.pricingAnnual {
-  font-size: 0.82rem;
-  margin-bottom: 1.15rem;
+.pricingPer {
+  font-size: 0.9rem;
 }
 
-.pricingContactDetail {
+.pricingProperties {
+  font-size: 0.84rem;
+  margin-top: 0.3rem;
+}
+
+.pricingDetail {
+  min-width: 0;
+}
+
+.pricingDetailInner {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pricingFacts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
   font-size: 0.85rem;
   line-height: 1.5;
-  margin-bottom: 1.15rem;
+  color: var(--text-muted);
 }
 
-/* Pushes every card's button to the bottom edge so the row of CTAs lines up
-   even though the cards above them have different amounts of text. */
 .pricingCta {
-  margin-top: auto;
   min-height: 44px;
 }
 
-.pricingCardContact {
-  justify-content: flex-start;
+.pricingVolume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  margin-top: 1.5rem;
+}
+
+.pricingVolumeCopy {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 40rem;
+}
+
+.pricingVolumeCopy strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.pricingVolumeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--teal-deep);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--tr);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .pricingCard:hover {
-    transform: translateY(-4px);
-    border-color: var(--border-strong);
+  .pricingVolumeLink:hover {
+    border-color: var(--teal-deep);
+  }
+}
+
+/* ---- Pricing: the expanding rail ----------------------------------------
+   Fine-pointer desktop only. Six equal cards read as a wall of numbers with
+   no route through them; here the recommended tier is open by default and
+   pointing at any tier opens that one while the rest recede, which is the
+   same motion as the reference gallery this was modelled on.
+
+   Two things make it safe rather than clever:
+   - The rail (tier name, price, property count) is legible in EVERY panel at
+     all times. Only the supporting facts and the CTA move, so nothing a
+     visitor needs in order to compare plans is behind an interaction.
+   - Keyboard users get the identical behaviour through :focus-within, because
+     the CTA inside each panel is focusable. Tabbing across the row opens each
+     panel in turn.
+
+   --on is 0 for a receded panel and 1 for the open one, and every animated
+   value is derived from it. Custom properties do not interpolate, but the
+   properties computed FROM one do, so a single flip animates the width, the
+   opacity, the saturation, and the detail fade together with no duplication.
+
+   This is the one place in the file that animates a layout property
+   (flex-grow). It is deliberate: width IS the effect, and there is no
+   transform that produces it without distorting the type. It is bounded to a
+   single row of six elements on a static marketing page, `contain` stops the
+   work escaping the row, and it never runs on touch. */
+@media (min-width: 1280px) and (hover: hover) and (pointer: fine) {
+  .pricingTrack {
+    display: flex;
+    align-items: stretch;
+    gap: 0.6rem;
+    /* layout only, NOT paint: paint containment would clip the "most chosen"
+       flag, which deliberately sits above the panel's top edge. */
+    contain: layout;
+  }
+
+  .pricingPanel {
+    --on: 0;
+    flex: 1 1 0;
+    flex-grow: calc(1 + 2.4 * var(--on));
+    min-width: 10.25rem;
+    display: grid;
+    grid-template-columns: minmax(0, 8.75rem) minmax(0, 1fr);
+    align-items: start;
+    gap: 0 1.35rem;
+    padding: 1.35rem 1.05rem;
+    box-shadow: none;
+    /* Dim via filter's opacity() rather than the opacity property: .reveal
+       already owns opacity on this element, and setting it here would cancel
+       the scroll entrance and leave the row visible before it is reached. */
+    filter: saturate(calc(0.22 + 0.78 * var(--on))) opacity(calc(0.6 + 0.4 * var(--on)));
+    transition:
+      flex-grow 520ms var(--ease-out),
+      filter 340ms var(--ease-out),
+      box-shadow 340ms var(--ease-out);
+  }
+
+  .pricingPanel[data-featured] {
+    --on: 1;
+  }
+
+  /* Once the pointer is anywhere in the row, the default-open panel gives up
+     its turn -- otherwise two panels would be open at once. */
+  .pricingTrack:hover .pricingPanel[data-featured],
+  .pricingTrack:focus-within .pricingPanel[data-featured] {
+    --on: 0;
+  }
+
+  /* Equal specificity to the rule above, so source order decides: the panel
+     actually being pointed at or focused wins. Keep these last. */
+  .pricingTrack:hover .pricingPanel:hover,
+  .pricingTrack:focus-within .pricingPanel:focus-within {
+    --on: 1;
+  }
+
+  .pricingTrack .pricingPanel:hover,
+  .pricingTrack .pricingPanel:focus-within,
+  .pricingTrack:not(:hover):not(:focus-within) .pricingPanel[data-featured] {
     box-shadow: var(--shadow-lg);
   }
-  .pricingCardPopular:hover {
-    border-color: var(--teal);
+
+  .pricingDetail {
+    overflow: hidden;
+    opacity: var(--on);
+    transition: opacity 300ms var(--ease-out);
+  }
+
+  /* Fixed width so the detail column is CLIPPED as the panel narrows rather
+     than reflowing into a one-word-per-line column on the way. It is at
+     opacity 0 by then, so the clip is never visible. The value is deliberately
+     a little narrower than the open panel's detail column: any wider and the
+     CTA clips, any narrower (or set to a percentage) and the collapsed panels
+     wrap their facts to six lines, which sets the height of the whole row. */
+  .pricingDetailInner {
+    width: 12.5rem;
+  }
+
+  .pricingFlag[data-visible] {
+    position: absolute;
+    top: -0.65rem;
+    left: 1.05rem;
+    margin-bottom: 0;
+  }
+
+  .pricingTier {
+    margin-top: 0.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pricingPanel,
+  .pricingDetail {
+    transition: none;
   }
 }
 
 /* ---- FAQ ----------------------------------------------------------------- */
 
 .faq {
-  padding-block: clamp(3rem, 7vw, 5rem);
-  border-top: 1px solid var(--border);
+  padding-block: clamp(3rem, 7vw, 5.5rem);
+  background: var(--bg-2);
 }
 
 .faqList {
@@ -569,8 +930,7 @@
 
 .footer {
   padding-block: clamp(2.5rem, 5vw, 3.5rem);
-  border-top: 1px solid var(--border);
-  background: var(--bg-2);
+  background: var(--bg);
 }
 
 .footerTop {
@@ -580,7 +940,6 @@
   justify-content: space-between;
   gap: 1.25rem;
   padding-bottom: 1.6rem;
-  border-bottom: 1px solid var(--border);
 }
 
 .footerBrand {
@@ -596,7 +955,7 @@
 
 /* Quiet closing nudge. Deliberately a text link rather than a third filled
    button: the page already carries a primary CTA in the header, the hero, the
-   founding band, and every pricing card. */
+   founding band, and every pricing panel. */
 .footerCta {
   display: inline-flex;
   align-items: center;
@@ -604,8 +963,8 @@
   min-height: 44px;
   font-weight: 600;
   font-size: 0.95rem;
-  /* --teal-deep rather than --teal: on the footer's tinted --bg-2 the lighter
-     teal lands at 4.46:1, just under the 4.5:1 minimum for body-size text. */
+  /* --teal-deep rather than --teal: on a tinted background the lighter teal
+     lands at 4.46:1, just under the 4.5:1 minimum for body-size text. */
   color: var(--teal-deep);
   border-bottom: 1px solid transparent;
   transition:

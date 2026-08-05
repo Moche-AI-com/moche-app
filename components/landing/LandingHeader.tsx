@@ -22,6 +22,7 @@ export function LandingHeader() {
           </Link>
         </nav>
       </div>
+      <span className={styles.headerProgress} aria-hidden />
     </header>
   );
 }

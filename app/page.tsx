@@ -4,6 +4,7 @@ import { getUser } from '@/lib/auth/guards';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { Hero } from '@/components/landing/Hero';
 import { Benefits } from '@/components/landing/Benefits';
+import { System } from '@/components/landing/System';
 import { FoundingBand } from '@/components/landing/FoundingBand';
 import { Pricing } from '@/components/landing/Pricing';
 import { Faq } from '@/components/landing/Faq';
@@ -46,7 +47,11 @@ export const metadata: Metadata = {
 // visitors to public/landing.html (that file stays on disk as an archive).
 // Authenticated hosts still fall through here and get redirected to /dashboard.
 //
-// Section order is deliberately short: hero, why, offer, price, objections.
+// Section order: hero, why, how it works, offer, price, objections. The
+// "how it works" section was added because the page went straight from four
+// benefit lines to the price with nothing explaining the mechanics -- a
+// visitor who was not already sold had to reverse-engineer the product from
+// the FAQ.
 // The standalone gallery section was folded into the hero and the "demo video
 // coming soon" placeholder was removed -- an empty state on a marketing page
 // costs more trust than the section earns.
@@ -59,6 +64,7 @@ export default async function Home() {
       <LandingHeader />
       <Hero />
       <Benefits />
+      <System />
       <FoundingBand />
       <Pricing />
       <Faq />

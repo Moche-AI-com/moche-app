@@ -4,30 +4,32 @@ import styles from './landing.module.css';
 
 // Outcome-led, per the product language rules: each title is a result the host
 // gets, not a feature the software has.
+//
+// Deliberately unboxed. This used to be four bordered, shadowed cards holding
+// two-line paragraphs, which made the densest block on the page out of the
+// least surprising claims. The card chrome and half the words are gone; the
+// detail line is now one clause, sized down, so the four titles read as a
+// scannable row rather than four things to read in full.
 const BENEFITS = [
   {
     Icon: Clock,
     title: 'Save hours every week',
-    detail:
-      'Routine guest questions get answered for you, so your team only steps in for the stays that actually need a person.',
+    detail: 'Routine questions answer themselves. You step in only where it counts.',
   },
   {
     Icon: Star,
-    title: 'Increase feedback and reviews',
-    detail:
-      'Guests get nudged toward leaving a review at the right moment in their stay, on every single booking.',
+    title: 'More reviews, better ratings',
+    detail: 'Every booking gets nudged toward a review at the right moment.',
   },
   {
     Icon: MessageSquare,
-    title: 'Answer guest questions instantly',
-    detail:
-      'Check-in, Wi-Fi, parking, house rules. Accurate answers arrive the moment a guest asks, day or night.',
+    title: 'Instant guest answers',
+    detail: 'Wi-Fi, parking, check-in, house rules — answered day or night.',
   },
   {
     Icon: Brain,
-    title: 'Never lose property knowledge again',
-    detail:
-      'Every detail about every property lives in one place instead of scattered notes, old texts, and memory.',
+    title: 'Knowledge that stays put',
+    detail: 'Every property detail in one place, not scattered notes and memory.',
   },
 ] as const;
 
@@ -38,17 +40,15 @@ export function Benefits() {
         <Reveal as="h2" id="benefits-heading" className={styles.sectionHeading}>
           Built for the way hosts actually work
         </Reveal>
-        <div className={styles.benefitsGrid}>
+        <ul className={styles.benefitsGrid}>
           {BENEFITS.map(({ Icon, title, detail }, i) => (
-            <Reveal key={title} delay={i * 70} className={styles.benefitsCard}>
-              <span className={styles.benefitsIcon} aria-hidden>
-                <Icon size={20} strokeWidth={1.75} />
-              </span>
+            <Reveal as="li" key={title} delay={i * 60} className={styles.benefitsItem}>
+              <Icon size={18} strokeWidth={1.75} aria-hidden className={styles.benefitsIcon} />
               <h3 className={styles.benefitsTitle}>{title}</h3>
-              <p className="muted">{detail}</p>
+              <p className={styles.benefitsDetail}>{detail}</p>
             </Reveal>
           ))}
-        </div>
+        </ul>
       </div>
     </section>
   );
