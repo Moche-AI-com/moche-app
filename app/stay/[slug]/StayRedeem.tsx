@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { KeyRound, Loader2 } from 'lucide-react';
+import { CodeInput } from '@/components/guest/CodeInput';
 
 type Phase = 'redeeming' | 'error' | 'code' | 'submitting-code' | 'code-error';
 
@@ -53,21 +54,28 @@ export function StayRedeem(props: {
     void redeem();
   }, [props.slug, props.token]);
 
-  async function submitCode(e: React.FormEvent) {
-    e.preventDefault();
+  // Takes the code explicitly rather than reading state, because the auto-submit
+  // path fires from the CodeInput's onComplete in the same tick the 4th digit is
+  // set, when `code` in this closure would still be the 3-digit value.
+  async function submitCode(submitted: string) {
+    if (submitted.length !== 4) return;
     setPhase('submitting-code');
     try {
       const res = await fetch(`/api/guest/${props.slug}/auth/code/confirm`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token: props.token, code }),
+        body: JSON.stringify({ token: props.token, code: submitted }),
       });
       if (!res.ok) {
+        // Clear the boxes so the next attempt starts from an empty, focused first
+        // digit instead of the guest having to delete four wrong digits.
+        setCode('');
         setPhase('code-error');
         return;
       }
       window.location.replace(`/g/${props.slug}`);
     } catch {
+      setCode('');
       setPhase('code-error');
     }
   }
@@ -99,7 +107,7 @@ export function StayRedeem(props: {
             <Loader2 size={16} className="animate-spin" /> Unlocking your concierge…
           </p>
         ) : phase === 'code' || phase === 'submitting-code' || phase === 'code-error' ? (
-          <form onSubmit={submitCode}>
+          <form onSubmit={(e) => { e.preventDefault(); void submitCode(code); }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem', color: accent, marginBottom: '.75rem' }}>
               <KeyRound size={18} />
               <span style={{ fontSize: '.85rem', fontWeight: 600 }}>Enter your 4-digit visit code</span>
@@ -107,30 +115,17 @@ export function StayRedeem(props: {
             <p style={{ opacity: 0.65, fontSize: '.82rem', marginBottom: '1rem' }}>
               Your host sent this along with the link. It confirms you’re the guest for this stay.
             </p>
-            <input
-              autoFocus
-              inputMode="numeric"
-              pattern="\d*"
-              maxLength={4}
+            <CodeInput
+              label="4-digit visit code"
+              accent={accent}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onChange={setCode}
+              onComplete={(full) => void submitCode(full)}
               disabled={phase === 'submitting-code'}
-              style={{
-                width: '100%',
-                textAlign: 'center',
-                fontSize: '1.6rem',
-                letterSpacing: '0.5rem',
-                fontWeight: 700,
-                padding: '.75rem',
-                borderRadius: 10,
-                border: `1px solid ${phase === 'code-error' ? '#ff6b6b' : 'rgba(255,255,255,0.18)'}`,
-                background: 'rgba(255,255,255,0.05)',
-                color: 'inherit',
-                marginBottom: '.75rem',
-              }}
+              error={phase === 'code-error'}
             />
             {phase === 'code-error' && (
-              <p style={{ color: '#ff8a8a', fontSize: '.82rem', marginBottom: '.75rem' }}>
+              <p role="alert" style={{ color: '#ff8a8a', fontSize: '.82rem', marginBottom: '.75rem' }}>
                 That code is invalid or has expired. Check with your host if this keeps happening.
               </p>
             )}

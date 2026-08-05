@@ -105,8 +105,8 @@ export function AiDisclosure({ variant = 'banner' }: { variant?: 'banner' | 'not
         >
           It answers from your host&rsquo;s property information and can make
           mistakes. Don&rsquo;t rely on it for emergency, medical, legal, or
-          financial decisions &mdash; for emergencies, contact local services or
-          your host first.
+          financial decisions. For emergencies, contact local services or your
+          host first.
         </div>
       )}
     </div>
