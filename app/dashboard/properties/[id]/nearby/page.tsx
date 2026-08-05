@@ -30,15 +30,16 @@ export default async function NearbyPlacesPage({ params }: { params: { id: strin
 
   return (
     <div>
-      <Link href={`/dashboard/properties/${params.id}`} className="muted" style={{ fontSize: '.85rem' }}>
-        ← Back to property
+      <Link href={`/dashboard/properties/${params.id}/local`} className="muted" style={{ fontSize: '.85rem' }}>
+        ← Local
       </Link>
       <h1 style={{ marginTop: '.5rem' }}>Nearby places</h1>
       <p className="muted" style={{ maxWidth: 640 }}>
         Auto-discovered within ~{formatRadiusMiles(NEARBY_RADIUS_M)} of your property using{' '}
         {geoProvider() === 'mapbox' ? 'Mapbox place data' : 'free OpenStreetMap data'}. Star the places
         you love, add a note, or hide the ones you don&apos;t. Your concierge recommends starred places
-        first (with your notes) and never mentions hidden ones.
+        first (with your notes) and never mentions hidden ones.{' '}
+        <Link href={`/dashboard/properties/${params.id}/local`}>See everything guests can be told →</Link>
       </p>
       <NearbyPlacesManager
         propertyId={params.id}
