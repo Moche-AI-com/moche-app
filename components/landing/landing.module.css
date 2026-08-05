@@ -467,15 +467,12 @@
    identical groups translated by exactly half the track makes the loop seam
    invisible. */
 @media (prefers-reduced-motion: no-preference) {
+  /* Deliberately no hover speed change. Retiming a running animation rescales
+     its elapsed time, so the track visibly jumps on both hover-in and
+     hover-out -- it reads as a glitch, not as deceleration. A constant rate is
+     the only version that stays calm under a moving cursor. */
   .marqueeTrack {
     animation: marqueeScroll 42s linear infinite;
-  }
-
-  /* Slow rather than stop on hover. A hard stop reads as a bug; deceleration
-     reads as the page noticing the cursor. */
-  .marquee:hover .marqueeTrack,
-  .marquee:focus-within .marqueeTrack {
-    animation-duration: 110s;
   }
 }
 

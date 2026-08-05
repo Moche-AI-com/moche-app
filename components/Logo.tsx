@@ -3,9 +3,13 @@ import Link from 'next/link';
 /**
  * Moche-AI bell-igloo mark — single source of truth.
  *
- * Design: an igloo/dome built from nested concentric arcs with an arched entrance,
- * topped by a coral "push-to-ring" service-bell button on a short stem — the igloo
- * doubles as a concierge service bell. Legible at 16/24/32px.
+ * Design: an igloo/dome of exactly two arcs -- an outer shell and one nested
+ * arc -- over a solid arched entrance, topped by a coral "push-to-ring"
+ * service-bell button on a short stem, so the igloo doubles as a concierge
+ * bell. Two arcs, not three: at 16-24px a third arc closes the gap between the
+ * nested arc and the entrance into a single teal smear, and the mark stops
+ * reading as a dome. Keep it at two anywhere this is redrawn -- app/icon.svg,
+ * lib/auth/auth-email.ts, app/g/[slug]/GuestPortal.tsx.
  *
  * variant:
  *  - 'gradient' (default): teal→iris gradient stroke, subtle glow. For dark UI.
@@ -44,9 +48,8 @@ export function DomeMark({
         <path d="M5 34h38" stroke={stroke} strokeWidth="2.4" strokeLinecap="round" />
         {/* outer igloo dome */}
         <path d="M8 34a16 16 0 0 1 32 0" stroke={stroke} strokeWidth="2.4" fill="none" />
-        {/* nested igloo arcs */}
-        <path d="M13 34a11 11 0 0 1 22 0" stroke={stroke} strokeWidth="1.7" opacity="0.7" fill="none" />
-        <path d="M18.5 34a5.5 5.5 0 0 1 11 0" stroke={stroke} strokeWidth="1.7" opacity="0.55" fill="none" />
+        {/* single nested arc -- see the note above on why there is only one */}
+        <path d="M13 34a11 11 0 0 1 22 0" stroke={stroke} strokeWidth="2.4" opacity="0.5" fill="none" />
         {/* arched entrance */}
         <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill={dome} opacity="0.9" />
         {/* push-to-ring service-bell button on a stem */}
