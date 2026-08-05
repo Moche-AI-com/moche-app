@@ -5,6 +5,14 @@ import { getSessionContext } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getStripe, priceIdFor, BillingNotConfiguredError } from '@/lib/billing/stripe';
 import { publicEnv, serverEnv } from '@/lib/env';
+import {
+  PLANS,
+  SELF_SERVE_PLAN_IDS,
+  FOUNDING_TRIAL_DAYS,
+  FOUNDING_TRIAL_PROPERTY_LIMIT,
+  TOP_TIER_PLAN_ID,
+  type PlanId,
+} from '@/lib/constants';
 import { recordAcceptances } from '@/lib/legal/acceptance';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
@@ -12,8 +20,13 @@ import { log } from '@/lib/log';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Derived from PLANS so a new tier cannot be added to the grid and silently stay
+// unbuyable, and so the sales-assisted tiers (enterprise, custom) are rejected here
+// rather than failing later on a missing price id.
+const SELF_SERVE = SELF_SERVE_PLAN_IDS as [PlanId, ...PlanId[]];
+
 const bodySchema = z.object({
-  planId: z.enum(['starter', 'pro', 'portfolio']),
+  planId: z.enum(SELF_SERVE as unknown as [string, ...string[]]).transform((v) => v as PlanId),
   interval: z.enum(['monthly', 'annual']).default('monthly'),
   // Clickwrap: the checkout UI presents an unchecked-by-default agreement box.
   // Required true so a paid subscription is never created without recorded consent.
@@ -52,6 +65,15 @@ export async function POST(req: Request) {
     throw e;
   }
 
+  // Defence in depth: the zod enum already excludes them, but a sales-assisted tier
+  // must never reach Stripe even if that enum is widened by accident.
+  if (!PLANS[planId]?.selfServe) {
+    return NextResponse.json(
+      { error: 'That plan is arranged with our team. Please contact sales.' },
+      { status: 400 },
+    );
+  }
+
   const price = priceIdFor(planId, interval);
   if (!price) {
     return NextResponse.json({ error: 'That plan is not available right now.' }, { status: 503 });
@@ -78,9 +100,15 @@ export async function POST(req: Request) {
     // never create duplicate customers across repeated checkouts.
     const { data: existing } = await supabase
       .from('subscriptions')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, stripe_subscription_id')
       .eq('host_account_id', hostAccountId)
       .maybeSingle();
+
+    // The Founding Member offer is one free month on the top tier, once per account.
+    // Anyone who has already had a Stripe subscription has already consumed it, so
+    // the trial is offered only when no subscription id was ever recorded. Without
+    // this check a host could cancel and re-checkout for an unlimited free ride.
+    const isFoundingTrialEligible = !existing?.stripe_subscription_id;
 
     let customerId = existing?.stripe_customer_id ?? null;
     if (!customerId) {
@@ -110,8 +138,31 @@ export async function POST(req: Request) {
       line_items: [{ price, quantity: 1 }],
       client_reference_id: hostAccountId,
       subscription_data: {
-        metadata: { host_account_id: hostAccountId, plan: planId },
+        metadata: {
+          host_account_id: hostAccountId,
+          plan: planId,
+          ...(isFoundingTrialEligible
+            ? {
+                founding_member: 'true',
+                trial_grants_plan: TOP_TIER_PLAN_ID,
+                trial_property_limit: String(FOUNDING_TRIAL_PROPERTY_LIMIT),
+              }
+            : {}),
+        },
+        ...(isFoundingTrialEligible
+          ? {
+              trial_period_days: FOUNDING_TRIAL_DAYS,
+              // A card is collected up front (payment_method_collection: 'always'
+              // below), so if it somehow goes missing we cancel rather than leave a
+              // subscription that can never be charged.
+              trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
+            }
+          : {}),
       },
+      // Stripe defaults trials to 'if_required', which would let a host start a free
+      // month with no card and force a second payment step at conversion. Requiring
+      // the card now means the trial converts on its own.
+      payment_method_collection: 'always',
       metadata: { host_account_id: hostAccountId, plan: planId },
       success_url: `${publicEnv.appUrl}/dashboard/billing?status=success`,
       cancel_url: `${publicEnv.appUrl}/dashboard/billing?status=cancelled`,
@@ -127,7 +178,7 @@ export async function POST(req: Request) {
       actorProfileId: ctx.user.id,
       hostAccountId,
       targetType: 'subscription',
-      metadata: { plan: planId, interval },
+      metadata: { plan: planId, interval, foundingTrial: isFoundingTrialEligible },
     });
 
     return NextResponse.json({ url: session.url });

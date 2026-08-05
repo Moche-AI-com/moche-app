@@ -1,28 +1,60 @@
 import type { Database } from '@/lib/database.types';
 
 export type BrainCategory = Database['public']['Enums']['brain_category'];
-export type PlanId = 'starter' | 'pro' | 'portfolio';
+export type PlanId =
+  | 'starter'
+  | 'pro'
+  | 'growth_lower'
+  | 'growth_upper'
+  | 'portfolio'
+  | 'enterprise'
+  | 'custom';
 export type BillingInterval = 'monthly' | 'annual';
+
+// Annual billing is 10x the monthly rate, which is two months free. This multiplier
+// is duplicated on the marketing page by design (that file is owned separately); the
+// numbers below are the single source of truth for anything the product enforces.
+export const ANNUAL_MULTIPLIER = 10;
+
+// Overage price per guest conversation once the pooled monthly allowance is used up.
+// We throttle rather than cut off (see lib/billing/throttle.ts).
+export const CONVERSATION_OVERAGE_USD = 0.02;
 
 export interface Plan {
   id: PlanId;
   name: string;
-  monthly: number; // USD/mo
-  annual: number; // USD/yr (2 months free)
+  monthly: number; // USD/mo, 0 for sales-assisted tiers
+  annual: number; // USD/yr, 0 for sales-assisted tiers
+  // Inclusive [min, max] property count for the tier. `Infinity` upper bound means
+  // "no ceiling" (the custom tier). propertyLimit mirrors the upper bound and stays
+  // the field enforcement code reads, so existing call sites keep working.
+  propertyRange: [number, number];
   propertyLimit: number;
+  // Pooled guest conversations per billing period, counted per host account (never
+  // per property). 0 means "agreed at contract" for sales-assisted tiers.
+  conversationAllowance: number;
+  // False for tiers that cannot be bought without talking to a human. These render
+  // a contact-sales action instead of a checkout button and are rejected by the
+  // checkout API.
+  selfServe: boolean;
   reviewNudge: boolean;
   smsEscalation: boolean;
   conciergeCustomization: boolean; // tone / creativity / escalation sensitivity / portal modules
   features: string[];
 }
 
+// Ordered cheapest to most expensive. Object key order is the render order on the
+// billing page, so do not reorder without checking that page.
 export const PLANS: Record<PlanId, Plan> = {
   starter: {
     id: 'starter',
     name: 'Starter',
     monthly: 29,
     annual: 290,
+    propertyRange: [1, 1],
     propertyLimit: 1,
+    conversationAllowance: 50,
+    selfServe: true,
     reviewNudge: false,
     smsEscalation: false,
     conciergeCustomization: false,
@@ -39,7 +71,10 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Pro',
     monthly: 69,
     annual: 690,
-    propertyLimit: 3,
+    propertyRange: [2, 5],
+    propertyLimit: 5,
+    conversationAllowance: 200,
+    selfServe: true,
     reviewNudge: false,
     smsEscalation: true,
     conciergeCustomization: true,
@@ -55,23 +90,116 @@ export const PLANS: Record<PlanId, Plan> = {
       'Maintenance flag routing',
     ],
   },
-  portfolio: {
-    id: 'portfolio',
-    name: 'Portfolio',
+  growth_lower: {
+    id: 'growth_lower',
+    name: 'Growth',
     monthly: 119,
     annual: 1190,
-    propertyLimit: 8,
+    propertyRange: [6, 10],
+    propertyLimit: 10,
+    conversationAllowance: 500,
+    selfServe: true,
     reviewNudge: true,
     smsEscalation: true,
     conciergeCustomization: true,
     features: [
       'Everything in Pro',
       'Post-stay review nudge',
-      'Up to 8 properties',
+      'Up to 10 properties',
+    ],
+  },
+  growth_upper: {
+    id: 'growth_upper',
+    name: 'Scale',
+    monthly: 169,
+    annual: 1690,
+    propertyRange: [11, 15],
+    propertyLimit: 15,
+    conversationAllowance: 800,
+    selfServe: true,
+    reviewNudge: true,
+    smsEscalation: true,
+    conciergeCustomization: true,
+    features: [
+      'Everything in Growth',
+      'Up to 15 properties',
       'Priority support',
     ],
   },
+  portfolio: {
+    id: 'portfolio',
+    name: 'Portfolio',
+    monthly: 249,
+    annual: 2490,
+    propertyRange: [16, 40],
+    propertyLimit: 40,
+    conversationAllowance: 1500,
+    selfServe: true,
+    reviewNudge: true,
+    smsEscalation: true,
+    conciergeCustomization: true,
+    features: [
+      'Everything in Scale',
+      'Up to 40 properties',
+      'Dedicated success contact',
+    ],
+  },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Enterprise',
+    monthly: 0,
+    annual: 0,
+    propertyRange: [41, 100],
+    propertyLimit: 100,
+    conversationAllowance: 0,
+    selfServe: false,
+    reviewNudge: true,
+    smsEscalation: true,
+    conciergeCustomization: true,
+    features: [
+      'Everything in Portfolio',
+      '41 to 100 properties',
+      'Pooled allowance agreed at contract',
+      'Onboarding assistance',
+    ],
+  },
+  custom: {
+    id: 'custom',
+    name: 'Custom',
+    monthly: 0,
+    annual: 0,
+    propertyRange: [101, Number.POSITIVE_INFINITY],
+    propertyLimit: Number.MAX_SAFE_INTEGER,
+    conversationAllowance: 0,
+    selfServe: false,
+    reviewNudge: true,
+    smsEscalation: true,
+    conciergeCustomization: true,
+    features: [
+      'Everything in Enterprise',
+      '101+ properties',
+      'Custom terms, allowance and support SLA',
+    ],
+  },
 };
+
+// Tiers a host can buy on their own, in render order.
+export const SELF_SERVE_PLAN_IDS = (Object.keys(PLANS) as PlanId[]).filter(
+  (id) => PLANS[id].selfServe,
+);
+
+// The tier a Founding Member trial grants during the trial window. Kept as a named
+// constant so the trial and the paid grid can never drift apart.
+export const TOP_TIER_PLAN_ID: PlanId = 'portfolio';
+
+// Founding Member offer: every signup gets one month on the top tier at $0, with a
+// card required up front so conversion needs no second payment step. The property
+// cap during the trial is deliberately lower than the top tier's own cap.
+export const FOUNDING_TRIAL_DAYS = 30;
+export const FOUNDING_TRIAL_PROPERTY_LIMIT = 5;
+
+// Where a host is sent to buy a sales-assisted tier.
+export const SALES_EMAIL = 'hostspark.org@gmail.com';
 
 // The one-time ACTIVATION_FEE_USD / ACTIVATION_FEE_ENABLED pair was removed for
 // launch. It had been permanently disabled (ACTIVATION_FEE_ENABLED = false) while

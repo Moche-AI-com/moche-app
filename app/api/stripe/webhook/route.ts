@@ -5,6 +5,7 @@ import { serverEnv, hasServiceRole } from '@/lib/env';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notify } from '@/lib/notify';
 import { log } from '@/lib/log';
+import { FOUNDING_TRIAL_PROPERTY_LIMIT } from '@/lib/constants';
 import type { Database } from '@/lib/database.types';
 
 export const runtime = 'nodejs';
@@ -38,8 +39,25 @@ function idOf(v: string | { id: string } | null | undefined): string | null {
 function fieldsFromSubscription(sub: Stripe.Subscription, statusOverride?: SubStatus): SubscriptionUpdate {
   const item = sub.items.data[0];
   const priceId = item?.price?.id ?? null;
+  const status = statusOverride ?? mapStatus(sub.status);
+
+  // Founding Member trials carry their property cap in subscription metadata, set by
+  // the checkout route. Parsed defensively: metadata is a free-form string map that a
+  // dashboard edit could corrupt, and a NaN here would become a null property cap.
+  const metaTrialLimit = Number.parseInt(String(sub.metadata?.trial_property_limit ?? ''), 10);
+  const trialPropertyLimit =
+    Number.isFinite(metaTrialLimit) && metaTrialLimit > 0
+      ? metaTrialLimit
+      : FOUNDING_TRIAL_PROPERTY_LIMIT;
+
   return {
-    status: statusOverride ?? mapStatus(sub.status),
+    status,
+    trial_property_limit: trialPropertyLimit,
+    // Clear the read-only latch whenever Stripe reports a status that entitles the
+    // account to service. Statuses that should degrade the account are handled by
+    // READ_ONLY_STATUSES in lib/billing/entitlements.ts, so the latch only needs to
+    // be released here, never set.
+    is_read_only: status === 'trialing' || status === 'active' ? false : undefined,
     plan: planFromPriceId(priceId),
     stripe_customer_id: idOf(sub.customer),
     stripe_subscription_id: sub.id,
