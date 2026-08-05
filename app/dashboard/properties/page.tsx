@@ -42,7 +42,7 @@ export default async function PropertiesPage() {
             New property
           </Link>
         ) : (
-          <Link href="/dashboard/billing" className="btn btn-coral">Upgrade to add more</Link>
+          <Link href="/dashboard/profile/billing" className="btn btn-coral">Upgrade to add more</Link>
         )}
       </div>
 

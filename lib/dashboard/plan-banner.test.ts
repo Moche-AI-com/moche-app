@@ -89,7 +89,7 @@ describe('planBannerFor', () => {
     const b = planBannerFor(ent(), NOW);
     expect(b?.variant).toBe('free_build');
     expect(b?.tone).toBe('info');
-    expect(b?.ctaHref).toBe('/dashboard/billing');
+    expect(b?.ctaHref).toBe('/dashboard/profile/billing');
   });
 
   it('pluralizes the property cap instead of hardcoding the singular', () => {
