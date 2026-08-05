@@ -74,3 +74,41 @@ export async function deleteObject(key: string): Promise<void> {
   const client = getS3Client();
   await client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET(), Key: key }));
 }
+
+// Server-side object write. Used by the cover-image pipeline, which must resize
+// with Sharp before storing, so those bytes necessarily transit the app server
+// (unlike the presigned direct-upload path above). Keys are always built by the
+// caller from trusted parts — never from raw client input.
+export async function putObject(params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+  cacheControl?: string;
+}): Promise<void> {
+  const client = getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET(),
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+      ...(params.cacheControl ? { CacheControl: params.cacheControl } : {}),
+    }),
+  );
+}
+
+// Server-side object read. The bucket is private, so guest-visible assets are
+// streamed through an app route rather than linked directly.
+export async function getObjectBytes(key: string): Promise<{ body: Buffer; contentType: string } | null> {
+  const client = getS3Client();
+  try {
+    const res = await client.send(new GetObjectCommand({ Bucket: S3_BUCKET(), Key: key }));
+    if (!res.Body) return null;
+    const bytes = await res.Body.transformToByteArray();
+    return { body: Buffer.from(bytes), contentType: res.ContentType ?? 'application/octet-stream' };
+  } catch (e) {
+    const name = (e as { name?: string } | null)?.name ?? '';
+    if (name === 'NoSuchKey' || name === 'NotFound') return null;
+    throw e;
+  }
+}

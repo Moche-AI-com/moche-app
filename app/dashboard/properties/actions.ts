@@ -80,7 +80,17 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
   // Server-safe analytics: identified by host user id, no property PII beyond its id.
   await capture('property_created', ctx.user.id, { property_id: property.id });
 
-  redirect(`/dashboard/properties/${property.id}`);
+  // Optional listing link (backlog P4-02). Deliberately NOT fetched here: a slow
+  // or bot-walled listing page must never delay or fail property creation. The
+  // property page picks it up and imports it into the review queue.
+  const listingUrl = String(formData.get('listingUrl') ?? '').trim();
+  const importable = listingUrl && /^https?:\/\//i.test(listingUrl) && listingUrl.length <= 2000;
+
+  redirect(
+    importable
+      ? `/dashboard/properties/${property.id}?import=${encodeURIComponent(listingUrl)}`
+      : `/dashboard/properties/${property.id}`,
+  );
 }
 
 export async function updatePropertyAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
@@ -102,7 +112,10 @@ export async function updatePropertyAction(_prev: PropertyFormState, formData: F
     lng: formData.get('lng') ?? '',
     brandPrimary: formData.get('brandPrimary') || '',
     brandAccent: formData.get('brandAccent') || '',
-    coverImageUrl: formData.get('coverImageUrl') || '',
+    // Cover images are managed by their own route (POST /api/properties/:id/cover)
+    // and are NOT part of this form any more. Only parse the field when it is
+    // actually present, so submitting the details form can never blank a cover.
+    ...(formData.has('coverImageUrl') ? { coverImageUrl: formData.get('coverImageUrl') || '' } : {}),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the details.' };
   const d = parsed.data;
@@ -124,7 +137,7 @@ export async function updatePropertyAction(_prev: PropertyFormState, formData: F
       lng: d.lng ?? null,
       brand_primary: d.brandPrimary || null,
       brand_accent: d.brandAccent || null,
-      cover_image_url: d.coverImageUrl || null,
+      ...(formData.has('coverImageUrl') ? { cover_image_url: d.coverImageUrl || null } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', propertyId);

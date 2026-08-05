@@ -8,12 +8,19 @@ import { PropertyStatusControls } from './StatusControls';
 import { SessionsPanel } from './SessionsPanel';
 import { PropertyLinkMinter } from './PropertyLinkMinter';
 import { CopyPortalLink } from './CopyPortalLink';
+import { ListingImportKickoff } from './ListingImportKickoff';
 
 export const dynamic = 'force-dynamic';
 
 const STATUS_BADGE: Record<string, string> = { live: 'badge-teal', paused: 'badge-coral' };
 
-export default async function PropertyDetailPage({ params }: { params: { id: string } }) {
+export default async function PropertyDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { import?: string };
+}) {
   const access = await requirePropertyAccess(params.id);
   const { property, can } = access;
   const supabase = createClient();
@@ -43,6 +50,11 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
   const prompts = gapPrompts(health);
   const portalUrl = `${publicEnv.appUrl}/g/${property.slug}`;
 
+  // Only an https listing link is ever handed to the client importer; anything
+  // else in the query string is ignored outright.
+  const rawImport = typeof searchParams.import === 'string' ? searchParams.import.trim() : '';
+  const listingImportUrl = /^https?:\/\//i.test(rawImport) && rawImport.length <= 2000 ? rawImport : null;
+
   // Guest access management is available to owners and co-hosts who can reply to guests.
   const canManageAccess = can.replyGuests;
   const sessions = canManageAccess ? await listPropertySessions(property.id, true) : [];
@@ -69,6 +81,10 @@ export default async function PropertyDetailPage({ params }: { params: { id: str
           />
         )}
       </div>
+
+      {listingImportUrl && can.editBrain && (
+        <ListingImportKickoff propertyId={property.id} listingUrl={listingImportUrl} />
+      )}
 
       {/* Brain Health */}
       <div className="card" style={{ padding: '1.5rem', marginBottom: '1.25rem' }}>
