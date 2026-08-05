@@ -7,6 +7,7 @@ import { updatePropertyAction, updatePropertySettingsAction, updateReviewNudgeAc
 import { RESTRICTED_TOPIC_OPTIONS, TONE_PRESETS } from '@/lib/constants';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { PropertyCoverUploader } from '@/components/PropertyCoverUploader';
 
 const COMMON_TZ = [
   'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
@@ -94,6 +95,7 @@ export function SettingsForms({
   return (
     <div style={{ display: 'grid', gap: '1.5rem', maxWidth: 720 }}>
       <BrandingForm property={property} />
+      <PropertyCoverUploader propertyId={property.id} initialUrl={property.cover_image_url} />
       {settings.legacy_tone_pending ? <LegacyToneBanner propertyId={property.id} settings={settings} /> : null}
       <ConciergeForm propertyId={property.id} settings={settings} premiumUnlocked={premiumUnlocked} planName={planName} />
       <ReviewNudgeForm propertyId={property.id} settings={settings} reviewUnlocked={reviewUnlocked} planName={planName} />
@@ -336,11 +338,6 @@ function BrandingForm({ property }: { property: Property }) {
             <input className="input" id="brandAccent" name="brandAccent" maxLength={7} defaultValue={property.brand_accent ?? ''} placeholder="#7C6FF0" />
           </div>
         </div>
-      </div>
-
-      <div className="field">
-        <label className="label" htmlFor="coverImageUrl">Cover image URL</label>
-        <input className="input" id="coverImageUrl" name="coverImageUrl" maxLength={2000} defaultValue={property.cover_image_url ?? ''} placeholder="https://… (optional hero image for the portal)" />
       </div>
 
       <div style={{ marginTop: '.5rem' }}>
