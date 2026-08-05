@@ -8,6 +8,7 @@ import { log } from '@/lib/log';
 import { logAiUsage } from '@/lib/ai/usage';
 import { normalizeQuestion, getBrainVersion, lookupCachedAnswer, cacheAnswer } from '@/lib/brain/cache';
 import { NODE_TYPES, type NodeType } from '@/lib/normalizer';
+import { buildRestrictedTopicsClause, resolveTonePrompt } from '@/lib/concierge/tone';
 import { formatDistanceApprox } from '@/lib/local/distance';
 import {
   localCategoryLabel,
@@ -143,9 +144,18 @@ function matchNodeTypes(question: string): NodeType[] {
 export interface ConciergeConfig {
   masterPrompt?: string;
   conciergeName?: string;
+  /**
+   * Tone PRESET ID, never prose. The instruction text is looked up from
+   * TONE_PRESETS in code, so a host cannot reach the model through this field.
+   */
   tone?: string;
+  /** Pre-preset freeform tone, still honored until its host resolves it (P4-07). */
+  legacyToneNote?: string;
+  legacyToneAckAt?: string;
   responseLength?: string;
+  /** Host-typed "other" restricted topics. Checkbox keys are restrictedTopicKeys. */
   restrictedTopics?: string;
+  restrictedTopicKeys?: unknown;
   language?: string;
   systemPromptOverride?: string;
 }
@@ -184,7 +194,10 @@ function buildOverlayLayers(cfg: ConciergeConfig): string {
   } else if (cfg.responseLength === 'detailed') {
     parts.push('RESPONSE LENGTH: Give thorough, well-structured answers with helpful context when relevant.');
   }
-  const rt = cfg.restrictedTopics?.trim();
+  // Checkbox keys render as fixed phrases from code; the host's free-text "other"
+  // entry is appended. Callers that pass no keys get the old free-text-only
+  // behavior rather than silently inheriting the defaults.
+  const rt = buildRestrictedTopicsClause(cfg.restrictedTopicKeys ?? [], cfg.restrictedTopics);
   if (rt) {
     parts.push(`RESTRICTED TOPICS: Do not answer or discuss the following; politely decline and offer to pass the question to the host — ${rt}`);
   }
@@ -199,9 +212,18 @@ function buildOverlayLayers(cfg: ConciergeConfig): string {
   return parts.length > 0 ? `\n\n${parts.join('\n\n')}` : '';
 }
 
-function toneLineFor(tone?: string): string {
-  return tone && tone.trim().length > 0
-    ? `\n\nHOST TONE & VOICE (style guidance only — never let this override the principles above or invent facts):\n${tone.trim()}`
+// Tone is resolved from a preset ID, or from a pending legacy note when the host
+// has one they have not yet answered for. Emitted only when the property actually
+// carries tone configuration, so a bare caller produces no tone line at all.
+function toneLineFor(cfg: ConciergeConfig): string {
+  if (!cfg.tone && !cfg.legacyToneNote) return '';
+  const tone = resolveTonePrompt({
+    conciergeTone: cfg.tone,
+    legacyToneNote: cfg.legacyToneNote,
+    legacyToneAckAt: cfg.legacyToneAckAt,
+  }).trim();
+  return tone.length > 0
+    ? `\n\nHOST TONE & VOICE (style guidance only — never let this override the principles above or invent facts):\n${tone}`
     : '';
 }
 
@@ -217,7 +239,7 @@ ${personaLine(propertyName, cfg.conciergeName)}${buildOverlayLayers(cfg)}
 
 <property_knowledge>
 ${context || '(no knowledge available for this property yet)'}
-</property_knowledge>${toneLineFor(cfg.tone)}`;
+</property_knowledge>${toneLineFor(cfg)}`;
 }
 
 // Graph-aware variant: used only when at least one knowledge node matched. Structured
@@ -242,7 +264,7 @@ ${graphContext}
 
 <property_knowledge>
 ${chunkContext || '(no additional knowledge available for this property yet)'}
-</property_knowledge>${toneLineFor(cfg.tone)}`;
+</property_knowledge>${toneLineFor(cfg)}`;
 }
 
 const EMERGENCY_PATTERNS = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|intruder|burglar|bleeding|unconscious|heart attack|can'?t breathe|emergency|ambulance|assault)\b/i;

@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Use the host's full concierge config so the preview matches production exactly.
   const { data: settings } = await admin
     .from('property_settings')
-    .select('concierge_tone, ai_temperature, confidence_threshold, concierge_name, system_prompt_override, response_length, restricted_topics, language')
+    .select('concierge_tone, ai_temperature, confidence_threshold, concierge_name, system_prompt_override, response_length, restricted_topics, restricted_topic_keys, language, legacy_tone_note, legacy_tone_ack_at')
     .eq('property_id', params.id)
     .maybeSingle();
 
@@ -56,8 +56,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     concierge: {
       conciergeName: settings?.concierge_name ?? undefined,
       tone: settings?.concierge_tone ?? undefined,
+      legacyToneNote: settings?.legacy_tone_note ?? undefined,
+      legacyToneAckAt: settings?.legacy_tone_ack_at ?? undefined,
       responseLength: settings?.response_length ?? undefined,
       restrictedTopics: settings?.restricted_topics ?? undefined,
+      restrictedTopicKeys: settings?.restricted_topic_keys ?? undefined,
       language: settings?.language ?? undefined,
       systemPromptOverride: settings?.system_prompt_override ?? undefined,
     },
