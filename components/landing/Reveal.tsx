@@ -19,6 +19,7 @@ export function Reveal({
   className,
   id,
   eager = false,
+  dataAttrs,
 }: {
   children: ReactNode;
   as?: ElementType;
@@ -40,6 +41,15 @@ export function Reveal({
    * play before it is scrolled to.
    */
   eager?: boolean;
+  /**
+   * Extra data-* attributes to put on the revealed element.
+   *
+   * Exists because a revealed element is sometimes also a styling hook for its
+   * parent (the pricing rail keys its default-open panel off data-featured),
+   * and wrapping it in another div to carry the attribute would break the
+   * flex/grid relationship with that parent.
+   */
+  dataAttrs?: Record<string, string | undefined>;
 }) {
   const ref = useRef<HTMLElement | null>(null);
   const [shown, setShown] = useState(false);
@@ -79,6 +89,7 @@ export function Reveal({
       className={className ? `reveal ${className}` : 'reveal'}
       data-shown={shown ? 'true' : 'false'}
       data-eager={eager ? '' : undefined}
+      {...dataAttrs}
       style={delay ? ({ '--reveal-delay': `${delay}ms` } as React.CSSProperties) : undefined}
     >
       {children}
