@@ -242,6 +242,35 @@
     will-change: auto;
   }
 
+  /* ---- Reveal failsafes -- do not remove ------------------------------
+     Every section of the landing page is wrapped in <Reveal>, so the page is
+     served entirely at `opacity: 0` and depends on client JS to become
+     visible. Two failure modes produced a completely blank page below the
+     header, and each needs its own guard:
+
+     1. JS never runs at all (disabled, blocked, or a renderer that applies
+        CSS but not JS -- link-preview bots and screenshot services do exactly
+        this). The blocking boot script in app/layout.tsx sets data-js='on'
+        before first paint, so its ABSENCE is a reliable "no JS" signal.
+        Content is shown immediately and unanimated.
+
+     2. The boot script ran but React never hydrated (chunk 404, runtime
+        error, aborted download). data-js='on' is set, yet no <Reveal> effect
+        ever fires, so data-shown stays 'false' forever. The boot script waits
+        2.5s for the data-hydrated marker set by <Providers>; if it never
+        arrives it sets data-reveal-failsafe and everything is forced visible.
+
+     Both are scoped to the html element rather than implemented as a CSS
+     animation on .reveal itself, because a filling animation would also
+     override the scroll transition and reveal every below-the-fold section
+     early -- defeating the effect it is meant to protect. */
+  html:not([data-js='on']) .reveal,
+  html[data-reveal-failsafe='on'] .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
   /* Reduced motion: content must still be visible, so the end state is
      applied unconditionally and only the movement is removed. */
   @media (prefers-reduced-motion: reduce) {

@@ -31,9 +31,21 @@ const CSP_DIRECTIVES = [
   "worker-src 'self' blob:",
   "frame-src 'self' https://challenges.cloudflare.com",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://challenges.cloudflare.com",
-  'upgrade-insecure-requests',
   'report-uri /api/csp-report',
 ].join('; ');
+
+// `upgrade-insecure-requests` is deliberately NOT in CSP_DIRECTIVES above.
+// Browsers ignore it when it arrives in a report-only policy and log
+// "The Content Security Policy directive 'upgrade-insecure-requests' is ignored
+// when delivered in a report-only policy" as a console error on every page load
+// -- noise that buries real errors during launch.
+//
+// So it ships as its own ENFORCING header instead. A policy containing only this
+// directive has no fetch directives, so it blocks nothing; it just upgrades any
+// stray http:// subresource to https://. The security benefit is kept and the
+// console stays clean, and it is independent of promoting CSP_DIRECTIVES out of
+// report-only later.
+const CSP_ENFORCED_DIRECTIVES = 'upgrade-insecure-requests';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -53,6 +65,7 @@ const nextConfig = {
           // Force HTTPS for a year incl. subdomains (Vercel serves valid certs).
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
           { key: 'Content-Security-Policy-Report-Only', value: CSP_DIRECTIVES },
+          { key: 'Content-Security-Policy', value: CSP_ENFORCED_DIRECTIVES },
           // Vercel serves files from public/ with `access-control-allow-origin: *`,
           // which let any origin read our pages cross-origin. Nothing here is a public
           // API, so pin the header to same-origin and override that default.

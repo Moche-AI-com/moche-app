@@ -8,14 +8,38 @@ import { FoundingBand } from '@/components/landing/FoundingBand';
 import { Pricing } from '@/components/landing/Pricing';
 import { Faq } from '@/components/landing/Faq';
 import { LandingFooter } from '@/components/landing/LandingFooter';
+import { SITE_URL, SITE_NAME, DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/seo';
 
-// Page-level metadata overrides the root layout's title for this route only.
+// Page-level metadata overrides the root layout for this route only.
 // The old landing.html title ("Moche-AI — An Intelligent Concierge for Every
 // Home") violates the product's no-"AI"-in-headline rule; this replaces it.
+//
+// `robots` is the important line. The root layout defaults every route to
+// noindex/nofollow to protect /dashboard and the per-guest /stay and /answer
+// URLs. The landing page inherited that default, so the live marketing site was
+// serving `noindex, nofollow` and could not be indexed at all. This opts the one
+// page that must rank back in, without weakening the default for anything else.
 export const metadata: Metadata = {
-  title: 'Moche-AI — Run every property from one workspace',
-  description:
-    'Save hours every week, answer guest questions instantly, and never lose property knowledge again -- all from one guest operations workspace for short-term rentals.',
+  title: DEFAULT_TITLE,
+  description: DEFAULT_DESCRIPTION,
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large' },
+  },
+  alternates: { canonical: SITE_URL },
+  // siteName and locale are repeated from the root layout on purpose: Next
+  // replaces the `openGraph` object wholesale rather than deep-merging it, so
+  // omitting them here drops og:site_name and og:locale from the one page that
+  // actually gets shared.
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    locale: 'en_US',
+    url: SITE_URL,
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+  },
 };
 
 // This is the ONLY homepage. middleware.ts no longer rewrites anonymous
