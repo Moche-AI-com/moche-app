@@ -46,7 +46,10 @@
   --chart-track: rgba(46,40,32,.10);
   --text:#131C28;
   --text-muted:#4E5A68;
-  --text-faint:#66717E;
+  /* Bumped from #66717E for the P6-03 audit: the old value was 4.26:1 on --bg-2
+     and 4.49:1 on --surface-2, both short of AA for the timestamps and helper
+     lines that use it. This clears 4.5:1 on all four surfaces. */
+  --text-faint:#5E6975;
   --teal:#0A7A72;
   --teal-deep:#08605A;
   --teal-vivid:#0FA79A;
@@ -74,7 +77,8 @@
   --border-strong: rgba(120,160,210,.28);
   --text:#EAF1FA;
   --text-muted:#9DB0C6;
-  --text-faint:#6F87A3;
+  /* Bumped from #6F87A3: 4.41:1 on --surface-2 in dark mode, just under AA. */
+  --text-faint:#7690AD;
   --teal:#33E6D4;
   --teal-deep:#12B5AD;
   --iris:#7C8CFF;
@@ -1034,4 +1038,78 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
 
   a { text-decoration: none; color: #000 !important; }
   @page { margin: 16mm; }
+}
+
+/* ---- Dashboard breadcrumbs (P6-06) ------------------------------------
+   The trail is the durable wayfinding; the Back button is a session-only
+   convenience that the component itself hides after a reload. Touch targets
+   are 44px tall on the interactive elements per the mobile baseline. */
+.crumb-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem .75rem;
+  margin: 0 0 1.25rem;
+}
+.crumb-back {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  min-height: 44px;
+  padding: 0 .7rem 0 .45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: .82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--tr), border-color var(--tr), background var(--tr);
+}
+.crumb-back:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); }
+.crumb-nav { min-width: 0; }
+.crumb-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 .1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crumb-item { display: inline-flex; align-items: center; min-width: 0; }
+.crumb-sep { color: var(--text-faint); flex: none; margin: 0 .15rem; }
+.crumb-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 .3rem;
+  color: var(--text-muted);
+  font-size: .82rem;
+  border-radius: var(--radius-sm);
+  transition: color var(--tr);
+  white-space: nowrap;
+}
+.crumb-link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.crumb-current {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 .3rem;
+  color: var(--text);
+  font-size: .82rem;
+  font-weight: 600;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .crumb-current { max-width: 14ch; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crumb-back, .crumb-link { transition: none; }
+}
+
+@media print {
+  .crumb-row { display: none !important; }
 }

@@ -3,6 +3,7 @@ import { MapPin, Star, Pencil, Compass } from 'lucide-react';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { formatDistanceApprox } from '@/lib/local/distance';
+import { LocalSearch } from './LocalSearch';
 import {
   localCategoryLabel,
   mergeLocalPlaces,
@@ -116,9 +117,6 @@ export default async function LocalOverviewPage({ params }: { params: { id: stri
 
   return (
     <div>
-      <Link href={`/dashboard/properties/${params.id}`} className="muted" style={{ fontSize: '.85rem' }}>
-        ← Back to property
-      </Link>
       <h1 style={{ marginTop: '.5rem' }}>Local</h1>
       <p className="muted" style={{ maxWidth: 640 }}>
         Everything your concierge can recommend, exactly as it ranks it. Your own picks come from
@@ -145,6 +143,8 @@ export default async function LocalOverviewPage({ params }: { params: { id: stri
           </Link>
         )}
       </div>
+
+      {(access.isOwner || access.can.editBrain) && <LocalSearch propertyId={params.id} />}
 
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>

@@ -61,7 +61,6 @@ export default async function PropertyDetailPage({
 
   return (
     <div>
-      <Link href="/dashboard/properties" className="muted" style={{ fontSize: '.85rem' }}>← Properties</Link>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', margin: '.5rem 0 1.5rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>

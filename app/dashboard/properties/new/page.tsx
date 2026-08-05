@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
@@ -15,7 +14,6 @@ export default async function NewPropertyPage() {
 
   return (
     <div>
-      <Link href="/dashboard/properties" className="muted" style={{ fontSize: '.85rem' }}>← Properties</Link>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0 1.5rem' }}>New property</h1>
       <PropertyCreateForm />
     </div>

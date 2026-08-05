@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
+import { Breadcrumbs } from '@/components/dashboard/Breadcrumbs';
 import { PostHogIdentify } from '@/components/PostHogIdentify';
 import { outstandingReacceptances } from '@/lib/legal/acceptance';
 import { verifyTrustedDeviceValue } from '@/lib/crypto';
@@ -24,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const supabase = createClient();
-  const [{ count }, { data: recentNotifications }, outstanding] = await Promise.all([
+  const [{ count }, { data: recentNotifications }, outstanding, { data: propertyRows }] = await Promise.all([
     supabase
       .from('notifications')
       .select('id', { count: 'exact', head: true })
@@ -41,7 +42,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // Re-acceptance gate: which clickwrap docs has this host not accepted at the
     // current version? Resilient to a missing table (returns [] pre-migration).
     outstandingReacceptances(supabase, ctx.user.id),
+    // Breadcrumb labels: a property id in the path has to render as a place the
+    // host recognises. One small RLS-scoped read here covers every property-scoped
+    // route, which is cheaper than a per-route layout fetch. Plans cap at 100
+    // properties, so this list stays small.
+    supabase.from('properties').select('id, display_name').order('display_name').limit(200),
   ]);
+
+  const propertyNames: Record<string, string> = {};
+  for (const row of propertyRows ?? []) {
+    if (row.display_name) propertyNames[row.id] = row.display_name;
+  }
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
@@ -52,7 +63,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         notifications={recentNotifications ?? []}
         isOwner={ctx.account.owner_id === ctx.user.id}
       />
-      <main className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>{children}</main>
+      <main className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
+        <Breadcrumbs names={propertyNames} />
+        {children}
+      </main>
       <FeedbackControl />
     </div>
   );

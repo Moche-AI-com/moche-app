@@ -69,7 +69,6 @@ export default async function BrainPage({
 
   return (
     <div>
-      <Link href={`/dashboard/properties/${params.id}`} className="muted" style={{ fontSize: '.85rem' }}>← {access.property.display_name}</Link>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '.5rem 0 1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Property Brain</h1>
