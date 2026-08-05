@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { hasPendingLegacyTone, resolveRestrictedTopicKeys, suggestTonePreset } from '@/lib/concierge/tone';
@@ -13,7 +12,6 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
   if (!access.can.editProperty) {
     return (
       <div>
-        <Link href={`/dashboard/properties/${params.id}`} className="muted" style={{ fontSize: '.85rem' }}>← Back to property</Link>
         <div className="alert alert-error" style={{ marginTop: '1rem' }}>You do not have permission to edit this property.</div>
       </div>
     );
@@ -61,7 +59,6 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
 
   return (
     <div>
-      <Link href={`/dashboard/properties/${property.id}`} className="muted" style={{ fontSize: '.85rem' }}>← Back to property</Link>
       <div style={{ margin: '.5rem 0 1.5rem' }}>
         <h1 style={{ fontSize: '1.8rem' }}>Settings</h1>
         <p className="faint" style={{ fontSize: '.85rem', marginTop: '.25rem' }}>

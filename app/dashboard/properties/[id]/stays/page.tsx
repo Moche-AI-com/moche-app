@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
@@ -45,7 +44,6 @@ export default async function StaysPage({
 
   return (
     <div>
-      <Link href={`/dashboard/properties/${params.id}`} className="muted" style={{ fontSize: '.85rem' }}>← {access.property.display_name}</Link>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0 .35rem' }}>Stays</h1>
       <p className="muted" style={{ fontSize: '.9rem', margin: '0 0 1.25rem' }}>
         {view === 'past'

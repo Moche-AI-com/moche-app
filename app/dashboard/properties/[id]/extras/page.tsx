@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { ExtrasManager, type ExtraRow } from './ExtrasManager';
@@ -19,7 +18,6 @@ export default async function ExtrasPage({ params }: { params: { id: string } })
 
   return (
     <div>
-      <Link href={`/dashboard/properties/${property.id}`} className="muted" style={{ fontSize: '.85rem' }}>← {property.display_name}</Link>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0 1.5rem' }}>Enhancements</h1>
       <ExtrasManager propertyId={property.id} offers={(offers ?? []) as ExtraRow[]} />
     </div>
