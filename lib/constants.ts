@@ -73,12 +73,13 @@ export const PLANS: Record<PlanId, Plan> = {
   },
 };
 
-// One-time onboarding fee. Kept configurable so it can be switched on later, but
-// waived at launch to reduce first-checkout friction (a paid setup fee on top of a
-// subscription measurably hurts early-stage conversion). When false, checkout bills
-// the plan price only and the billing page advertises "no setup fees".
-export const ACTIVATION_FEE_USD = 49;
-export const ACTIVATION_FEE_ENABLED = false;
+// The one-time ACTIVATION_FEE_USD / ACTIVATION_FEE_ENABLED pair was removed for
+// launch. It had been permanently disabled (ACTIVATION_FEE_ENABLED = false) while
+// still carrying a live code path through checkout and the billing page, which is
+// exactly the kind of dead conditional that gets accidentally re-enabled. The
+// commercial decision is that there is no setup fee, so the concept no longer
+// exists in code. Reintroducing it would mean a new Stripe one-time price plus a
+// deliberate add_invoice_items branch, not flipping a flag.
 
 // Categories required for the "core" completeness gate — the portal can only go
 // live once these are present. Mirrors the Brain Health "Core layer".

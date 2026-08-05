@@ -5,7 +5,6 @@ import { getSessionContext } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getStripe, priceIdFor, BillingNotConfiguredError } from '@/lib/billing/stripe';
 import { publicEnv, serverEnv } from '@/lib/env';
-import { ACTIVATION_FEE_ENABLED } from '@/lib/constants';
 import { recordAcceptances } from '@/lib/legal/acceptance';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
@@ -79,14 +78,9 @@ export async function POST(req: Request) {
     // never create duplicate customers across repeated checkouts.
     const { data: existing } = await supabase
       .from('subscriptions')
-      .select('stripe_customer_id, stripe_subscription_id')
+      .select('stripe_customer_id')
       .eq('host_account_id', hostAccountId)
       .maybeSingle();
-
-    // First-time checkout = no prior Stripe subscription on this account. The one-time
-    // activation fee (when enabled + configured) is only added on the first checkout so
-    // upgrades/downgrades never re-charge it.
-    const isFirstCheckout = !existing?.stripe_subscription_id;
 
     let customerId = existing?.stripe_customer_id ?? null;
     if (!customerId) {
@@ -110,11 +104,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Optional one-time onboarding fee, billed on the first invoice alongside the
-    // subscription. add_invoice_items charges it once (not every renewal).
-    const addActivationFee =
-      ACTIVATION_FEE_ENABLED && isFirstCheckout && !!serverEnv.stripeActivationPriceId;
-
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -122,9 +111,6 @@ export async function POST(req: Request) {
       client_reference_id: hostAccountId,
       subscription_data: {
         metadata: { host_account_id: hostAccountId, plan: planId },
-        ...(addActivationFee
-          ? { add_invoice_items: [{ price: serverEnv.stripeActivationPriceId }] }
-          : {}),
       },
       metadata: { host_account_id: hostAccountId, plan: planId },
       success_url: `${publicEnv.appUrl}/dashboard/billing?status=success`,

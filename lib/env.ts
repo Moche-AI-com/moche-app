@@ -159,9 +159,8 @@ export const serverEnv = {
     portfolio_monthly: process.env.STRIPE_PRICE_PORTFOLIO_MONTHLY ?? '',
     portfolio_annual: process.env.STRIPE_PRICE_PORTFOLIO_ANNUAL ?? '',
   },
-  // One-time price for the optional onboarding/activation fee (added to first checkout
-  // when ACTIVATION_FEE_ENABLED is true). Empty when the fee is waived.
-  stripeActivationPriceId: process.env.STRIPE_PRICE_ACTIVATION ?? '',
+  // STRIPE_PRICE_ACTIVATION was removed alongside the activation-fee constants in
+  // lib/constants.ts. There is no setup fee, so there is no one-time price to read.
 
   // AWS S3 — private object storage. Presigned PUT/GET only; bytes never transit
   // the app server. SERVER ONLY. Never prefix with NEXT_PUBLIC_.
