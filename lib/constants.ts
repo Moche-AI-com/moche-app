@@ -291,6 +291,126 @@ export const RESPONSE_LENGTHS = ['concise', 'balanced', 'detailed'] as const;
 export type ResponseLength = (typeof RESPONSE_LENGTHS)[number];
 export const DEFAULT_RESPONSE_LENGTH: ResponseLength = 'balanced';
 
+// ---------------------------------------------------------------------------
+// Concierge tone presets (P4-06)
+// ---------------------------------------------------------------------------
+// `property_settings.concierge_tone` stores one of these IDs, not prose. The
+// prompt fragment is what actually reaches the model, so a host can never inject
+// arbitrary instructions through the tone control - the ID is validated against
+// this list on the way in and the fragment is chosen from this list on the way
+// out. Freeform style guidance still has a home: `system_prompt_override`.
+//
+// The five tone IDs. Declared before the preset table so `TonePreset.id` is typed
+// against them: a preset with a typo'd or unlisted ID is a compile error, and the
+// tuple can be handed straight to z.enum() without a second copy of the list.
+export const TONE_PRESET_IDS = [
+  'friendly',
+  'professional',
+  'luxury_concierge',
+  'casual',
+  'family_friendly',
+] as const;
+
+export type TonePresetId = (typeof TONE_PRESET_IDS)[number];
+
+export const DEFAULT_TONE_PRESET_ID: TonePresetId = 'friendly';
+
+// `description` is host-facing copy. `promptFragment` is model-facing and must
+// stay style-only: it may shape delivery, never facts, and never policy.
+export interface TonePreset {
+  id: TonePresetId;
+  label: string;
+  description: string;
+  promptFragment: string;
+}
+
+
+export const TONE_PRESETS: readonly TonePreset[] = [
+  {
+    id: 'friendly',
+    label: 'Warm and friendly',
+    description: 'Upbeat and welcoming, like a thoughtful local host.',
+    promptFragment:
+      'Friendly, warm, and welcoming. Use the guest’s name when you know it, keep replies upbeat and concise, and sound like a thoughtful local host who is glad they came.',
+  },
+  {
+    id: 'professional',
+    label: 'Polished and professional',
+    description: 'Courteous and precise, like a boutique-hotel front desk.',
+    promptFragment:
+      'Polished and professional. Courteous, precise, and efficient, like a boutique-hotel front desk. Avoid slang and exclamation marks.',
+  },
+  {
+    id: 'luxury_concierge',
+    label: 'Luxury concierge',
+    description: 'Discreet and refined, for high-end stays.',
+    promptFragment:
+      'Refined and discreet, in the manner of a luxury hotel concierge. Understated, unhurried, and anticipatory. Offer to arrange things rather than instructing the guest to do them. Never gush.',
+  },
+  {
+    id: 'casual',
+    label: 'Casual and fun',
+    description: 'Relaxed and playful, like a friend showing them around.',
+    promptFragment:
+      'Casual and fun. Relaxed, a little playful, and encouraging, like a friend showing them around town. Contractions are welcome and the occasional emoji is fine in moderation.',
+  },
+  {
+    id: 'family_friendly',
+    label: 'Family friendly',
+    description: 'Clear and reassuring, tuned for guests traveling with kids.',
+    promptFragment:
+      'Clear, patient, and reassuring, tuned for guests traveling with children. Favor plain language and short sentences, call out anything safety-relevant, and mention kid-friendly options when they are genuinely relevant.',
+  },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Restricted topics (P4-08)
+// ---------------------------------------------------------------------------
+// Stored as a jsonb array of these keys in `property_settings.restricted_topic_keys`.
+// The four DEFAULT_RESTRICTED_TOPIC_KEYS are pre-checked for every new property,
+// so a host who never opens settings is still protected on the topics that most
+// often need a human. Anything not covered here goes in the free-text "other"
+// field, which is stored separately in `restricted_topics`.
+// Declared before the option table for the same reason as TONE_PRESET_IDS: the
+// keys are type-checked, and the tuple is the single list z.enum() validates against.
+export const RESTRICTED_TOPIC_KEYS = [
+  'pricing',
+  'refunds',
+  'legal_advice',
+  'neighbor_disputes',
+  'medical_advice',
+  'security_details',
+  'other_guests',
+  'owner_details',
+] as const;
+
+export type RestrictedTopicKey = (typeof RESTRICTED_TOPIC_KEYS)[number];
+
+export interface RestrictedTopicOption {
+  key: RestrictedTopicKey;
+  label: string;
+  /** Model-facing phrasing, spliced into a single RESTRICTED TOPICS line. */
+  phrase: string;
+}
+
+export const RESTRICTED_TOPIC_OPTIONS: readonly RestrictedTopicOption[] = [
+  { key: 'pricing', label: 'Pricing and rates', phrase: 'nightly rates, discounts, or what the guest paid' },
+  { key: 'refunds', label: 'Refunds and cancellations', phrase: 'refunds, cancellations, or fee disputes' },
+  { key: 'legal_advice', label: 'Legal advice', phrase: 'legal advice or the interpretation of contracts' },
+  { key: 'neighbor_disputes', label: 'Neighbor disputes', phrase: 'disputes with neighbors or other guests' },
+  { key: 'medical_advice', label: 'Medical advice', phrase: 'medical, health, or first-aid advice' },
+  { key: 'security_details', label: 'Security system details', phrase: 'the location or workings of cameras, alarms, or locks beyond what the guest needs to get in' },
+  { key: 'other_guests', label: 'Other guests and bookings', phrase: 'other guests, other bookings, or who else has stayed' },
+  { key: 'owner_details', label: 'Owner and staff details', phrase: 'personal details about the owner, staff, or cleaners' },
+] as const;
+
+export const DEFAULT_RESTRICTED_TOPIC_KEYS: readonly RestrictedTopicKey[] = [
+  'pricing',
+  'refunds',
+  'legal_advice',
+  'neighbor_disputes',
+] as const;
+
 // The server-side master concierge system prompt. This is the code fallback used
 // when the app_settings 'master_concierge_prompt' row is missing/unreadable, and
 // MUST stay byte-for-byte in sync with the seed in supabase-migrations-CONCIERGE.sql
