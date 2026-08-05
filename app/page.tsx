@@ -8,6 +8,7 @@ import { System } from '@/components/landing/System';
 import { FoundingBand } from '@/components/landing/FoundingBand';
 import { Pricing } from '@/components/landing/Pricing';
 import { Faq } from '@/components/landing/Faq';
+import { ClosingCta } from '@/components/landing/ClosingCta';
 import { LandingFooter } from '@/components/landing/LandingFooter';
 import { SITE_URL, SITE_NAME, DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/seo';
 
@@ -68,6 +69,7 @@ export default async function Home() {
       <FoundingBand />
       <Pricing />
       <Faq />
+      <ClosingCta />
       <LandingFooter />
     </main>
   );

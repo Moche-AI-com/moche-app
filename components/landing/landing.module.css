@@ -337,6 +337,16 @@
   text-align: center;
 }
 
+.heroKicker {
+  font-size: clamp(0.86rem, 1.4vw, 0.98rem);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--teal);
+  margin: 0 auto 0.85rem;
+  max-width: 32rem;
+  text-wrap: balance;
+}
+
 .heroTitle {
   font-size: clamp(2.4rem, 6.4vw, 4.25rem);
   line-height: 1.02;
@@ -435,6 +445,7 @@
 }
 
 .steps {
+  position: relative;
   list-style: none;
   margin: clamp(1.75rem, 4vw, 2.5rem) 0 0;
   padding: 0;
@@ -903,6 +914,198 @@
   .pricingPanel,
   .pricingDetail {
     transition: none;
+  }
+}
+
+/* ---- Closing CTA --------------------------------------------------------- */
+
+/* The page used to end on a question about cancellation: a visitor who read
+   the whole thing had nothing left to act on. This section is the only place
+   all three ways in sit together, and it states the beta incentive next to
+   them rather than making anyone scroll back up for it. */
+.closing {
+  padding-block: clamp(3.25rem, 8vw, 6rem);
+  background: var(--bg-2);
+}
+
+.closingInner {
+  max-width: 44rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.closingTitle {
+  font-size: clamp(1.7rem, 4.2vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.9rem;
+  text-wrap: balance;
+}
+
+.closingLead {
+  font-size: clamp(0.98rem, 1.6vw, 1.1rem);
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 32rem;
+  margin: 0 auto;
+  text-wrap: pretty;
+}
+
+.closingActions {
+  margin-top: clamp(1.5rem, 3vw, 2rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+}
+
+/* Contact sales is a text link, not a third button. Three equal buttons make a
+   visitor choose between them before they know which one they are; this reads
+   as the fallback for the one case the two buttons do not cover. */
+.closingTextLink {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--teal);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+}
+
+.closingTextLink:hover,
+.closingTextLink:focus-visible {
+  border-bottom-color: currentColor;
+}
+
+.closingPerks {
+  margin: clamp(2rem, 4.5vw, 3rem) 0 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.35rem;
+  text-align: left;
+}
+
+@media (min-width: 780px) {
+  .closingPerks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2rem;
+  }
+}
+
+.closingPerk {
+  min-width: 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.closingPerkLabel {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.3rem;
+}
+
+.closingPerkDetail {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+/* ---- Scroll-linked flourishes ------------------------------------------- */
+
+/* Both effects below are progress-linked rather than triggered: they track the
+   scroll position continuously, which is what makes a page feel like it is
+   responding to you instead of firing cues at you. Both run entirely on the
+   compositor via `animation-timeline`, so there is no scroll listener and
+   nothing on the main thread, and both are additive -- a browser without
+   scroll-driven animations gets the static page and loses nothing it can name.
+   Neither survives prefers-reduced-motion. */
+.stepsRule {
+  display: none;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* A rule that draws itself through the three steps as they pass, so the
+       numbered sequence reads as a sequence rather than three loose columns. */
+    .stepsRule {
+      display: block;
+      position: absolute;
+      top: -0.1rem;
+      /* Outdented into the wrap's gutter so it never crowds the step text. */
+      left: -0.75rem;
+      width: 1px;
+      height: 100%;
+      background: linear-gradient(to bottom, var(--teal), transparent);
+      opacity: 0.45;
+      transform-origin: top;
+      animation: ruleDraw linear both;
+      animation-timeline: view();
+      animation-range: entry 15% cover 55%;
+    }
+
+    /* On desktop the three steps are a row, and one full-width rule above them
+       is indistinguishable from the section dividers that were deliberately
+       removed from this page. Each step gets its own short marker instead,
+       drawn as it enters -- a cue, not a border. */
+    @media (min-width: 860px) {
+      .stepsRule {
+        display: none;
+      }
+
+      .step::before {
+        content: '';
+        display: block;
+        width: 2.5rem;
+        height: 2px;
+        margin-bottom: 0.85rem;
+        border-radius: 2px;
+        background: var(--teal);
+        opacity: 0.55;
+        transform-origin: left;
+        animation: ruleDrawX linear both;
+        animation-timeline: view();
+        animation-range: entry 10% cover 40%;
+      }
+    }
+
+    /* The founding photograph settles out of a slight scale as it enters, so
+       the panel reads as a window being approached rather than a static image
+       that happens to be there. 1.08 -> 1 is small enough that nobody names it
+       and large enough to feel. */
+    .foundingImage {
+      animation: mediaSettle linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 45%;
+    }
+  }
+}
+
+@keyframes ruleDraw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ruleDrawX {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes mediaSettle {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
   }
 }
 

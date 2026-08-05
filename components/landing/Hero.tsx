@@ -72,14 +72,17 @@ export function Hero() {
       </div>
 
       <div className={`wrap ${styles.heroCopy}`}>
-        <Reveal as="h1" eager className={styles.heroTitle}>
+        <Reveal as="p" eager className={styles.heroKicker}>
+          Elevate your stay, get more reviews, and handle fewer questions.
+        </Reveal>
+        <Reveal as="h1" eager delay={60} className={styles.heroTitle}>
           Run every property from one workspace
         </Reveal>
-        <Reveal as="p" eager delay={90} className={styles.heroSubtitle}>
+        <Reveal as="p" eager delay={130} className={styles.heroSubtitle}>
           One place to answer guests, keep every property&apos;s details straight, and turn more
           stays into five-star reviews.
         </Reveal>
-        <Reveal eager delay={170} className={styles.heroActions}>
+        <Reveal eager delay={200} className={styles.heroActions}>
           <Link href="/signup" className="btn btn-primary btn-lg">
             Start free trial
           </Link>
@@ -90,7 +93,7 @@ export function Hero() {
             Request a demo
           </a>
         </Reveal>
-        <Reveal as="p" eager delay={240} className={styles.heroTrialNote}>
+        <Reveal as="p" eager delay={270} className={styles.heroTrialNote}>
           One month free on the top tier, up to 5 properties. Card required, cancel anytime.
         </Reveal>
       </div>
