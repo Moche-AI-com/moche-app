@@ -2,8 +2,9 @@
 
 import { useFormState } from 'react-dom';
 import Link from 'next/link';
-import { Lock, Star } from 'lucide-react';
-import { updatePropertyAction, updatePropertySettingsAction, updateReviewNudgeAction, type PropertyFormState } from '../../actions';
+import { Info, Lock, Star } from 'lucide-react';
+import { updatePropertyAction, updatePropertySettingsAction, updateReviewNudgeAction, resolveLegacyToneAction, type PropertyFormState } from '../../actions';
+import { RESTRICTED_TOPIC_OPTIONS, TONE_PRESETS } from '@/lib/constants';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
@@ -24,12 +25,6 @@ const MODULE_LABELS: { key: string; label: string; hint: string }[] = [
   { key: 'maintenance_reports', label: 'Maintenance reports', hint: 'Let guests flag issues; opens a service request for you.' },
   { key: 'review_nudge', label: 'Review nudge', hint: 'Gently invite happy guests to leave a review.' },
   { key: 'extras', label: 'Extras', hint: 'Offer late checkout, mid-stay cleans, and other add-ons.' },
-];
-
-const TONE_PRESETS = [
-  { label: 'Warm & friendly', text: 'Friendly, warm, and welcoming. Use the guest\u2019s name when known, keep replies upbeat and concise, and sound like a thoughtful local host.' },
-  { label: 'Polished & professional', text: 'Polished and professional. Courteous, precise, and efficient \u2014 like a boutique-hotel front desk. Avoid slang.' },
-  { label: 'Casual & fun', text: 'Casual and fun. Relaxed, a little playful, and encouraging \u2014 like a friend showing them around town. Emojis are okay in moderation.' },
 ];
 
 interface Property {
@@ -63,6 +58,10 @@ interface Settings {
   system_prompt_override: string | null;
   response_length: string;
   restricted_topics: string | null;
+  restricted_topic_keys: string[];
+  legacy_tone_note: string | null;
+  legacy_tone_pending: boolean;
+  suggested_tone_preset: string;
   language: string;
   is_premium_override: boolean;
 }
@@ -95,9 +94,76 @@ export function SettingsForms({
   return (
     <div style={{ display: 'grid', gap: '1.5rem', maxWidth: 720 }}>
       <BrandingForm property={property} />
+      {settings.legacy_tone_pending ? <LegacyToneBanner propertyId={property.id} settings={settings} /> : null}
       <ConciergeForm propertyId={property.id} settings={settings} premiumUnlocked={premiumUnlocked} planName={planName} />
       <ReviewNudgeForm propertyId={property.id} settings={settings} reviewUnlocked={reviewUnlocked} planName={planName} />
     </div>
+  );
+}
+
+// Tone used to be a free text box; it is now a fixed set of presets. Any host who
+// had written their own tone description keeps it driving the concierge verbatim
+// until they answer this banner, so nobody's voice changes without their say.
+function LegacyToneBanner({ propertyId, settings }: { propertyId: string; settings: Settings }) {
+  const [state, formAction] = useFormState<PropertyFormState, FormData>(resolveLegacyToneAction, {});
+  return (
+    <form
+      action={formAction}
+      className="card"
+      style={{ padding: '1.25rem', borderColor: 'var(--coral)' }}
+      data-testid="legacy-tone-banner"
+    >
+      <input type="hidden" name="propertyId" value={propertyId} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
+        <Info size={16} aria-hidden />
+        <h3 style={{ fontSize: '.95rem', margin: 0 }}>Confirm your concierge tone</h3>
+      </div>
+      <p className="muted" style={{ fontSize: '.82rem', marginBottom: '.6rem' }}>
+        Tone is now a set of presets instead of free text. Your concierge is still using
+        exactly what you wrote, and nothing changes until you choose below.
+      </p>
+      <blockquote
+        style={{
+          margin: '0 0 .85rem',
+          padding: '.6rem .8rem',
+          borderLeft: '3px solid var(--border-strong)',
+          background: 'var(--surface-2)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '.82rem',
+        }}
+        data-testid="legacy-tone-note"
+      >
+        {settings.legacy_tone_note}
+      </blockquote>
+
+      <div className="field">
+        <label className="label" htmlFor="legacyTonePreset">Closest preset</label>
+        <select
+          className="select"
+          id="legacyTonePreset"
+          name="conciergeTone"
+          defaultValue={settings.suggested_tone_preset}
+          data-testid="select-legacy-tone-preset"
+        >
+          {TONE_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>{`${p.label} — ${p.description}`}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
+        <SubmitButton className="btn btn-primary btn-sm" name="choice" value="keep" testId="legacy-tone-keep">
+          Keep my wording as a custom instruction
+        </SubmitButton>
+        <SubmitButton className="btn btn-ghost btn-sm" name="choice" value="discard" testId="legacy-tone-discard">
+          Just use the preset
+        </SubmitButton>
+      </div>
+      <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>
+        Keeping it moves your wording into Custom system prompt, where free text is still allowed.
+      </p>
+      <FormMessage error={state.error} success={state.success} />
+    </form>
   );
 }
 
@@ -387,30 +453,22 @@ function ConciergeForm({ propertyId, settings, premiumUnlocked, planName }: { pr
 
           <div className="field">
             <label className="label" htmlFor="conciergeTone">Tone &amp; voice</label>
-            <textarea
-              className="textarea"
+            <select
+              className="select"
               id="conciergeTone"
               name="conciergeTone"
-              maxLength={2000}
-              rows={4}
-              defaultValue={settings.concierge_tone ?? ''}
-              placeholder="Describe how the concierge should sound. e.g. Warm, concise, and local — like a thoughtful host who knows the neighborhood."
-              data-testid="input-concierge-tone"
-            />
-            <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
+              required
+              defaultValue={settings.legacy_tone_pending ? settings.suggested_tone_preset : (settings.concierge_tone || 'friendly')}
+              data-testid="select-concierge-tone"
+            >
               {TONE_PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => { const t = document.getElementById('conciergeTone') as HTMLTextAreaElement | null; if (t) t.value = p.text; }}
-                >
-                  {p.label}
-                </button>
+                <option key={p.id} value={p.id}>{`${p.label} — ${p.description}`}</option>
               ))}
-            </div>
+            </select>
             <p className="faint" style={{ fontSize: '.72rem', marginTop: '.4rem' }}>
-              Style guidance only — it never changes the facts, only the delivery. The concierge still answers strictly from your Brain.
+              Style guidance only. It never changes the facts, only the delivery, and the concierge
+              still answers strictly from your Brain. Need something more specific? Add it under
+              Custom system prompt below.
             </p>
           </div>
 
@@ -430,11 +488,55 @@ function ConciergeForm({ propertyId, settings, premiumUnlocked, planName }: { pr
           </div>
 
           <div className="field">
-            <label className="label" htmlFor="restrictedTopics">Restricted topics</label>
-            <textarea className="textarea" id="restrictedTopics" name="restrictedTopics" maxLength={1000} rows={2}
-              defaultValue={settings.restricted_topics ?? ''}
-              placeholder="Topics the concierge should decline and pass to you, e.g. refunds, disputes, medical advice."
-              data-testid="input-restricted-topics" />
+            <span className="label">Restricted topics</span>
+            <p className="faint" style={{ fontSize: '.72rem', margin: '0 0 .5rem' }}>
+              The concierge politely declines these and offers to pass the question to you.
+            </p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '.35rem .75rem',
+              }}
+            >
+              {RESTRICTED_TOPIC_OPTIONS.map((o) => (
+                <label
+                  key={o.key}
+                  htmlFor={`restricted_topic_${o.key}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '.5rem',
+                    fontSize: '.85rem',
+                    minHeight: '44px',
+                    cursor: locked ? 'default' : 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    id={`restricted_topic_${o.key}`}
+                    name={`restricted_topic_${o.key}`}
+                    defaultChecked={settings.restricted_topic_keys.includes(o.key)}
+                    data-testid={`check-restricted-${o.key}`}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+            <div className="field" style={{ marginTop: '.6rem' }}>
+              <label className="label" htmlFor="restrictedTopics" style={{ fontSize: '.78rem' }}>
+                Anything else
+              </label>
+              <input
+                className="input"
+                id="restrictedTopics"
+                name="restrictedTopics"
+                maxLength={1000}
+                defaultValue={settings.restricted_topics ?? ''}
+                placeholder="e.g. the broken hot tub, the upstairs renovation"
+                data-testid="input-restricted-topics"
+              />
+            </div>
           </div>
 
           <div className="field">
