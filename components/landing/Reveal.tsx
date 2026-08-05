@@ -18,6 +18,7 @@ export function Reveal({
   delay = 0,
   className,
   id,
+  eager = false,
 }: {
   children: ReactNode;
   as?: ElementType;
@@ -25,6 +26,20 @@ export function Reveal({
   delay?: number;
   className?: string;
   id?: string;
+  /**
+   * Set on content that is above the fold at load.
+   *
+   * An eager instance plays its entrance from CSS the moment styles apply,
+   * instead of waiting for this component to hydrate and its observer to fire.
+   * Hydration is ~300ms behind first paint even on a fast connection, and the
+   * hero is the LCP element -- gating it on JS means the page reads as blank
+   * below the header for that whole window, and far longer on a slow device.
+   *
+   * Only worth it for the first screen. Below-the-fold content is not visible
+   * during that window anyway, and giving it a CSS animation would make it
+   * play before it is scrolled to.
+   */
+  eager?: boolean;
 }) {
   const ref = useRef<HTMLElement | null>(null);
   const [shown, setShown] = useState(false);
@@ -63,6 +78,7 @@ export function Reveal({
       id={id}
       className={className ? `reveal ${className}` : 'reveal'}
       data-shown={shown ? 'true' : 'false'}
+      data-eager={eager ? '' : undefined}
       style={delay ? ({ '--reveal-delay': `${delay}ms` } as React.CSSProperties) : undefined}
     >
       {children}
