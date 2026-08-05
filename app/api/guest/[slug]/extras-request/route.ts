@@ -7,6 +7,7 @@ import { signEscalationLinkToken } from '@/lib/crypto';
 import { publicEnv } from '@/lib/env';
 import { capture } from '@/lib/posthog-server';
 import { log } from '@/lib/log';
+import { clampExtraQuantity, DEFAULT_EXTRA_QUANTITY } from '@/lib/guest/extras';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   // The offer must belong to this property and be active.
   const { data: offer } = await admin
     .from('guest_extras')
-    .select('id, title, price_text, active, property_id')
+    .select('id, title, price_text, active, property_id, max_quantity')
     .eq('id', parsed.data.offerId)
     .eq('property_id', session.propertyId)
     .maybeSingle();
@@ -57,7 +58,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     return NextResponse.json({ error: 'That enhancement is no longer available.' }, { status: 404 });
   }
 
-  const quantity = parsed.data.quantity ?? 1;
+  // The client stepper already clamps, but a request can arrive from anywhere,
+  // so the host's advisory ceiling is enforced here too rather than trusted.
+  const quantity = clampExtraQuantity(parsed.data.quantity ?? DEFAULT_EXTRA_QUANTITY, offer.max_quantity);
   const guestNote = parsed.data.note?.trim() || null;
 
   const priceSuffix = offer.price_text ? ` (${offer.price_text})` : '';
