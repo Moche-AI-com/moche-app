@@ -53,11 +53,14 @@ describe('buildCoverDerivatives', () => {
     }
   });
 
-  it('strips EXIF metadata, including GPS, from the output', async () => {
+  it('strips EXIF metadata from the output', async () => {
+    // sharp can only author IFD0 tags, so Copyright stands in for the whole EXIF
+    // block here. The guarantee under test is that the re-encode emits no EXIF at
+    // all, which is what keeps a phone photo's GPS tags off the guest portal.
     const withExif = await sharp({
       create: { width: 1200, height: 800, channels: 3, background: { r: 10, g: 10, b: 10 } },
     })
-      .withMetadata({ exif: { IFD0: { Copyright: 'test-host' }, GPS: { GPSLatitudeRef: 'N' } } })
+      .withMetadata({ exif: { IFD0: { Copyright: 'test-host' } } })
       .jpeg()
       .toBuffer();
 
