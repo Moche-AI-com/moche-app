@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Network, LayoutGrid } from 'lucide-react';
 import type { CardBrainHealth, CardHealth } from '@/lib/brain/health';
+import type { Readiness } from '@/lib/brain/readiness';
 import { BrainGraph, type GraphItem } from './BrainGraph';
 
 function scoreColor(pct: number): string {
@@ -104,6 +105,7 @@ export function BrainCards({
   propertyName,
   propertySlug,
   health,
+  readiness,
   canEdit,
   graphItems,
   categoryLabels,
@@ -112,6 +114,7 @@ export function BrainCards({
   propertyName: string;
   propertySlug: string;
   health: CardBrainHealth;
+  readiness: Readiness;
   canEdit: boolean;
   graphItems: GraphItem[];
   categoryLabels: Record<string, string>;
@@ -148,6 +151,52 @@ export function BrainCards({
           >
             Preview as guest <ExternalLink size={15} />
           </a>
+        </div>
+
+        {/* Launch readiness. Distinct from Brain Health on purpose: health asks
+            "how full is this Brain", readiness asks "is this safe to put in
+            front of a guest", which includes having reviewed what the AI wrote. */}
+        <div
+          style={{ borderTop: '1px solid var(--border)', marginTop: '1.1rem', paddingTop: '1rem' }}
+          data-testid="brain-readiness"
+        >
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '.6rem', flexWrap: 'wrap', marginBottom: '.5rem' }}>
+            <h3 style={{ fontSize: '.95rem', margin: 0 }}>Launch readiness</h3>
+            <span
+              className={`badge ${readiness.ready ? 'badge-teal' : 'badge-coral'}`}
+              data-testid="readiness-label"
+            >
+              {readiness.label} · {readiness.score}/100
+            </span>
+          </div>
+
+          {readiness.pendingReviews > 0 && (
+            <p style={{ fontSize: '.85rem', margin: '0 0 .5rem' }}>
+              <Link href="/dashboard/updates" style={{ color: 'var(--coral)' }}>
+                {readiness.pendingReviews} AI {readiness.pendingReviews === 1 ? 'suggestion' : 'suggestions'} waiting for
+                your approval
+              </Link>
+              . Nothing there is live yet.
+            </p>
+          )}
+
+          {readiness.missing.length === 0 ? (
+            <p className="muted" style={{ fontSize: '.85rem', margin: 0 }}>
+              Everything is in place. This property is ready to share with guests.
+            </p>
+          ) : (
+            <ul className="muted" style={{ fontSize: '.85rem', margin: 0, paddingLeft: '1.1rem' }} data-testid="readiness-missing">
+              {readiness.missing.slice(0, 4).map((item) => (
+                <li key={item.key} style={{ marginBottom: '.15rem' }}>
+                  {item.label}
+                  {item.required && <span style={{ color: 'var(--coral)' }}> (needed)</span>}
+                </li>
+              ))}
+              {readiness.missing.length > 4 && (
+                <li className="faint">and {readiness.missing.length - 4} more</li>
+              )}
+            </ul>
+          )}
         </div>
       </div>
 

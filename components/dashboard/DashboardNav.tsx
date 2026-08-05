@@ -17,6 +17,7 @@ const LINKS: Array<{ href: string; label: string; ownerOnly?: boolean }> = [
   { href: '/dashboard/escalations', label: 'Escalations' },
   { href: '/dashboard/service-requests', label: 'Service' },
   { href: '/dashboard/extras', label: 'Extras' },
+  { href: '/dashboard/updates', label: 'Review' },
   { href: '/dashboard/reports', label: 'Reports' },
   { href: '/dashboard/billing', label: 'Billing', ownerOnly: true },
   { href: '/dashboard/profile', label: 'Profile' },

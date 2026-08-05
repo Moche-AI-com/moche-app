@@ -43,7 +43,12 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not fetch that URL');
-      setMsg({ kind: 'ok', text: `Imported "${json.title}" into ${json.chunks} chunk(s).` });
+      // URL imports land in the review queue rather than going live, so the
+      // confirmation has to say so or the host will assume it is already live.
+      setMsg({
+        kind: 'ok',
+        text: json.message ?? `"${json.title}" was sent to your review queue.`,
+      });
       form.reset();
       router.refresh();
     } catch (err) {
@@ -121,8 +126,8 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
               <option value="documents">Reference</option>
             </select>
           </div>
-          <button className="btn btn-primary btn-block btn-sm" disabled={busy}>{busy ? 'Fetching…' : 'Fetch & index'}</button>
-          <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>We fetch page text server-side and clean it into a structured summary. Some sites (e.g. Zillow) block automated fetches — use Paste if a URL fails.</p>
+          <button className="btn btn-primary btn-block btn-sm" disabled={busy}>{busy ? 'Fetching…' : 'Fetch for review'}</button>
+          <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>We read the page server-side and draft a structured summary, then send it to your review queue. Nothing reaches your guests until you approve it. Some sites (e.g. Zillow) block automated fetches, so use Paste if a URL fails.</p>
         </form>
       ) : (
         <form onSubmit={ingestPaste}>

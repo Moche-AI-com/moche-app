@@ -11,6 +11,8 @@ import { ValueHero, ValueMetricsGrid, GuestFeedbackPanel } from './DashboardOver
 import { AttentionStrip, ActivityTrendCard, TopTopicsCard, ActivityFeedCard } from './DashboardInsights';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { ExtrasRequestsCard, type ExtrasRequestRow } from '@/components/dashboard/ExtrasRequestsCard';
+import { UpdateQueueCard, type UpdateQueueCardRow } from '@/components/dashboard/UpdateQueueCard';
+import { queueSummary } from '@/lib/brain/proposals';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,7 +120,7 @@ export default async function DashboardHome({
   // the dashboard. Extras requests have no dedicated table (see the
   // EXTRAS_REQUEST_PREFIX comment above) so they're read straight out of
   // `escalations`, the same table/RLS the Escalations page already uses.
-  const [metrics, feedback, trend, topics, feed, extrasEscalations] = await Promise.all([
+  const [metrics, feedback, trend, topics, feed, extrasEscalations, proposalRows] = await Promise.all([
     loadValueMetrics(supabase, propertyIds, {
       activeStays,
       openEscalations: escCount,
@@ -136,6 +138,17 @@ export default async function DashboardHome({
           .in('property_id', propertyIds)
           .ilike('question', `${EXTRAS_REQUEST_PREFIX}%`)
       : Promise.resolve({ data: [] as { id: string; property_id: string; status: string }[] }),
+    // Pending AI drafts, for the review-queue tile. Only pending rows are read:
+    // the tile answers "is anything waiting on me", not "what have I decided".
+    propertyIds.length > 0
+      ? supabase
+          .from('proposed_updates')
+          .select('id, property_id, status, created_at')
+          .in('property_id', propertyIds)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true })
+          .limit(500)
+      : Promise.resolve({ data: [] as { id: string; property_id: string; status: string; created_at: string }[] }),
   ]);
 
   // Low ratings worth a second look, from the recent feedback sample.
@@ -161,6 +174,24 @@ export default async function DashboardHome({
       };
     })
     .sort((a, b) => b.count - a.count);
+
+  // Review-queue summary. queueSummary() owns the wording so the tile, the
+  // empty state, and any future banner cannot drift apart.
+  const pendingProposals = (proposalRows.data ?? []) as Array<{ property_id: string; status: string; created_at: string }>;
+  const proposalSummary = queueSummary(
+    pendingProposals.map((r) => ({ status: r.status as 'pending', created_at: r.created_at })),
+  );
+  const pendingByProperty = new Map<string, number>();
+  for (const row of pendingProposals) {
+    pendingByProperty.set(row.property_id, (pendingByProperty.get(row.property_id) ?? 0) + 1);
+  }
+  const updateQueueRows: UpdateQueueCardRow[] = (properties ?? [])
+    .map((p) => ({
+      propertyId: p.id,
+      propertyName: p.display_name as string,
+      pending: pendingByProperty.get(p.id) ?? 0,
+    }))
+    .sort((a, b) => b.pending - a.pending);
 
   const hostName = (ctx.profile.full_name ?? '').split(' ')[0] ?? '';
 
@@ -271,6 +302,7 @@ export default async function DashboardHome({
 
         <div className="dash-col-side" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-section)' }}>
           <ActivityFeedCard events={feed} />
+          <UpdateQueueCard rows={updateQueueRows} detail={proposalSummary.detail} pending={proposalSummary.pending} />
           <ExtrasRequestsCard rows={extrasRequestRows} />
           <GuestFeedbackPanel feedback={feedback} />
         </div>
