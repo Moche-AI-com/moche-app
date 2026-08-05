@@ -1913,6 +1913,94 @@ export type Database = {
           },
         ]
       }
+      proposed_updates: {
+        Row: {
+          applied_at: string | null
+          applied_value: Json | null
+          apply_error: string | null
+          confidence: number | null
+          created_at: string
+          field_path: string
+          host_account_id: string
+          id: string
+          label: string
+          original_value: Json | null
+          property_id: string
+          proposed_value: Json
+          resolution_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_ref: string | null
+          source_type: string
+          status: Database["public"]["Enums"]["proposed_update_status"]
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_value?: Json | null
+          apply_error?: string | null
+          confidence?: number | null
+          created_at?: string
+          field_path: string
+          host_account_id: string
+          id?: string
+          label: string
+          original_value?: Json | null
+          property_id: string
+          proposed_value: Json
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_ref?: string | null
+          source_type: string
+          status?: Database["public"]["Enums"]["proposed_update_status"]
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_value?: Json | null
+          apply_error?: string | null
+          confidence?: number | null
+          created_at?: string
+          field_path?: string
+          host_account_id?: string
+          id?: string
+          label?: string
+          original_value?: Json | null
+          property_id?: string
+          proposed_value?: Json
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_ref?: string | null
+          source_type?: string
+          status?: Database["public"]["Enums"]["proposed_update_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposed_updates_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposed_updates_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposed_updates_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recommendations: {
         Row: {
           address: string | null
@@ -2399,6 +2487,7 @@ export type Database = {
         | "system"
       processing_status: "pending" | "processing" | "ready" | "failed" | "stale"
       property_status: "draft" | "live" | "paused" | "archived"
+      proposed_update_status: "pending" | "approved" | "modified" | "denied"
       service_status:
         | "new"
         | "acknowledged"
@@ -2615,6 +2704,7 @@ export const Constants = {
       ],
       processing_status: ["pending", "processing", "ready", "failed", "stale"],
       property_status: ["draft", "live", "paused", "archived"],
+      proposed_update_status: ["pending", "approved", "modified", "denied"],
       service_status: [
         "new",
         "acknowledged",
