@@ -3,6 +3,7 @@ import { ArrowUpRight, Plus } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements } from '@/lib/billing/entitlements';
+import { planBannerFor } from '@/lib/dashboard/plan-banner';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { loadValueMetrics, loadGuestFeedback } from '@/lib/dashboard/overview';
 import { loadActivityTrend, loadTopTopics, loadActivityFeed } from '@/lib/dashboard/insights';
@@ -39,6 +40,10 @@ export default async function DashboardHome({
     supabase.from('service_requests').select('id, property_id').in('status', ['new', 'acknowledged', 'in_progress']),
     getEntitlements(supabase, accountId),
   ]);
+
+  // Read-only (lapsed billing) has to win over the free-build message, so the
+  // decision lives in one tested place rather than in the JSX.
+  const planBanner = planBannerFor(ent);
 
   const allPropertyIds = (allProperties ?? []).map((p) => p.id);
   // The property filter is a URL search param (?property=<id>) so it survives a
@@ -182,18 +187,18 @@ export default async function DashboardHome({
 
       <ValueHero hostName={hostName} metrics={metrics} />
 
-      {!ent.active && (
+      {planBanner ? (
         // No marginTop: .dash-overview already supplies --gap-section between
         // its children, and stacking a margin on top of that is what made the
         // vertical rhythm jump.
-        <div className="alert alert-info">
-          You&apos;re on the free build tier ({ent.propertyLimit} property).{' '}
-          <Link href="/dashboard/billing" className="gradient-text" style={{ fontWeight: 600 }}>
-            Choose a plan
-          </Link>{' '}
-          to publish more properties and unlock concierge personality control, co-hosts, cloning, and review nudges.
+        <div className={`alert alert-${planBanner.tone}`} data-testid={`plan-banner-${planBanner.variant}`}>
+          <strong style={{ display: 'block', marginBottom: '.2rem' }}>{planBanner.title}</strong>
+          {planBanner.body}{' '}
+          <Link href={planBanner.ctaHref} className="gradient-text" style={{ fontWeight: 600 }}>
+            {planBanner.ctaLabel}
+          </Link>
         </div>
-      )}
+      ) : null}
 
       <AttentionStrip openEscalations={escCount} openServiceRequests={svcCount} lowRatings={lowRatings} />
 

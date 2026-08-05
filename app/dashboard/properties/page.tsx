@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
+import { propertyUsageLine } from '@/lib/dashboard/plan-banner';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,9 @@ export default async function PropertiesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Properties</h1>
-          <p className="muted" style={{ fontSize: '.9rem' }}>{gate.used} of {ent.propertyLimit} used on your plan.</p>
+          <p className="muted" style={{ fontSize: '.9rem' }} data-testid="property-usage-line">
+            {propertyUsageLine(gate.used, ent.propertyLimit, ent.active)}
+          </p>
         </div>
         {gate.ok ? (
           // Same treatment as the home dashboard action, so the primary

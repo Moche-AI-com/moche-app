@@ -360,6 +360,10 @@
   .alert { padding: .85rem 1rem; border-radius: var(--radius-md); font-size: .9rem; border: 1px solid var(--border-strong); }
   .alert-error { background: rgba(255,138,92,.1); border-color: var(--coral); color: var(--coral-soft); }
   .alert-success { background: rgba(51,230,212,.1); border-color: var(--teal); color: var(--teal); }
+  /* Between info and error: something the host should act on soon, but nothing is
+     broken yet (a trial about to lapse). Borrows the coral border for urgency but
+     keeps body-text color so it does not read as a failure. */
+  .alert-warn { background: rgba(255,138,92,.07); border-color: var(--coral); }
   .alert-info { background: var(--surface-2); color: var(--text-muted); }
 
   /* Dashboard top nav: horizontal-scroll link rail so it never overflows on phones */
