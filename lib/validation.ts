@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RESTRICTED_TOPIC_KEYS, TONE_PRESET_IDS } from '@/lib/constants';
 import { Constants } from '@/lib/database.types';
 
 export const emailSchema = z.string().email().max(320);
@@ -77,7 +78,9 @@ export const propertyCreateWithGeoSchema = propertyCreateSchema.extend({
 });
 
 export const propertySettingsSchema = z.object({
-  conciergeTone: z.string().trim().max(2000).optional(),
+  // A preset ID, never prose (P4-06). Anything else is rejected here rather than
+  // being trimmed and stored, so freeform tone text cannot reach the model.
+  conciergeTone: z.enum(TONE_PRESET_IDS).optional(),
   confidenceThreshold: z.number().min(0).max(1).optional(),
   gracePeriodHours: z.number().int().min(0).max(168).optional(),
   aiTemperature: z.number().min(0).max(2).optional(),
@@ -89,6 +92,11 @@ export const propertySettingsSchema = z.object({
   conciergeName: z.string().trim().max(80).optional(),
   systemPromptOverride: z.string().trim().max(4000).optional(),
   responseLength: z.enum(['concise', 'balanced', 'detailed']).optional(),
+  // Checkbox selections. Unknown keys are rejected outright rather than dropped,
+  // so a mismatched form and server surface as an error instead of quietly
+  // un-restricting a topic the host thinks is switched on.
+  restrictedTopicKeys: z.array(z.enum(RESTRICTED_TOPIC_KEYS)).max(RESTRICTED_TOPIC_KEYS.length).optional(),
+  // Free-text "other" restricted topics only.
   restrictedTopics: z.string().trim().max(1000).optional(),
   language: z.string().trim().max(40).optional(),
 });

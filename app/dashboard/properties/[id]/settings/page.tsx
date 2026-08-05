@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { hasPendingLegacyTone, resolveRestrictedTopicKeys, suggestTonePreset } from '@/lib/concierge/tone';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOURS, DEFAULT_CONCIERGE_NAME, DEFAULT_RESPONSE_LENGTH, PLANS } from '@/lib/constants';
 import { SettingsForms } from './SettingsForms';
@@ -24,7 +25,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
   const planName = ent.planId ? PLANS[ent.planId].name : null;
   const { data: settings } = await supabase
     .from('property_settings')
-    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, review_url, modules, concierge_name, system_prompt_override, response_length, restricted_topics, language, is_premium_override')
+    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, review_url, modules, concierge_name, system_prompt_override, response_length, restricted_topics, restricted_topic_keys, language, is_premium_override, legacy_tone_note, legacy_tone_ack_at')
     .eq('property_id', property.id)
     .maybeSingle();
 
@@ -42,6 +43,15 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
     system_prompt_override: settings?.system_prompt_override ?? null,
     response_length: (settings?.response_length ?? DEFAULT_RESPONSE_LENGTH) as string,
     restricted_topics: settings?.restricted_topics ?? null,
+    restricted_topic_keys: resolveRestrictedTopicKeys(settings?.restricted_topic_keys) as string[],
+    // Pending only while the host has an un-answered legacy tone note; drives the
+    // confirmation banner and, until answered, the live guest prompt.
+    legacy_tone_note: settings?.legacy_tone_note ?? null,
+    legacy_tone_pending: hasPendingLegacyTone({
+      legacyToneNote: settings?.legacy_tone_note,
+      legacyToneAckAt: settings?.legacy_tone_ack_at,
+    }),
+    suggested_tone_preset: suggestTonePreset(settings?.legacy_tone_note) as string,
     language: settings?.language ?? 'auto',
     is_premium_override: settings?.is_premium_override ?? false,
   };

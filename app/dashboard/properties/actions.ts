@@ -9,7 +9,7 @@ import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
 import { audit } from '@/lib/audit';
-import { DEFAULT_MODULES } from '@/lib/constants';
+import { DEFAULT_MODULES, RESTRICTED_TOPIC_KEYS, TONE_PRESET_IDS } from '@/lib/constants';
 import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
 import { capture } from '@/lib/posthog-server';
@@ -173,6 +173,13 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
     modules[key] = formData.get(`module_${key}`) === 'on';
   }
 
+  // Restricted topics arrive as one checkbox per option so an unchecked box is an
+  // absence rather than a value to parse. Only submitted keys are collected; the
+  // schema then rejects anything not in RESTRICTED_TOPIC_KEYS.
+  const restrictedTopicKeys = RESTRICTED_TOPIC_KEYS.filter(
+    (key) => formData.get(`restricted_topic_${key}`) === 'on',
+  );
+
   const rawTemp = formData.get('aiTemperature');
   const rawThreshold = formData.get('confidenceThreshold');
   const rawGrace = formData.get('gracePeriodHours');
@@ -185,6 +192,7 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
     conciergeName: formData.get('conciergeName') || undefined,
     systemPromptOverride: formData.get('systemPromptOverride') || undefined,
     responseLength: formData.get('responseLength') || undefined,
+    restrictedTopicKeys,
     restrictedTopics: formData.get('restrictedTopics') || undefined,
     language: formData.get('language') || undefined,
     // Review nudge is driven by the module toggle below; mirror it onto the dedicated flag.
@@ -202,6 +210,9 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
         ...(d.conciergeName !== undefined ? { concierge_name: d.conciergeName } : {}),
         ...(d.systemPromptOverride !== undefined ? { system_prompt_override: d.systemPromptOverride || null } : {}),
         ...(d.responseLength !== undefined ? { response_length: d.responseLength } : {}),
+        ...(d.restrictedTopicKeys !== undefined
+          ? { restricted_topic_keys: d.restrictedTopicKeys as unknown as Json }
+          : {}),
         ...(d.restrictedTopics !== undefined ? { restricted_topics: d.restrictedTopics || null } : {}),
         ...(d.language !== undefined ? { language: d.language } : {}),
         ...(d.reviewNudgeEnabled !== undefined ? { review_nudge_enabled: d.reviewNudgeEnabled } : {}),
@@ -239,6 +250,91 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
   revalidatePath(`/dashboard/properties/${propertyId}`);
   revalidatePath(`/dashboard/properties/${propertyId}/settings`);
   return { success: 'Concierge settings saved.' };
+}
+
+// Resolve a pre-preset freeform tone note (P4-07).
+//
+// Tone used to be a free text box. Two live properties still hold prose there,
+// including a deliberate personality the host clearly wanted. Rather than guess,
+// the note keeps driving the guest prompt verbatim until the host picks one of two
+// outcomes here:
+//
+//   keep    - move the prose into the custom instructions field, where freeform
+//             text is still allowed, and apply the chosen preset on top of it.
+//   discard - drop the prose and use the chosen preset alone.
+//
+// Either way legacy_tone_ack_at is stamped, which is what flips the guest prompt
+// off the legacy note. Until then nothing about the concierge changes.
+export async function resolveLegacyToneAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.editProperty) return { error: 'You do not have permission to edit this property.' };
+
+  const choice = String(formData.get('choice') ?? '');
+  if (choice !== 'keep' && choice !== 'discard') return { error: 'Choose whether to keep or replace your old tone note.' };
+
+  const preset = String(formData.get('conciergeTone') ?? '');
+  if (!(TONE_PRESET_IDS as readonly string[]).includes(preset)) {
+    return { error: 'Choose one of the tone presets.' };
+  }
+
+  const supabase = createClient();
+  const { data: current } = await supabase
+    .from('property_settings')
+    .select('legacy_tone_note, legacy_tone_ack_at, system_prompt_override')
+    .eq('property_id', propertyId)
+    .maybeSingle();
+
+  const note = current?.legacy_tone_note?.trim() ?? '';
+  // Already answered, or nothing to answer. Treated as success rather than an error
+  // so a double submit or a stale tab does not look broken to the host.
+  if (!note || current?.legacy_tone_ack_at) {
+    revalidatePath(`/dashboard/properties/${propertyId}/settings`);
+    return { success: 'Your tone settings are already up to date.' };
+  }
+
+  // Appended rather than overwritten so an existing custom instruction survives.
+  const existingOverride = current?.system_prompt_override?.trim() ?? '';
+  const mergedOverride =
+    choice === 'keep'
+      ? [existingOverride, note].filter(Boolean).join('\n\n').slice(0, 4000)
+      : existingOverride;
+
+  const { error } = await supabase
+    .from('property_settings')
+    .update({
+      concierge_tone: preset,
+      legacy_tone_note: null,
+      legacy_tone_ack_at: new Date().toISOString(),
+      ...(choice === 'keep' ? { system_prompt_override: mergedOverride || null } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('property_id', propertyId);
+
+  if (error) {
+    log.warn('legacy_tone_resolve_failed', { error: error.message });
+    return { error: 'Could not update your tone settings. Please try again.' };
+  }
+
+  await audit(supabase, {
+    action: 'property.settings.legacy_tone_resolved',
+    actorProfileId: access.property.host_account_id,
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+    // The prose itself is recorded so a host who picked "discard" by mistake can
+    // still recover what they had written.
+    metadata: { choice, preset, previous_note: note },
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  revalidatePath(`/dashboard/properties/${propertyId}/settings`);
+  return {
+    success:
+      choice === 'keep'
+        ? 'Saved. Your old tone note now lives in custom instructions.'
+        : 'Saved. Your concierge now uses the preset you picked.',
+  };
 }
 
 // Review Nudge config — enable, destination review_url, and the "auto" toggle
@@ -414,6 +510,13 @@ export async function clonePropertyAction(formData: FormData): Promise<void> {
     concierge_tone: srcSettings?.concierge_tone ?? undefined,
     confidence_threshold: srcSettings?.confidence_threshold ?? undefined,
     grace_period_hours: srcSettings?.grace_period_hours ?? undefined,
+    // Restricted topics are a safety setting, so a clone inherits them rather than
+    // silently falling back to the defaults.
+    restricted_topic_keys: (srcSettings?.restricted_topic_keys ?? undefined) as Json | undefined,
+    restricted_topics: srcSettings?.restricted_topics ?? undefined,
+    // A pending legacy tone note is deliberately NOT cloned: the new property starts
+    // on a preset, so there is nothing for its host to be asked about.
+    legacy_tone_ack_at: new Date().toISOString(),
   });
 
   // Copy manual brain items (text-based). Ingested chunks are re-embedded lazily; here we

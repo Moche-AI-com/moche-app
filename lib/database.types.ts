@@ -1848,9 +1848,12 @@ export type Database = {
           grace_period_hours: number
           is_premium_override: boolean
           language: string
+          legacy_tone_ack_at: string | null
+          legacy_tone_note: string | null
           modules: Json
           property_id: string
           response_length: string
+          restricted_topic_keys: Json
           restricted_topics: string | null
           review_nudge_auto: boolean
           review_nudge_enabled: boolean
@@ -1866,9 +1869,12 @@ export type Database = {
           grace_period_hours?: number
           is_premium_override?: boolean
           language?: string
+          legacy_tone_ack_at?: string | null
+          legacy_tone_note?: string | null
           modules?: Json
           property_id: string
           response_length?: string
+          restricted_topic_keys?: Json
           restricted_topics?: string | null
           review_nudge_auto?: boolean
           review_nudge_enabled?: boolean
@@ -1884,9 +1890,12 @@ export type Database = {
           grace_period_hours?: number
           is_premium_override?: boolean
           language?: string
+          legacy_tone_ack_at?: string | null
+          legacy_tone_note?: string | null
           modules?: Json
           property_id?: string
           response_length?: string
+          restricted_topic_keys?: Json
           restricted_topics?: string | null
           review_nudge_auto?: boolean
           review_nudge_enabled?: boolean
