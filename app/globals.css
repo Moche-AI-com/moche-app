@@ -260,15 +260,43 @@
         2.5s for the data-hydrated marker set by <Providers>; if it never
         arrives it sets data-reveal-failsafe and everything is forced visible.
 
-     Both are scoped to the html element rather than implemented as a CSS
-     animation on .reveal itself, because a filling animation would also
-     override the scroll transition and reveal every below-the-fold section
-     early -- defeating the effect it is meant to protect. */
+     Both are scoped to the html element rather than applied to .reveal
+     globally, because a blanket filling animation would also override the
+     scroll transition and reveal every below-the-fold section early --
+     defeating the effect it is meant to protect. The one place an animation
+     IS the right tool is the first screen; see [data-eager] below. */
   html:not([data-js='on']) .reveal,
   html[data-reveal-failsafe='on'] .reveal {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+
+  /* ---- Above-the-fold reveals -----------------------------------------
+     The failsafes above catch JS *failing*. They do not help with JS merely
+     being late, which is the common case: hydration lands roughly 300ms after
+     first paint on a fast connection and much later on a slow device, and
+     until it does the hero -- the LCP element -- is still at opacity 0. The
+     page reads as blank below the header for that entire window.
+
+     Marking the first screen [data-eager] plays the same entrance from CSS as
+     soon as styles apply, with no JS involved at all. Once <Reveal> hydrates
+     and its observer fires, data-shown flips to 'true', this rule stops
+     matching, and the [data-shown='true'] rule holds the identical end state,
+     so the handover is invisible whenever it happens.
+
+     Scoped to [data-js='on'] so it cannot fight the no-JS failsafe, and to
+     no-preference so it cannot fight the reduced-motion block below, both of
+     which are lower specificity than this selector. */
+  @media (prefers-reduced-motion: no-preference) {
+    html[data-js='on'] .reveal[data-eager][data-shown='false'] {
+      animation: reveal-in 620ms var(--ease-out) var(--reveal-delay, 0ms) both;
+    }
+  }
+
+  @keyframes reveal-in {
+    from { opacity: 0; transform: translate3d(0, 18px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
   }
 
   /* Reduced motion: content must still be visible, so the end state is
@@ -279,6 +307,7 @@
       opacity: 1;
       transform: none;
       transition: none;
+      animation: none;
     }
     .rise-in { animation: none; opacity: 1; }
   }

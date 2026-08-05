@@ -27,14 +27,14 @@ export function Hero() {
   return (
     <section className={styles.hero}>
       <div className={`wrap ${styles.heroCopy}`}>
-        <Reveal as="h1" className={styles.heroTitle}>
+        <Reveal as="h1" eager className={styles.heroTitle}>
           Run every property from one workspace
         </Reveal>
-        <Reveal as="p" delay={90} className={styles.heroSubtitle}>
+        <Reveal as="p" eager delay={90} className={styles.heroSubtitle}>
           One place to answer guests, keep every property&apos;s details straight, and turn more
           stays into five-star reviews.
         </Reveal>
-        <Reveal delay={170} className={styles.heroActions}>
+        <Reveal eager delay={170} className={styles.heroActions}>
           <Link href="/signup" className="btn btn-primary btn-lg">
             Start free trial
           </Link>
@@ -45,12 +45,12 @@ export function Hero() {
             Request a demo
           </a>
         </Reveal>
-        <Reveal as="p" delay={240} className={styles.heroTrialNote}>
+        <Reveal as="p" eager delay={240} className={styles.heroTrialNote}>
           One month free on the top tier, up to 5 properties. Card required, cancel anytime.
         </Reveal>
       </div>
 
-      <Reveal delay={200} className={styles.heroStrip}>
+      <Reveal eager delay={200} className={styles.heroStrip}>
         <ul className={styles.heroStripTrack}>
           {FRAMES.map((frame, i) => (
             <li

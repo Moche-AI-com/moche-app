@@ -59,9 +59,14 @@ export const viewport: Viewport = {
 //    comfortably past hydration on a slow connection, so a healthy load never
 //    trips it. See the reveal failsafe block in app/globals.css.
 //
+//    The window is 1200ms rather than the 2500ms it started at: the hero now
+//    plays its entrance from CSS via [data-eager], so this timer only has to
+//    rescue below-the-fold content. Nothing visible is waiting on it, so a
+//    shorter fuse costs nothing and cuts what a broken-JS visitor stares at.
+//
 // Wrapped in try/catch because localStorage throws in some privacy modes, and
 // the reveal guard must still run if the theme read fails.
-const BOOT = `var d=document.documentElement;d.setAttribute('data-js','on');try{var t=localStorage.getItem('moche-theme');if(t==='dark'||t==='light'){d.setAttribute('data-theme',t)}}catch(e){}setTimeout(function(){if(!d.hasAttribute('data-hydrated')){d.setAttribute('data-reveal-failsafe','on')}},2500);`;
+const BOOT = `var d=document.documentElement;d.setAttribute('data-js','on');try{var t=localStorage.getItem('moche-theme');if(t==='dark'||t==='light'){d.setAttribute('data-theme',t)}}catch(e){}setTimeout(function(){if(!d.hasAttribute('data-hydrated')){d.setAttribute('data-reveal-failsafe','on')}},1200);`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
