@@ -209,7 +209,7 @@ function ReviewNudgeForm({ propertyId, settings, reviewUnlocked, planName }: { p
               <p className="muted" style={{ fontSize: '.78rem', marginBottom: '.75rem' }}>
                 {planName ? `You’re on ${planName}. ` : ''}The review nudge invites satisfied guests to leave a review at your chosen link.
               </p>
-              <Link href="/dashboard/billing" className="btn btn-primary btn-sm" data-testid="review-nudge-upgrade-link">Upgrade to Pro</Link>
+              <Link href="/dashboard/profile/billing" className="btn btn-primary btn-sm" data-testid="review-nudge-upgrade-link">Upgrade to Pro</Link>
             </div>
           </div>
         ) : null}
@@ -433,7 +433,7 @@ function ConciergeForm({ propertyId, settings, premiumUnlocked, planName }: { pr
               <p className="muted" style={{ fontSize: '.78rem', marginBottom: '.75rem' }}>
                 {planName ? `You’re on ${planName}. ` : ''}Unlock the concierge name, custom system prompt, tone &amp; language, response length, and restricted topics.
               </p>
-              <Link href="/dashboard/billing" className="btn btn-primary btn-sm" data-testid="premium-upgrade-link">Upgrade to Pro</Link>
+              <Link href="/dashboard/profile/billing" className="btn btn-primary btn-sm" data-testid="premium-upgrade-link">Upgrade to Pro</Link>
             </div>
           </div>
         ) : null}

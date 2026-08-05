@@ -138,7 +138,7 @@ export async function POST(req: Request) {
           kind: 'billing',
           title: 'Subscription active',
           body: fields.plan ? `Your ${fields.plan} plan is now active.` : 'Your subscription is now active.',
-          link: '/dashboard/billing',
+          link: '/dashboard/profile/billing',
         });
         break;
       }
@@ -205,7 +205,7 @@ export async function POST(req: Request) {
               kind: 'billing',
               title: 'Payment received',
               body: 'Your payment went through and your subscription is active again.',
-              link: '/dashboard/billing',
+              link: '/dashboard/profile/billing',
             });
           }
         }
@@ -240,7 +240,7 @@ export async function POST(req: Request) {
             kind: 'billing',
             title: 'Payment failed',
             body: 'We could not process your latest payment. Please update your billing details.',
-            link: '/dashboard/billing',
+            link: '/dashboard/profile/billing',
           });
         }
         break;

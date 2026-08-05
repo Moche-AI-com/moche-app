@@ -89,7 +89,7 @@ export function planBannerFor(ent: PlanBannerInput, now: Date = new Date()): Pla
         ? `Billing on your ${planName} plan needs attention, so your concierge is not answering guests right now. Your properties and Brain are untouched.`
         : 'Billing needs attention, so your concierge is not answering guests right now. Your properties and Brain are untouched.',
       ctaLabel: 'Fix billing',
-      ctaHref: '/dashboard/billing',
+      ctaHref: '/dashboard/profile/billing',
     };
   }
 
@@ -106,7 +106,7 @@ export function planBannerFor(ent: PlanBannerInput, now: Date = new Date()): Pla
             : `${pluralize(left, 'day')} left in your trial`,
       body: `You have every premium feature plus ${capsSentence(ent.propertyLimit, ent.conversationAllowance)}. Pick a plan before the trial ends to keep your concierge answering.`,
       ctaLabel: 'Choose a plan',
-      ctaHref: '/dashboard/billing',
+      ctaHref: '/dashboard/profile/billing',
     };
   }
 
@@ -117,7 +117,7 @@ export function planBannerFor(ent: PlanBannerInput, now: Date = new Date()): Pla
       title: 'You are on the free build tier',
       body: `Build and preview ${capsSentence(ent.propertyLimit, ent.conversationAllowance)}. Choose a plan to publish, add more properties, and unlock concierge personality, co-hosts, cloning, and review nudges.`,
       ctaLabel: 'Choose a plan',
-      ctaHref: '/dashboard/billing',
+      ctaHref: '/dashboard/profile/billing',
     };
   }
 

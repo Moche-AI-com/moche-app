@@ -1113,3 +1113,95 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
 @media print {
   .crumb-row { display: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Profile settings shell (backlog P6-05).
+   Two columns on wide screens with a sticky rail; on narrow screens the rail
+   becomes a horizontally scrollable pill row so the host is never made to scroll
+   past ten nav items to reach the section they opened.
+   --------------------------------------------------------------------------- */
+.profile-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.profile-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: .4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: .35rem;
+  /* Bleed to the container edge so a cut-off pill reads as scrollable. */
+  scroll-snap-type: x proximity;
+}
+
+.profile-nav-list::-webkit-scrollbar { display: none; }
+
+.profile-nav-link {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 0 .85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: .88rem;
+  font-weight: 500;
+  text-decoration: none;
+  scroll-snap-align: start;
+  transition: color var(--tr), background-color var(--tr), border-color var(--tr);
+}
+
+.profile-nav-link:hover { color: var(--text); border-color: var(--border-strong); }
+
+.profile-nav-link.is-active {
+  background: var(--surface-2);
+  border-color: var(--teal);
+  color: var(--text);
+}
+
+.profile-body { min-width: 0; }
+
+@media (min-width: 900px) {
+  .profile-shell { grid-template-columns: 232px minmax(0, 1fr); gap: 2rem; }
+
+  .profile-nav { position: sticky; top: 1rem; }
+
+  .profile-nav-list {
+    flex-direction: column;
+    gap: .15rem;
+    overflow-x: visible;
+    padding-bottom: 0;
+  }
+
+  .profile-nav-link {
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    background: transparent;
+    padding: 0 .75rem;
+  }
+
+  .profile-nav-link.is-active {
+    background: var(--surface-2);
+    border-color: var(--border);
+    /* A left rail reads as "you are here" even for someone who cannot rely on
+       the background-colour difference alone. */
+    box-shadow: inset 3px 0 0 0 var(--teal);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-nav-link { transition: none; }
+}
+
+@media print {
+  .profile-nav { display: none !important; }
+  .profile-shell { display: block !important; }
+}

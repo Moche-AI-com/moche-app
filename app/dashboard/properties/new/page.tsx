@@ -10,7 +10,7 @@ export default async function NewPropertyPage() {
   const ctx = await requireSession();
   const supabase = createClient();
   const gate = await canCreateProperty(supabase, ctx.account.id);
-  if (!gate.ok) redirect('/dashboard/billing?reason=limit');
+  if (!gate.ok) redirect('/dashboard/profile/billing?reason=limit');
 
   return (
     <div>

@@ -164,8 +164,8 @@ export async function POST(req: Request) {
       // the card now means the trial converts on its own.
       payment_method_collection: 'always',
       metadata: { host_account_id: hostAccountId, plan: planId },
-      success_url: `${publicEnv.appUrl}/dashboard/billing?status=success`,
-      cancel_url: `${publicEnv.appUrl}/dashboard/billing?status=cancelled`,
+      success_url: `${publicEnv.appUrl}/dashboard/profile/billing?status=success`,
+      cancel_url: `${publicEnv.appUrl}/dashboard/profile/billing?status=cancelled`,
       allow_promotion_codes: true,
     });
 
