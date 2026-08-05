@@ -6,6 +6,7 @@ import { Logo } from '@/components/Logo';
 import { logoutAction } from '@/app/(auth)/actions';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { NotificationBell, type NotificationItem } from '@/components/dashboard/NotificationBell';
+import { isNavActive } from '@/lib/dashboard/nav-active';
 
 // `ownerOnly` links are hidden from invited members (co-hosts, cleaners,
 // managers). This is presentation only: hiding a tab is a courtesy so the nav
@@ -19,7 +20,7 @@ const LINKS: Array<{ href: string; label: string; ownerOnly?: boolean }> = [
   { href: '/dashboard/extras', label: 'Extras' },
   { href: '/dashboard/updates', label: 'Review' },
   { href: '/dashboard/reports', label: 'Reports' },
-  { href: '/dashboard/billing', label: 'Billing', ownerOnly: true },
+  { href: '/dashboard/profile/billing', label: 'Billing', ownerOnly: true },
   { href: '/dashboard/profile', label: 'Profile' },
 ];
 
@@ -35,6 +36,7 @@ export function DashboardNav({
 }) {
   const pathname = usePathname();
   const links = LINKS.filter((l) => !l.ownerOnly || isOwner);
+  const hrefs = links.map((l) => l.href);
   return (
     <header className="dash-nav" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 50 }}>
       <div className="wrap dash-nav-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64, gap: '1rem' }}>
@@ -50,7 +52,8 @@ export function DashboardNav({
         </div>
         <nav className="dash-nav-links" style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap' }}>
           {links.map((l) => {
-            const active = l.href === '/dashboard' ? pathname === l.href : pathname.startsWith(l.href);
+            // Most-specific-tab-wins, because Billing now lives inside /dashboard/profile.
+            const active = isNavActive(pathname, l.href, hrefs);
             return (
               // Styling lives entirely in globals.css (.dash-tab) — inline styles would
               // beat the :hover/:focus-visible rules and kill the hover affordance.
