@@ -179,8 +179,7 @@ function DomeMark({ size = 40 }: { size?: number }) {
         </defs>
         <path d="M5 34h38" stroke={`url(#${gid})`} strokeWidth="2.4" strokeLinecap="round" />
         <path d="M8 34a16 16 0 0 1 32 0" stroke={`url(#${gid})`} strokeWidth="2.4" fill="none" />
-        <path d="M13 34a11 11 0 0 1 22 0" stroke={`url(#${gid})`} strokeWidth="1.7" opacity="0.7" fill="none" />
-        <path d="M18.5 34a5.5 5.5 0 0 1 11 0" stroke={`url(#${gid})`} strokeWidth="1.7" opacity="0.55" fill="none" />
+        <path d="M13 34a11 11 0 0 1 22 0" stroke={`url(#${gid})`} strokeWidth="2.4" opacity="0.5" fill="none" />
         <path d="M20.5 34v-4.2a3.5 3.5 0 0 1 7 0V34" fill={GOLD} opacity="0.9" />
         <circle cx="24" cy="12" r="2.4" fill={GOLD} />
         <path d="M24 12v-4" stroke={GOLD} strokeWidth="1.6" strokeLinecap="round" />
