@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
 import { propertyCreateWithGeoSchema, propertyUpdateSchema, propertySettingsSchema } from '@/lib/validation';
 import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
+import { DEFAULT_HOST_LANGUAGE, resolveLanguage } from '@/lib/guest/languages';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
 import { audit } from '@/lib/audit';
@@ -209,6 +210,7 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
     restrictedTopicKeys,
     restrictedTopics: formData.get('restrictedTopics') || undefined,
     language: formData.get('language') || undefined,
+    hostLanguage: formData.get('hostLanguage') || undefined,
     // Review nudge is driven by the module toggle below; mirror it onto the dedicated flag.
     reviewNudgeEnabled: modules.review_nudge,
     modules,
@@ -243,6 +245,10 @@ export async function updatePropertySettingsAction(_prev: PropertyFormState, for
         ...(d.aiTemperature !== undefined ? { ai_temperature: d.aiTemperature } : {}),
         ...(d.confidenceThreshold !== undefined ? { confidence_threshold: d.confidenceThreshold } : {}),
         ...(d.gracePeriodHours !== undefined ? { grace_period_hours: d.gracePeriodHours } : {}),
+        // Free field, on purpose — see hostLanguage in propertySettingsSchema.
+        ...(d.hostLanguage !== undefined
+          ? { host_language: resolveLanguage(d.hostLanguage)?.code ?? DEFAULT_HOST_LANGUAGE }
+          : {}),
         ...premiumPatch,
         updated_at: new Date().toISOString(),
       },

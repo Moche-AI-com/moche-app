@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Info, Lock, Star } from 'lucide-react';
 import { updatePropertyAction, updatePropertySettingsAction, updateReviewNudgeAction, resolveLegacyToneAction, type PropertyFormState } from '../../actions';
 import { RESTRICTED_TOPIC_OPTIONS, TONE_PRESETS } from '@/lib/constants';
+import { DEFAULT_HOST_LANGUAGE, PORTAL_LANGUAGES } from '@/lib/guest/languages';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { PropertyCoverUploader } from '@/components/PropertyCoverUploader';
@@ -64,6 +65,7 @@ interface Settings {
   legacy_tone_pending: boolean;
   suggested_tone_preset: string;
   language: string;
+  host_language: string;
   is_premium_override: boolean;
 }
 
@@ -401,6 +403,28 @@ function ConciergeForm({ propertyId, settings, premiumUnlocked, planName }: { pr
           onChange={(e) => { const l = document.getElementById('graceOut'); if (l) l.textContent = String(e.target.value); }} />
         <p className="faint" style={{ fontSize: '.72rem', marginTop: '.25rem' }}>
           How long guests can keep using the portal after checkout. Now: <span id="graceOut">{settings.grace_period_hours ?? 24}</span>h
+        </p>
+      </div>
+
+      <div className="field" style={{ marginTop: '1rem' }}>
+        <label className="label" htmlFor="hostLanguage">Your language</label>
+        <select
+          className="select"
+          id="hostLanguage"
+          name="hostLanguage"
+          defaultValue={settings.host_language || DEFAULT_HOST_LANGUAGE}
+          data-testid="select-host-language"
+        >
+          {PORTAL_LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.nativeLabel === l.label ? l.label : `${l.label} — ${l.nativeLabel}`}
+            </option>
+          ))}
+        </select>
+        <p className="faint" style={{ fontSize: '.72rem', marginTop: '.4rem' }}>
+          Guests can switch the portal to their own language. When they do, anything that reaches
+          you — escalations, requests, notes — is translated into this language first, with the
+          guest&rsquo;s original wording kept underneath.
         </p>
       </div>
 

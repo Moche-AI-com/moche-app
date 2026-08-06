@@ -100,6 +100,11 @@ export const propertySettingsSchema = z.object({
   // Free-text "other" restricted topics only.
   restrictedTopics: z.string().trim().max(1000).optional(),
   language: z.string().trim().max(40).optional(),
+  // Guest UX pass — the host's own reading language. Escalations and guest
+  // requests written in another language are translated into it before they
+  // reach the host, so this is deliberately NOT a premium field: a host who
+  // cannot read the message cannot run the property.
+  hostLanguage: z.string().trim().max(16).optional(),
 });
 
 export const brainCategoryEnum = z.enum(Constants.public.Enums.brain_category);
@@ -218,11 +223,17 @@ export const linkMintSchema = z.object({
 
 export const guestChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
+  // Guest UX pass — the language the guest picked in the portal Globe picker.
+  // Optional so existing clients keep working unchanged; unknown values are
+  // resolved (or discarded) server-side by lib/guest/languages.ts rather than
+  // being enumerated here, so adding a language never needs a schema change.
+  language: z.string().trim().max(16).optional(),
 });
 
 // Guest-initiated manual escalation ("ring the host") — the guest types their issue.
 export const guestEscalateSchema = z.object({
   message: z.string().trim().min(1, 'Please describe your issue.').max(2000),
+  language: z.string().trim().max(16).optional(),
 });
 
 export const guestServiceRequestSchema = z.object({
@@ -288,6 +299,20 @@ export const extraOfferSchema = z.object({
   isFavorite: z.boolean().default(false),
   // Advisory per-request ceiling. Empty means the app default.
   maxQuantity: z.number().int().min(1).max(10).optional().nullable(),
+  // 'quantity' is a countable item and keeps the guest-side stepper; 'package' is a
+  // single bookable bundle (golf package, wedding package) and hides it. Mirrors the
+  // guest_extras_kind_check constraint so a bad value fails here with a clean message.
+  kind: z.enum(['quantity', 'package']).default('quantity'),
+  // What one unit is, in the words a guest would use: "towels", "chairs", "bikes".
+  // Only meaningful for 'quantity' offers.
+  unitLabel: z.string().trim().max(40).optional().or(z.literal('')),
+  // The axis the variants vary along, e.g. "Colour", "Size". Shown as the picker's label.
+  optionLabel: z.string().trim().max(60).optional().or(z.literal('')),
+  // Newline-separated variants as typed by the host; normalized to an array by
+  // normalizeExtraOptions() (trimmed, de-duplicated, capped) before it reaches the DB.
+  options: z.string().max(1000).optional().or(z.literal('')),
+  // Longer guest-facing detail: what's included, exclusions, lead time.
+  details: z.string().trim().max(2000).optional().or(z.literal('')),
 });
 
 // Add-on — guest requests an extra; routes through the existing escalation path.
@@ -299,6 +324,11 @@ export const guestExtraRequestSchema = z.object({
   // instead of as a database constraint violation.
   quantity: z.number().int().min(1).max(20).optional(),
   note: z.string().trim().max(1000).optional(),
+  // Guest UX pass — the variant the guest picked ("Blue bike"). Validated
+  // against the offer's own `options` array server-side, not here: only the
+  // offer row knows which strings are legitimate.
+  variant: z.string().trim().max(120).optional(),
+  language: z.string().trim().max(16).optional(),
 });
 
 // Add-on — one-tap product feedback (guest path, via admin client).

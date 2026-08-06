@@ -11,6 +11,8 @@ import { publicEnv } from '@/lib/env';
 import { capture } from '@/lib/posthog-server';
 import type { ChatMessage } from '@/lib/ai';
 import { log } from '@/lib/log';
+import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
+import { translateForHost, notificationBody } from '@/lib/guest/translate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,6 +32,13 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   const question = parsed.data.message;
 
   const admin = createAdminClient();
+
+  // Guest UX pass — the guest's own language choice from the portal Globe picker.
+  // It OVERRIDES the host's configured response language: a host setting a default
+  // is expressing a preference, but a guest actively picking their language is
+  // stating a need. Unknown values resolve to null and fall through to the host
+  // setting, so a malformed client can never break the reply.
+  const guestLanguage = resolveLanguage(parsed.data.language);
 
   // Confirm the slug matches the session's property (defense in depth).
   const { data: property } = await admin
@@ -59,7 +68,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   // plus the premium persona/overrides). All layered on the server-side master prompt.
   const { data: settings } = await admin
     .from('property_settings')
-    .select('concierge_tone, ai_temperature, confidence_threshold, concierge_name, system_prompt_override, response_length, restricted_topics, restricted_topic_keys, language, legacy_tone_note, legacy_tone_ack_at')
+    .select('concierge_tone, ai_temperature, confidence_threshold, concierge_name, system_prompt_override, response_length, restricted_topics, restricted_topic_keys, language, host_language, legacy_tone_note, legacy_tone_ack_at')
     .eq('property_id', session.propertyId)
     .maybeSingle();
 
@@ -107,7 +116,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
       responseLength: settings?.response_length ?? undefined,
       restrictedTopics: settings?.restricted_topics ?? undefined,
       restrictedTopicKeys: settings?.restricted_topic_keys ?? undefined,
-      language: settings?.language ?? undefined,
+      language: guestLanguage?.code ?? settings?.language ?? undefined,
       systemPromptOverride: settings?.system_prompt_override ?? undefined,
     },
     source: 'guest_chat',
@@ -127,13 +136,31 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     latency_ms: latencyMs,
   } as never);
 
-  // Escalate on low confidence: create an open escalation and notify the host.
+  // Persist the guest's language on the stay so any surface that later needs to know
+  // what the guest reads (host replies, notifications, a second device) does not have
+  // to trust a client-supplied value. Best-effort: never block the reply.
+  if (guestLanguage) {
+    void admin.from('stays').update({ guest_language: guestLanguage.code } as never).eq('id', session.stayId);
+  }
+
+  // Escalate on low confidence, or when the concierge explicitly declared it cannot
+  // answer from the property knowledge (the no-guessing contract). Either way the
+  // host gets a real, answerable question rather than the guest getting a guess.
   if (answer.shouldEscalate) {
+    // The host reads escalations in THEIR language. The guest's original wording is
+    // always preserved above the translation — a mistranslated door code or street
+    // name must never be the only copy the host sees.
+    const hostLanguage = settings?.host_language ?? DEFAULT_HOST_LANGUAGE;
+    // `unknownNote` is the model's own English restatement of what the host needs to
+    // answer, which is a far better prompt for the host than the raw guest turn.
+    const asked = answer.unknownNote ? `${question}\n\n(Concierge could not answer: ${answer.unknownNote})` : question;
+    const translated = await translateForHost(asked, guestLanguage?.code ?? null, hostLanguage);
+
     const { data: esc } = await admin.from('escalations').insert({
       property_id: session.propertyId,
       stay_id: session.stayId,
       conversation_id: conversationId,
-      question,
+      question: translated.text,
       status: 'open',
     } as never).select('id').single();
     const escId = (esc as { id: string } | null)?.id;
@@ -147,7 +174,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
         hostAccountId: (prop as { host_account_id: string }).host_account_id,
         kind: 'escalation',
         title: 'A guest question needs your input',
-        body: question.slice(0, 200),
+        body: notificationBody(translated, question),
         propertyId: session.propertyId,
         // Deep-link straight to the answer form (in-app + email fan-out use this).
         link: escId ? `/dashboard/escalations/${escId}` : '/dashboard/escalations',

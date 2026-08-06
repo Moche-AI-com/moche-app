@@ -4,10 +4,10 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
-  ConciergeBell, X, ArrowRight, Volume2, VolumeX, Zap, MapPin, Eye,
+  ConciergeBell, X, ArrowRight, Zap, MapPin, Eye,
   AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, Wrench,
   Paperclip, Loader2, CheckCircle2, Phone, Globe, ShoppingCart, ChevronLeft, ChevronRight,
-  Minus, type LucideIcon,
+  Minus, Search, Mail, Package, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
@@ -15,8 +15,14 @@ import { formatDistance } from '@/lib/local/distance';
 import { NEARBY_CATEGORY_LABEL } from '@/lib/local/categories';
 import {
   clampExtraQuantity, extraQuantityCeiling, groupExtrasByCategory, quantityAdvisory,
+  isPackageExtra, normalizeExtraOptions, quantitySummary,
   DEFAULT_EXTRA_QUANTITY, type ExtrasGroup,
 } from '@/lib/guest/extras';
+import {
+  PORTAL_LANGUAGES, AUTO_LANGUAGE, searchLanguages, languageNativeLabel, resolveLanguage,
+} from '@/lib/guest/languages';
+import { linkify } from '@/lib/guest/linkify';
+import { sectionizeHistory, sectionPreview, type HistoryMessage, type HistorySection } from '@/lib/guest/history';
 
 // Luxury concierge palette (per Feature 3 brief). Fixed dark base + gold accent so the
 // portal reads as a high-end hotel experience regardless of per-property brand colors.
@@ -35,16 +41,69 @@ const MESSAGE_HOST = '__MESSAGE_HOST__';
 const SERVICE_REQUEST = '__SERVICE_REQUEST__';
 
 interface SubChoice { label: string; query: string }
-interface Category { key: string; label: string; Icon: LucideIcon; subtitle: string; choices: SubChoice[] }
+interface Category {
+  key: string;
+  label: string;
+  Icon: LucideIcon;
+  subtitle: string;
+  choices: SubChoice[];
+  /**
+   * When set, tapping the card performs this action immediately instead of
+   * opening the sub-choice sheet. "Ask anything" uses it to drop the guest
+   * straight into the chat input — asking them to pick a canned question first
+   * is precisely the friction that card exists to avoid.
+   */
+  direct?: string;
+  /** Renders wider and with a filled treatment as the grid's lead action. */
+  primary?: boolean;
+}
 
 // Choice-driven categories (zero-typing UX). Each opens a sub-choice screen whose taps
 // fire a pre-formed natural-language query at the existing concierge chat API.
+// Sentinel query: open the chat straight away with the input focused. Used by the
+// "Ask anything" card, which must never make a guest tap through a sub-choice sheet
+// just to type their own question.
 const CATEGORIES: Category[] = [
   {
-    key: 'dining', label: 'Dining', Icon: UtensilsCrossed, subtitle: 'Where to eat & drink',
+    // Card-set rule (Guest UX pass): a conversational tile only earns its place if
+    // the concierge can answer its questions CONFIDENTLY from the property Brain or
+    // from verified local data. Questions whose answer only the host knows — where
+    // the toiletries live, which room is "bedroom 1", when the bins go out — are not
+    // tiles: they route to the host through Report an issue / Message your host, or
+    // are escalated automatically by the no-guessing contract in lib/guest/concierge.
+    key: 'ask', label: 'Ask anything', Icon: MessageCircle, subtitle: 'Type your own question',
+    // No sub-choices: this card opens the chat directly (see openCategory).
+    choices: [],
+    direct: FOCUS_INPUT,
+    primary: true,
+  },
+  {
+    key: 'stay', label: 'Your stay', Icon: KeyRound, subtitle: 'Arrival, departure & access',
     choices: [
-      { label: 'Casual Dining', query: 'What are the best casual dining spots nearby?' },
-      { label: 'Fine Dining', query: 'Can you recommend upscale or fine dining restaurants nearby?' },
+      { label: 'Check-in time', query: 'What is the check-in time and process?' },
+      { label: 'Check-out time', query: 'What is the check-out time and process?' },
+      { label: 'Getting in', query: 'How do I access the property — door code or lockbox?' },
+      { label: 'Early arrival', query: 'Is early check-in or luggage drop-off possible?' },
+      { label: 'Late checkout', query: 'Is a late check-out possible?' },
+      { label: 'Parking', query: 'Where can I park?' },
+    ],
+  },
+  {
+    key: 'house', label: 'In the home', Icon: Wifi, subtitle: 'WiFi, rules & essentials',
+    choices: [
+      { label: 'WiFi password', query: 'What is the WiFi network name and password?' },
+      { label: 'House rules', query: 'What are the house rules?' },
+      { label: 'Appliances', query: 'How do I use the appliances — TV, thermostat, coffee maker?' },
+      { label: 'Laundry', query: 'Is there a washer, dryer, or laundry service?' },
+      { label: 'Trash & recycling', query: 'How does the trash and recycling work?' },
+      { label: 'Emergency info', query: 'What should I do in an emergency, and who do I contact?' },
+    ],
+  },
+  {
+    key: 'dining', label: 'Eat & drink', Icon: UtensilsCrossed, subtitle: 'Restaurants, cafés & bars',
+    choices: [
+      { label: 'Casual dining', query: 'What are the best casual dining spots nearby?' },
+      { label: 'Fine dining', query: 'Can you recommend upscale or fine dining restaurants nearby?' },
       { label: 'Coffee', query: 'Where can I get great coffee nearby?' },
       { label: 'Drinks', query: 'What are good bars or places for a drink nearby?' },
       { label: 'Takeout', query: 'What are good takeout or delivery options nearby?' },
@@ -52,81 +111,40 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
-    key: 'local', label: 'Local Guide', Icon: Compass, subtitle: 'Explore the area',
+    key: 'local', label: 'Explore nearby', Icon: Compass, subtitle: 'Things to see & do',
     choices: [
-      { label: 'Top Attractions', query: 'What are the top attractions and things to do nearby?' },
-      { label: 'Nature & Outdoors', query: 'Are there good beaches, parks, or trails nearby?' },
-      { label: 'Family Friendly', query: 'What are some family-friendly activities nearby?' },
+      { label: 'Top attractions', query: 'What are the top attractions and things to do nearby?' },
+      { label: 'Nature & outdoors', query: 'Are there good beaches, parks, or trails nearby?' },
+      { label: 'Family friendly', query: 'What are some family-friendly activities nearby?' },
       { label: 'Nightlife', query: 'What is the nightlife like around here?' },
-      { label: 'Hidden Gems', query: "What are some local hidden gems most visitors don't know about?" },
-      { label: 'Getting Around', query: 'How do I get around the area — transit, taxis, or rideshare?' },
+      { label: 'Hidden gems', query: "What are some local hidden gems most visitors don't know about?" },
+      { label: 'Getting around', query: 'How do I get around the area — transit, taxis, or rideshare?' },
     ],
   },
   {
-    key: 'checkinout', label: 'Check-In / Out', Icon: KeyRound, subtitle: 'Arrival & departure',
+    key: 'favorites', label: "Host's picks", Icon: Star, subtitle: 'Personally recommended',
     choices: [
-      { label: 'Check-In Time', query: 'What is the check-in time and process?' },
-      { label: 'Check-Out Time', query: 'What is the check-out time and process?' },
-      { label: 'Access / Door Code', query: 'How do I access the property — door code or lockbox?' },
-      { label: 'Early Arrival', query: 'Is early check-in or luggage drop-off possible?' },
-      { label: 'Late Checkout', query: 'Is a late check-out possible?' },
+      { label: "Host's top picks", query: "What are the host's personal favorite recommendations nearby?" },
+      { label: 'Best restaurants', query: 'Which restaurants does the host recommend most?' },
+      { label: 'Must-see spots', query: 'What are the must-see spots the host recommends?' },
+      { label: 'Local favorites', query: 'What local favorites should I not miss?' },
     ],
   },
-  {
-    // Change 4: this category is for genuine questions about housekeeping only.
-    // Concrete requests-for-a-thing (fresh towels, a mid-stay clean) were moved out
-    // of these conversational chips — guests now reach them through the Extras card
-    // or the Report an issue / Request Supplies flow instead.
-    key: 'housekeeping', label: 'Housekeeping', Icon: Sparkles, subtitle: 'Comfort & supplies',
-    choices: [
-      { label: 'Toiletries', query: 'Where can I find extra toiletries and essentials?' },
-      { label: 'Trash & Recycling', query: 'How does the trash and recycling work?' },
-      { label: 'Laundry', query: 'Is there a washer, dryer, or laundry service?' },
-    ],
-  },
-  {
-    key: 'wifi', label: 'WiFi & Info', Icon: Wifi, subtitle: 'House essentials',
-    choices: [
-      { label: 'WiFi Password', query: 'What is the WiFi network name and password?' },
-      { label: 'House Rules', query: 'What are the house rules?' },
-      { label: 'Parking', query: 'Where can I park?' },
-      { label: 'Appliances', query: 'How do I use the appliances — TV, thermostat, coffee maker?' },
-      { label: 'Emergency Info', query: 'What should I do in an emergency, and who do I contact?' },
-    ],
-  },
-  {
-    key: 'favorites', label: 'Favorites', Icon: Star, subtitle: "Host's top picks",
-    choices: [
-      { label: "Host's Top Picks", query: "What are the host's personal favorite recommendations nearby?" },
-      { label: 'Best Restaurants', query: 'Which restaurants does the host recommend most?' },
-      { label: 'Must-See Spots', query: 'What are the must-see spots the host recommends?' },
-      { label: 'Local Favorites', query: 'What local favorites should I not miss?' },
-    ],
-  },
-  {
-    key: 'ask', label: 'Ask Anything', Icon: MessageCircle, subtitle: 'Your own question',
-    choices: [
-      { label: 'What can you help with?', query: 'What can you help me with during my stay?' },
-      { label: 'Plan my evening', query: 'Can you suggest a plan for my evening nearby?' },
-      { label: 'Type my own question', query: FOCUS_INPUT },
-    ],
-  },
-  // Change 4: the old 'Request' category mixed genuine questions with concrete
-  // requests-for-a-thing (supplies, maintenance, reporting an issue). Those now live
-  // in the dedicated Extras card and the Report an issue card below the grid, and
-  // "Message the Host" already has its own persistent link — so this conversational
-  // tile has been retired rather than deleted-and-forgotten (kept here, commented,
-  // per the "nothing is deleted" rule, in case a future question-only variant is needed).
-  // {
-  //   key: 'request', label: 'Request', Icon: ConciergeBell, subtitle: 'Ask the host for help',
-  //   choices: [
-  //     { label: 'Report an Issue', query: SERVICE_REQUEST },
-  //     { label: 'Request Supplies', query: 'Could I request some extra supplies?' },
-  //     { label: 'Maintenance Help', query: 'Something needs maintenance — can you help?' },
-  //     { label: 'Message the Host', query: MESSAGE_HOST },
-  //     { label: 'Something Else', query: FOCUS_INPUT },
-  //   ],
-  // },
+  // Retired tiles are kept here (commented, per the "nothing is deleted" rule) with the
+  // reason they were retired, so a future pass can see what was tried:
+  //
+  // 'request' — mixed genuine questions with concrete requests-for-a-thing. Those now
+  //   live in the Extras card and the Report an issue card.
+  //
+  // 'housekeeping' — retired in the Guest UX pass. Its chips ("Toiletries", "Trash &
+  //   Recycling", "Laundry") were the single largest source of confident-sounding
+  //   guesses: the concierge cannot know where a specific home keeps its toiletries.
+  //   The two chips the Brain reliably DOES cover (trash, laundry) moved into
+  //   'In the home'; "Toiletries" was dropped entirely and now escalates like any
+  //   other host-only fact.
+  //
+  // 'checkinout' / 'wifi' — merged into 'Your stay' and 'In the home' respectively, to
+  //   get the grid down to six tiles so a guest sees every option without scrolling.
 ];
 
 interface ChatPlaceRef {
@@ -172,6 +190,20 @@ export interface ExtraOffer {
   is_favorite: boolean;
   /** Advisory per-request ceiling set by the host; null means the app default. */
   max_quantity: number | null;
+  /**
+   * 'quantity' — a countable item with a stepper (towels, beach chairs, a bike).
+   * 'package'  — one bookable bundle (golf package, wedding package); no stepper.
+   * Absent on rows written before the Guest UX migration; treated as 'quantity'.
+   */
+  kind?: string | null;
+  /** Host-named axis of choice shown above the variant picker, e.g. "Colour". */
+  option_label?: string | null;
+  /** Concrete variants the guest picks between, e.g. ["Blue bike", "Pink bike"]. */
+  options?: string[] | null;
+  /** What one unit is, in guest words: "towels", "chairs". Shown beside the stepper. */
+  unit_label?: string | null;
+  /** Longer guest-facing detail: what's included, exclusions, lead time. */
+  details?: string | null;
 }
 
 /** Moche-AI dome/bell mark — inlined so the brand-scoped portal needs no external CSS. */
@@ -216,6 +248,13 @@ export function GuestPortal(props: {
 }) {
   const [verified, setVerified] = useState(props.initialVerified);
   const [guestName, setGuestName] = useState(props.guestName);
+  // Chat history moved OUT of the chat box and behind the brand pill. Owned here
+  // rather than in <Concierge> because the pill lives in the hero, above it — and
+  // because the sheet loads its own data, the two never need to share chat state.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // A host previewing the portal has no guest session, so there is no history to
+  // read and the endpoint would 401. The pill stays inert for them.
+  const historyAvailable = verified && !props.hostPreview;
 
   return (
     <div
@@ -245,10 +284,25 @@ export function GuestPortal(props: {
             ) : (
               <DomeMark size={40} />
             )}
-            <span className="gp-brandchip">
-              <DomeMark size={15} />
-              <span>Moche<span style={{ color: GOLD }}>.AI</span></span>
-            </span>
+            {historyAvailable ? (
+              <button
+                type="button"
+                className="gp-brandchip gp-brandchip-btn"
+                onClick={() => setHistoryOpen(true)}
+                data-testid="button-chat-history"
+                aria-label="Open your conversation history"
+                title="Your conversation history"
+              >
+                <DomeMark size={15} />
+                <span>Moche<span style={{ color: GOLD }}>.AI</span></span>
+                <ChevronRight size={13} aria-hidden style={{ opacity: 0.6, marginLeft: -2 }} />
+              </button>
+            ) : (
+              <span className="gp-brandchip">
+                <DomeMark size={15} />
+                <span>Moche<span style={{ color: GOLD }}>.AI</span></span>
+              </span>
+            )}
           </header>
           <div className="gp-hero-title">
             <div className="gp-eyebrow">Your Private Concierge</div>
@@ -287,6 +341,10 @@ export function GuestPortal(props: {
           />
         )}
 
+        {historyOpen && (
+          <ChatHistorySheet slug={props.slug} onClose={() => setHistoryOpen(false)} />
+        )}
+
         <footer className="gp-footer">
           <DomeMark size={14} />
           <span>Powered by Moche-AI · Your host verifies access. We never share your details.</span>
@@ -313,7 +371,12 @@ export function GuestPortal(props: {
           color: rgba(236,231,221,.62);
           opacity: 1;
         }
-        .gp-hero { position: relative; min-height: 58dvh; display: flex; overflow: hidden; }
+        /* Guest UX pass: the hero was 58dvh, which pushed every actionable card below
+           the fold and made "scroll" the first thing a guest did. 42dvh still reads as
+           a full-bleed property photo while letting the top of the card grid land in
+           view on a phone. */
+        .gp-hero { position: relative; min-height: 42dvh; display: flex; overflow: hidden; }
+        @media (min-width: 700px) { .gp-hero { min-height: 48dvh; } }
         .gp-hero-bg {
           position: absolute; inset: 0; background-size: cover; background-position: center;
           background-color: #14171f;
@@ -339,7 +402,7 @@ export function GuestPortal(props: {
           opacity: .9; margin-bottom: .35rem;
         }
         .gp-hero-title h1 {
-          font-size: clamp(2.4rem, 8vw, 3.6rem); line-height: 1.02; font-weight: 600;
+          font-size: clamp(1.9rem, 6.4vw, 3rem); line-height: 1.04; font-weight: 600;
           letter-spacing: -.01em; margin: 0; color: #fbf7ef;
           text-shadow: 0 2px 30px rgba(0,0,0,.5);
         }
@@ -354,6 +417,19 @@ export function GuestPortal(props: {
           border: 1px solid rgba(201,169,110,.25); background: rgba(13,15,20,.4);
           backdrop-filter: blur(8px); white-space: nowrap;
         }
+        /* The pill doubles as the history entry point once a guest is verified, so it
+           needs a real tap affordance and a 44px-tall target without looking like a
+           second primary action competing with the concierge itself. */
+        .gp-brandchip-btn {
+          cursor: pointer; color: inherit; font: inherit; opacity: .9;
+          min-height: 34px; padding: .42rem .7rem;
+          transition: border-color .18s, background .18s, opacity .18s, transform .18s;
+        }
+        .gp-brandchip-btn:hover {
+          opacity: 1; border-color: rgba(201,169,110,.55);
+          background: rgba(13,15,20,.62); transform: translateY(-1px);
+        }
+        .gp-brandchip-btn:active { transform: translateY(0); }
         .gp-container { position: relative; max-width: 720px; margin: 0 auto; padding: 0 1.25rem 3rem; }
         .gp-footer {
           display: flex; align-items: center; justify-content: center; gap: .4rem;
@@ -551,33 +627,45 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
   );
 }
 
-// Soft synthesized bell chime via Web Audio — no audio asset needed. Gentle two-note
-// ping. Best-effort: silently no-ops if Web Audio is unavailable or blocked.
-function playChime() {
-  try {
-    const Ctx = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext });
-    const AC = Ctx.AudioContext ?? Ctx.webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const now = ctx.currentTime;
-    [880, 1318.5].forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      const t = now + i * 0.12;
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 1.2);
-    });
-    setTimeout(() => { try { ctx.close(); } catch { /* noop */ } }, 1600);
-  } catch {
-    /* audio not available — silent */
-  }
-}
+// RETIRED (Guest UX pass) — the synthesized Web Audio chime and its mute toggle.
+//
+// Removed because the control did nothing a guest could perceive as useful: the
+// chime only fired on send and on a polled host reply, most guests browse with a
+// muted phone, and the toggle occupied the single most valuable slot in the
+// presence bar. That slot now holds the language selector, which every non-English
+// guest needs on their first visit.
+//
+// Kept here, commented, per the codebase's "nothing is deleted" rule, in case an
+// opt-in arrival/host-reply sound is ever wanted as a real notification setting
+// rather than an unexplained speaker icon.
+//
+// // Soft synthesized bell chime via Web Audio — no audio asset needed. Gentle two-note
+// // ping. Best-effort: silently no-ops if Web Audio is unavailable or blocked.
+// function playChime() {
+//   try {
+//     const Ctx = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext });
+//     const AC = Ctx.AudioContext ?? Ctx.webkitAudioContext;
+//     if (!AC) return;
+//     const ctx = new AC();
+//     const now = ctx.currentTime;
+//     [880, 1318.5].forEach((freq, i) => {
+//       const osc = ctx.createOscillator();
+//       const gain = ctx.createGain();
+//       osc.type = 'sine';
+//       osc.frequency.value = freq;
+//       const t = now + i * 0.12;
+//       gain.gain.setValueAtTime(0.0001, t);
+//       gain.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
+//       gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+//       osc.connect(gain).connect(ctx.destination);
+//       osc.start(t);
+//       osc.stop(t + 1.2);
+//     });
+//     setTimeout(() => { try { ctx.close(); } catch { /* noop */ } }, 1600);
+//   } catch {
+//     /* audio not available — silent */
+//   }
+// }
 
 function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, reviewNudge, extraOffers }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null; reviewNudge: ReviewNudgeConfig; extraOffers: ExtraOffer[] }) {
   const [entries, setEntries] = useState<ChatEntry[]>([
@@ -588,7 +676,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const [asked, setAsked] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
-  const [muted, setMuted] = useState(false);
+  // Guest UX pass — the guest's reading language, chosen from the Globe picker that
+  // replaced the mute toggle. `AUTO_LANGUAGE` means "reply in whatever I write in",
+  // which is the right default: it is correct for an English guest and degrades
+  // gracefully for everyone else without forcing a choice on arrival.
+  const [language, setLanguage] = useState<string>(AUTO_LANGUAGE);
+  const [langOpen, setLangOpen] = useState(false);
   // 4c soft-gate: once a question is escalated to the host, offer to notify the guest
   // when the host replies. 'idle' shows the prompt; 'saved'/'skipped' hide it.
   const [notifyChoice, setNotifyChoice] = useState<'idle' | 'saved' | 'skipped'>('idle');
@@ -639,18 +732,29 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const chatRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Default the chime to muted when the guest prefers reduced motion (a calm-experience signal).
+  // Restore the guest's language across reloads and across the several times a guest
+  // reopens the portal during a stay. Scoped per property so one device used at two
+  // stays doesn't leak a choice between them. Falls back silently when storage is
+  // unavailable (private mode, blocked storage) rather than breaking the portal.
+  const langKey = `moche_lang_${propertyId}`;
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      setMuted(true);
-    }
-  }, []);
+    try {
+      const saved = window.localStorage.getItem(langKey);
+      if (saved && resolveLanguage(saved)) setLanguage(saved);
+    } catch { /* storage unavailable — keep the auto default */ }
+  }, [langKey]);
+
+  const chooseLanguage = useCallback((code: string) => {
+    setLanguage(code);
+    setLangOpen(false);
+    try { window.localStorage.setItem(langKey, code); } catch { /* best-effort */ }
+  }, [langKey]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [entries, busy]);
 
   // Lock body scroll while a bottom sheet is open so the underlying portal can't scroll
   // behind the sheet on mobile (a common bottom-sheet UX defect). Restored on close.
-  const anySheetOpen = !!activeCategory || hostComposerOpen || srOpen || !!placeDetailId;
+  const anySheetOpen = !!activeCategory || hostComposerOpen || srOpen || !!placeDetailId || langOpen;
   useEffect(() => {
     if (!anySheetOpen || typeof document === 'undefined') return;
     const prev = document.body.style.overflow;
@@ -685,7 +789,16 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             }),
           })
         : await fetch(`/api/guest/${slug}/chat`, {
-            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: text }),
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            // The guest's chosen language rides along with every turn so the concierge
+            // answers in it AND so any escalation is translated into the host's own
+            // language server-side. 'auto' is omitted: the server then mirrors whatever
+            // language the guest actually wrote in.
+            body: JSON.stringify({
+              message: text,
+              ...(language !== AUTO_LANGUAGE ? { language } : {}),
+            }),
           });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'I could not answer just now.');
@@ -699,7 +812,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     } catch (e) {
       setEntries((prev) => [...prev, { role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
     } finally { setBusy(false); }
-  }, [busy, entries, hostPreview, propertyId, slug]);
+  }, [busy, entries, hostPreview, propertyId, slug, language]);
 
   // Add-on: one-tap feedback. Records a private product_feedback row (guest path).
   // A positive rating (4-5) is the signal that surfaces the Review Nudge when the host
@@ -751,7 +864,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     }
     try {
       const res = await fetch(`/api/guest/${slug}/escalate`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: trimmed }),
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: trimmed,
+          ...(language !== AUTO_LANGUAGE ? { language } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not reach your host just now.');
@@ -763,7 +881,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     } finally {
       setHostSending(false);
     }
-  }, [hostSending, hostPreview, slug]);
+  }, [hostSending, hostPreview, slug, language]);
 
   // "Report an issue" interview (WS-7). startServiceRequest fires the guest's first
   // free-text description; continueServiceRequest answers a follow-up question.
@@ -903,9 +1021,24 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         const json = await res.json();
         const history: { role: string; content: string; created_at: string; model?: string | null }[] = json.messages ?? [];
         if (cancelled || history.length === 0) return;
-        const hydrated: ChatEntry[] = history
-          .filter((m) => m.role === 'guest' || m.role === 'assistant' || m.role === 'host')
-          .map((m) => ({ role: m.role as 'guest' | 'assistant' | 'host', content: m.content }));
+        const usable = history.filter((m) => m.role === 'guest' || m.role === 'assistant' || m.role === 'host');
+        // Guest UX pass: the chat box used to replay the guest's ENTIRE stay, so a
+        // returning guest opened the portal to a wall of old messages and had to
+        // scroll to reach the live conversation. Now the box shows only the current
+        // conversation (the last section, split on a 45-minute gap); everything older
+        // lives behind the Moche.AI pill in the history sheet, organised by title.
+        const sections = sectionizeHistory(
+          usable.map((m) => ({
+            role: m.role as HistoryMessage['role'],
+            content: m.content,
+            created_at: m.created_at,
+          })),
+        );
+        const current = sections[sections.length - 1];
+        const hydrated: ChatEntry[] = (current?.messages ?? []).map((m) => ({
+          role: m.role as 'guest' | 'assistant' | 'host',
+          content: m.content,
+        }));
         if (hydrated.length === 0) return;
         lastSeenRef.current = history[history.length - 1]?.created_at ?? null;
         // Keep the greeting as the lead-in, then the real history beneath it.
@@ -934,7 +1067,6 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         const hostReplies = incoming.filter((m) => m.role === 'host');
         lastSeenRef.current = incoming[incoming.length - 1]?.created_at ?? lastSeenRef.current;
         if (hostReplies.length > 0) {
-          if (!muted) playChime();
           setEntries((e) => [...e, ...hostReplies.map((m) => ({ role: 'host' as const, content: m.content }))]);
         }
       } catch { /* best-effort polling */ }
@@ -942,7 +1074,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     poll();
     const id = setInterval(poll, 8000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [hostPreview, hasEscalation, slug, muted]);
+  }, [hostPreview, hasEscalation, slug]);
 
   // Handle a sub-choice tap: fire a pre-formed query, focus the free-text input, or open
   // the "Message the host" composer.
@@ -966,8 +1098,14 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     send(choice.query);
   }
 
-  function openCategory(cat: Category, chime = false) {
-    if (chime && !muted) playChime();
+  function openCategory(cat: Category) {
+    // Cards flagged `direct` skip the sub-choice sheet entirely. "Ask anything" is
+    // the whole reason this exists: a guest who wants to type should be typing one
+    // tap after they decide to, not choosing from a list of questions they didn't ask.
+    if (cat.direct) {
+      pickSubChoice({ label: cat.label, query: cat.direct });
+      return;
+    }
     setActiveCategory(cat);
   }
 
@@ -984,14 +1122,21 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             <span className="gp-dot" /> Online · replies instantly
           </div>
         </div>
+        {/* Language selector — occupies the slot the retired mute toggle used to hold.
+            Shows the chosen language's own endonym ("Español", not "Spanish"), because
+            a guest scanning for their language recognises it written their way. */}
         <button
-          onClick={() => setMuted((m) => !m)}
-          className="gp-mute"
-          data-testid="button-toggle-chime"
-          aria-label={muted ? 'Unmute chime' : 'Mute chime'}
-          title={muted ? 'Unmute chime' : 'Mute chime'}
+          type="button"
+          onClick={() => setLangOpen(true)}
+          className="gp-lang"
+          data-testid="button-language"
+          aria-label="Change language"
+          title="Change language"
         >
-          {muted ? <VolumeX size={15} aria-hidden /> : <Volume2 size={15} aria-hidden />}
+          <Globe size={15} aria-hidden />
+          <span className="gp-lang-code">
+            {language === AUTO_LANGUAGE ? 'Language' : languageNativeLabel(language)}
+          </span>
         </button>
       </div>
 
@@ -1002,10 +1147,10 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           <button
             key={cat.key}
             onClick={() => openCategory(cat)}
-            className="gp-cat gp-card"
+            className={`gp-cat gp-card${cat.primary ? ' gp-cat-primary' : ''}`}
             data-testid={`category-${cat.key}`}
           >
-            <span className="gp-cat-icon"><cat.Icon size={22} aria-hidden /></span>
+            <span className="gp-cat-icon"><cat.Icon size={20} aria-hidden /></span>
             <span className="gp-serif gp-cat-label">{cat.label}</span>
             <span className="gp-cat-sub">{cat.subtitle}</span>
           </button>
@@ -1032,7 +1177,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             data-testid="card-extras"
             aria-expanded={extrasOpen}
           >
-            <span className="gp-cat-icon"><ShoppingCart size={22} aria-hidden /></span>
+            <span className="gp-cat-icon"><ShoppingCart size={20} aria-hidden /></span>
             <span className="gp-serif gp-cat-label">Extras</span>
             <span className="gp-cat-sub">Add something to your stay</span>
           </button>
@@ -1043,7 +1188,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           className="gp-cat gp-card gp-req-card"
           data-testid="card-report-issue"
         >
-          <span className="gp-cat-icon"><Wrench size={22} aria-hidden /></span>
+          <span className="gp-cat-icon"><Wrench size={20} aria-hidden /></span>
           <span className="gp-serif gp-cat-label">Report an issue</span>
           <span className="gp-cat-sub">Maintenance or service request</span>
         </button>
@@ -1091,7 +1236,29 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                       <AlertTriangle size={14} aria-hidden /> For emergencies, contact local services first.
                     </div>
                   )}
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                  {/* Answers routinely contain a booking URL, the host's number, or a
+                      maps link. Rendering them as inert text made the guest retype
+                      them by hand. linkify() only ever promotes http(s)/mailto/tel and
+                      always labels the anchor with the literal source text, so a model
+                      cannot mint a link target that differs from what the guest reads. */}
+                  <div style={{ whiteSpace: 'pre-wrap' }}>
+                    {linkify(m.content).map((seg, si) =>
+                      seg.kind === 'link' ? (
+                        <a
+                          key={si}
+                          href={seg.href}
+                          className="gp-inline-link"
+                          target={seg.linkKind === 'url' ? '_blank' : undefined}
+                          rel={seg.linkKind === 'url' ? 'noopener noreferrer nofollow' : undefined}
+                          data-testid={`msg-link-${i}-${si}`}
+                        >
+                          {seg.label}
+                        </a>
+                      ) : (
+                        <span key={si}>{seg.value}</span>
+                      ),
+                    )}
+                  </div>
                 </div>
                 {m.places && m.places.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem', marginTop: '.4rem' }}>
@@ -1173,9 +1340,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 
       {/* De-emphasized free-text input — kept available but secondary to the cards.
           The send action is the concierge service bell: tapping it rings the concierge
-          and submits the message. A soft chime plays on send when unmuted. */}
+          and submits the message. */}
       <form
-        onSubmit={(e) => { e.preventDefault(); if (input.trim() && !busy) { if (!muted) playChime(); send(input); } }}
+        onSubmit={(e) => { e.preventDefault(); if (input.trim() && !busy) send(input); }}
         style={{ display: 'flex', gap: '.5rem', marginTop: '.9rem', alignItems: 'stretch' }}
         data-testid="chat-form"
       >
@@ -1197,6 +1364,15 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       </form>
 
       <AiDisclosure variant="note" />
+
+      {/* Language sheet — the Globe's destination. Same portaled bottom-sheet pattern
+          as every other sheet here (a transformed .gp-rise ancestor would otherwise
+          trap position:fixed). Scrollable, searchable, and labelled in each language's
+          own script. */}
+      {mounted && langOpen && createPortal(
+        <LanguageSheet current={language} onPick={chooseLanguage} onClose={() => setLangOpen(false)} />,
+        document.body,
+      )}
 
       {/* Sub-choice slide-over — pre-formed options that instantly trigger the chat.
           Portaled to document.body so position:fixed resolves against the viewport and
@@ -1521,41 +1697,62 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           width: 7px; height: 7px; border-radius: 50%; background: ${GOLD};
           box-shadow: 0 0 0 0 ${GOLD}; animation: gpPulse 2s infinite;
         }
-        /* Responsive guest-card grids: a single, even mobile column avoids
-           scattered half-width cards; wider viewports use tidy equal-height
-           pairs, with an odd final card spanning rather than orphaning. */
+        /* Guest UX pass — the card grid was ONE full-width column on mobile with
+           1.12rem labels and 38px icons, so seven tall cards plus the request row
+           meant a guest scrolled roughly three screens before reaching the chat.
+           It is now a two-column grid at every width with a denser card, which
+           puts the whole card set plus the chat box within about one screen.
+           grid-auto-rows:1fr keeps every card the same height so the grid reads
+           as a deliberate set rather than a ragged stack. */
         .gp-cats,
         .gp-req-row {
           display: grid;
-          grid-template-columns: minmax(0, 1fr);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           grid-auto-flow: dense;
           grid-auto-rows: 1fr;
           align-items: stretch;
-          gap: .75rem;
+          gap: .55rem;
         }
         @media (min-width: 561px) {
-          .gp-cats,
-          .gp-req-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .gp-cats > :last-child:nth-child(odd),
-          .gp-req-row > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+          .gp-cats, .gp-req-row { gap: .75rem; }
+          .gp-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
+        /* "Ask anything" is the one card that leads somewhere open-ended, so it spans
+           the full width and carries a gold wash — it should read as the primary
+           action, with the topic tiles as shortcuts beneath it. */
+        .gp-cat-primary {
+          grid-column: 1 / -1;
+          background: linear-gradient(135deg, rgba(201,169,110,.16), rgba(201,169,110,.05));
+          border-color: rgba(201,169,110,.42);
+          flex-direction: row; align-items: center; gap: .7rem;
+        }
+        .gp-cat-primary .gp-cat-icon { margin-bottom: 0; }
+        .gp-cat-primary .gp-cat-label { font-size: 1.02rem; }
+        .gp-cat-primary .gp-cat-sub { display: block; }
         .gp-cat {
-          display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: .1rem;
-          min-width: 0; min-height: 100%; padding: var(--pad-card); cursor: pointer; text-align: left; color: inherit;
+          display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: .08rem;
+          min-width: 0; min-height: 88px; padding: .8rem .85rem; cursor: pointer; text-align: left; color: inherit;
           transition: transform .2s cubic-bezier(.16,1,.3,1), border-color .2s, background .2s, box-shadow .2s;
         }
+        @media (min-width: 561px) { .gp-cat { padding: var(--pad-card); min-height: 104px; } }
         .gp-cat:hover {
           transform: translateY(-3px); border-color: rgba(201,169,110,.5);
           box-shadow: 0 14px 34px -18px rgba(201,169,110,.7);
         }
         .gp-cat:active { transform: translateY(-1px); }
         .gp-cat-icon {
-          display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px;
-          margin-bottom: .5rem; color: ${GOLD};
+          display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+          margin-bottom: .42rem; color: ${GOLD}; flex-shrink: 0;
           background: rgba(201,169,110,.12); border: 1px solid rgba(201,169,110,.22);
         }
-        .gp-cat-label { font-size: 1.12rem; font-weight: 600; line-height: 1.1; color: #f3ede1; }
-        .gp-cat-sub { font-size: .72rem; opacity: .55; }
+        @media (min-width: 561px) { .gp-cat-icon { width: 38px; height: 38px; border-radius: 11px; } }
+        .gp-cat-label { font-size: .92rem; font-weight: 600; line-height: 1.15; color: #f3ede1; }
+        @media (min-width: 561px) { .gp-cat-label { font-size: 1.05rem; } }
+        /* The subtitle is the first thing to go on a narrow phone: at two columns it
+           wraps to three lines and doubles card height for very little added meaning.
+           It returns as soon as there is room for it. */
+        .gp-cat-sub { font-size: .7rem; opacity: .55; display: none; line-height: 1.3; }
+        @media (min-width: 421px) { .gp-cat-sub { display: block; } }
         /* Change 2 & 3 — Extras / Report-an-issue cards: same visual family as .gp-cat
            (via shared classNames) but laid out as a standalone row so they read as their
            own clearly-tappable surfaces rather than part of the conversational grid. */
@@ -1593,12 +1790,111 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         .gp-typing:nth-child(2) { animation-delay: .2s; }
         .gp-typing:nth-child(3) { animation-delay: .4s; }
         .gp-msg { animation: gpMsg .35s cubic-bezier(.16,1,.3,1) both; }
-        .gp-mute {
-          flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: #ece7dd;
-          border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
-          display: grid; place-items: center; opacity: .7; transition: opacity .18s, transform .18s, background .18s;
+        /* RETIRED with the chime: .gp-mute (34px circular speaker toggle). Kept
+           commented per the "nothing is deleted" rule.
+           .gp-mute {
+             flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; color: #ece7dd;
+             border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
+             display: grid; place-items: center; opacity: .7; transition: opacity .18s, transform .18s, background .18s;
+           }
+           .gp-mute:hover { opacity: 1; transform: translateY(-1px); background: rgba(255,255,255,.07); } */
+
+        /* Language control — a pill rather than the old bare circle, because the
+           current language has to be readable at a glance; an unlabelled globe would
+           leave a guest unsure whether their choice took effect. 34px keeps it in the
+           presence bar; the tap target is widened by padding, not by height. */
+        .gp-lang {
+          flex-shrink: 0; min-height: 34px; border-radius: 999px; cursor: pointer; color: #ece7dd;
+          border: 1px solid rgba(201,169,110,.3); background: rgba(201,169,110,.08);
+          display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .7rem;
+          font-size: .74rem; font-weight: 600; opacity: .82;
+          transition: opacity .18s, transform .18s, background .18s, border-color .18s;
         }
-        .gp-mute:hover { opacity: 1; transform: translateY(-1px); background: rgba(255,255,255,.07); }
+        .gp-lang:hover {
+          opacity: 1; transform: translateY(-1px);
+          background: rgba(201,169,110,.14); border-color: rgba(201,169,110,.5);
+        }
+        .gp-lang-code { max-width: 8.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .gp-lang-search {
+          display: flex; align-items: center; gap: .5rem; margin: .2rem 0 .6rem;
+          padding: .6rem .8rem; border-radius: 12px;
+          border: 1px solid rgba(255,255,255,.14); background: #171c25;
+        }
+        .gp-lang-search input {
+          flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+          color: #fbf7ef; font-size: .9rem;
+        }
+        /* Capped height with its own scroll: 40+ languages must never push the sheet
+           past the viewport or hijack the page scroll behind it. */
+        .gp-lang-list {
+          display: flex; flex-direction: column; gap: .2rem;
+          max-height: 52dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+          margin: 0 -.25rem; padding: 0 .25rem;
+        }
+        .gp-lang-row {
+          display: flex; align-items: center; gap: .6rem; width: 100%; min-height: 46px;
+          padding: .6rem .75rem; border-radius: 12px; cursor: pointer; text-align: left;
+          border: 1px solid transparent; background: transparent; color: inherit;
+          transition: background .16s, border-color .16s;
+        }
+        .gp-lang-row:hover { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.1); }
+        .gp-lang-row-on { background: rgba(201,169,110,.12); border-color: rgba(201,169,110,.35); }
+        .gp-lang-native { flex: 1; min-width: 0; font-size: .92rem; color: #f3ede1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .gp-lang-en { font-size: .74rem; opacity: .5; flex-shrink: 0; }
+        .gp-lang-empty { padding: 1.2rem .75rem; font-size: .84rem; opacity: .6; text-align: center; }
+
+        /* Conversation history sheet. Taller than the other sheets because scanning a
+           stay's worth of conversations is its entire job. */
+        .gp-history-sheet { max-height: 88dvh; display: flex; flex-direction: column; }
+        .gp-history-body {
+          display: flex; flex-direction: column; gap: .45rem;
+          overflow-y: auto; -webkit-overflow-scrolling: touch;
+          margin: .2rem -.25rem 0; padding: 0 .25rem .4rem;
+        }
+        .gp-history-note {
+          display: flex; align-items: center; justify-content: center; gap: .45rem;
+          padding: 1.6rem 1rem; font-size: .86rem; opacity: .62; text-align: center; line-height: 1.5;
+        }
+        .gp-history-section {
+          border: 1px solid rgba(255,255,255,.09); border-radius: 14px;
+          background: rgba(255,255,255,.025); overflow: hidden;
+        }
+        .gp-history-head {
+          display: flex; align-items: center; gap: .6rem; width: 100%; min-height: 52px;
+          padding: .7rem .85rem; cursor: pointer; text-align: left;
+          border: 0; background: transparent; color: inherit; transition: background .16s;
+        }
+        .gp-history-head:hover { background: rgba(255,255,255,.04); }
+        .gp-history-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
+        .gp-history-title {
+          font-size: .95rem; font-weight: 600; color: #f3ede1; line-height: 1.2;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .gp-history-preview {
+          font-size: .74rem; opacity: .5; line-height: 1.25;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .gp-history-chev { flex-shrink: 0; opacity: .5; transition: transform .18s ease; }
+        .gp-history-msgs {
+          display: flex; flex-direction: column; gap: .55rem;
+          padding: .1rem .85rem .85rem; border-top: 1px solid rgba(255,255,255,.07);
+          animation: gpFade .2s ease both;
+        }
+        .gp-history-msg { display: flex; flex-direction: column; gap: .12rem; padding-top: .55rem; }
+        .gp-history-who {
+          font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; opacity: .45; font-weight: 600;
+        }
+        .gp-history-msg-guest .gp-history-who { color: ${GOLD}; opacity: .75; }
+        .gp-history-msg-host .gp-history-who { color: ${GOLD}; opacity: .9; }
+        .gp-history-text { font-size: .86rem; line-height: 1.5; color: #e8e3d9; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+        /* Inline links inside concierge answers. Underlined rather than colour-only so
+           they are distinguishable without relying on colour perception. */
+        .gp-inline-link {
+          color: ${GOLD}; text-decoration: underline; text-underline-offset: 2px;
+          text-decoration-color: rgba(201,169,110,.55); overflow-wrap: anywhere;
+        }
+        .gp-inline-link:hover { text-decoration-color: ${GOLD}; }
         .gp-sheet-scrim {
           position: fixed; inset: 0; z-index: 50; background: rgba(6,8,12,.6); backdrop-filter: blur(4px);
           display: flex; align-items: flex-end; justify-content: center; padding: 0;
@@ -1671,7 +1967,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         @keyframes gpSheetUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: reduce) {
           .gp-dot, .gp-typing, .gp-msg, .gp-pills, .gp-sheet, .gp-sheet-scrim { animation: none; }
-          .gp-cat:hover, .gp-pill:hover, .gp-bell-send:hover:not(:disabled), .gp-subchoice:hover, .gp-mute:hover { transform: none; }
+          .gp-cat:hover, .gp-pill:hover, .gp-bell-send:hover:not(:disabled), .gp-subchoice:hover,
+          .gp-lang:hover, .gp-brandchip-btn:hover { transform: none; }
+          .gp-history-msgs, .gp-history-chev { animation: none; transition: none; }
         }
       `}</style>
     </div>
@@ -1686,6 +1984,280 @@ const GUEST_NOTIFY_FINE_PRINT =
 
 // 4c — inline soft-gate. Captures a contact + explicit consent and posts to the
 // notify-consent endpoint, which stores it on the guest's verified session row.
+/**
+ * Language picker (Guest UX pass). Replaces the retired mute toggle in the presence bar.
+ *
+ * Two deliberate choices:
+ *  - Every language is listed by its endonym first ("Espanol", "Portugues", "Tieng Viet").
+ *    A guest scanning for their language looks for it written the way they write it, not
+ *    for the English exonym.
+ *  - "Match my message" is the default and stays pinned at the top. Most guests never
+ *    need to touch this; the concierge already mirrors whatever language they type in.
+ *    The explicit picker exists for the guest who wants to READ in their language while
+ *    typing in imperfect English, which the auto behaviour can't infer.
+ */
+function LanguageSheet({ current, onPick, onClose }: { current: string; onPick: (code: string) => void; onClose: () => void }) {
+  const [query, setQuery] = useState('');
+  const results = useMemo(() => (query.trim() ? searchLanguages(query) : PORTAL_LANGUAGES), [query]);
+
+  // Escape closes, matching the other sheets and giving keyboard users a way out.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="gp-sheet-scrim" onClick={onClose} data-testid="language-overlay">
+      <div
+        className="gp-sheet gp-card"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose your language"
+        data-testid="language-sheet"
+      >
+        <div className="gp-sheet-grip" aria-hidden />
+        <div className="gp-sheet-head">
+          <span className="gp-cat-icon gp-sheet-badge"><Globe size={22} aria-hidden /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="gp-serif gp-sheet-title">Language</div>
+            <div className="gp-sheet-sub">Your concierge will reply in it</div>
+          </div>
+          <button onClick={onClose} className="gp-sheet-close" data-testid="button-close-language" aria-label="Close">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+
+        <div className="gp-lang-search">
+          <Search size={15} aria-hidden style={{ opacity: 0.5, flexShrink: 0 }} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search languages"
+            aria-label="Search languages"
+            data-testid="input-language-search"
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="gp-lang-list" data-testid="language-list">
+          <button
+            type="button"
+            onClick={() => onPick(AUTO_LANGUAGE)}
+            className={`gp-lang-row${current === AUTO_LANGUAGE ? ' gp-lang-row-on' : ''}`}
+            data-testid="language-option-auto"
+          >
+            <span className="gp-lang-native">Match my message</span>
+            <span className="gp-lang-en">Automatic</span>
+            {current === AUTO_LANGUAGE && <Check size={16} aria-hidden style={{ color: GOLD, flexShrink: 0 }} />}
+          </button>
+
+          {results.map((lang) => (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => onPick(lang.code)}
+              className={`gp-lang-row${current === lang.code ? ' gp-lang-row-on' : ''}`}
+              data-testid={`language-option-${lang.code}`}
+              lang={lang.code}
+            >
+              <span className="gp-lang-native">{lang.nativeLabel}</span>
+              <span className="gp-lang-en">{lang.label}</span>
+              {current === lang.code && <Check size={16} aria-hidden style={{ color: GOLD, flexShrink: 0 }} />}
+            </button>
+          ))}
+
+          {results.length === 0 && (
+            <div className="gp-lang-empty" data-testid="language-empty">
+              No match for &ldquo;{query.trim()}&rdquo;. Try the language&apos;s English name.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Conversation history (Guest UX pass).
+ *
+ * History used to be replayed inside the chat box, which meant a guest on day four
+ * opened the portal to days one through three and had to scroll past all of it. It now
+ * lives behind the Moche.AI pill: a full-height sheet of collapsible sections split on
+ * a 45-minute conversational gap, each with a title derived from the guest's opening
+ * question so the list is scannable rather than a flat transcript.
+ *
+ * This component fetches its own data on open. That is intentional: the sheet is opened
+ * from the hero (outside <Concierge>), and giving it its own fetch avoids lifting chat
+ * state up through the whole portal for a panel most guests open rarely, if ever.
+ */
+function ChatHistorySheet({ slug, onClose }: { slug: string; onClose: () => void }) {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [sections, setSections] = useState<HistorySection[]>([]);
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/guest/${slug}/messages`);
+        if (!res.ok) throw new Error('unavailable');
+        const json = await res.json();
+        const raw = ((json.messages ?? []) as { role: string; content: string; created_at: string }[])
+          .filter((m) => m.role === 'guest' || m.role === 'assistant' || m.role === 'host')
+          .map((m): HistoryMessage => ({
+            role: m.role as HistoryMessage['role'],
+            content: m.content,
+            created_at: m.created_at,
+          }));
+        if (cancelled) return;
+        // Newest conversation first — a guest looking something up almost always wants
+        // the most recent exchange, not the first one of the stay.
+        const built = sectionizeHistory(raw).reverse();
+        setSections(built);
+        // Expand the most recent section so the sheet is never a wall of closed rows.
+        setOpenIds(new Set(built.length > 0 ? [built[0].id] : []));
+        setState('ready');
+      } catch {
+        if (!cancelled) setState('error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  function toggle(id: string) {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="gp-sheet-scrim" onClick={onClose} data-testid="chat-history-overlay">
+      <div
+        className="gp-sheet gp-card gp-history-sheet"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Your conversation history"
+        data-testid="chat-history-sheet"
+      >
+        <div className="gp-sheet-grip" aria-hidden />
+        <div className="gp-sheet-head">
+          <span className="gp-cat-icon gp-sheet-badge"><DomeMark size={22} /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="gp-serif gp-sheet-title">Your conversations</div>
+            <div className="gp-sheet-sub">Everything you have asked during this stay</div>
+          </div>
+          <button onClick={onClose} className="gp-sheet-close" data-testid="button-close-history" aria-label="Close">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+
+        <div className="gp-history-body">
+          {state === 'loading' && (
+            <div className="gp-history-note" data-testid="history-loading">
+              <Loader2 size={15} aria-hidden className="gp-spin" /> Loading your conversations…
+            </div>
+          )}
+
+          {state === 'error' && (
+            <div className="gp-history-note" data-testid="history-error">
+              We could not load your history just now. Your current conversation is still open behind this panel.
+            </div>
+          )}
+
+          {state === 'ready' && sections.length === 0 && (
+            <div className="gp-history-note" data-testid="history-empty">
+              Nothing here yet. Ask your concierge a question and it will show up in this list.
+            </div>
+          )}
+
+          {state === 'ready' && sections.map((section) => {
+            const open = openIds.has(section.id);
+            return (
+              <div key={section.id} className="gp-history-section" data-testid={`history-section-${section.id}`}>
+                <button
+                  type="button"
+                  className="gp-history-head"
+                  onClick={() => toggle(section.id)}
+                  aria-expanded={open}
+                  data-testid={`history-toggle-${section.id}`}
+                >
+                  <span className="gp-history-meta">
+                    <span className="gp-serif gp-history-title">{section.title}</span>
+                    <span className="gp-history-preview">{sectionPreview(section)}</span>
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    aria-hidden
+                    className="gp-history-chev"
+                    style={{ transform: open ? 'rotate(90deg)' : 'none' }}
+                  />
+                </button>
+
+                {open && (
+                  <div className="gp-history-msgs">
+                    {section.messages.map((m, i) => (
+                      <div
+                        key={`${section.id}-${i}`}
+                        className={`gp-history-msg gp-history-msg-${m.role}`}
+                        data-testid={`history-msg-${m.role}-${i}`}
+                      >
+                        <span className="gp-history-who">
+                          {m.role === 'guest' ? 'You' : m.role === 'host' ? 'Your host' : 'Concierge'}
+                        </span>
+                        <span className="gp-history-text">
+                          {linkify(m.content).map((seg, si) =>
+                            seg.kind === 'link' ? (
+                              <a
+                                key={si}
+                                href={seg.href}
+                                className="gp-inline-link"
+                                target={seg.linkKind === 'url' ? '_blank' : undefined}
+                                rel={seg.linkKind === 'url' ? 'noopener noreferrer nofollow' : undefined}
+                              >
+                                {seg.label}
+                              </a>
+                            ) : (
+                              <span key={si}>{seg.value}</span>
+                            ),
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => void; onSkip: () => void }) {
   const [contact, setContact] = useState('');
   const [consent, setConsent] = useState(false);
@@ -1764,6 +2336,12 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
   const [openOfferId, setOpenOfferId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(DEFAULT_EXTRA_QUANTITY);
   const [note, setNote] = useState('');
+  // Which concrete variant the guest picked ("Blue bike" vs "Pink bike"). Null until
+  // they choose, which is also what gates the request button for offers that define
+  // options: a host who bothered to list variants should never get an order that
+  // doesn't say which one.
+  const [variant, setVariant] = useState<string | null>(null);
+  const [variantError, setVariantError] = useState(false);
 
   const activeGroup: ExtrasGroup<ExtraOffer> | null =
     groups.find((g) => g.category.id === openCategory) ?? null;
@@ -1773,14 +2351,24 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
     setOpenOfferId(offer.id);
     setQuantity(DEFAULT_EXTRA_QUANTITY);
     setNote('');
+    // Preselect when there is only one variant — presenting a "choice" of one is
+    // busywork, but the order still needs to record which variant it was.
+    const opts = normalizeExtraOptions(offer.options);
+    setVariant(opts.length === 1 ? opts[0] : null);
+    setVariantError(false);
     // Clear a stale error so a retry starts from a clean panel.
     setState((s) => (s[offer.id] === 'error' ? { ...s, [offer.id]: 'idle' } : s));
   }, []);
 
-  const request = useCallback(async (offer: ExtraOffer, qty: number, message: string) => {
+  const request = useCallback(async (offer: ExtraOffer, qty: number, message: string, chosenVariant: string | null) => {
     const offerId = offer.id;
     if (state[offerId] === 'busy') return;
-    const safeQty = clampExtraQuantity(qty, offer.max_quantity);
+    const opts = normalizeExtraOptions(offer.options);
+    if (opts.length > 0 && !chosenVariant) { setVariantError(true); return; }
+    setVariantError(false);
+    // Packages are one bundle, not a countable item, so the quantity is pinned to 1
+    // here as well as server-side — the stepper isn't even rendered for them.
+    const safeQty = isPackageExtra(offer.kind) ? 1 : clampExtraQuantity(qty, offer.max_quantity);
     // Host preview is read-only — reflect success without creating a real escalation.
     if (hostPreview) { setState((s) => ({ ...s, [offerId]: 'done' })); return; }
     setState((s) => ({ ...s, [offerId]: 'busy' }));
@@ -1790,6 +2378,7 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
         body: JSON.stringify({
           offerId,
           quantity: safeQty,
+          ...(chosenVariant ? { variant: chosenVariant } : {}),
           ...(message.trim() ? { note: message.trim().slice(0, 1000) } : {}),
         }),
       });
@@ -1802,6 +2391,8 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
 
   const detailState = openOffer ? state[openOffer.id] ?? 'idle' : 'idle';
   const ceiling = openOffer ? extraQuantityCeiling(openOffer.max_quantity) : 1;
+  const detailOptions = openOffer ? normalizeExtraOptions(openOffer.options) : [];
+  const detailIsPackage = openOffer ? isPackageExtra(openOffer.kind) : false;
 
   return (
     <section style={{ marginTop: '1.5rem' }} data-testid="extras-section">
@@ -1869,8 +2460,58 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
             </div>
           ) : (
             <>
+              {/* What exactly the guest is getting. Hosts write this so the offer is
+                  unambiguous before it is requested — what's included, lead time,
+                  exclusions — rather than leaving the guest to ask in chat. */}
+              {openOffer.details && (
+                <div className="gp-extra-details" data-testid={`extra-details-${openOffer.id}`}>
+                  {openOffer.details}
+                </div>
+              )}
+
+              {/* Variant picker. This is the difference between "a bike" and "the blue
+                  bike": the host listed distinct things, so the guest chooses one
+                  rather than describing it in the free-text note and hoping. */}
+              {detailOptions.length > 0 && (
+                <fieldset className="gp-variant" data-testid={`extra-variants-${openOffer.id}`}>
+                  <legend className="gp-qty-label">{openOffer.option_label?.trim() || 'Choose an option'}</legend>
+                  <div className="gp-variant-row">
+                    {detailOptions.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        className={`gp-variant-chip${variant === opt ? ' gp-variant-chip-on' : ''}`}
+                        onClick={() => { setVariant(opt); setVariantError(false); }}
+                        aria-pressed={variant === opt}
+                        disabled={detailState === 'busy'}
+                        data-testid={`extra-variant-${opt}`}
+                      >
+                        {variant === opt && <Check size={13} aria-hidden style={{ flexShrink: 0 }} />}
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  {variantError && (
+                    <p className="gp-variant-error" data-testid="extra-variant-error">
+                      Pick one so your host knows exactly what to bring.
+                    </p>
+                  )}
+                </fieldset>
+              )}
+
+              {/* A package is a single bookable bundle — a golf package, a wedding
+                  package — so a stepper would invite a nonsensical "3 wedding
+                  packages". Countable items keep the stepper. */}
+              {detailIsPackage ? (
+                <div className="gp-package-note" data-testid={`extra-package-note-${openOffer.id}`}>
+                  <Package size={15} aria-hidden style={{ color: GOLD, flexShrink: 0 }} />
+                  <span>Booked as one package for your stay.</span>
+                </div>
+              ) : (
               <div className="gp-qty-row">
-                <span className="gp-qty-label" id={`qty-label-${openOffer.id}`}>How many?</span>
+                <span className="gp-qty-label" id={`qty-label-${openOffer.id}`}>
+                  How many{openOffer.unit_label?.trim() ? ` ${openOffer.unit_label.trim()}` : ''}?
+                </span>
                 <div className="gp-qty" role="group" aria-labelledby={`qty-label-${openOffer.id}`}>
                   <button
                     type="button"
@@ -1895,7 +2536,8 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
                   </button>
                 </div>
               </div>
-              {quantity >= ceiling && (
+              )}
+              {!detailIsPackage && quantity >= ceiling && (
                 <p style={{ fontSize: '.74rem', opacity: 0.55, margin: '.5rem 0 0' }} data-testid="extra-qty-ceiling">
                   {ceiling} is the most you can request here. Ask your host in chat if you need more.
                 </p>
@@ -1916,13 +2558,17 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
                 data-testid="input-extra-note"
               />
 
+              {/* Restate the order in plain words right above the button, so the guest
+                  confirms "2 extra towels, blue" rather than a bare quantity. */}
               <p style={{ fontSize: '.78rem', opacity: 0.6, margin: '.7rem 0 .9rem', lineHeight: 1.45 }} data-testid="extra-advisory">
-                {quantityAdvisory(quantity)}
+                {detailIsPackage
+                  ? 'Your host will confirm availability and the price. Nothing is charged now.'
+                  : `${quantitySummary(quantity, openOffer.unit_label)}${variant ? ` · ${variant}` : ''} — ${quantityAdvisory(quantity)}`}
               </p>
 
               <button
                 type="button"
-                onClick={() => request(openOffer, quantity, note)}
+                onClick={() => request(openOffer, quantity, note, variant)}
                 className="gp-extra-cta"
                 disabled={detailState === 'busy'}
                 data-testid={`button-extra-request-${openOffer.id}`}
@@ -1961,6 +2607,20 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
                 {offer.description && (
                   <span style={{ display: 'block', opacity: 0.65, fontSize: '.83rem', margin: '.35rem 0 0', lineHeight: 1.45 }}>{offer.description}</span>
                 )}
+                {/* Surface the choice up front so a guest can see there IS a choice
+                    before they commit a tap to the detail panel. */}
+                {(() => {
+                  const opts = normalizeExtraOptions(offer.options);
+                  const pkg = isPackageExtra(offer.kind);
+                  if (!pkg && opts.length === 0) return null;
+                  return (
+                    <span className="gp-extra-tags" data-testid={`extra-tags-${offer.id}`}>
+                      {pkg && <span className="gp-extra-tag"><Package size={11} aria-hidden /> Package</span>}
+                      {opts.slice(0, 3).map((o) => <span key={o} className="gp-extra-tag">{o}</span>)}
+                      {opts.length > 3 && <span className="gp-extra-tag">+{opts.length - 3} more</span>}
+                    </span>
+                  );
+                })()}
                 <span className="gp-extra-item-foot">
                   {st === 'done' ? (
                     <><Check size={14} aria-hidden /> Requested</>
@@ -2012,6 +2672,36 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
           .gp-extras > :last-child:nth-child(odd) { grid-column: 1 / -1; }
         }
         .gp-extra-item { display: block; min-width: 0; min-height: 100%; padding: var(--pad-card); }
+        .gp-extra-details {
+          margin: .75rem 0 0; padding: .7rem .85rem; border-radius: 12px;
+          border: 1px solid rgba(201,169,110,.2); background: rgba(201,169,110,.06);
+          font-size: .83rem; line-height: 1.5; opacity: .85; white-space: pre-wrap;
+        }
+        .gp-variant { border: 0; padding: 0; margin: 1rem 0 0; min-width: 0; }
+        .gp-variant-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .45rem; }
+        .gp-variant-chip {
+          display: inline-flex; align-items: center; gap: .3rem; min-height: 40px;
+          padding: .5rem .85rem; border-radius: 999px; cursor: pointer; font-size: .84rem;
+          border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.04); color: #ece7dd;
+          transition: background .16s, border-color .16s, color .16s;
+        }
+        .gp-variant-chip:hover:not(:disabled) { border-color: rgba(201,169,110,.45); background: rgba(201,169,110,.08); }
+        .gp-variant-chip-on {
+          border-color: ${GOLD}; background: rgba(201,169,110,.18); color: #fbf7ef; font-weight: 600;
+        }
+        .gp-variant-chip:disabled { opacity: .5; cursor: not-allowed; }
+        .gp-variant-error { font-size: .76rem; color: #e6a15c; margin: .45rem 0 0; }
+        .gp-package-note {
+          display: flex; align-items: center; gap: .45rem; margin: 1rem 0 0;
+          padding: .6rem .8rem; border-radius: 12px; font-size: .83rem;
+          border: 1px solid rgba(201,169,110,.24); background: rgba(201,169,110,.08);
+        }
+        .gp-extra-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+        .gp-extra-tag {
+          display: inline-flex; align-items: center; gap: .25rem;
+          padding: .18rem .5rem; border-radius: 999px; font-size: .68rem; line-height: 1.4;
+          border: 1px solid rgba(201,169,110,.28); background: rgba(201,169,110,.09); color: #e2d7bf;
+        }
         .gp-extra-item-foot {
           display: inline-flex; align-items: center; gap: .3rem; margin-top: .75rem;
           font-size: .8rem; font-weight: 600; color: ${GOLD};

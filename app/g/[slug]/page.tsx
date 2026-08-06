@@ -50,7 +50,7 @@ export default async function GuestPortalPage({ params }: { params: { slug: stri
       .maybeSingle(),
     admin
       .from('guest_extras')
-      .select('id, title, description, price_text, cta_label, category, is_favorite, max_quantity')
+      .select('id, title, description, price_text, cta_label, category, is_favorite, max_quantity, kind, option_label, options, unit_label, details')
       .eq('property_id', property.id)
       .eq('active', true)
       // Matches the guest-facing order in lib/guest/extras.ts (P5-06). The app

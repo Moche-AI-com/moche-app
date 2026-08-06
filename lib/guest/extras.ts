@@ -79,6 +79,99 @@ export function quantityAdvisory(quantity: number): string {
     : 'This sends a request to your host. Nothing is charged now.';
 }
 
+// --- Kind: countable item vs. bookable package ----------------------------
+//
+// These are genuinely different purchases and must not share one UI:
+//   'quantity' — a countable thing (extra towels, beach chairs, a bike). The
+//                guest picks how many, and possibly which variant.
+//   'package'  — one bookable bundle (golf package, wedding package). Asking
+//                "how many wedding packages?" is nonsense, so no stepper.
+
+export const EXTRA_KINDS = ['quantity', 'package'] as const;
+export type ExtraKind = (typeof EXTRA_KINDS)[number];
+export const DEFAULT_EXTRA_KIND: ExtraKind = 'quantity';
+
+/** Any unrecognised or missing value falls back to the countable default. */
+export function normalizeExtraKind(value: unknown): ExtraKind {
+  return value === 'package' ? 'package' : DEFAULT_EXTRA_KIND;
+}
+
+export function isPackageExtra(value: unknown): boolean {
+  return normalizeExtraKind(value) === 'package';
+}
+
+// --- Variants -------------------------------------------------------------
+//
+// "A bike" is not a useful thing to request; "the blue bike" is. Hosts list the
+// concrete options they actually have and the guest picks one, so both sides
+// know exactly what was asked for.
+
+/** Ceiling on how many options one offer may present, so a tile stays scannable. */
+export const MAX_EXTRA_OPTIONS = 12;
+
+/** Trims, drops blanks and duplicates, and caps the list. Order is the host's. */
+export function normalizeExtraOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of value) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim().slice(0, 120);
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+    if (out.length >= MAX_EXTRA_OPTIONS) break;
+  }
+  return out;
+}
+
+/**
+ * Parses the host's free-text options box into the stored array.
+ *
+ * Hosts type one option per line, but people paste comma-separated lists too, so
+ * both separators are accepted rather than silently producing one giant "option".
+ * Normalisation (trim, de-dupe, cap) is shared with normalizeExtraOptions so the
+ * form and the database can never disagree about what a valid list looks like.
+ */
+export function parseExtraOptionsInput(value: unknown): string[] {
+  if (Array.isArray(value)) return normalizeExtraOptions(value);
+  if (typeof value !== 'string') return [];
+  return normalizeExtraOptions(value.split(/[\n,]/));
+}
+
+/**
+ * Resolves a guest-submitted variant against the host's own option list and
+ * returns the HOST's spelling, never the guest's.
+ *
+ * This is the security-relevant half of the feature: the returned string is
+ * written into a host notification and an order record, so it must come from
+ * the catalog rather than from the request body. An unrecognised value returns
+ * null and the caller decides whether that is a 400 or simply "no variant".
+ */
+export function resolveExtraVariant(submitted: unknown, options: unknown): string | null {
+  if (typeof submitted !== 'string') return null;
+  const want = submitted.trim().toLowerCase();
+  if (!want) return null;
+  return normalizeExtraOptions(options).find((o) => o.toLowerCase() === want) ?? null;
+}
+
+/** True when the guest must pick before the request button can be enabled. */
+export function requiresVariantChoice(offer: { kind?: unknown; options?: unknown }): boolean {
+  return !isPackageExtra(offer.kind) && normalizeExtraOptions(offer.options).length > 0;
+}
+
+/**
+ * The line rendered beside the stepper so a bare "3" is never ambiguous:
+ * "3 towels" reads correctly; "3" alone does not. Falls back to the neutral
+ * "3 ×" when the host has not named a unit.
+ */
+export function quantitySummary(quantity: number, unitLabel?: string | null): string {
+  const unit = unitLabel?.trim();
+  return unit ? `${quantity} ${unit}` : `× ${quantity}`;
+}
+
 // --- Ordering (P5-06) -----------------------------------------------------
 
 export interface SortableExtra {

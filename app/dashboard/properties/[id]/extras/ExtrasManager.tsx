@@ -4,7 +4,10 @@ import { useState } from 'react';
 import { useFormState } from 'react-dom';
 import { Plus, Pencil, Trash2, GripVertical } from 'lucide-react';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
-import { EXTRAS_CATEGORIES, extraCategory, extraQuantityCeiling, normalizeExtraCategory } from '@/lib/guest/extras';
+import {
+  EXTRAS_CATEGORIES, extraCategory, extraQuantityCeiling, normalizeExtraCategory,
+  isPackageExtra, normalizeExtraOptions, MAX_EXTRA_OPTIONS,
+} from '@/lib/guest/extras';
 import { PremiumImage } from '@/components/PremiumImage';
 import {
   createExtraAction, updateExtraAction, toggleExtraAction, deleteExtraAction,
@@ -22,6 +25,16 @@ export interface ExtraRow {
   category: string | null;
   is_favorite: boolean;
   max_quantity: number | null;
+  /** 'quantity' (countable, guest gets a stepper) or 'package' (one bundle). */
+  kind: string | null;
+  /** Guest-facing unit for the stepper: "towels", "chairs". */
+  unit_label: string | null;
+  /** Label above the variant picker, e.g. "Colour". */
+  option_label: string | null;
+  /** Concrete variants: ["Blue bike", "Pink bike"]. */
+  options: string[] | null;
+  /** Longer guest-facing detail shown on the request panel. */
+  details: string | null;
 }
 
 export function ExtrasManager({ propertyId, offers }: { propertyId: string; offers: ExtraRow[] }) {
@@ -35,7 +48,8 @@ export function ExtrasManager({ propertyId, offers }: { propertyId: string; offe
           <h2 style={{ fontSize: '1.15rem' }}>Extras</h2>
           <p className="muted" style={{ fontSize: '.85rem', marginTop: '.25rem' }}>
             Offers your guests can request from the portal (late checkout, mid-stay clean, airport transfer…).
-            A request reaches you through your usual escalations and notifications.
+            A request reaches you through your usual escalations and notifications. Add options
+            (blue bike / pink bike) and a unit (&ldquo;towels&rdquo;) so a request tells you exactly what to bring.
           </p>
         </div>
         {!adding && (
@@ -76,11 +90,18 @@ export function ExtrasManager({ propertyId, offers }: { propertyId: string; offe
                       {offer.is_favorite && (
                         <span className="badge badge-teal" data-testid={`extra-featured-${offer.id}`}>Featured</span>
                       )}
+                      {isPackageExtra(offer.kind) && (
+                        <span className="badge" data-testid={`extra-kind-${offer.id}`}>Package</span>
+                      )}
                     </div>
                     {offer.description && <p className="muted" style={{ fontSize: '.85rem', margin: '.35rem 0 0' }}>{offer.description}</p>}
                     <p className="faint" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>
                       CTA: {offer.cta_label || 'Request'}
-                      {offer.max_quantity ? ` · Max ${offer.max_quantity} per request` : ''}
+                      {!isPackageExtra(offer.kind) && offer.max_quantity ? ` · Max ${offer.max_quantity} per request` : ''}
+                      {!isPackageExtra(offer.kind) && offer.unit_label ? ` · Unit: ${offer.unit_label}` : ''}
+                      {normalizeExtraOptions(offer.options).length > 0
+                        ? ` · ${offer.option_label || 'Options'}: ${normalizeExtraOptions(offer.options).join(', ')}`
+                        : ''}
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '.35rem', flexShrink: 0 }}>
@@ -116,6 +137,10 @@ export function ExtrasManager({ propertyId, offers }: { propertyId: string; offe
 function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string; offer?: ExtraRow; onDone: () => void; onCancel: () => void }) {
   const action = offer ? updateExtraAction : createExtraAction;
   const [state, formAction] = useFormState<ExtraFormState, FormData>(action, {});
+  // Kind drives which fields are meaningful, so it is the one piece of form state
+  // held in React: a package has no unit and no per-request ceiling.
+  const [kind, setKind] = useState<'quantity' | 'package'>(isPackageExtra(offer?.kind) ? 'package' : 'quantity');
+  const isPackage = kind === 'package';
   // Close the inline form once the server action reports success.
   if (state.success) setTimeout(onDone, 0);
 
@@ -164,23 +189,119 @@ function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string
             Guests browse by category first, so grouping helps once you have more than a few.
           </p>
         </div>
-        <div style={{ width: 150 }}>
-          <label className="label">Max per request</label>
+        {!isPackage && (
+          <div style={{ width: 150 }}>
+            <label className="label">Max per request</label>
+            <input
+              name="maxQuantity"
+              type="number"
+              className="input"
+              defaultValue={offer?.max_quantity ?? ''}
+              min={1}
+              max={10}
+              placeholder="Any"
+              data-testid="input-extra-max-quantity"
+            />
+            <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+              Leave blank for up to {extraQuantityCeiling(null)}.
+            </p>
+          </div>
+        )}
+        {!isPackage && (
+          <div style={{ width: 170 }}>
+            <label className="label">Unit</label>
+            <input
+              name="unitLabel"
+              className="input"
+              defaultValue={offer?.unit_label ?? ''}
+              placeholder="towels"
+              maxLength={40}
+              data-testid="input-extra-unit-label"
+            />
+            <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+              Guests see &ldquo;2 towels&rdquo; instead of a bare &ldquo;2&rdquo;.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: '.9rem' }}>
+        <label className="label">Type</label>
+        <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }} role="radiogroup" aria-label="Offer type">
+          {([
+            { id: 'quantity' as const, label: 'Countable item', hint: 'Guests choose how many — towels, beach chairs, bikes.' },
+            { id: 'package' as const, label: 'Package', hint: 'One bundle bought as-is — golf package, wedding package.' },
+          ]).map((opt) => (
+            <label
+              key={opt.id}
+              style={{
+                flex: 1, minWidth: 220, display: 'flex', gap: '.55rem', alignItems: 'flex-start',
+                padding: '.7rem .8rem', borderRadius: 10, cursor: 'pointer',
+                border: `1px solid ${kind === opt.id ? 'var(--accent, #c9a96e)' : 'var(--line, rgba(0,0,0,.14))'}`,
+              }}
+            >
+              <input
+                type="radio"
+                name="kind"
+                value={opt.id}
+                checked={kind === opt.id}
+                onChange={() => setKind(opt.id)}
+                data-testid={`radio-extra-kind-${opt.id}`}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                <strong style={{ fontSize: '.88rem', display: 'block' }}>{opt.label}</strong>
+                <span className="faint" style={{ fontSize: '.75rem' }}>{opt.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginTop: '.9rem' }}>
+        <div style={{ width: 180 }}>
+          <label className="label">Options label</label>
           <input
-            name="maxQuantity"
-            type="number"
+            name="optionLabel"
             className="input"
-            defaultValue={offer?.max_quantity ?? ''}
-            min={1}
-            max={10}
-            placeholder="Any"
-            data-testid="input-extra-max-quantity"
+            defaultValue={offer?.option_label ?? ''}
+            placeholder="Colour"
+            maxLength={60}
+            data-testid="input-extra-option-label"
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <label className="label">Options (one per line)</label>
+          <textarea
+            name="options"
+            className="input"
+            defaultValue={(offer?.options ?? []).join('\n')}
+            placeholder={'Blue bike\nPink bike'}
+            rows={3}
+            maxLength={1000}
+            data-testid="input-extra-options"
           />
           <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
-            Leave blank for up to {extraQuantityCeiling(null)}.
+            Leave blank if there is nothing to choose between. Up to {MAX_EXTRA_OPTIONS}; guests must pick one before requesting.
           </p>
         </div>
       </div>
+
+      <label className="label" style={{ marginTop: '.9rem' }}>What&rsquo;s included</label>
+      <textarea
+        name="details"
+        className="input"
+        defaultValue={offer?.details ?? ''}
+        placeholder={isPackage
+          ? '18 holes for two, cart, and club hire. Book 24h ahead.'
+          : 'Fresh set delivered to your door within the hour.'}
+        rows={3}
+        maxLength={2000}
+        data-testid="input-extra-details"
+      />
+      <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+        Shown to guests when they open the offer, so they know exactly what they are getting.
+      </p>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '.85rem 0 0', fontSize: '.88rem', cursor: 'pointer' }}>
         <input type="checkbox" name="isFavorite" defaultChecked={offer?.is_favorite ?? false} data-testid="checkbox-extra-favorite" />

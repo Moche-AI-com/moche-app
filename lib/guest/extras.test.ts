@@ -11,6 +11,15 @@ import {
   normalizeExtraCategory,
   quantityAdvisory,
   sortExtras,
+  EXTRA_KINDS,
+  MAX_EXTRA_OPTIONS,
+  normalizeExtraKind,
+  isPackageExtra,
+  normalizeExtraOptions,
+  parseExtraOptionsInput,
+  resolveExtraVariant,
+  requiresVariantChoice,
+  quantitySummary,
 } from './extras';
 
 const extra = (id: string, title: string, category?: string | null, is_favorite = false) => ({
@@ -177,5 +186,118 @@ describe('groupExtrasByCategory', () => {
 
   it('handles an empty list', () => {
     expect(groupExtrasByCategory([])).toEqual([]);
+  });
+});
+
+// --- Guest UX pass: kinds, variants, packages -----------------------------
+
+describe('normalizeExtraKind / isPackageExtra', () => {
+  it('treats anything that is not the literal "package" as countable', () => {
+    expect(normalizeExtraKind('package')).toBe('package');
+    expect(normalizeExtraKind('quantity')).toBe('quantity');
+    expect(normalizeExtraKind('Package')).toBe('quantity');
+    expect(normalizeExtraKind(null)).toBe('quantity');
+    expect(normalizeExtraKind(undefined)).toBe('quantity');
+    expect(normalizeExtraKind(7)).toBe('quantity');
+  });
+
+  it('exposes the same decision as a boolean', () => {
+    expect(isPackageExtra('package')).toBe(true);
+    expect(isPackageExtra('quantity')).toBe(false);
+    expect(isPackageExtra(null)).toBe(false);
+  });
+
+  it('lists both kinds exactly once', () => {
+    expect([...EXTRA_KINDS]).toEqual(['quantity', 'package']);
+  });
+});
+
+describe('normalizeExtraOptions', () => {
+  it('trims, drops blanks, and preserves the host order', () => {
+    expect(normalizeExtraOptions([' Blue bike ', '', '  ', 'Pink bike'])).toEqual(['Blue bike', 'Pink bike']);
+  });
+
+  it('de-duplicates case-insensitively, keeping the first spelling', () => {
+    expect(normalizeExtraOptions(['Blue bike', 'blue BIKE'])).toEqual(['Blue bike']);
+  });
+
+  it('caps the list so a tile stays scannable', () => {
+    const many = Array.from({ length: MAX_EXTRA_OPTIONS + 5 }, (_, i) => `Option ${i}`);
+    expect(normalizeExtraOptions(many)).toHaveLength(MAX_EXTRA_OPTIONS);
+  });
+
+  it('ignores non-array and non-string input rather than throwing', () => {
+    expect(normalizeExtraOptions('Blue bike')).toEqual([]);
+    expect(normalizeExtraOptions(null)).toEqual([]);
+    expect(normalizeExtraOptions([1, {}, 'Blue bike'])).toEqual(['Blue bike']);
+  });
+});
+
+describe('parseExtraOptionsInput', () => {
+  it('splits the host textarea on newlines', () => {
+    expect(parseExtraOptionsInput('Blue bike\nPink bike')).toEqual(['Blue bike', 'Pink bike']);
+  });
+
+  it('also accepts a pasted comma-separated list', () => {
+    expect(parseExtraOptionsInput('Small, Medium, Large')).toEqual(['Small', 'Medium', 'Large']);
+  });
+
+  it('passes an array straight through the same normalizer', () => {
+    expect(parseExtraOptionsInput([' Blue ', 'blue'])).toEqual(['Blue']);
+  });
+
+  it('returns an empty list for blank or non-string input', () => {
+    expect(parseExtraOptionsInput('')).toEqual([]);
+    expect(parseExtraOptionsInput('   \n  ')).toEqual([]);
+    expect(parseExtraOptionsInput(null)).toEqual([]);
+  });
+});
+
+describe('resolveExtraVariant', () => {
+  const options = ['Blue bike', 'Pink bike'];
+
+  it("returns the HOST's spelling, never the guest's", () => {
+    expect(resolveExtraVariant('blue BIKE', options)).toBe('Blue bike');
+    expect(resolveExtraVariant('  pink bike  ', options)).toBe('Pink bike');
+  });
+
+  it('rejects anything not in the catalog, so a request cannot invent an item', () => {
+    expect(resolveExtraVariant('Gold bike', options)).toBeNull();
+    expect(resolveExtraVariant('<script>alert(1)</script>', options)).toBeNull();
+  });
+
+  it('returns null for blank, missing, or non-string submissions', () => {
+    expect(resolveExtraVariant('', options)).toBeNull();
+    expect(resolveExtraVariant('   ', options)).toBeNull();
+    expect(resolveExtraVariant(null, options)).toBeNull();
+    expect(resolveExtraVariant('Blue bike', null)).toBeNull();
+  });
+});
+
+describe('requiresVariantChoice', () => {
+  it('is true for a countable offer that lists options', () => {
+    expect(requiresVariantChoice({ kind: 'quantity', options: ['Blue bike', 'Pink bike'] })).toBe(true);
+  });
+
+  it('is false when there is nothing to choose between', () => {
+    expect(requiresVariantChoice({ kind: 'quantity', options: [] })).toBe(false);
+    expect(requiresVariantChoice({ kind: 'quantity' })).toBe(false);
+  });
+
+  it('is false for a package, which is bought as one bundle', () => {
+    expect(requiresVariantChoice({ kind: 'package', options: ['A', 'B'] })).toBe(false);
+  });
+});
+
+describe('quantitySummary', () => {
+  it('names the unit so a bare number is never ambiguous', () => {
+    expect(quantitySummary(3, 'towels')).toBe('3 towels');
+    expect(quantitySummary(1, ' beach chairs ')).toBe('1 beach chairs');
+  });
+
+  it('falls back to a neutral multiplier when the host named no unit', () => {
+    expect(quantitySummary(2, null)).toBe('× 2');
+    expect(quantitySummary(2, '   ')).toBe('× 2');
+    expect(quantitySummary(2)).toBe('× 2');
   });
 });
