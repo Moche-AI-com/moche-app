@@ -104,7 +104,7 @@ export const PLANS: Record<PlanId, Plan> = {
     conciergeCustomization: true,
     features: [
       'Everything in Pro',
-      'Post-stay review nudge',
+      'Guest review nudge',
       'Up to 10 properties',
     ],
   },

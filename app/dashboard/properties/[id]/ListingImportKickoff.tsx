@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LoaderCircle, CheckCircle2, TriangleAlert } from 'lucide-react';
+import { BRAIN_CATEGORY_LABELS, type BrainCategory } from '@/lib/constants';
 
 // Backlog P4-02: the create form takes an optional listing URL. Property
 // creation must succeed immediately regardless of what happens to that URL, so
@@ -12,13 +13,21 @@ import { LoaderCircle, CheckCircle2, TriangleAlert } from 'lucide-react';
 // property page picks the URL up once and imports it here, where a failure is
 // an actionable state on screen rather than a silent gap.
 //
-// The import lands in the review queue, never straight into the Brain.
-
 type State = 'running' | 'done' | 'failed';
+type FiledItem = { category: BrainCategory; title: string; brainItemId: string };
+
+function sectionBreakdown(filed: FiledItem[]): string {
+  const counts = new Map<BrainCategory, number>();
+  for (const item of filed) counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([category, count]) => `${count} in ${BRAIN_CATEGORY_LABELS[category]}`)
+    .join(' · ');
+}
 
 export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: string; listingUrl: string }) {
   const [state, setState] = useState<State>('running');
   const [message, setMessage] = useState<string | null>(null);
+  const [filed, setFiled] = useState<FiledItem[] | null>(null);
   const started = useRef(false);
   const router = useRouter();
 
@@ -32,9 +41,14 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
         const res = await fetch(`/api/properties/${propertyId}/ingest/url`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ url: listingUrl, category: 'core', visibility: 'guest_visible' }),
+          body: JSON.stringify({ url: listingUrl, category: 'core', visibility: 'guest' }),
         });
-        const json = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+        const json = (await res.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+          autofilled?: boolean;
+          filed?: FiledItem[];
+        } | null;
         if (cancelled) return;
         if (!res.ok) {
           setState('failed');
@@ -42,7 +56,8 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
           return;
         }
         setState('done');
-        setMessage(json?.message ?? 'Sent to your review queue.');
+        setMessage(json?.message ?? 'Your listing details were imported.');
+        setFiled(json?.autofilled && Array.isArray(json.filed) ? json.filed : null);
       } catch {
         if (cancelled) return;
         setState('failed');
@@ -60,17 +75,15 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
     };
   }, [propertyId, listingUrl, router]);
 
-  const border = state === 'failed' ? 'var(--coral)' : state === 'done' ? 'var(--teal)' : 'var(--border)';
-
   return (
-    <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', borderColor: border }} role="status">
+    <div className={`card${filed ? ' alert alert-success' : ''}`} style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem' }} role="status">
       <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
         {state === 'running' && <LoaderCircle size={16} className="spin" aria-hidden />}
         {state === 'done' && <CheckCircle2 size={16} aria-hidden />}
         {state === 'failed' && <TriangleAlert size={16} aria-hidden />}
         <strong style={{ fontSize: '.9rem' }}>
           {state === 'running' && 'Reading your listing…'}
-          {state === 'done' && 'Listing sent to your review queue'}
+          {state === 'done' && (filed ? 'Your Brain is set up' : 'Listing import complete')}
           {state === 'failed' && 'We could not import that listing'}
         </strong>
       </div>
@@ -79,9 +92,19 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
           ? 'This takes a few seconds. Your property is already created, so you can keep working.'
           : message}
       </p>
-      {state === 'done' && (
+      {filed && (
+        <>
+          <p className="muted" style={{ fontSize: '.82rem', margin: '.55rem 0 0' }}>
+            {sectionBreakdown(filed)}
+          </p>
+          <Link href={`/dashboard/properties/${propertyId}/brain`} className="btn btn-primary" style={{ marginTop: '.75rem', minHeight: 44 }}>
+            Review &amp; manage your Brain
+          </Link>
+        </>
+      )}
+      {state === 'done' && !filed && (
         <Link href="/dashboard/updates" className="btn btn-sm btn-ghost" style={{ marginTop: '.6rem', minHeight: 44 }}>
-          Review the draft
+          Review imported details
         </Link>
       )}
       {state === 'failed' && (

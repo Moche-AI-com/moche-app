@@ -216,12 +216,12 @@ describe('queueSummary', () => {
     );
     expect(s.pending).toBe(2);
     expect(s.oldestPendingDays).toBe(9);
-    expect(s.detail).toBe('2 suggestions to review. Oldest arrived 9 days ago.');
+    expect(s.detail).toBe('2 suggestions to approve. Oldest arrived 9 days ago.');
   });
 
   it('uses singular phrasing for one row and "today" for a fresh one', () => {
     const s = queueSummary([{ status: 'pending', created_at: '2026-03-10T09:00:00Z' }], now);
-    expect(s.detail).toBe('1 suggestion to review. Oldest arrived today.');
+    expect(s.detail).toBe('1 suggestion to approve. Oldest arrived today.');
   });
 
   it('says "1 day ago" rather than "1 days ago"', () => {

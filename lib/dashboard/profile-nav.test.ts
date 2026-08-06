@@ -18,6 +18,17 @@ describe('PROFILE_SECTIONS', () => {
     expect(new Set(PROFILE_SECTIONS.map((s) => s.href)).size).toBe(PROFILE_SECTIONS.length);
   });
 
+  it('replaces the legacy legal section with owner-only user management', () => {
+    const legal = PROFILE_SECTIONS.find((section) => section.key === 'legal');
+    const userManagement = PROFILE_SECTIONS.find((section) => section.key === 'user-management');
+    expect(legal).toBeUndefined();
+    expect(userManagement).toMatchObject({
+      href: '/dashboard/profile/user-management',
+      label: 'User management',
+      ownerOnly: true,
+    });
+  });
+
   it('keeps every section under the profile shell', () => {
     for (const s of PROFILE_SECTIONS) {
       expect(s.href.startsWith('/dashboard/profile')).toBe(true);
@@ -54,6 +65,7 @@ describe('visibleProfileSections', () => {
     const forMember = visibleProfileSections(false);
     expect(forMember.every((s) => !s.ownerOnly)).toBe(true);
     expect(forMember.map((s) => s.key)).not.toContain('billing');
+    expect(forMember.map((s) => s.key)).not.toContain('user-management');
     expect(forMember.map((s) => s.key)).toContain('security');
   });
 });
@@ -84,7 +96,7 @@ describe('activeProfileSection', () => {
 
 describe('isProfileSectionActive', () => {
   it('lights exactly one item per path', () => {
-    for (const path of ['/dashboard/profile', '/dashboard/profile/details', '/dashboard/profile/legal']) {
+    for (const path of ['/dashboard/profile', '/dashboard/profile/details', '/dashboard/profile/user-management']) {
       const active = PROFILE_SECTIONS.filter((s) => isProfileSectionActive(path, s));
       expect(active).toHaveLength(1);
     }

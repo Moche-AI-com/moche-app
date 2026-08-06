@@ -55,7 +55,7 @@ describe('isNavActive', () => {
       '/dashboard/properties',
       '/dashboard/profile',
       '/dashboard/profile/billing',
-      '/dashboard/profile/legal',
+      '/dashboard/profile/user-management',
       '/dashboard/reports/service-request/xyz',
     ];
     for (const p of paths) {

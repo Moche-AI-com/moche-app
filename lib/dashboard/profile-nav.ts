@@ -74,11 +74,11 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
     ownerOnly: false,
   },
   {
-    key: 'legal',
-    label: 'Legal and agreements',
-    href: `${BASE}/legal`,
-    summary: 'The exact terms and privacy versions you accepted, and when.',
-    ownerOnly: false,
+    key: 'user-management',
+    label: 'User management',
+    href: `${BASE}/user-management`,
+    summary: 'Invite people, choose their roles, and set exactly what they can do.',
+    ownerOnly: true,
   },
   {
     key: 'privacy',

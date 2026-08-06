@@ -36,6 +36,9 @@
    darker than their dark-mode twins: #0FA79A teal on white is only 2.98:1,
    which fails as text. Every value below clears 4.5:1 on --bg or --surface. */
 [data-theme='light'], :root {
+  /* Keep mobile UA controls (text, caret, autofill and scrollbars) in the
+     selected palette instead of letting iOS/Android assume a light surface. */
+  color-scheme: light;
   --bg:#FAF7F1;
   --bg-2:#F2EDE4;
   --surface:#FFFFFF;
@@ -68,6 +71,9 @@
 }
 
 [data-theme='dark'] {
+  /* See the light theme block: native form-control rendering must follow this
+     token set, particularly inside modal surfaces on mobile browsers. */
+  color-scheme: dark;
   --bg:#070C14;
   --bg-2:#0A121F;
   --surface:#0E1826;
@@ -116,6 +122,41 @@
   a { color: inherit; text-decoration: none; }
   :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: var(--radius-sm); }
   ::selection { background: var(--glow-teal); color: var(--text); }
+
+  /* Baseline form-control contract. Controls throughout the app include raw
+     elements with inline layout styles, so class-only rules can leave a modal
+     input at the browser default text/caret colour on mobile. */
+  input, textarea, select, button { font: inherit; }
+  input, textarea, select {
+    color: var(--text);
+    -webkit-text-fill-color: var(--text);
+    caret-color: var(--teal);
+  }
+  input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']),
+  textarea,
+  select {
+    background-color: var(--bg-2);
+  }
+  input:disabled, textarea:disabled, select:disabled {
+    -webkit-text-fill-color: var(--text-muted);
+    opacity: 1; /* iOS otherwise fades disabled text until it is unreadable. */
+  }
+  ::placeholder { color: var(--text-faint); opacity: 1; }
+  input[type='search']::-webkit-search-cancel-button { color: var(--text); }
+  input:-webkit-autofill {
+    -webkit-text-fill-color: var(--text);
+    box-shadow: 0 0 0 1000px var(--bg-2) inset;
+  }
+}
+
+/* Safari zooms when a text control computes below 16px. This covers raw,
+   classed and inline-styled controls without disabling user zoom. */
+@media (max-width: 480px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 @layer components {
@@ -344,6 +385,67 @@
   .label { display: block; font-size: .82rem; font-weight: 600; color: var(--text-muted); margin-bottom: .35rem; }
   .field { margin-bottom: 1rem; }
 
+  /* Host notification disclosure. The desktop panel stays anchored to its bell;
+     on phone-sized viewports it becomes a centred, viewport-safe sheet. */
+  .notification-bell-root { position: relative; }
+  .notification-backdrop { display: none; }
+  .notification-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    width: 340px;
+    max-width: calc(100vw - 2rem);
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 12px 32px rgba(0,0,0,.28);
+    z-index: 60;
+  }
+  .notification-list { max-height: 360px; overflow-y: auto; }
+  .notification-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: .65rem;
+    width: 100%;
+    padding: .75rem 1rem;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .notification-row-icon { align-self: start; margin-top: .1rem; }
+  .notification-row-text { display: block; min-width: 0; }
+  .notification-row-title {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .85rem;
+  }
+  .notification-row-body {
+    display: -webkit-box;
+    margin-top: .15rem;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow-wrap: anywhere;
+    font-size: .78rem;
+  }
+  .notification-row-time {
+    align-self: baseline;
+    white-space: nowrap;
+    font-size: .7rem;
+  }
+  .notification-panel-footer {
+    display: block;
+    padding: .7rem 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--teal);
+    text-align: center;
+    font-size: .82rem;
+    font-weight: 600;
+  }
+
   .badge {
     display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .6rem;
     border-radius: 9999px; font-size: .72rem; font-weight: 600; border: 1px solid var(--border-strong);
@@ -380,6 +482,84 @@
 
   /* Duplicate control clusters: show desktop set, hide mobile set by default */
   .dash-nav-controls-mobile { display: none !important; }
+}
+
+@media (max-width: 719px) {
+  .notification-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    border: 0;
+    background: rgba(4, 10, 18, .46);
+    cursor: default;
+  }
+  .notification-panel {
+    position: fixed;
+    right: auto;
+    top: auto;
+    left: 50%;
+    bottom: max(1rem, calc(1rem + env(safe-area-inset-bottom)));
+    transform: translateX(-50%);
+    width: min(92vw, 420px);
+    max-width: none;
+    max-height: 70dvh;
+    /* A capped block scrolls reliably even when its content is shorter than the
+       cap. A flex child with `min-height: 0` can otherwise collapse the whole
+       sheet to its borders on mobile WebKit. */
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    z-index: 60;
+  }
+  .notification-list {
+    max-height: none;
+  }
+  .notification-row { gap: .55rem; padding-inline: .85rem; }
+  .notification-row-time { font-size: .68rem; }
+}
+
+/* Full notification history uses the same durable row geometry as the bell:
+   content has a real min-width boundary, metadata stays inline, and long
+   messages are intentionally clipped instead of forcing a horizontal scroll. */
+.notifications-history-list { display: flex; flex-direction: column; gap: .6rem; }
+.notification-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: .9rem;
+  padding: var(--pad-card);
+}
+.notification-history-content { min-width: 0; }
+.notification-history-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: .6rem;
+  margin-bottom: .25rem;
+}
+.notification-history-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .95rem;
+}
+.notification-history-body {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  font-size: .85rem;
+}
+.notification-history-time { align-self: baseline; white-space: nowrap; font-size: .75rem; }
+
+@media (max-width: 480px) {
+  .notification-history-row { gap: .6rem; padding: 1rem; }
+  .notification-history-head { gap: .45rem; }
+  .notification-history-time { font-size: .7rem; }
 }
 
 /* ============================================================

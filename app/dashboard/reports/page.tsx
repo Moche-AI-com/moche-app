@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { Printer, Archive, FileText, Sparkles } from 'lucide-react';
+import { Printer, Archive, FileText, Sparkles, Building2 } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { EXTRAS_ORDER_STATUS_LABEL, type ExtrasOrderStatus } from '@/lib/dashboard/extras-orders';
+import { RestorePropertyButton } from './RestorePropertyButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,15 +28,29 @@ export default async function ReportsPage({
   const ctx = await requireSession();
   const supabase = createClient();
 
+  // Deliberately NOT filtered on `deleted_at`. Permanently deleting a property
+  // keeps the host's reports and leaves the property row behind as a stripped
+  // tombstone (see lib/properties/purge.ts) precisely so those reports can still
+  // say which property they came from. Filtering deleted rows out here would
+  // label every retained report "Property".
   const { data: properties } = await supabase
     .from('properties')
-    .select('id, display_name')
+    .select('id, display_name, status, archived_at, updated_at, deleted_at')
     .eq('host_account_id', ctx.account.id)
-    .is('deleted_at', null)
     .order('display_name');
 
-  const propList = properties ?? [];
-  const propNames = new Map(propList.map((p) => [p.id, p.display_name]));
+  const allProps = properties ?? [];
+  // Names cover deleted properties too, so a retained report keeps its label.
+  const propNames = new Map(allProps.map((p) => [p.id, p.display_name]));
+  // The filter and the report scope only offer properties that still exist.
+  const propList = allProps.filter((p) => p.deleted_at === null);
+
+  // Archived properties live here rather than in the Properties list. Ordered
+  // newest-archived-first, falling back to `updated_at` for rows archived before
+  // `archived_at` existed.
+  const archivedProps = propList
+    .filter((p) => p.status === 'archived')
+    .sort((a, b) => (b.archived_at ?? b.updated_at).localeCompare(a.archived_at ?? a.updated_at));
 
   // Only honour a property filter for a property this account actually owns.
   // Otherwise a hand-edited ?property= would produce a confusing empty page
@@ -78,14 +93,16 @@ export default async function ReportsPage({
     extras = (extrasRes.data ?? []) as typeof extras;
   }
 
-  const empty = requests.length === 0 && stays.length === 0 && extras.length === 0;
+  const empty =
+    requests.length === 0 && stays.length === 0 && extras.length === 0 && archivedProps.length === 0;
 
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
         <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Reports</h1>
         <p className="muted" style={{ fontSize: '.9rem', margin: '.35rem 0 0' }}>
-          Your archive of completed work. Print any service report for a contractor, an owner, or your own records.
+          Your archive of completed work and retired properties. Print any service report for a contractor, an owner,
+          or your own records.
         </p>
       </div>
 
@@ -95,12 +112,41 @@ export default async function ReportsPage({
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
           <Archive size={22} aria-hidden style={{ color: 'var(--text-faint)', marginBottom: '.6rem' }} />
           <p className="muted">
-            Nothing archived yet. Once you resolve a service request, complete an extra, or a stay checks out, it appears
-            here as a printable record.
+            Nothing archived yet. Once you resolve a service request, complete an extra, a stay checks out, or you
+            archive a property, it appears here as a printable record.
           </p>
         </div>
       ) : (
         <>
+          {archivedProps.length > 0 && (
+            <section style={{ marginBottom: '2rem' }} data-testid="archived-properties-section">
+              <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
+                <Building2 size={16} aria-hidden /> Archived properties
+                <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({archivedProps.length})</span>
+              </h2>
+              <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .75rem' }}>
+                These are out of your active list and their guest portals are closed. Their records stay here, and you can
+                restore one at any time — it comes back paused so you decide when guests get in again.
+              </p>
+              <div className="report-list">
+                {archivedProps.map((p) => (
+                  <div key={p.id} className="report-list-row" data-testid="archived-property-row">
+                    <div style={{ minWidth: 0 }}>
+                      <p className="report-list-title">{p.display_name}</p>
+                      <p className="report-list-meta">Archived {fmtDate(p.archived_at ?? p.updated_at)}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+                      <RestorePropertyButton propertyId={p.id} />
+                      <Link href={`/dashboard/properties/${p.id}`} className="btn btn-ghost btn-sm">
+                        Open
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section style={{ marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
               <FileText size={16} aria-hidden /> Service reports

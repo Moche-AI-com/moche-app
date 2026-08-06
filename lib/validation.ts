@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { RESTRICTED_TOPIC_KEYS, TONE_PRESET_IDS } from '@/lib/constants';
 import { Constants } from '@/lib/database.types';
+import { INVITABLE_ROLE_IDS } from '@/lib/auth/member-capabilities';
 
 export const emailSchema = z.string().email().max(320);
 export const passwordSchema = z.string().min(10, 'Password must be at least 10 characters').max(200);
@@ -166,6 +167,25 @@ export const coHostInviteSchema = z.object({
   canResolveMaintenance: z.boolean().default(false),
   canViewAnalytics: z.boolean().default(true),
 });
+
+// Security boundary for user-management forms. The action still runs
+// normalizeCapabilities() so unknown permission keys are rejected before this
+// shape is persisted; this schema validates the final, normalized values.
+export const memberInviteSchema = z.object({
+  email: emailSchema.transform((email) => email.trim().toLowerCase()),
+  role: z.enum(INVITABLE_ROLE_IDS),
+  can_edit_brain: z.boolean(),
+  can_reply_guests: z.boolean(),
+  can_receive_escalations: z.boolean(),
+  can_resolve_maintenance: z.boolean(),
+  can_view_analytics: z.boolean(),
+  propertyIds: z.array(z.string().uuid()).max(100).optional().default([]),
+}).strict();
+
+export const memberCapabilityUpdateSchema = memberInviteSchema
+  .omit({ email: true, propertyIds: true })
+  .extend({ profileId: z.string().uuid() })
+  .strict();
 
 export const guestVerifyStartSchema = z.object({
   contact: z.string().trim().min(3).max(320),

@@ -1168,6 +1168,88 @@ export type Database = {
         }
         Relationships: []
       }
+      member_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_profile_id: string | null
+          can_edit_brain: boolean
+          can_receive_escalations: boolean
+          can_reply_guests: boolean
+          can_resolve_maintenance: boolean
+          can_view_analytics: boolean
+          created_at: string
+          email: string
+          expires_at: string
+          host_account_id: string
+          id: string
+          invited_by: string
+          property_ids: string[]
+          revoked_at: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          token_hash: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_profile_id?: string | null
+          can_edit_brain?: boolean
+          can_receive_escalations?: boolean
+          can_reply_guests?: boolean
+          can_resolve_maintenance?: boolean
+          can_view_analytics?: boolean
+          created_at?: string
+          email: string
+          expires_at: string
+          host_account_id: string
+          id?: string
+          invited_by: string
+          property_ids?: string[]
+          revoked_at?: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          token_hash: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_profile_id?: string | null
+          can_edit_brain?: boolean
+          can_receive_escalations?: boolean
+          can_reply_guests?: boolean
+          can_resolve_maintenance?: boolean
+          can_view_analytics?: boolean
+          created_at?: string
+          email?: string
+          expires_at?: string
+          host_account_id?: string
+          id?: string
+          invited_by?: string
+          property_ids?: string[]
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["member_role"]
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_invites_accepted_profile_id_fkey"
+            columns: ["accepted_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_invites_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_invites_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_feedback: {
         Row: {
           created_at: string
@@ -1585,6 +1667,7 @@ export type Database = {
         Row: {
           address_line1: string | null
           address_line2: string | null
+          archived_at: string | null
           brand_accent: string | null
           brand_primary: string | null
           city: string | null
@@ -1601,6 +1684,7 @@ export type Database = {
           logo_url: string | null
           postal_code: string | null
           published_at: string | null
+          purged_at: string | null
           region: string | null
           slug: string
           status: Database["public"]["Enums"]["property_status"]
@@ -1610,6 +1694,7 @@ export type Database = {
         Insert: {
           address_line1?: string | null
           address_line2?: string | null
+          archived_at?: string | null
           brand_accent?: string | null
           brand_primary?: string | null
           city?: string | null
@@ -1626,6 +1711,7 @@ export type Database = {
           logo_url?: string | null
           postal_code?: string | null
           published_at?: string | null
+          purged_at?: string | null
           region?: string | null
           slug: string
           status?: Database["public"]["Enums"]["property_status"]
@@ -1635,6 +1721,7 @@ export type Database = {
         Update: {
           address_line1?: string | null
           address_line2?: string | null
+          archived_at?: string | null
           brand_accent?: string | null
           brand_primary?: string | null
           city?: string | null
@@ -1651,6 +1738,7 @@ export type Database = {
           logo_url?: string | null
           postal_code?: string | null
           published_at?: string | null
+          purged_at?: string | null
           region?: string | null
           slug?: string
           status?: Database["public"]["Enums"]["property_status"]
@@ -2487,6 +2575,7 @@ export type Database = {
         | "maintenance"
         | "cleaner"
         | "viewer"
+        | "support"
       notification_kind:
         | "escalation"
         | "maintenance"
@@ -2702,6 +2791,7 @@ export const Constants = {
         "maintenance",
         "cleaner",
         "viewer",
+        "support",
       ],
       notification_kind: [
         "escalation",

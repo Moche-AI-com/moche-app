@@ -9,6 +9,7 @@ import { SessionsPanel } from './SessionsPanel';
 import { PropertyLinkMinter } from './PropertyLinkMinter';
 import { CopyPortalLink } from './CopyPortalLink';
 import { ListingImportKickoff } from './ListingImportKickoff';
+import { DangerZone } from './DangerZone';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,6 +172,14 @@ export default async function PropertyDetailPage({
           <SessionsPanel propertyId={property.id} initialSessions={sessions} />
         </div>
       )}
+
+      {/*
+        Last thing on the page, gated on the same permission as every other
+        destructive property action. Kept away from the Archive button in the
+        header on purpose: Archive is reversible, this is not, and putting them
+        side by side is how a host deletes a property they meant to shelve.
+      */}
+      {can.editProperty && <DangerZone propertyId={property.id} propertyName={property.display_name} />}
     </div>
   );
 }

@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getPropertyAccess, getSessionContext } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { extractText } from '@/lib/ingest/extract';
-import { ingestText } from '@/lib/ingest/pipeline';
+import { segmentSourceContent } from '@/lib/ingest/segment';
+import { createProposal } from '@/lib/brain/proposal-store';
+import { autofillBrainFromSegments, isInitialSetup } from '@/lib/brain/setup-autofill';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import type { Database } from '@/lib/database.types';
@@ -20,8 +23,15 @@ const ALLOWED = new Set([
 const VALID_CATEGORIES = new Set<Database['public']['Enums']['brain_category']>([
   'core', 'appliances', 'house_rules', 'checkin_checkout', 'local_recommendations',
   'emergency', 'documents', 'product_urls', 'host_qa', 'internal_notes',
+  'transportation',
 ]);
 
+/**
+ * Document ingestion seeds an empty draft Brain with validated sections, then
+ * returns to proposals for every later import. The first-import exception avoids
+ * an unusable empty setup state; once any Brain item exists, a host approval is
+ * required before new extracted material can become guest-visible.
+ */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const access = await getPropertyAccess(params.id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
@@ -44,6 +54,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const buffer = Buffer.from(await file.arrayBuffer());
   const ctx = await getSessionContext();
   const supabase = createClient();
+  const admin = createAdminClient();
 
   // 1. Upload the raw file to the private bucket at <property_id>/<uuid>-<name>.
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
@@ -90,30 +101,71 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: 'No readable text was found in that document.' }, { status: 400 });
   }
 
-  // 4. Run the shared ingestion pipeline (chunk -> embed -> chunks).
-  try {
-    const title = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 200) || 'Document';
-    const result = await ingestText(supabase, {
+  const title = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 200) || 'Document';
+
+  // 4. The narrow first-setup exception files each validated source section
+  // through the normal ingestion pipeline; subsequent documents remain drafts.
+  if (await isInitialSetup(admin, params.id)) {
+    const segmented = await segmentSourceContent(text);
+    const result = await autofillBrainFromSegments(admin, {
       propertyId: params.id,
-      title,
-      text,
-      category,
-      visibility,
+      hostAccountId: access.property.host_account_id,
+      actorProfileId: ctx?.user.id ?? null,
       sourceType: 'document',
-      kind: 'document',
-      documentId,
-      createdBy: ctx?.user.id ?? null,
+      sourceRef: documentId,
+      segments: segmented.segments,
     });
-    await supabase.from('documents').update({ status: 'ready', brain_item_id: result.brainItemId } as never).eq('id', documentId);
+    await supabase
+      .from('documents')
+      .update({
+        status: result.created > 0 ? 'ready' : 'failed',
+        brain_item_id: result.filed[0]?.brainItemId ?? null,
+        error_detail: result.created > 0 ? null : 'ingest_failed',
+      } as never)
+      .eq('id', documentId);
+    const sectionCount = new Set(result.filed.map((item) => item.category)).size;
+    return NextResponse.json({
+      ok: true,
+      autofilled: true,
+      created: result.created,
+      filed: result.filed,
+      message: `Added ${result.created} details to your Brain, sorted into ${sectionCount} sections. Check anything that looks off.`,
+    });
+  }
+
+  // 5. Once the Brain has content, preserve the normal human approval boundary.
+  try {
+    const proposal = await createProposal(admin, {
+      propertyId: params.id,
+      hostAccountId: access.property.host_account_id,
+      fieldPath: 'brain.document_summary',
+      label: title,
+      proposedValue: { title, text, category, visibility },
+      sourceType: 'document',
+      sourceRef: documentId,
+      confidence: 0.4,
+    });
+    if (!proposal.ok) {
+      await supabase.from('documents').update({ status: 'failed', error_detail: 'proposal_failed' } as never).eq('id', documentId);
+      return NextResponse.json({ error: proposal.error }, { status: 500 });
+    }
+    await supabase.from('documents').update({ status: 'ready' } as never).eq('id', documentId);
     await audit(supabase, {
-      action: 'brain.ingest.document',
+      action: 'brain.proposal.create',
       actorProfileId: ctx?.user.id,
       hostAccountId: access.property.host_account_id,
       propertyId: params.id,
-      targetType: 'document',
-      targetId: documentId,
+      targetType: 'proposed_update',
+      targetId: proposal.id,
+      metadata: { fieldPath: 'brain.document_summary', sourceRef: documentId },
     });
-    return NextResponse.json({ ok: true, title: result.title, chunks: result.chunks });
+    return NextResponse.json({
+      ok: true,
+      queued: true,
+      proposalId: proposal.id,
+      title,
+      message: 'Your imported details are ready for you to review.',
+    });
   } catch (e) {
     await supabase.from('documents').update({ status: 'failed', error_detail: 'ingest_failed' } as never).eq('id', documentId);
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Ingestion failed.' }, { status: 500 });

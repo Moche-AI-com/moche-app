@@ -7,17 +7,23 @@ import { propertyUsageLine } from '@/lib/dashboard/plan-banner';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_BADGE: Record<string, string> = { live: 'badge-teal', paused: 'badge-coral', draft: '', archived: '' };
+// 'archived' is intentionally absent: archived properties are not listed here.
+const STATUS_BADGE: Record<string, string> = { live: 'badge-teal', paused: 'badge-coral', draft: '' };
 
 export default async function PropertiesPage() {
   const ctx = await requireSession();
   const supabase = createClient();
   const [{ data: properties }, gate, ent] = await Promise.all([
+    // Archived properties are excluded and listed under Reports instead,
+    // alongside the archived service requests, extras, and stays they relate to.
+    // Leaving them here defeated the point of archiving: a host with a dozen
+    // retired listings still had to scroll past all of them.
     supabase
       .from('properties')
       .select('id, display_name, slug, status, city, region')
       .eq('host_account_id', ctx.account.id)
       .is('deleted_at', null)
+      .neq('status', 'archived')
       .order('created_at', { ascending: false }),
     canCreateProperty(supabase, ctx.account.id),
     getEntitlements(supabase, ctx.account.id),
@@ -48,8 +54,11 @@ export default async function PropertiesPage() {
 
       {(properties?.length ?? 0) === 0 ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
-          <p className="muted" style={{ marginBottom: '1rem' }}>No properties yet.</p>
-          <Link href="/dashboard/properties/new" className="btn btn-primary">Create your first property</Link>
+          <p className="muted" style={{ marginBottom: '1rem' }}>No active properties.</p>
+          <Link href="/dashboard/properties/new" className="btn btn-primary">Create a property</Link>
+          <p className="faint" style={{ fontSize: '.78rem', marginTop: '.9rem' }}>
+            Archived a property? It’s in <Link href="/dashboard/reports" className="gradient-text" style={{ fontWeight: 600 }}>Reports</Link>, and you can restore it from there.
+          </p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '1rem' }}>

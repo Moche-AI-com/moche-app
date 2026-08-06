@@ -28,6 +28,8 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+  // Invitation links remain public: an invitee must be able to read the invitation
+  // before signing in or creating an account.
   const isProtected = path.startsWith('/dashboard');
   const isAuthPage = ['/login', '/signup'].some((p) => path === p);
 

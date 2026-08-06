@@ -35,7 +35,7 @@ export function SubmitButton({
 }
 
 export function FormMessage({ error, success }: { error?: string; success?: string }) {
-  if (error) return <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{error}</div>;
-  if (success) return <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{success}</div>;
+  if (error) return <div className="alert alert-error" role="alert" style={{ marginBottom: '1rem' }}>{error}</div>;
+  if (success) return <div className="alert alert-success" role="status" aria-live="polite" style={{ marginBottom: '1rem' }}>{success}</div>;
   return null;
 }

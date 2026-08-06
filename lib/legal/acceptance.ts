@@ -5,7 +5,7 @@ import { CURRENT_VERSIONS, CLICKWRAP_SLUGS, type LegalSlug } from '@/lib/legal/r
 import { log } from '@/lib/log';
 
 type Client = SupabaseClient<Database>;
-export type AcceptanceContext = 'signup' | 'checkout' | 'dpa' | 'reacceptance';
+export type AcceptanceContext = 'signup' | 'invite' | 'checkout' | 'dpa' | 'reacceptance';
 
 export interface AcceptanceInput {
   userId: string;

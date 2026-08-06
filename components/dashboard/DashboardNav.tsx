@@ -12,15 +12,21 @@ import { isNavActive } from '@/lib/dashboard/nav-active';
 // managers). This is presentation only: hiding a tab is a courtesy so the nav
 // reflects what the person can actually do, NOT a security boundary. The route
 // itself still guards, and RLS still guards under that.
+//
+// Billing deliberately has NO top-level tab. It lives at
+// /dashboard/profile/billing and is reached through the Profile left-nav, since
+// Profile is where every other account-level setting already lives and a
+// dedicated tab made the primary nav read as two competing account sections.
+// The route and its Profile section entry both still exist — only the tab is
+// gone — so existing links, Stripe return URLs, and upgrade CTAs keep working.
 const LINKS: Array<{ href: string; label: string; ownerOnly?: boolean }> = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/dashboard/properties', label: 'Properties' },
   { href: '/dashboard/escalations', label: 'Escalations' },
   { href: '/dashboard/service-requests', label: 'Service' },
   { href: '/dashboard/extras', label: 'Extras' },
-  { href: '/dashboard/updates', label: 'Review' },
+  { href: '/dashboard/updates', label: 'Updates' },
   { href: '/dashboard/reports', label: 'Reports' },
-  { href: '/dashboard/profile/billing', label: 'Billing', ownerOnly: true },
   { href: '/dashboard/profile', label: 'Profile' },
 ];
 
@@ -31,7 +37,12 @@ export function DashboardNav({
 }: {
   unread: number;
   notifications: NotificationItem[];
-  /** Defaults to true so an omitted prop can never silently hide a real owner's billing tab. */
+  /**
+   * Defaults to true so an omitted prop can never silently hide a tab from a
+   * real owner. No link is currently `ownerOnly` — the filter is kept because
+   * owner-only tabs have been added and removed more than once, and losing the
+   * mechanism means the next one gets hardcoded badly.
+   */
   isOwner?: boolean;
 }) {
   const pathname = usePathname();
