@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { Printer, Archive, FileText, Sparkles, Building2 } from 'lucide-react';
+import { Printer, Archive, FileText, Sparkles, Building2, MessageSquare } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { EXTRAS_ORDER_STATUS_LABEL, type ExtrasOrderStatus } from '@/lib/dashboard/extras-orders';
 import { RestorePropertyButton } from './RestorePropertyButton';
+import { HandledEscalations, type HandledEscalation, type HandledThreadMessage } from './HandledEscalations';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +63,7 @@ export default async function ReportsPage({
   let requests: Array<{ id: string; property_id: string; service_type: string; status: string; urgency: string; created_at: string; archived_at: string | null; summary: string | null; description: string }> = [];
   let stays: Array<{ id: string; property_id: string; guest_display_name: string | null; check_in: string | null; check_out: string | null; status: string; archived_at: string | null }> = [];
   let extras: Array<{ id: string; property_id: string; item_title: string; item_price_text: string | null; quantity: number; status: ExtrasOrderStatus; created_at: string; archived_at: string | null }> = [];
+  let handled: HandledEscalation[] = [];
 
   if (scopeIds.length) {
     const [reqRes, stayRes, extrasRes] = await Promise.all([
@@ -91,10 +93,59 @@ export default async function ReportsPage({
     requests = reqRes.data ?? [];
     stays = stayRes.data ?? [];
     extras = (extrasRes.data ?? []) as typeof extras;
+
+    // Handled escalations — every guest question a real person ended up answering.
+    // Fetched in two hops rather than one join because the thread is the expensive
+    // part and only the escalations that actually have a conversation need it.
+    const { data: escRows } = await supabase
+      .from('escalations')
+      .select('id, property_id, question, status, host_response, responded_at, created_at, conversation_id')
+      .in('property_id', scopeIds)
+      .neq('status', 'open')
+      .order('responded_at', { ascending: false, nullsFirst: false })
+      .limit(100);
+
+    const escalations = escRows ?? [];
+    const convIds = escalations.map((e) => e.conversation_id).filter((id): id is string => Boolean(id));
+
+    // One query for every thread, grouped in memory. 100 escalations x ~10 messages
+    // is well inside a single round trip, and it avoids a request per row.
+    const threads = new Map<string, HandledThreadMessage[]>();
+    if (convIds.length) {
+      const { data: msgRows } = await supabase
+        .from('messages')
+        .select('id, conversation_id, role, content, created_at, ai_training_excluded')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: true })
+        .limit(1500);
+      for (const m of msgRows ?? []) {
+        const list = threads.get(m.conversation_id) ?? [];
+        list.push({
+          id: m.id,
+          role: m.role as HandledThreadMessage['role'],
+          content: m.content,
+          created_at: m.created_at,
+          ai_training_excluded: m.ai_training_excluded,
+        });
+        threads.set(m.conversation_id, list);
+      }
+    }
+
+    handled = escalations.map((e) => ({
+      id: e.id,
+      propertyName: propNames.get(e.property_id) ?? 'Property',
+      question: e.question,
+      hostResponse: e.host_response,
+      status: e.status,
+      respondedAt: e.responded_at,
+      createdAt: e.created_at,
+      messages: e.conversation_id ? threads.get(e.conversation_id) ?? [] : [],
+    }));
   }
 
   const empty =
-    requests.length === 0 && stays.length === 0 && extras.length === 0 && archivedProps.length === 0;
+    requests.length === 0 && stays.length === 0 && extras.length === 0 && archivedProps.length === 0 &&
+    handled.length === 0;
 
   return (
     <div>
@@ -146,6 +197,19 @@ export default async function ReportsPage({
               </div>
             </section>
           )}
+
+          <section style={{ marginBottom: '2rem' }} data-testid="handled-escalations-section">
+            <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
+              <MessageSquare size={16} aria-hidden /> Handled escalations
+              <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({handled.length})</span>
+            </h2>
+            <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .75rem' }}>
+              Every guest question your team answered personally, with the full thread around it. Open one to see what the
+              guest asked, what the concierge had already tried, and what you replied — and to choose whether each of your
+              replies is used to train the concierge for future guests.
+            </p>
+            <HandledEscalations items={handled} />
+          </section>
 
           <section style={{ marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
