@@ -11,7 +11,7 @@ export default async function ExtrasPage({ params }: { params: { id: string } })
 
   const { data: offers } = await supabase
     .from('guest_extras')
-    .select('id, title, description, price_text, cta_label, active, sort_order, category, is_favorite, max_quantity')
+    .select('id, title, description, price_text, cta_label, active, sort_order, category, is_favorite, max_quantity, kind, unit_label, option_label, options, details')
     .eq('property_id', property.id)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });

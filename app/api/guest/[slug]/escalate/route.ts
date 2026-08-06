@@ -8,6 +8,8 @@ import { publicEnv } from '@/lib/env';
 import { capture } from '@/lib/posthog-server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/log';
+import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
+import { translateForHost, notificationBody } from '@/lib/guest/translate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,6 +35,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   const message = parsed.data.message;
 
   const admin = createAdminClient();
+
+  const guestLanguage = resolveLanguage(parsed.data.language);
 
   // Confirm the slug matches the session's property (defense in depth).
   const { data: property } = await admin
@@ -78,7 +82,24 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     conversationId = (conv as { id: string }).id;
   }
 
+  // The host reads their escalation queue in their own language. Translation is
+  // best-effort and always keeps the guest's original text above it (see
+  // lib/guest/translate.ts), so a translation outage degrades to today's behaviour
+  // rather than blocking the guest from reaching their host.
+  const { data: langSettings } = await admin
+    .from('property_settings')
+    .select('host_language')
+    .eq('property_id', session.propertyId)
+    .maybeSingle();
+  const hostLanguage = (langSettings as { host_language?: string | null } | null)?.host_language ?? DEFAULT_HOST_LANGUAGE;
+  const translated = await translateForHost(message, guestLanguage?.code ?? null, hostLanguage);
+
+  if (guestLanguage) {
+    void admin.from('stays').update({ guest_language: guestLanguage.code } as never).eq('id', session.stayId);
+  }
+
   // Record the guest's message so it shows in the thread (guest + host views).
+  // Stored verbatim: the thread is what the GUEST sees, so it stays in their words.
   await admin.from('messages').insert({
     conversation_id: conversationId,
     property_id: session.propertyId,
@@ -115,7 +136,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
         property_id: session.propertyId,
         stay_id: session.stayId,
         conversation_id: conversationId,
-        question: message,
+        question: translated.text,
         status: 'open',
       } as never)
       .select('id')
@@ -130,7 +151,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     shouldNotify = staleMs >= REPING_AFTER_MS;
     await admin
       .from('escalations')
-      .update({ question: message, updated_at: new Date().toISOString() } as never)
+      .update({ question: translated.text, updated_at: new Date().toISOString() } as never)
       .eq('id', escId);
   }
 
@@ -142,7 +163,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
       hostAccountId: property.host_account_id,
       kind: 'escalation',
       title: 'A guest is asking for you',
-      body: message.slice(0, 200),
+      body: notificationBody(translated, message),
       propertyId: session.propertyId,
       link: `/dashboard/escalations/${escId}`,
       actionUrl: answerUrl,

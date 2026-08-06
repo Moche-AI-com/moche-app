@@ -305,6 +305,7 @@ export type Database = {
           property_id: string
           stay_id: string
           updated_at: string
+          title: string | null
         }
         Insert: {
           created_at?: string
@@ -312,6 +313,7 @@ export type Database = {
           property_id: string
           stay_id: string
           updated_at?: string
+          title?: string | null
         }
         Update: {
           created_at?: string
@@ -319,6 +321,7 @@ export type Database = {
           property_id?: string
           stay_id?: string
           updated_at?: string
+          title?: string | null
         }
         Relationships: [
           {
@@ -575,6 +578,7 @@ export type Database = {
           status: Database["public"]["Enums"]["extras_order_status"]
           stay_id: string | null
           updated_at: string
+          item_variant: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -595,6 +599,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["extras_order_status"]
           stay_id?: string | null
           updated_at?: string
+          item_variant?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -615,6 +620,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["extras_order_status"]
           stay_id?: string | null
           updated_at?: string
+          item_variant?: string | null
         }
         Relationships: [
           {
@@ -822,6 +828,11 @@ export type Database = {
           property_id: string
           sort_order: number
           title: string
+          details: string | null
+          kind: string
+          option_label: string | null
+          options: string[] | null
+          unit_label: string | null
         }
         Insert: {
           active?: boolean
@@ -836,6 +847,11 @@ export type Database = {
           property_id: string
           sort_order?: number
           title: string
+          details?: string | null
+          kind?: string
+          option_label?: string | null
+          options?: string[] | null
+          unit_label?: string | null
         }
         Update: {
           active?: boolean
@@ -850,6 +866,11 @@ export type Database = {
           property_id?: string
           sort_order?: number
           title?: string
+          details?: string | null
+          kind?: string
+          option_label?: string | null
+          options?: string[] | null
+          unit_label?: string | null
         }
         Relationships: [
           {
@@ -1957,6 +1978,7 @@ export type Database = {
           review_url: string | null
           system_prompt_override: string | null
           updated_at: string
+          host_language: string
         }
         Insert: {
           ai_temperature?: number
@@ -1978,6 +2000,7 @@ export type Database = {
           review_url?: string | null
           system_prompt_override?: string | null
           updated_at?: string
+          host_language?: string
         }
         Update: {
           ai_temperature?: number
@@ -1999,6 +2022,7 @@ export type Database = {
           review_url?: string | null
           system_prompt_override?: string | null
           updated_at?: string
+          host_language?: string
         }
         Relationships: [
           {
@@ -2323,6 +2347,7 @@ export type Database = {
           property_id: string
           status: Database["public"]["Enums"]["stay_status"]
           updated_at: string
+          guest_language: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -2346,6 +2371,7 @@ export type Database = {
           property_id: string
           status?: Database["public"]["Enums"]["stay_status"]
           updated_at?: string
+          guest_language?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -2369,6 +2395,7 @@ export type Database = {
           property_id?: string
           status?: Database["public"]["Enums"]["stay_status"]
           updated_at?: string
+          guest_language?: string | null
         }
         Relationships: [
           {

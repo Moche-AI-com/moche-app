@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { extraOfferSchema } from '@/lib/validation';
+import { parseExtraOptionsInput } from '@/lib/guest/extras';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 
@@ -31,6 +32,11 @@ export async function createExtraAction(_prev: ExtraFormState, formData: FormDat
     category: formData.get('category') || '',
     isFavorite: formData.get('isFavorite') === 'on',
     maxQuantity: Number(formData.get('maxQuantity') ?? 0) || null,
+    kind: formData.get('kind') === 'package' ? 'package' : 'quantity',
+    unitLabel: formData.get('unitLabel') || '',
+    optionLabel: formData.get('optionLabel') || '',
+    options: formData.get('options') || '',
+    details: formData.get('details') || '',
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the offer details.' };
   const d = parsed.data;
@@ -47,6 +53,13 @@ export async function createExtraAction(_prev: ExtraFormState, formData: FormDat
     category: d.category ? d.category : null,
     is_favorite: d.isFavorite,
     max_quantity: d.maxQuantity ?? null,
+    kind: d.kind,
+    // A package is one bundle, so a unit label and a per-request ceiling are
+    // meaningless for it; blank them rather than storing values the guest UI ignores.
+    unit_label: d.kind === 'package' ? null : (d.unitLabel ? d.unitLabel : null),
+    option_label: d.optionLabel ? d.optionLabel : null,
+    options: parseExtraOptionsInput(d.options),
+    details: d.details ? d.details : null,
   } as never);
 
   if (error) {
@@ -81,6 +94,11 @@ export async function updateExtraAction(_prev: ExtraFormState, formData: FormDat
     category: formData.get('category') || '',
     isFavorite: formData.get('isFavorite') === 'on',
     maxQuantity: Number(formData.get('maxQuantity') ?? 0) || null,
+    kind: formData.get('kind') === 'package' ? 'package' : 'quantity',
+    unitLabel: formData.get('unitLabel') || '',
+    optionLabel: formData.get('optionLabel') || '',
+    options: formData.get('options') || '',
+    details: formData.get('details') || '',
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the offer details.' };
   const d = parsed.data;
@@ -98,6 +116,11 @@ export async function updateExtraAction(_prev: ExtraFormState, formData: FormDat
       category: d.category ? d.category : null,
       is_favorite: d.isFavorite,
       max_quantity: d.maxQuantity ?? null,
+      kind: d.kind,
+      unit_label: d.kind === 'package' ? null : (d.unitLabel ? d.unitLabel : null),
+      option_label: d.optionLabel ? d.optionLabel : null,
+      options: parseExtraOptionsInput(d.options),
+      details: d.details ? d.details : null,
     } as never)
     .eq('id', offerId)
     .eq('property_id', propertyId);

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { hasPendingLegacyTone, resolveRestrictedTopicKeys, suggestTonePreset } from '@/lib/concierge/tone';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOURS, DEFAULT_CONCIERGE_NAME, DEFAULT_RESPONSE_LENGTH, PLANS } from '@/lib/constants';
+import { DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { SettingsForms } from './SettingsForms';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
   const planName = ent.planId ? PLANS[ent.planId].name : null;
   const { data: settings } = await supabase
     .from('property_settings')
-    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, review_url, modules, concierge_name, system_prompt_override, response_length, restricted_topics, restricted_topic_keys, language, is_premium_override, legacy_tone_note, legacy_tone_ack_at')
+    .select('concierge_tone, ai_temperature, confidence_threshold, grace_period_hours, review_nudge_enabled, review_nudge_auto, review_url, modules, concierge_name, system_prompt_override, response_length, restricted_topics, restricted_topic_keys, language, host_language, is_premium_override, legacy_tone_note, legacy_tone_ack_at')
     .eq('property_id', property.id)
     .maybeSingle();
 
@@ -51,6 +52,7 @@ export default async function PropertySettingsPage({ params }: { params: { id: s
     }),
     suggested_tone_preset: suggestTonePreset(settings?.legacy_tone_note) as string,
     language: settings?.language ?? 'auto',
+    host_language: settings?.host_language ?? DEFAULT_HOST_LANGUAGE,
     is_premium_override: settings?.is_premium_override ?? false,
   };
 

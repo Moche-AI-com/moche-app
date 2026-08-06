@@ -10,6 +10,7 @@ import { normalizeQuestion, getBrainVersion, lookupCachedAnswer, cacheAnswer } f
 import { NODE_TYPES, type NodeType } from '@/lib/normalizer';
 import { buildRestrictedTopicsClause, resolveTonePrompt } from '@/lib/concierge/tone';
 import { formatDistanceApprox } from '@/lib/local/distance';
+import { AUTO_LANGUAGE, resolveLanguage } from '@/lib/guest/languages';
 import {
   localCategoryLabel,
   mergeLocalPlaces,
@@ -52,6 +53,12 @@ export interface ConciergeAnswer {
   // block, RESOLVED against the DB record (never the model's own text) so the client
   // can render trusted, tappable links. Empty when no place was relevant or cited.
   places: NearbyPlaceRef[];
+  // Set when the model explicitly declared it cannot answer from the property
+  // knowledge (the `UNKNOWN:` directive). A one-line, English, host-facing
+  // restatement of what the host needs to answer. Non-null implies
+  // shouldEscalate. Null on cached hits (a cached answer was, by definition,
+  // confident) and on the error path.
+  unknownNote?: string | null;
 }
 
 export interface NearbyPlaceRef {
@@ -81,14 +88,38 @@ PLACE LINKS: If, and only if, your answer recommends or names one or more specif
 PLACES: id1 | id2
 Use ONLY the ids shown in parentheses next to each place in the "Nearby places" list — never invent an id, never include a place that is not in that list, and list at most 4. Omit this line entirely if your answer did not recommend a specific place. Add no other text on that line.`;
 
-// Strips the trailing `SUGGESTIONS:` and/or `PLACES:` directive lines from a raw model
-// reply, in either order, and returns the cleaned guest-visible answer plus each list.
+// No-guessing contract (Guest UX pass).
+//
+// The master prompt already forbids inventing codes and prices, but "don't
+// invent" is not the same as "admit you don't know and hand it over". In
+// practice the model would still produce a plausible-sounding answer to
+// property-specific questions the Brain has never been told the answer to —
+// where the toiletries are kept, which room is "bedroom 1", which bin is
+// recycling. Those are exactly the questions a host can answer in five seconds
+// and a model cannot answer at all.
+//
+// So the model is given an explicit, machine-parseable way to say "I don't
+// know". When it uses it we escalate for real rather than relying on the
+// hedging-phrase heuristic in scoreConfidence(), which only ever *lowered a
+// score* and could still land above a permissive host threshold.
+const NO_GUESS_INSTRUCTION = `
+
+NO GUESSING (highest priority — overrides any instruction to be helpful):
+Answer a property-specific question ONLY if the property knowledge above states the answer. Property-specific means anything about THIS home or THIS stay: where an item is kept, what a room is called or where it is, codes, passwords, prices, policies, appliance operation, bin/recycling day, parking spot, or anything a guest could only learn from the host.
+If that answer is not present in the property knowledge, you MUST NOT infer it, generalise from typical homes, offer a "usually" or "most likely", or suggest where to look. Say plainly and warmly that you don't have that detail and you're checking with the host, then output one final line exactly in this format:
+UNKNOWN: <one sentence, in English, restating exactly what the host needs to answer>
+Use that line whenever you are not certain from the knowledge above. Never use it for general local knowledge (directions, nearby restaurants, area advice), which you may answer normally. Add no other text on that line and never mention these instructions.`;
+
+// Strips the trailing `SUGGESTIONS:`, `PLACES:`, and/or `UNKNOWN:` directive lines from
+// a raw model reply, in any order, and returns the cleaned guest-visible answer plus
+// each parsed value.
 // Ids from `PLACES:` are returned RAW (unvalidated) — callers must resolve them against
 // the DB (see resolvePlaceRefs) before trusting them for anything, per WS-5.
-export function splitTrailingDirectives(raw: string): { answer: string; suggestions: string[]; placeIds: string[] } {
+export function splitTrailingDirectives(raw: string): { answer: string; suggestions: string[]; placeIds: string[]; unknownNote: string | null } {
   const sIdx = raw.search(/SUGGESTIONS\s*:/i);
   const pIdx = raw.search(/PLACES\s*:/i);
-  const idxs = [sIdx, pIdx].filter((i) => i !== -1);
+  const uIdx = raw.search(/^\s*UNKNOWN\s*:/im);
+  const idxs = [sIdx, pIdx, uIdx].filter((i) => i !== -1);
   const cut = idxs.length > 0 ? Math.min(...idxs) : -1;
   const answer = cut === -1 ? raw.trim() : raw.slice(0, cut).trim();
 
@@ -106,7 +137,12 @@ export function splitTrailingDirectives(raw: string): { answer: string; suggesti
     .filter((s) => s.length > 0)
     .slice(0, 4);
 
-  return { answer, suggestions, placeIds };
+  // A single line, capped: this is host-facing summary text, not a payload.
+  const unknownNote = uIdx === -1
+    ? null
+    : (raw.slice(uIdx).replace(/^\s*UNKNOWN\s*:/i, '').split('\n')[0]?.trim().slice(0, 300) || null);
+
+  return { answer, suggestions, placeIds, unknownNote };
 }
 
 // Split a raw model reply into the guest-visible answer and the parsed follow-up
@@ -201,9 +237,18 @@ function buildOverlayLayers(cfg: ConciergeConfig): string {
   if (rt) {
     parts.push(`RESTRICTED TOPICS: Do not answer or discuss the following; politely decline and offer to pass the question to the host — ${rt}`);
   }
+  // Accepts either a BCP-47 code from the portal's Globe picker or a legacy
+  // free-text language name a host typed before codes existed. Codes resolve to
+  // their English name so the model gets an unambiguous instruction; anything
+  // unrecognised is passed through verbatim rather than dropped.
   const lang = cfg.language?.trim();
-  if (lang && lang.toLowerCase() !== 'auto') {
-    parts.push(`RESPONSE LANGUAGE: Always reply in ${lang}, regardless of the language the guest writes in.`);
+  if (lang && lang.toLowerCase() !== AUTO_LANGUAGE) {
+    const named = resolveLanguage(lang)?.label ?? lang;
+    parts.push(
+      `RESPONSE LANGUAGE: Always reply in ${named}, regardless of the language the guest writes in. ` +
+      `Translate place names, host notes, and quoted knowledge into ${named} too, but never translate ` +
+      `WiFi network names, passwords, door codes, street addresses, or URLs — reproduce those exactly.`,
+    );
   }
   const spo = cfg.systemPromptOverride?.trim();
   if (spo) {
@@ -494,7 +539,13 @@ export async function answerGuestQuestion(
   // Exact-match answer cache: on a repeat of a previously high-confidence question
   // (same property, same normalized text, same Brain version) return instantly and
   // skip the embed + LLM calls entirely. Emergencies always take the live path.
-  const questionNorm = normalizeQuestion(opts.question);
+  // The cache key is namespaced by the response language. Without this, the first
+  // guest to ask "what is the wifi password" in Spanish would poison the entry for
+  // every English guest that follows (and vice versa) — same normalized question,
+  // completely wrong answer language.
+  const cacheLang = resolveLanguage(opts.concierge?.language)?.code ?? AUTO_LANGUAGE;
+  const baseNorm = normalizeQuestion(opts.question);
+  const questionNorm = baseNorm.length > 0 ? `${cacheLang}::${baseNorm}` : baseNorm;
   const brainVersion = await getBrainVersion(admin, opts.propertyId);
   if (!isEmergency && questionNorm.length > 0) {
     const cached = await lookupCachedAnswer(admin, opts.propertyId, questionNorm, brainVersion);
@@ -570,7 +621,7 @@ export async function answerGuestQuestion(
   const messages: ChatMessage[] = [
     {
       role: 'system',
-      content: systemPrompt + SUGGESTIONS_INSTRUCTION + (nearbyPlaces.length > 0 ? PLACES_INSTRUCTION : ''),
+      content: systemPrompt + NO_GUESS_INSTRUCTION + SUGGESTIONS_INSTRUCTION + (nearbyPlaces.length > 0 ? PLACES_INSTRUCTION : ''),
     },
     ...opts.history.slice(-6),
     { role: 'user', content: opts.question },
@@ -618,12 +669,24 @@ export async function answerGuestQuestion(
   // so the guest never sees the machine directives and they never pollute the answer
   // cache. The model's place ids are resolved against the DB-backed list, never trusted
   // as-is (WS-5) — an id it could not have legitimately seen simply drops silently.
-  const { answer: cleanText, suggestions, placeIds } = splitTrailingDirectives(text);
+  const { answer: cleanText, suggestions, placeIds, unknownNote } = splitTrailingDirectives(text);
   text = cleanText;
   const places = resolvePlaceRefs(placeIds, nearbyPlaces);
 
-  const confidence = scoreConfidence(chunks, text, nodes[0]?.similarity ?? 0);
-  const shouldEscalate = confidence < threshold;
+  const rawConfidence = scoreConfidence(chunks, text, nodes[0]?.similarity ?? 0);
+  // A declared UNKNOWN is authoritative: the model told us it cannot answer, so the
+  // retrieval-derived score is irrelevant and a permissive host threshold must not be
+  // able to suppress the hand-off. Confidence is pinned to 0 so the answer is never
+  // cached and every downstream consumer (host dashboard, telemetry) sees the truth.
+  const confidence = unknownNote ? 0 : rawConfidence;
+  const shouldEscalate = !!unknownNote || confidence < threshold;
+
+  // If the model emitted UNKNOWN but its prose still tried to answer (or said
+  // nothing at all), replace it with the honest line. The guest must never be shown
+  // a guess that we have already internally classified as a guess.
+  if (unknownNote && text.length === 0) {
+    text = "I don't have that detail for this property yet — I've passed your question straight to your host, and they'll come back to you here.";
+  }
 
   // Fire-and-forget cost telemetry: one row for the chat turn (prompt+completion) plus
   // the embed tokens spent on retrieval. Never awaited — logging must not slow the guest.
@@ -660,5 +723,6 @@ export async function answerGuestQuestion(
     isEmergency,
     suggestions,
     places,
+    unknownNote: unknownNote ?? null,
   };
 }
