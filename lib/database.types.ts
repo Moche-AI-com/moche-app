@@ -1312,6 +1312,7 @@ export type Database = {
       }
       messages: {
         Row: {
+          ai_training_excluded: boolean
           author_profile_id: string | null
           confidence: number | null
           content: string
@@ -1326,6 +1327,7 @@ export type Database = {
           sources: Json | null
         }
         Insert: {
+          ai_training_excluded?: boolean
           author_profile_id?: string | null
           confidence?: number | null
           content: string
@@ -1340,6 +1342,7 @@ export type Database = {
           sources?: Json | null
         }
         Update: {
+          ai_training_excluded?: boolean
           author_profile_id?: string | null
           confidence?: number | null
           content?: string

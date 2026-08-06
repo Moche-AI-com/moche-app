@@ -64,19 +64,26 @@ interface Category {
 // "Ask anything" card, which must never make a guest tap through a sub-choice sheet
 // just to type their own question.
 const CATEGORIES: Category[] = [
-  {
-    // Card-set rule (Guest UX pass): a conversational tile only earns its place if
-    // the concierge can answer its questions CONFIDENTLY from the property Brain or
-    // from verified local data. Questions whose answer only the host knows — where
-    // the toiletries live, which room is "bedroom 1", when the bins go out — are not
-    // tiles: they route to the host through Report an issue / Message your host, or
-    // are escalated automatically by the no-guessing contract in lib/guest/concierge.
-    key: 'ask', label: 'Ask anything', Icon: MessageCircle, subtitle: 'Type your own question',
-    // No sub-choices: this card opens the chat directly (see openCategory).
-    choices: [],
-    direct: FOCUS_INPUT,
-    primary: true,
-  },
+  // Card-set rule (Guest UX pass): a conversational tile only earns its place if
+  // the concierge can answer its questions CONFIDENTLY from the property Brain or
+  // from verified local data. Questions whose answer only the host knows — where
+  // the toiletries live, which room is "bedroom 1", when the bins go out — are not
+  // tiles: they route to the host through Report an issue / Message your host, or
+  // are escalated automatically by the no-guessing contract in lib/guest/concierge.
+  //
+  // RETIRED (Guest card pass, per the "nothing is deleted" rule):
+  //
+  // 'ask' — "Ask anything" was a card that did nothing but focus the chat input that
+  //   already sits directly beneath the grid. It read as a sixth topic while being a
+  //   no-op, and it consumed the full-width primary slot that the guest's real
+  //   entry point (the chat box itself) occupies. Guests type in the chat; they do
+  //   not need a card to be told they may. Its FOCUS_INPUT sentinel is retained
+  //   below because openCategory still honours it for any future direct tile.
+  //
+  // {
+  //   key: 'ask', label: 'Ask anything', Icon: MessageCircle, subtitle: 'Type your own question',
+  //   choices: [], direct: FOCUS_INPUT, primary: true,
+  // },
   {
     key: 'stay', label: 'Your stay', Icon: KeyRound, subtitle: 'Arrival, departure & access',
     choices: [
@@ -248,6 +255,12 @@ export function GuestPortal(props: {
 }) {
   const [verified, setVerified] = useState(props.initialVerified);
   const [guestName, setGuestName] = useState(props.guestName);
+  // Arrival curtain (see <ArrivalCurtain>). A guest who has just typed their code is
+  // in the single highest-stakes second of the whole product, and what they used to
+  // get was the gate vanishing and a half-laid-out portal snapping into place around
+  // them. `arriving` is true from the moment the code is accepted until the curtain
+  // has covered that work and bowed out. The portal mounts and loads UNDERNEATH it.
+  const [arriving, setArriving] = useState(false);
   // Chat history moved OUT of the chat box and behind the brand pill. Owned here
   // rather than in <Concierge> because the pill lives in the hero, above it — and
   // because the sheet loads its own data, the two never need to share chat state.
@@ -293,8 +306,11 @@ export function GuestPortal(props: {
                 aria-label="Open your conversation history"
                 title="Your conversation history"
               >
+                {/* Guest card pass: this chip used to read "Moche.AI", which looks like a
+                    brand badge, not a control — guests did not know it opened anything.
+                    It now says what it does. The brand mark stays as the leading glyph. */}
                 <DomeMark size={15} />
-                <span>Moche<span style={{ color: GOLD }}>.AI</span></span>
+                <span>Chat <span style={{ color: GOLD }}>History</span></span>
                 <ChevronRight size={13} aria-hidden style={{ opacity: 0.6, marginLeft: -2 }} />
               </button>
             ) : (
@@ -327,18 +343,28 @@ export function GuestPortal(props: {
             slug={props.slug}
             propertyName={props.propertyName}
             turnstileSiteKey={props.turnstileSiteKey}
-            onVerified={(name) => { setVerified(true); setGuestName(name); }}
+            onVerified={(name) => { setArriving(true); setVerified(true); setGuestName(name); }}
           />
         ) : (
-          <Concierge
-            slug={props.slug}
-            propertyId={props.propertyId}
-            hostPreview={props.hostPreview}
-            propertyName={props.propertyName}
-            guestName={guestName}
-            reviewNudge={props.reviewNudge}
-            extraOffers={props.extraOffers}
-          />
+          // Mounted immediately but held at opacity 0 while the curtain is up, so every
+          // effect, fetch, font and image resolves BEFORE the guest sees anything. The
+          // reveal is then a single graceful fade of a finished page rather than a
+          // sequence of things popping into position.
+          <div className={arriving ? 'gp-arriving' : 'gp-arrived'} aria-hidden={arriving || undefined}>
+            <Concierge
+              slug={props.slug}
+              propertyId={props.propertyId}
+              hostPreview={props.hostPreview}
+              propertyName={props.propertyName}
+              guestName={guestName}
+              reviewNudge={props.reviewNudge}
+              extraOffers={props.extraOffers}
+            />
+          </div>
+        )}
+
+        {arriving && (
+          <ArrivalCurtain propertyName={props.propertyName} onDone={() => setArriving(false)} />
         )}
 
         {historyOpen && (
@@ -437,8 +463,17 @@ export function GuestPortal(props: {
         }
         .gp-rise { animation: gpRise .6s cubic-bezier(.16,1,.3,1) both; }
         @keyframes gpRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+        /* The portal while the arrival curtain is up: fully mounted and laid out, but
+           invisible and inert. visibility (not display) is deliberate — the browser
+           still performs layout and still fetches the images, which is the entire
+           point of holding the curtain there. */
+        .gp-arriving { opacity: 0; visibility: hidden; pointer-events: none; }
+        /* The handover. Slightly slower and gentler than .gp-rise because it moves the
+           whole page at once rather than a single card. */
+        .gp-arrived { animation: gpArrive .5s cubic-bezier(.16,1,.3,1) both; }
+        @keyframes gpArrive { from { opacity: 0; transform: translateY(10px) scale(.995); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: reduce) {
-          .gp-rise { animation: none; }
+          .gp-rise, .gp-arrived { animation: none; }
         }
       `}</style>
     </div>
@@ -627,6 +662,194 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Arrival curtain                                                            */
+/* -------------------------------------------------------------------------- */
+
+// Shown for the moment between "code accepted" and "portal ready". Its job is not
+// decoration — it is to OWN the load. The portal mounts behind it and spends this
+// time resolving fonts, images and its first fetches; the curtain guarantees the
+// guest never watches that happen. It leaves on the later of a minimum dwell (so it
+// never flickers) and the browser reporting a settled frame, then hands over with a
+// single fade.
+//
+// The bell is the brand's own mark of service, so it is what rings here: a soft
+// swing with two gold rings expanding out of it, plus the synthesized two-note chime
+// retired from the old mute toggle below. Audio is a best-effort courtesy — it is
+// unlocked by the guest's own tap on "Verify", and silently skipped if blocked.
+const ARRIVAL_MIN_MS = 1600;
+const ARRIVAL_FADE_MS = 520;
+
+function playArrivalChime() {
+  try {
+    const Ctx = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+    const AC = Ctx.AudioContext ?? Ctx.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+    [880, 1318.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = now + i * 0.12;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1.2);
+    });
+    setTimeout(() => { try { void ctx.close(); } catch { /* noop */ } }, 1600);
+  } catch { /* audio is a courtesy, never a requirement */ }
+}
+
+function ArrivalCurtain({ propertyName, onDone }: { propertyName: string; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+
+  useEffect(() => {
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    playArrivalChime();
+
+    // The portal is scrolled to the top and frozen while the curtain is up, so a
+    // guest who flicks the screen mid-load does not reveal the page they are meant
+    // to be shielded from.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+
+    const finish = () => {
+      if (cancelled) return;
+      setLeaving(true);
+      timers.push(setTimeout(() => { if (!cancelled) doneRef.current(); }, ARRIVAL_FADE_MS));
+    };
+
+    // Wait for the LATER of: the minimum dwell, and the page actually being quiet.
+    // Fonts are the usual culprit behind a late layout shift, so they are awaited
+    // explicitly; the double rAF then lets the resulting paint land before we lift.
+    const dwell = new Promise<void>((r) => timers.push(setTimeout(r, ARRIVAL_MIN_MS)));
+    const settled = Promise.resolve(document.fonts?.ready)
+      .catch(() => undefined)
+      .then(() => new Promise<void>((r) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => r()));
+      }));
+    // A stuck font load must never strand a guest on a loading screen, so the whole
+    // thing is capped well short of anything a person would call "broken".
+    const cap = new Promise<void>((r) => timers.push(setTimeout(r, 4000)));
+    void Promise.race([Promise.all([dwell, settled]).then(() => undefined), cap]).then(finish);
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  return (
+    <div
+      className={`gp-curtain${leaving ? ' gp-curtain-out' : ''}`}
+      role="status"
+      aria-live="polite"
+      data-testid="arrival-curtain"
+    >
+      <div className="gp-curtain-inner">
+        <div className="gp-curtain-bell" aria-hidden>
+          <span className="gp-curtain-ring" />
+          <span className="gp-curtain-ring gp-curtain-ring-2" />
+          <ConciergeBell size={40} strokeWidth={1.4} />
+        </div>
+        <div className="gp-serif gp-curtain-title">{propertyName}</div>
+        <div className="gp-curtain-sub">Preparing your concierge</div>
+        <div className="gp-curtain-bar"><span /></div>
+      </div>
+
+      <style jsx>{`
+        .gp-curtain {
+          position: fixed; inset: 0; z-index: 80;
+          display: flex; align-items: center; justify-content: center;
+          padding: 2rem 1.5rem calc(2rem + env(safe-area-inset-bottom));
+          background:
+            radial-gradient(90% 60% at 50% 38%, rgba(201,169,110,.13), transparent 70%),
+            ${BG};
+          color: #ece7dd;
+          animation: gpCurtainIn .3s ease both;
+        }
+        .gp-curtain-out {
+          animation: gpCurtainOut ${ARRIVAL_FADE_MS}ms cubic-bezier(.4, 0, .2, 1) both;
+          pointer-events: none;
+        }
+        .gp-curtain-inner { text-align: center; max-width: 22rem; }
+        .gp-curtain-bell {
+          position: relative; display: inline-flex; align-items: center; justify-content: center;
+          width: 92px; height: 92px; margin-bottom: 1.35rem;
+          border-radius: 50%; color: ${GOLD};
+          background: rgba(201,169,110,.08);
+          border: 1px solid rgba(201,169,110,.24);
+          animation: gpBellSwing 1.5s cubic-bezier(.36,.07,.19,.97) .12s 2 both;
+          transform-origin: 50% 22%;
+        }
+        /* Rings read as the sound leaving the bell, which is why they are staggered
+           to the swing rather than looping on their own clock. */
+        .gp-curtain-ring {
+          position: absolute; inset: 0; border-radius: 50%;
+          border: 1px solid rgba(201,169,110,.5);
+          animation: gpBellRing 1.5s ease-out .12s infinite both;
+        }
+        .gp-curtain-ring-2 { animation-delay: .68s; }
+        .gp-curtain-title { font-size: 1.5rem; line-height: 1.25; color: #fbf7ef; }
+        .gp-curtain-sub {
+          margin-top: .45rem; font-size: .82rem; opacity: .6;
+          letter-spacing: .1em; text-transform: uppercase;
+        }
+        .gp-curtain-bar {
+          position: relative; overflow: hidden;
+          width: 108px; height: 2px; margin: 1.5rem auto 0;
+          border-radius: 999px; background: rgba(255,255,255,.09);
+        }
+        .gp-curtain-bar > span {
+          position: absolute; inset: 0; display: block;
+          background: linear-gradient(90deg, transparent, ${GOLD}, transparent);
+          animation: gpCurtainBar 1.35s ease-in-out infinite;
+        }
+        @keyframes gpCurtainIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes gpCurtainOut {
+          from { opacity: 1; }
+          to { opacity: 0; visibility: hidden; }
+        }
+        @keyframes gpBellSwing {
+          0%, 100% { transform: rotate(0deg); }
+          8% { transform: rotate(11deg); }
+          20% { transform: rotate(-8deg); }
+          32% { transform: rotate(5deg); }
+          44% { transform: rotate(-3deg); }
+          56% { transform: rotate(1deg); }
+          68% { transform: rotate(0deg); }
+        }
+        @keyframes gpBellRing {
+          0% { opacity: .55; transform: scale(1); }
+          70% { opacity: 0; transform: scale(1.75); }
+          100% { opacity: 0; transform: scale(1.75); }
+        }
+        @keyframes gpCurtainBar {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        /* Reduced motion keeps the curtain and its fade — those carry meaning and
+           prevent the jarring snap this whole component exists to remove — and drops
+           only the decorative swing, rings and sweep. */
+        @media (prefers-reduced-motion: reduce) {
+          .gp-curtain-bell, .gp-curtain-ring, .gp-curtain-bar > span { animation: none; }
+          .gp-curtain-ring { opacity: .3; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // RETIRED (Guest UX pass) — the synthesized Web Audio chime and its mute toggle.
 //
 // Removed because the control did nothing a guest could perceive as useful: the
@@ -669,7 +892,9 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
 
 function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, reviewNudge, extraOffers }: { slug: string; propertyId: string; hostPreview: boolean; propertyName: string; guestName: string | null; reviewNudge: ReviewNudgeConfig; extraOffers: ExtraOffer[] }) {
   const [entries, setEntries] = useState<ChatEntry[]>([
-    { role: 'assistant', content: `Hi${guestName ? ` ${guestName}` : ''}! I'm your concierge for ${propertyName}. Tap a category below for instant answers — or ask me anything.` },
+    // The cards are ABOVE this chat box, not below it. The old copy said "below" and
+    // sent guests scrolling past the input looking for something that was never there.
+    { role: 'assistant', content: `Hi${guestName ? ` ${guestName}` : ''}! I'm your concierge for ${propertyName}. Tap any card above for instant answers — or just type your question here.` },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -726,7 +951,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   useEffect(() => { setMounted(true); }, []);
   // Timestamp of the newest message we've rendered, so polling only pulls newer ones.
   const lastSeenRef = useRef<string | null>(null);
-  const hasEscalation = entries.some((e) => e.escalated) || entries.some((e) => e.role === 'host');
+  // True once this stay has any stored conversation at all. Set by the mount effect
+  // below. It keeps the host-reply poll alive for a guest who escalated, closed the
+  // tab and came back — the poll used to depend on replayed messages being in the
+  // chat box, and the chat box no longer replays them.
+  const [hasPriorHistory, setHasPriorHistory] = useState(false);
+  const hasEscalation = hasPriorHistory || entries.some((e) => e.escalated) || entries.some((e) => e.role === 'host');
   const guestMsgCount = entries.filter((e) => e.role === 'guest').length;
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -1004,11 +1234,18 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     setPlaceDetailError(null);
   }
 
-  // Hydrate prior conversation history on mount so a returning guest (new tab, reload,
-  // came back later) sees their earlier messages AND any host reply — not just a fresh
-  // greeting. Without this, the two-way loop only worked within one uninterrupted session.
-  // Runs once; if history exists it replaces the greeting-only transcript and seeds the
-  // poll cursor so the live poll picks up from the newest message.
+  // Every refresh starts a clean chat; everything already said lives in Chat History.
+  //
+  // This effect used to replay the guest's most recent conversation section into the
+  // chat box. Two passes of that behaviour showed the same problem: a guest who
+  // reloads is almost always starting a NEW question, and they arrived to a box
+  // pre-filled with a conversation they had already finished — which they then had to
+  // scroll past to reach the input. Nothing is lost: every message is persisted
+  // server-side and rendered, sectioned and titled, behind the Chat History chip.
+  //
+  // What the effect still does is seed the poll cursor and record that this stay HAS a
+  // conversation, so a host reply that lands after the refresh still streams into the
+  // live chat rather than being silently dropped.
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (hostPreview || hydratedRef.current) return;
@@ -1022,29 +1259,10 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         const history: { role: string; content: string; created_at: string; model?: string | null }[] = json.messages ?? [];
         if (cancelled || history.length === 0) return;
         const usable = history.filter((m) => m.role === 'guest' || m.role === 'assistant' || m.role === 'host');
-        // Guest UX pass: the chat box used to replay the guest's ENTIRE stay, so a
-        // returning guest opened the portal to a wall of old messages and had to
-        // scroll to reach the live conversation. Now the box shows only the current
-        // conversation (the last section, split on a 45-minute gap); everything older
-        // lives behind the Moche.AI pill in the history sheet, organised by title.
-        const sections = sectionizeHistory(
-          usable.map((m) => ({
-            role: m.role as HistoryMessage['role'],
-            content: m.content,
-            created_at: m.created_at,
-          })),
-        );
-        const current = sections[sections.length - 1];
-        const hydrated: ChatEntry[] = (current?.messages ?? []).map((m) => ({
-          role: m.role as 'guest' | 'assistant' | 'host',
-          content: m.content,
-        }));
-        if (hydrated.length === 0) return;
-        lastSeenRef.current = history[history.length - 1]?.created_at ?? null;
-        // Keep the greeting as the lead-in, then the real history beneath it.
-        setEntries((e) => [e[0], ...hydrated]);
-        setAsked(true);
-      } catch { /* best-effort hydration */ }
+        if (usable.length === 0) return;
+        lastSeenRef.current = usable[usable.length - 1]?.created_at ?? null;
+        setHasPriorHistory(true);
+      } catch { /* best-effort — a failed fetch just means no poll cursor */ }
     })();
     return () => { cancelled = true; };
   }, [hostPreview, slug]);
@@ -1140,7 +1358,14 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         </button>
       </div>
 
-      {/* Choice-driven category cards — the primary, zero-typing UX. */}
+      {/* ONE grid, every action. Guest card pass: the topic tiles, Extras, Report an
+          issue and Message your host used to live in three separate blocks (.gp-cats,
+          .gp-req-row, and a lone .gp-host-link), which produced ragged half-empty rows
+          and a stray band of dead space where a card should have been. They are all the
+          same thing to a guest — "a tappable way to get something" — so they are now one
+          uniform grid. The trailing-odd rule in the stylesheet makes the last card span
+          the row, so the grid can never end in a hole. Behaviour is unchanged; only the
+          layout and the reachability of "Message your host" changed. */}
       <div style={{ fontSize: '.72rem', opacity: 0.5, margin: '.25rem .15rem .6rem', textTransform: 'uppercase', letterSpacing: '.14em' }}>How can we help?</div>
       <div className="gp-cats" data-testid="category-grid">
         {CATEGORIES.map((cat) => (
@@ -1155,14 +1380,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             <span className="gp-cat-sub">{cat.subtitle}</span>
           </button>
         ))}
-      </div>
 
-      {/* Change 2 & 3 — Extras and "Report an issue" each get their own clearly-tappable
-          card (same visual family as the category grid above), instead of Extras being
-          a long inline list guests stumble into and the service-request flow hiding
-          behind a small bell button. Existing request/interview behaviour is unchanged;
-          these cards only change how guests *reach* it. */}
-      <div className="gp-req-row" data-testid="requests-row">
         {extraOffers.length > 0 && (
           <button
             type="button"
@@ -1173,7 +1391,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                 return next;
               });
             }}
-            className="gp-cat gp-card gp-req-card"
+            className="gp-cat gp-card gp-cat-accent"
             data-testid="card-extras"
             aria-expanded={extrasOpen}
           >
@@ -1182,15 +1400,32 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             <span className="gp-cat-sub">Add something to your stay</span>
           </button>
         )}
+
         <button
           type="button"
           onClick={() => { closeServiceRequest(); setTimeout(() => setSrOpen(true), 60); }}
-          className="gp-cat gp-card gp-req-card"
+          className="gp-cat gp-card"
           data-testid="card-report-issue"
         >
           <span className="gp-cat-icon"><Wrench size={20} aria-hidden /></span>
           <span className="gp-serif gp-cat-label">Report an issue</span>
           <span className="gp-cat-sub">Maintenance or service request</span>
+        </button>
+
+        {/* Message your host — promoted from a thin text link under the grid into a
+            real card. It is one of the two most-wanted actions in the portal and was
+            the least visible thing on the page. Still the same escalation flow: it
+            opens the confirm-style composer, never pings the host on a stray tap. */}
+        <button
+          type="button"
+          onClick={() => { setHostComposerError(null); setHostMsg(''); setHostComposerOpen(true); }}
+          className="gp-cat gp-card gp-cat-accent"
+          data-testid="button-service-bell"
+          aria-label="Message your host directly"
+        >
+          <span className="gp-cat-icon"><UserRound size={20} aria-hidden /></span>
+          <span className="gp-serif gp-cat-label">Message your host</span>
+          <span className="gp-cat-sub">A real person replies to you</span>
         </button>
       </div>
 
@@ -1204,20 +1439,28 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       )}
 
 
-      {/* Direct line to the host. Deliberately relocated ABOVE the chat (out of the
-          thumb zone near the send bell) and given a confirm-style composer so guests
-          don't trigger a host ping by accident. */}
-      <button
-        onClick={() => { setHostComposerError(null); setHostMsg(''); setHostComposerOpen(true); }}
-        className="gp-host-link"
-        data-testid="button-service-bell"
-        aria-label="Message your host"
-      >
-        <UserRound size={15} aria-hidden /> Message your host directly
-      </button>
+      {/* RETIRED (Guest card pass): the standalone "Message your host directly" text
+          link that used to sit here. It carried the same data-testid and the same
+          handler, and has been promoted into the card grid above so it is discoverable
+          rather than being the smallest, lowest-contrast target on the page.
+
+        <button
+          onClick={() => { setHostComposerError(null); setHostMsg(''); setHostComposerOpen(true); }}
+          className="gp-host-link"
+          data-testid="button-service-bell"
+          aria-label="Message your host"
+        >
+          <UserRound size={15} aria-hidden /> Message your host directly
+        </button>
+      */}
 
       <div ref={chatRef} style={{ scrollMarginTop: '1rem' }}>
         <div ref={scrollRef} style={{ ...cardStyle, maxHeight: '48dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '.85rem', padding: '1.1rem' }} data-testid="chat-view">
+          {hasPriorHistory && (
+            <div className="gp-chat-earlier" data-testid="chat-earlier-note">
+              Everything you asked earlier is saved under <strong>Chat History</strong> at the top of the page.
+            </div>
+          )}
           {entries.map((m, i) => (
             <div key={i} className="gp-msg" style={{ display: 'flex', gap: '.5rem', alignSelf: m.role === 'guest' ? 'flex-end' : 'flex-start', maxWidth: '90%', flexDirection: m.role === 'guest' ? 'row-reverse' : 'row' }}>
               {m.role === 'assistant' && <span style={{ flexShrink: 0, marginTop: 2 }}><DomeMark size={26} /></span>}
@@ -1227,8 +1470,14 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                 </span>
               )}
               <div>
-                {m.role === 'host' && (
-                  <div style={{ fontSize: '.7rem', fontWeight: 600, color: GOLD, marginBottom: '.2rem', letterSpacing: '.02em' }}>Your host</div>
+                {/* Who is speaking, always named. The live chat used to label host
+                    replies only, so a guest reading back through a thread could not
+                    tell the concierge's answer from their host's. Both are labelled
+                    now, matching the wording used in the history sheet. */}
+                {m.role !== 'guest' && (
+                  <div style={{ fontSize: '.7rem', fontWeight: 600, color: GOLD, marginBottom: '.2rem', letterSpacing: '.02em' }} data-testid={`msg-who-${m.role}-${i}`}>
+                    {m.role === 'host' ? 'Your host' : 'Concierge'}
+                  </div>
                 )}
                 <div style={m.role === 'guest' ? bubbleGuest : m.role === 'host' ? bubbleHost : bubbleAssistant} data-testid={`msg-${m.role}-${i}`}>
                   {m.isEmergency && (
@@ -1717,9 +1966,31 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           .gp-cats, .gp-req-row { gap: .75rem; }
           .gp-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
-        /* "Ask anything" is the one card that leads somewhere open-ended, so it spans
-           the full width and carries a gold wash — it should read as the primary
-           action, with the topic tiles as shortcuts beneath it. */
+        /* No holes at the end of the grid. With an odd number of cards the last one
+           would otherwise sit alone beside a rectangle of empty page, which is exactly
+           the "random section space where a card should be" this pass set out to kill.
+           A lone trailing card takes the whole row instead and reads as intentional.
+           Two selectors because the column count changes at the breakpoint: at 2 cols
+           the orphan is an odd-numbered last child; at 3 cols it is a 3n+1 last child. */
+        .gp-cats > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+        @media (min-width: 561px) {
+          .gp-cats > :last-child:nth-child(odd) { grid-column: auto; }
+          .gp-cats > :last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
+          .gp-cats > :nth-last-child(2):nth-child(3n + 1) { grid-column: span 2; }
+        }
+        /* Extras and Message your host are the two cards that reach a human or a
+           purchase rather than an instant answer, so they carry a faint gold wash to
+           separate them from the five informational tiles without shouting. */
+        .gp-cat-accent {
+          background: linear-gradient(135deg, rgba(201,169,110,.15), rgba(201,169,110,.04));
+          border-color: rgba(201,169,110,.4);
+        }
+        .gp-cat-accent .gp-cat-icon { background: rgba(201,169,110,.2); }
+        /* RETIRED (Guest card pass) — .gp-cat-primary, the full-width gold wash that
+           belonged to the "Ask anything" card. That card was removed (see CATEGORIES),
+           and the trailing-orphan rule above now handles full-width spanning. Kept per
+           the "nothing is deleted" rule in case a future primary tile wants it back.
+
         .gp-cat-primary {
           grid-column: 1 / -1;
           background: linear-gradient(135deg, rgba(201,169,110,.16), rgba(201,169,110,.05));
@@ -1729,6 +2000,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         .gp-cat-primary .gp-cat-icon { margin-bottom: 0; }
         .gp-cat-primary .gp-cat-label { font-size: 1.02rem; }
         .gp-cat-primary .gp-cat-sub { display: block; }
+        */
         .gp-cat {
           display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: .08rem;
           min-width: 0; min-height: 88px; padding: .8rem .85rem; cursor: pointer; text-align: left; color: inherit;
@@ -1820,10 +2092,31 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           padding: .6rem .8rem; border-radius: 12px;
           border: 1px solid rgba(255,255,255,.14); background: #171c25;
         }
+        /* The language search box was unreadable on mobile: a guest typed and saw
+           nothing. Two causes, both fixed here.
+           1. The sheets are portaled to document.body, which puts them OUTSIDE
+              .gp-root — the only element carrying colorScheme:'dark'. Form controls
+              inside them therefore fell back to the UA's LIGHT scheme and painted
+              near-white text on the near-black .gp-lang-search background.
+           2. iOS Safari ignores plain 'color' on an input and honours only
+              -webkit-text-fill-color, which this rule never set.
+           color-scheme is declared on the scrim and the sheet (below) so every control
+           in every portaled sheet inherits the dark scheme, not just this one. */
         .gp-lang-search input {
           flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
-          color: #fbf7ef; font-size: .9rem;
+          color: #fbf7ef; -webkit-text-fill-color: #fbf7ef; caret-color: ${GOLD};
+          font-size: 16px; /* under 16px iOS Safari zooms the viewport on focus */
+          opacity: 1;
         }
+        .gp-lang-search input::placeholder { color: rgba(251,247,239,.45); -webkit-text-fill-color: rgba(251,247,239,.45); opacity: 1; }
+        .gp-lang-search:focus-within { border-color: rgba(201,169,110,.55); }
+        /* Small, quiet note at the top of a resumed chat, pointing at where the earlier
+           conversation went. Not a bubble — it is chrome, not a message. */
+        .gp-chat-earlier {
+          font-size: .74rem; line-height: 1.4; opacity: .6; text-align: center;
+          padding: .1rem .4rem .35rem; border-bottom: 1px solid rgba(255,255,255,.07);
+        }
+        .gp-chat-earlier strong { color: ${GOLD}; font-weight: 600; }
         /* Capped height with its own scroll: 40+ languages must never push the sheet
            past the viewport or hijack the page scroll behind it. */
         .gp-lang-list {
@@ -1858,6 +2151,19 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         .gp-history-section {
           border: 1px solid rgba(255,255,255,.09); border-radius: 14px;
           background: rgba(255,255,255,.025); overflow: hidden;
+        }
+        /* Threads a real person answered get the gold treatment the rest of the portal
+           reserves for human contact, so they are findable at a glance in a long list. */
+        .gp-history-section-host {
+          border-color: rgba(201,169,110,.32);
+          background: rgba(201,169,110,.05);
+        }
+        .gp-history-hostbadge {
+          display: inline-flex; align-items: center; gap: .28rem; align-self: flex-start;
+          margin: .1rem 0 .05rem; padding: .1rem .42rem;
+          border-radius: 999px; border: 1px solid rgba(201,169,110,.35);
+          background: rgba(201,169,110,.1); color: ${GOLD};
+          font-size: .66rem; letter-spacing: .04em; line-height: 1.5; white-space: nowrap;
         }
         .gp-history-head {
           display: flex; align-items: center; gap: .6rem; width: 100%; min-height: 52px;
@@ -1895,16 +2201,29 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           text-decoration-color: rgba(201,169,110,.55); overflow-wrap: anywhere;
         }
         .gp-inline-link:hover { text-decoration-color: ${GOLD}; }
+        /* color-scheme is the fix for every "I can't see what I'm typing" report in a
+           bottom sheet. Sheets are portaled to document.body, outside .gp-root, so they
+           never inherited the dark scheme the portal sets inline — UA-painted form
+           controls (text, caret, autofill, spinners) came out light-on-dark. Declaring
+           it here covers every current and future sheet, not just the language search. */
         .gp-sheet-scrim {
           position: fixed; inset: 0; z-index: 50; background: rgba(6,8,12,.6); backdrop-filter: blur(4px);
           display: flex; align-items: flex-end; justify-content: center; padding: 0;
           animation: gpFade .25s ease both;
+          color-scheme: dark;
+        }
+        .gp-sheet-scrim input, .gp-sheet-scrim textarea, .gp-sheet-scrim select {
+          color: #fbf7ef; -webkit-text-fill-color: #fbf7ef; caret-color: ${GOLD};
+        }
+        .gp-sheet-scrim input::placeholder, .gp-sheet-scrim textarea::placeholder {
+          color: rgba(251,247,239,.45); -webkit-text-fill-color: rgba(251,247,239,.45); opacity: 1;
         }
         @media (min-width: 560px) { .gp-sheet-scrim { align-items: center; padding: 1rem; } }
         .gp-sheet {
           width: 100%; max-width: 560px; border-radius: 22px 22px 0 0;
           padding: 1.25rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
           animation: gpSheetUp .34s cubic-bezier(.16,1,.3,1) both;
+          color-scheme: dark;
         }
         @media (min-width: 560px) { .gp-sheet { border-radius: 22px; } }
         .gp-sheet-grip {
@@ -2195,8 +2514,18 @@ function ChatHistorySheet({ slug, onClose }: { slug: string; onClose: () => void
 
           {state === 'ready' && sections.map((section) => {
             const open = openIds.has(section.id);
+            // A conversation a real person joined is the one a guest actually comes
+            // back looking for — "what did the host say about the parking?" — so it is
+            // marked in the collapsed list rather than only being discoverable by
+            // opening every section in turn.
+            const withHost = section.messages.some((m) => m.role === 'host');
             return (
-              <div key={section.id} className="gp-history-section" data-testid={`history-section-${section.id}`}>
+              <div
+                key={section.id}
+                className={`gp-history-section${withHost ? ' gp-history-section-host' : ''}`}
+                data-testid={`history-section-${section.id}`}
+                data-host-thread={withHost ? 'true' : undefined}
+              >
                 <button
                   type="button"
                   className="gp-history-head"
@@ -2206,6 +2535,11 @@ function ChatHistorySheet({ slug, onClose }: { slug: string; onClose: () => void
                 >
                   <span className="gp-history-meta">
                     <span className="gp-serif gp-history-title">{section.title}</span>
+                    {withHost && (
+                      <span className="gp-history-hostbadge" data-testid={`history-host-badge-${section.id}`}>
+                        <UserRound size={11} aria-hidden /> Your host replied
+                      </span>
+                    )}
                     <span className="gp-history-preview">{sectionPreview(section)}</span>
                   </span>
                   <ChevronRight
@@ -2396,19 +2730,25 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
 
   return (
     <section style={{ marginTop: '1.5rem' }} data-testid="extras-section">
-      {/* Premium banner — drops to a gold-tinted dark gradient if the asset is absent. */}
-      <PremiumImage
-        src="/premium/enhancements-banner.jpg"
-        alt=""
-        aspectRatio="21 / 6"
-        radius={16}
-        sizes="(max-width: 720px) 100vw, 720px"
-        className="gp-extra-banner"
-      >
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', padding: '.9rem 1.1rem', background: 'linear-gradient(to top, rgba(13,15,20,.75), transparent 70%)' }}>
-          <span className="gp-serif" style={{ fontSize: '1.25rem', color: '#fbf7ef' }}>Elevate your stay</span>
-        </div>
-      </PremiumImage>
+      {/* RETIRED (Extras imagery pass) — the "Elevate your stay" glass banner. It was a
+          decorative strip of marketing copy sitting between the guest and the thing they
+          tapped for, and it carried the section's only photograph. Real per-category
+          imagery now does that job on the tiles themselves, where it actually helps a
+          guest recognise what is on offer. Kept per the "nothing is deleted" rule.
+
+        <PremiumImage
+          src="/premium/enhancements-banner.jpg"
+          alt=""
+          aspectRatio="21 / 6"
+          radius={16}
+          sizes="(max-width: 720px) 100vw, 720px"
+          className="gp-extra-banner"
+        >
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', padding: '.9rem 1.1rem', background: 'linear-gradient(to top, rgba(13,15,20,.75), transparent 70%)' }}>
+            <span className="gp-serif" style={{ fontSize: '1.25rem', color: '#fbf7ef' }}>Elevate your stay</span>
+          </div>
+        </PremiumImage>
+      */}
 
       {/* Breadcrumb-style back control. One step back at a time so the guest is
           never dropped out of the flow by a single tap. */}
@@ -2634,7 +2974,13 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
         </div>
       ) : (
         /* --- Step 1: category tiles ------------------------------------- */
-        <div className="gp-extras" data-testid="extras-categories">
+        /* Image-led tiles. A list of category NAMES asked a guest to imagine what
+           "Arrival & departure" contains; a photograph tells them in one glance, and it
+           is what makes this section feel like part of the property rather than a form.
+           Every image is a local asset served through PremiumImage, which paints a
+           gold-tinted dark gradient underneath — so a missing or slow file degrades to
+           a deliberate-looking card instead of a broken one. */
+        <div className="gp-extras gp-extras-cats" data-testid="extras-categories">
           {groups.map((group) => {
             const requested = group.items.filter((i) => (state[i.id] ?? 'idle') === 'done').length;
             return (
@@ -2642,19 +2988,29 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
                 key={group.category.id}
                 type="button"
                 onClick={() => setOpenCategory(group.category.id)}
-                style={{ ...gridCardStyle, textAlign: 'left', width: '100%', cursor: 'pointer' }}
-                className="gp-card gp-extra-item"
+                style={{ textAlign: 'left', width: '100%', cursor: 'pointer', padding: 0, overflow: 'hidden' }}
+                className="gp-card gp-extra-item gp-extra-cat"
                 data-testid={`extras-category-${group.category.id}`}
               >
-                <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
-                  <span className="gp-serif" style={{ fontSize: '1.1rem', color: '#fbf7ef', lineHeight: 1.2 }}>{group.category.label}</span>
-                  <span style={{ opacity: 0.5, fontSize: '.78rem', flexShrink: 0 }}>
+                <PremiumImage
+                  src={`/premium/extras/${group.category.id}.jpg`}
+                  alt=""
+                  aspectRatio="16 / 9"
+                  radius={0}
+                  sizes="(max-width: 560px) 100vw, 360px"
+                  className="gp-extra-cat-img"
+                >
+                  <span className="gp-extra-cat-veil" aria-hidden />
+                  <span className="gp-extra-cat-count">
                     {group.items.length} {group.items.length === 1 ? 'option' : 'options'}
                   </span>
-                </span>
-                <span style={{ display: 'block', opacity: 0.65, fontSize: '.83rem', margin: '.35rem 0 0', lineHeight: 1.45 }}>{group.category.hint}</span>
-                <span className="gp-extra-item-foot">
-                  {requested > 0 ? (<><Check size={14} aria-hidden /> {requested} requested</>) : (<>Browse <ChevronRight size={14} aria-hidden /></>)}
+                </PremiumImage>
+                <span className="gp-extra-cat-body">
+                  <span className="gp-serif" style={{ display: 'block', fontSize: '1.1rem', color: '#fbf7ef', lineHeight: 1.2 }}>{group.category.label}</span>
+                  <span style={{ display: 'block', opacity: 0.65, fontSize: '.83rem', margin: '.3rem 0 0', lineHeight: 1.45 }}>{group.category.hint}</span>
+                  <span className="gp-extra-item-foot">
+                    {requested > 0 ? (<><Check size={14} aria-hidden /> {requested} requested</>) : (<>Browse <ChevronRight size={14} aria-hidden /></>)}
+                  </span>
                 </span>
               </button>
             );
@@ -2667,9 +3023,43 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
           display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem;
           grid-auto-flow: dense; grid-auto-rows: 1fr; align-items: stretch;
         }
+        /* Image-led category tiles. The photo is edge-to-edge at the top of the card
+           and the copy sits beneath it, so the tile reads like a listing card rather
+           than a form row. The card itself owns the rounding and clips the image. */
+        .gp-extras-cats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        @media (min-width: 561px) { .gp-extras-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        /* Two class names so this beats the generic .gp-extra-item { display: block }
+           rule declared further down the sheet. */
+        .gp-extra-item.gp-extra-cat { display: flex; flex-direction: column; padding: 0; }
+        .gp-extra-cat :global(.gp-extra-cat-img) { width: 100%; flex-shrink: 0; }
+        /* Warm scrim so the gold count chip and the card edge stay legible over any
+           photograph, however bright its corner happens to be. */
+        .gp-extra-cat-veil {
+          position: absolute; inset: 0; pointer-events: none;
+          background: linear-gradient(to top, rgba(13,15,20,.9), rgba(13,15,20,.12) 62%, rgba(13,15,20,.3));
+        }
+        .gp-extra-cat-count {
+          position: absolute; right: .5rem; top: .5rem; z-index: 1;
+          padding: .18rem .5rem; border-radius: 999px; font-size: .68rem; line-height: 1.4;
+          color: #f4e9d2; background: rgba(13,15,20,.72);
+          border: 1px solid rgba(201,169,110,.4); backdrop-filter: blur(6px);
+          white-space: nowrap;
+        }
+        .gp-extra-cat-body {
+          display: flex; flex-direction: column; flex: 1;
+          padding: .8rem .85rem .85rem;
+        }
+        .gp-extra-cat .gp-extra-item-foot { margin-top: auto; padding-top: .55rem; }
         @media (min-width: 561px) {
           .gp-extras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .gp-extras > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+          .gp-extras:not(.gp-extras-cats) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+        }
+        /* Same no-orphan rule the main card grid uses: a lone trailing tile takes the
+           whole row rather than leaving a hole beside it. */
+        .gp-extras-cats > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+        @media (min-width: 561px) {
+          .gp-extras-cats > :last-child:nth-child(odd) { grid-column: auto; }
+          .gp-extras-cats > :last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
         }
         .gp-extra-item { display: block; min-width: 0; min-height: 100%; padding: var(--pad-card); }
         .gp-extra-details {
