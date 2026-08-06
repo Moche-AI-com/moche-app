@@ -71,6 +71,18 @@ export function hashSessionToken(token: string): string {
   return sha256(`session:${token}`);
 }
 
+// --- Member invitations ---------------------------------------------------
+// The raw token has 256 bits of entropy and is emailed once; the database stores
+// only this SHA-256 digest so a database export cannot redeem an invitation.
+
+export function generateMemberInviteToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+export function hashMemberInviteToken(token: string): string {
+  return sha256(token);
+}
+
 // --- IP hashing ----------------------------------------------------------
 // We only ever persist hashed IPs (for rate limiting + audit), never raw.
 

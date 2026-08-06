@@ -1,13 +1,39 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { BRAIN_CATEGORY_LABELS, type BrainCategory } from '@/lib/constants';
+
+type FiledItem = { category: BrainCategory; title: string; brainItemId: string };
+type IngestResponse = {
+  error?: string;
+  message?: string;
+  title?: string;
+  chunks?: number;
+  autofilled?: boolean;
+  filed?: FiledItem[];
+};
+
+function sectionBreakdown(filed: FiledItem[]): string {
+  const counts = new Map<BrainCategory, number>();
+  for (const item of filed) counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([category, count]) => `${count} in ${BRAIN_CATEGORY_LABELS[category]}`)
+    .join(' · ');
+}
 
 export function IngestPanel({ propertyId }: { propertyId: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<'doc' | 'url' | 'paste'>('doc');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [filed, setFiled] = useState<FiledItem[] | null>(null);
+
+  function recordResponse(json: IngestResponse, defaultMessage: string) {
+    setFiled(json.autofilled && Array.isArray(json.filed) ? json.filed : null);
+    setMsg({ kind: 'ok', text: json.message ?? defaultMessage });
+  }
 
   async function uploadDoc(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -15,11 +41,12 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
     const fd = new FormData(form);
     setBusy(true);
     setMsg(null);
+    setFiled(null);
     try {
       const res = await fetch(`/api/properties/${propertyId}/ingest/document`, { method: 'POST', body: fd });
-      const json = await res.json();
+      const json = await res.json() as IngestResponse;
       if (!res.ok) throw new Error(json.error ?? 'Upload failed');
-      setMsg({ kind: 'ok', text: `Ingested "${json.title}" into ${json.chunks} chunk(s).` });
+      recordResponse(json, `Imported "${json.title}".`);
       form.reset();
       router.refresh();
     } catch (err) {
@@ -35,20 +62,16 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
     const body = Object.fromEntries(new FormData(form).entries());
     setBusy(true);
     setMsg(null);
+    setFiled(null);
     try {
       const res = await fetch(`/api/properties/${propertyId}/ingest/url`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
+      const json = await res.json() as IngestResponse;
       if (!res.ok) throw new Error(json.error ?? 'Could not fetch that URL');
-      // URL imports land in the review queue rather than going live, so the
-      // confirmation has to say so or the host will assume it is already live.
-      setMsg({
-        kind: 'ok',
-        text: json.message ?? `"${json.title}" was sent to your review queue.`,
-      });
+      recordResponse(json, json.message ?? `"${json.title}" was imported.`);
       form.reset();
       router.refresh();
     } catch (err) {
@@ -64,15 +87,16 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
     const body = Object.fromEntries(new FormData(form).entries());
     setBusy(true);
     setMsg(null);
+    setFiled(null);
     try {
       const res = await fetch(`/api/properties/${propertyId}/ingest/text`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
+      const json = await res.json() as IngestResponse;
       if (!res.ok) throw new Error(json.error ?? 'Could not save that text');
-      setMsg({ kind: 'ok', text: `Cleaned & indexed "${json.title}" into ${json.chunks} chunk(s).` });
+      recordResponse(json, `Imported "${json.title}".`);
       form.reset();
       router.refresh();
     } catch (err) {
@@ -92,6 +116,15 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
       </div>
 
       {msg && <div className={`alert ${msg.kind === 'ok' ? 'alert-success' : 'alert-error'}`} style={{ fontSize: '.8rem', marginBottom: '.75rem' }}>{msg.text}</div>}
+      {filed && (
+        <div className="card alert alert-success" style={{ padding: '1rem', marginBottom: '.75rem' }} role="status">
+          <strong>Your Brain is set up</strong>
+          <p className="muted" style={{ fontSize: '.8rem', margin: '.4rem 0 0' }}>{sectionBreakdown(filed)}</p>
+          <Link href={`/dashboard/properties/${propertyId}/brain`} className="btn btn-primary" style={{ marginTop: '.75rem', minHeight: 44 }}>
+            Review &amp; manage your Brain
+          </Link>
+        </div>
+      )}
 
       {tab === 'doc' ? (
         <form onSubmit={uploadDoc}>
@@ -126,8 +159,8 @@ export function IngestPanel({ propertyId }: { propertyId: string }) {
               <option value="documents">Reference</option>
             </select>
           </div>
-          <button className="btn btn-primary btn-block btn-sm" disabled={busy}>{busy ? 'Fetching…' : 'Fetch for review'}</button>
-          <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>We read the page server-side and draft a structured summary, then send it to your review queue. Nothing reaches your guests until you approve it. Some sites (e.g. Zillow) block automated fetches, so use Paste if a URL fails.</p>
+          <button className="btn btn-primary btn-block btn-sm" disabled={busy}>{busy ? 'Fetching…' : 'Fetch details'}</button>
+          <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>We read the page server-side and organize its details. Some sites (e.g. Zillow) block automated fetches, so use Paste if a URL fails.</p>
         </form>
       ) : (
         <form onSubmit={ingestPaste}>

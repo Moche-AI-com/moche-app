@@ -244,7 +244,7 @@ export function daysBetween(fromIso: string, now: Date): number {
 export function queueSummary(rows: QueueRow[], now: Date = new Date()): QueueSummary {
   const pendingRows = rows.filter((r) => r.status === 'pending');
   if (pendingRows.length === 0) {
-    return { pending: 0, oldestPendingDays: null, detail: 'Nothing waiting. Anything the AI reads lands here first.' };
+    return { pending: 0, oldestPendingDays: null, detail: 'Nothing waiting. Anything the AI learns after setup lands here first.' };
   }
   const oldest = pendingRows.reduce(
     (acc, r) => (new Date(r.created_at).getTime() < new Date(acc.created_at).getTime() ? r : acc),
@@ -256,7 +256,7 @@ export function queueSummary(rows: QueueRow[], now: Date = new Date()): QueueSum
   return {
     pending: pendingRows.length,
     oldestPendingDays: days,
-    detail: `${pendingRows.length} ${noun} to review. Oldest arrived ${age}.`,
+    detail: `${pendingRows.length} ${noun} to approve. Oldest arrived ${age}.`,
   };
 }
 

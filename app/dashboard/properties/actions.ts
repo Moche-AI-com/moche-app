@@ -9,6 +9,7 @@ import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
 import { audit } from '@/lib/audit';
+import { purgeProperty, isDeleteConfirmed, DELETE_CONFIRMATION_WORD } from '@/lib/properties/purge';
 import { DEFAULT_MODULES, RESTRICTED_TOPIC_KEYS, TONE_PRESET_IDS } from '@/lib/constants';
 import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
@@ -82,7 +83,7 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
 
   // Optional listing link (backlog P4-02). Deliberately NOT fetched here: a slow
   // or bot-walled listing page must never delay or fail property creation. The
-  // property page picks it up and imports it into the review queue.
+  // property page picks it up and imports it straight into the Brain.
   const listingUrl = String(formData.get('listingUrl') ?? '').trim();
   const importable = listingUrl && /^https?:\/\//i.test(listingUrl) && listingUrl.length <= 2000;
 
@@ -442,12 +443,18 @@ async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft'
     }
   }
 
+  const now = new Date().toISOString();
+
   const { error } = await supabase
     .from('properties')
     .update({
       status,
-      published_at: status === 'live' ? new Date().toISOString() : undefined,
-      updated_at: new Date().toISOString(),
+      published_at: status === 'live' ? now : undefined,
+      // Archiving stamps the date Reports orders by; every other transition
+      // clears it, so a restore-then-archive cycle cannot leave a stale date
+      // behind and sort the property into the wrong place in the archive.
+      archived_at: status === 'archived' ? now : null,
+      updated_at: now,
     })
     .eq('id', propertyId);
   if (error) return { error: 'Could not update the property status.' };
@@ -455,6 +462,10 @@ async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft'
   await audit(supabase, { action: `property.${status}`, propertyId, targetType: 'property', targetId: propertyId });
   revalidatePath(`/dashboard/properties/${propertyId}`);
   revalidatePath('/dashboard/properties');
+  // Archived properties are listed under Reports, so both the source and the
+  // destination list have to be revalidated or the property appears to vanish
+  // without arriving anywhere.
+  revalidatePath('/dashboard/reports');
   return { success: `Property ${status === 'live' ? 'published' : status}.` };
 }
 
@@ -468,18 +479,93 @@ export async function archivePropertyAction(_prev: PropertyFormState, formData: 
   return setStatus(String(formData.get('propertyId') ?? ''), 'archived');
 }
 
-export async function deletePropertyAction(formData: FormData): Promise<void> {
+/**
+ * Brings an archived property back into the active Properties list.
+ *
+ * Restores to `paused` rather than `live` deliberately: a property coming out of
+ * the archive may have stale pricing, stale door codes, or a guest portal the
+ * host has not looked at in months, and silently reopening it to guests is not a
+ * decision this button should make on their behalf. The host publishes it again
+ * when they are ready.
+ */
+export async function restorePropertyAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const result = await setStatus(propertyId, 'paused');
+  if (result.error) return result;
+  return { success: 'Property restored. Publish it again when you\u2019re ready.' };
+}
+
+/**
+ * Permanently destroys a property, gated on the host typing the word "delete".
+ *
+ * This replaced a soft delete that only set `deleted_at`. The soft delete was
+ * the wrong contract for a button labelled "delete for good": the property
+ * disappeared from the dashboard while every guest conversation, address, door
+ * code, and uploaded document stayed in the database indefinitely.
+ *
+ * The host's reports survive by design — archived service requests, completed
+ * extras, and past stays are records they may need for a contractor dispute, an
+ * owner statement, or their taxes, and losing those to a property cleanup would
+ * be its own kind of data loss. See `lib/properties/purge.ts` for exactly what
+ * is erased and what is kept.
+ *
+ * Three things guard the destructive path, in order:
+ *   1. `requirePropertyAccess` + `editProperty` — the real authorisation check.
+ *   2. The typed confirmation — protects against a misclick, not an attacker.
+ *      It is verified HERE and not only in the dialog, because a client-side
+ *      confirmation is a UI affordance and not a gate.
+ *   3. An audit record written BEFORE the delete — see below.
+ *
+ * The audit row is written first on purpose. `audit_logs.property_id` is
+ * `on delete set null`, so the record survives the cascade with the id preserved
+ * in its metadata; writing it afterwards would mean a purge that succeeded and
+ * then failed to log left no trace of who erased what.
+ */
+export async function deletePropertyAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
   const propertyId = String(formData.get('propertyId') ?? '');
   const access = await requirePropertyAccess(propertyId);
-  if (!access.can.editProperty) redirect(`/dashboard/properties/${propertyId}`);
+  if (!access.can.editProperty) {
+    return { error: 'You do not have permission to delete this property.' };
+  }
+
+  const typed = formData.get('confirm');
+  if (!isDeleteConfirmed(typeof typed === 'string' ? typed : null)) {
+    return { error: `Type “${DELETE_CONFIRMATION_WORD}” to confirm you want this property erased for good.` };
+  }
+
   const supabase = createClient();
-  await supabase
-    .from('properties')
-    .update({ deleted_at: new Date().toISOString(), status: 'archived' })
-    .eq('id', propertyId);
-  await audit(supabase, { action: 'property.deleted', propertyId, targetType: 'property', targetId: propertyId });
+
+  await audit(supabase, {
+    action: 'property.purged',
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+    metadata: {
+      property_id: propertyId,
+      display_name: access.property.display_name,
+      slug: access.property.slug,
+      status: access.property.status,
+    } as Json,
+  });
+
+  const result = await purgeProperty(supabase, propertyId);
+  if (!result.purged) {
+    return { error: 'Could not delete the property. Nothing was removed — please try again.' };
+  }
+
+  if (result.warnings.length > 0) {
+    // The database records are gone, which is what the host asked for. Leaked
+    // storage bytes are a cleanup problem for us, not a failure to report to
+    // them mid-flow, so this is logged rather than surfaced.
+    log.warn('property_purge_incomplete_storage', { propertyId, warnings: result.warnings });
+  }
+
+  await capture('property_purged', access.property.host_account_id, { propertyId });
+
   revalidatePath('/dashboard/properties');
-  redirect('/dashboard/properties');
+  revalidatePath('/dashboard/reports');
+  revalidatePath('/dashboard');
+  redirect('/dashboard/properties?deleted=1');
 }
 
 // Clones a property's brain content into a brand-new property (Pro+ feature).

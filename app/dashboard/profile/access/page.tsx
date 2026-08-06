@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { CAPABILITIES } from '@/lib/auth/member-capabilities';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,18 +9,11 @@ const ROLE_LABEL: Record<string, string> = {
   owner: 'Owner',
   co_host: 'Co-host',
   property_manager: 'Property manager',
+  support: 'Support',
   maintenance: 'Maintenance',
   cleaner: 'Cleaner',
   viewer: 'Viewer',
 };
-
-const CAPABILITY_LABEL: Array<{ key: string; label: string }> = [
-  { key: 'can_edit_brain', label: 'Edit the Brain' },
-  { key: 'can_reply_guests', label: 'Reply to guests' },
-  { key: 'can_receive_escalations', label: 'Receive escalations' },
-  { key: 'can_resolve_maintenance', label: 'Resolve maintenance' },
-  { key: 'can_view_analytics', label: 'View analytics' },
-];
 
 /**
  * Every property this person can reach, and exactly what they can do on each.
@@ -73,8 +67,8 @@ export default async function ProfileAccessPage() {
             const m = memberships.get(p.id);
             const role = isOwner ? 'owner' : ((m?.role as string) ?? 'viewer');
             const caps = isOwner
-              ? CAPABILITY_LABEL.map((c) => c.label)
-              : CAPABILITY_LABEL.filter((c) => m?.[c.key] === true).map((c) => c.label);
+              ? CAPABILITIES.map((capability) => capability.label)
+              : CAPABILITIES.filter((capability) => m?.[capability.key] === true).map((capability) => capability.label);
             const place = [p.city, p.region].filter(Boolean).join(', ');
             return (
               <li key={p.id} className="report-list-row">

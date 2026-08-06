@@ -5,7 +5,13 @@ import { UpdateQueueClient, type ProposalRow } from './UpdateQueueClient';
 export const dynamic = 'force-dynamic';
 
 /**
- * The review queue: everything the AI has drafted, waiting on a human.
+ * The Knowledge Queue: everything the AI has drafted, waiting on a human.
+ *
+ * Deliberately not called "Reviews" anywhere in the UI. To a short-term-rental
+ * host a review is what a guest writes about them after checkout, and naming an
+ * internal approval list after it sent hosts here looking for guest ratings.
+ * The /dashboard/updates route predates the rename and is kept so existing
+ * links, bookmarks, and notification deep-links do not break.
  *
  * A single account-wide page rather than a tab inside each property's Brain.
  * A host with eight properties should not have to visit eight pages to find out
@@ -88,7 +94,7 @@ export default async function UpdatesPage({ searchParams }: { searchParams?: { v
   return (
     <div>
       <div style={{ marginBottom: '1.1rem' }}>
-        <h1 style={{ fontSize: '1.5rem', margin: '0 0 .3rem' }}>Review queue</h1>
+        <h1 style={{ fontSize: '1.5rem', margin: '0 0 .3rem' }}>Knowledge Queue</h1>
         <p className="muted" style={{ margin: 0, fontSize: '.92rem' }}>
           When the assistant reads a listing page or a document, it drafts the details here first. Nothing reaches your
           guests until you approve it, and you can correct a draft before approving.

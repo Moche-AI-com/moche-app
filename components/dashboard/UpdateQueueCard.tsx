@@ -5,7 +5,12 @@ import { ShieldCheck, ArrowUpRight, Sparkles } from 'lucide-react';
 import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
 import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
 
-// Dashboard tile for the AI review queue (backlog P2-08).
+// Dashboard tile for the Knowledge Queue (backlog P2-08).
+//
+// Named "Knowledge Queue", never "reviews": in short-term-rental language a
+// "review" is what a guest writes about the host after checkout. Calling an
+// internal approval list "Reviews" made hosts open it expecting guest ratings.
+// The route stays /dashboard/updates so existing links keep working.
 //
 // Deliberately a thin summary: count, oldest-pending age, and per-property
 // breakdown. The decision itself lives on /dashboard/updates, because approving
@@ -37,9 +42,9 @@ export function UpdateQueueCard({
       <div className="dash-panel-head">
         <div>
           <h2 className="dash-section-title">
-            <ShieldCheck size={16} aria-hidden /> Review queue
+            <ShieldCheck size={16} aria-hidden /> Knowledge Queue
           </h2>
-          <p className="dash-section-sub">Drafts the assistant made, waiting on your approval.</p>
+          <p className="dash-section-sub">Knowledge the assistant drafted, waiting on your approval.</p>
         </div>
         <div className="dash-panel-head-aside">
           {hasPending && (
@@ -51,7 +56,7 @@ export function UpdateQueueCard({
             collapsed={collapsed}
             onToggle={() => toggle('update-queue')}
             panelId="update-queue-body"
-            label="Review queue"
+            label="Knowledge Queue"
           />
         </div>
       </div>
@@ -83,7 +88,7 @@ export function UpdateQueueCard({
                 ))}
             </ul>
             <Link href="/dashboard/updates" className="dash-panel-link">
-              Review them now <ArrowUpRight size={14} aria-hidden />
+              Open the queue <ArrowUpRight size={14} aria-hidden />
             </Link>
           </>
         ) : (

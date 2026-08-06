@@ -56,27 +56,23 @@ export default async function NotificationsPage() {
           <p className="muted">You&rsquo;re all caught up. New guest escalations and service requests will show up here.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+        <div className="notifications-history-list">
           {list.map((n) => {
             const inner = (
               <div
-                className="card"
+                className="card notification-history-row"
                 style={{
-                  padding: '1rem 1.15rem',
-                  display: 'flex',
-                  gap: '.9rem',
-                  alignItems: 'flex-start',
                   borderLeft: n.read_at ? '3px solid transparent' : '3px solid var(--teal)',
                 }}
               >
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.6rem', marginBottom: '.25rem' }}>
-                    <strong style={{ fontSize: '.95rem' }}>{n.title}</strong>
+                <div className="notification-history-content">
+                  <div className="notification-history-head">
+                    <strong className="notification-history-title">{n.title}</strong>
                     <span className={`badge ${KIND_BADGE[n.kind] ?? ''}`} style={{ flexShrink: 0 }}>{n.kind}</span>
                   </div>
-                  {n.body ? <p className="muted" style={{ fontSize: '.85rem', margin: 0 }}>{n.body}</p> : null}
-                  <p className="faint" style={{ fontSize: '.75rem', marginTop: '.35rem', marginBottom: 0 }}>{timeAgo(n.created_at)}</p>
+                  {n.body ? <p className="muted notification-history-body">{n.body}</p> : null}
                 </div>
+                <span className="faint notification-history-time">{timeAgo(n.created_at)}</span>
               </div>
             );
             return n.link ? (

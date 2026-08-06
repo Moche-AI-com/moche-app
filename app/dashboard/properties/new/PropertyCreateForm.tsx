@@ -69,9 +69,9 @@ export function PropertyCreateForm() {
           style={{ minHeight: 44 }}
         />
         <p className="faint" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>
-          Paste your Airbnb, Vrbo, or direct booking page and we&apos;ll draft your Brain from it.
-          Every draft waits in your review queue until you approve it. Your property is created
-          either way, even if the page cannot be read.
+          Paste your Airbnb, Vrbo, or direct booking page and we&apos;ll build your Brain from it
+          automatically — sorted into the right sections, ready for you to look over and edit.
+          Your property is created either way, even if the page cannot be read.
         </p>
       </div>
       <SubmitButton>Create property</SubmitButton>

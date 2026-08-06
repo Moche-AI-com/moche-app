@@ -7,6 +7,7 @@ describe('MEMBER_ROLES', () => {
       'owner',
       'co_host',
       'property_manager',
+      'support',
       'maintenance',
       'cleaner',
       'viewer',
@@ -54,13 +55,13 @@ describe('defaultCapabilitiesForRole', () => {
     });
   });
 
-  it('property_manager mirrors co_host scope minus owner-only powers', () => {
+  it('property_manager gets operating actions but not analytics by default', () => {
     const pm = defaultCapabilitiesForRole('property_manager');
     expect(pm.editBrain).toBe(true);
     expect(pm.replyGuests).toBe(true);
     expect(pm.receiveEscalations).toBe(true);
     expect(pm.resolveMaintenance).toBe(true);
-    expect(pm.viewAnalytics).toBe(true);
+    expect(pm.viewAnalytics).toBe(false);
     expect(pm.editProperty).toBe(false);
     expect(pm.manageBilling).toBe(false);
     expect(pm.manageCoHosts).toBe(false);
@@ -83,10 +84,23 @@ describe('defaultCapabilitiesForRole', () => {
     expect(defaultCapabilitiesForRole('cleaner')).toEqual(defaultCapabilitiesForRole('maintenance'));
   });
 
-  it('viewer is read-only: only viewAnalytics is true', () => {
+  it('viewer is read-only with no action enabled', () => {
     const viewer = defaultCapabilitiesForRole('viewer');
     const trueKeys = Object.entries(viewer).filter(([, v]) => v).map(([k]) => k);
-    expect(trueKeys).toEqual(['viewAnalytics']);
+    expect(trueKeys).toEqual([]);
+  });
+
+  it('support can reply to guests and receive escalations only', () => {
+    expect(defaultCapabilitiesForRole('support')).toEqual({
+      editBrain: false,
+      replyGuests: true,
+      receiveEscalations: true,
+      resolveMaintenance: false,
+      viewAnalytics: false,
+      editProperty: false,
+      manageBilling: false,
+      manageCoHosts: false,
+    });
   });
 
   it('no preset role can manageBilling, manageCoHosts, or editProperty except owner', () => {

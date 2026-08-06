@@ -6,7 +6,9 @@ import { getSessionContext } from '@/lib/auth/guards';
 import { ingestUrlSchema } from '@/lib/validation';
 import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { standardizeListing } from '@/lib/ingest/standardize';
+import { segmentSourceContent } from '@/lib/ingest/segment';
 import { createProposal } from '@/lib/brain/proposal-store';
+import { autofillBrainFromSegments, isInitialSetup } from '@/lib/brain/setup-autofill';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 
@@ -14,16 +16,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * URL ingestion now stops at the review queue (backlog P2-06/P2-07).
+ * URL ingestion has two deliberately different paths.
  *
- * This route used to run the fetched page through an AI standardization pass and
- * write the model's output straight into brain_items, where the concierge began
- * quoting it to guests immediately. A hallucinated check-out time or parking
- * rule went live with nobody having read it.
- *
- * It now creates a `proposed_updates` row instead. Nothing reaches guest-visible
- * storage until a human with brain-edit rights approves it — and they can approve
- * a corrected version, with both the model's text and theirs retained.
+ * A first import for an empty draft property files validated, source-derived
+ * segments directly into brain_items. With no existing Brain there is nothing to
+ * contradict, and forcing a host to approve their first import blocks them from
+ * ever reaching a useful setup state. Every later import still creates a
+ * proposed_updates row, preserving the human approval boundary once facts exist.
  */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const access = await getPropertyAccess(params.id);
@@ -57,14 +56,35 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const ctx = await getSessionContext();
   const supabase = createClient();
+  const admin = createAdminClient();
+
+  if (await isInitialSetup(admin, params.id)) {
+    const segmented = await segmentSourceContent(page.text, { sourceUrl: page.sourceUrl });
+    const result = await autofillBrainFromSegments(admin, {
+      propertyId: params.id,
+      hostAccountId: access.property.host_account_id,
+      actorProfileId: ctx?.user.id ?? null,
+      sourceType: 'listing_url',
+      sourceRef: page.sourceUrl,
+      segments: segmented.segments,
+    });
+    const sectionCount = new Set(result.filed.map((item) => item.category)).size;
+    return NextResponse.json({
+      ok: true,
+      autofilled: true,
+      created: result.created,
+      filed: result.filed,
+      message: `Added ${result.created} details to your Brain, sorted into ${sectionCount} sections. Check anything that looks off.`,
+    });
+  }
 
   // Standardize the raw page into clean, guest-useful markdown. Degrades to raw
-  // text if the AI pass fails, which is fine now: a weak draft is a weak draft
-  // sitting in a review queue rather than a weak answer given to a guest.
+  // text if the AI pass fails. This still becomes a host-reviewed proposal
+  // rather than an unverified answer given to a guest.
   const standardized = await standardizeListing(page.text, page.sourceUrl);
 
   const resolvedTitle = (title && title.trim()) || page.title || url;
-  const proposal = await createProposal(createAdminClient(), {
+  const proposal = await createProposal(admin, {
     propertyId: params.id,
     hostAccountId: access.property.host_account_id,
     fieldPath: 'brain.listing_summary',
@@ -102,6 +122,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     queued: true,
     proposalId: proposal.id,
     title: resolvedTitle,
-    message: 'Sent to your review queue. Nothing goes live until you approve it.',
+    message: 'Your imported details are ready for you to review.',
   });
 }

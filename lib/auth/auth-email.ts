@@ -3,6 +3,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import { serverEnv, publicEnv } from '@/lib/env';
 import { log } from '@/lib/log';
+import {
+  CAPABILITIES,
+  MEMBER_ROLES,
+  type CapabilitySet,
+  type InvitableRole,
+} from '@/lib/auth/member-capabilities';
 
 // ---------------------------------------------------------------------------
 // Auth email delivery via Resend.
@@ -54,8 +60,10 @@ function renderAuthEmail(opts: {
   buttonLabel: string;
   url: string;
   outro: string;
+  detailsHtml?: string;
+  detailsText?: string;
 }): { html: string; text: string } {
-  const { preheader, heading, intro, buttonLabel, url, outro } = opts;
+  const { preheader, heading, intro, buttonLabel, url, outro, detailsHtml = '', detailsText = '' } = opts;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,6 +86,7 @@ function renderAuthEmail(opts: {
       <tr><td style="padding:16px 32px 0 32px;">
         <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;color:#EAF1FA;">${heading}</h1>
         <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#9DB0C6;">${intro}</p>
+        ${detailsHtml}
       </td></tr>
       <tr><td align="center" style="padding:0 32px 8px 32px;">
         <a href="${url}" style="display:inline-block;background:#33E6D4;background-image:linear-gradient(115deg,#33E6D4 0%,#58C7E0 45%,#7C8CFF 100%);color:#04121A;font-size:15px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:10px;">${buttonLabel}</a>
@@ -102,6 +111,8 @@ function renderAuthEmail(opts: {
     '',
     intro.replace(/<[^>]+>/g, ''),
     '',
+    detailsText,
+    detailsText ? '' : '',
     `${buttonLabel}: ${url}`,
     '',
     outro.replace(/<[^>]+>/g, ''),
@@ -111,6 +122,19 @@ function renderAuthEmail(opts: {
   ].join('\n');
 
   return { html, text };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    };
+    return entities[character] ?? character;
+  });
 }
 
 async function send(to: string, subject: string, html: string, text: string): Promise<boolean> {
@@ -224,4 +248,49 @@ export async function sendPasswordReset(
   });
 
   await send(params.email, 'Reset your Moche-AI password', html, text);
+}
+
+/**
+ * Sends the only copy of a member-invitation URL. The raw token is intentionally
+ * accepted only here, where it becomes part of the email link; callers persist
+ * its hash and never include the raw token in logs or audit metadata.
+ */
+export async function sendMemberInvite(params: {
+  email: string;
+  inviterName: string;
+  accountName: string;
+  role: InvitableRole;
+  capabilities: CapabilitySet;
+  token: string;
+}): Promise<boolean> {
+  const role = MEMBER_ROLES.find((candidate) => candidate.id === params.role);
+  const roleLabel = role?.label ?? 'Team member';
+  const capabilityLabels = CAPABILITIES
+    .filter((capability) => params.capabilities[capability.key])
+    .map((capability) => capability.label);
+  const safeInviter = escapeHtml(params.inviterName || 'Your host');
+  const safeAccount = escapeHtml(params.accountName);
+  const safeRole = escapeHtml(roleLabel);
+  const subjectAccount = params.accountName.replace(/[\r\n]/g, ' ').trim() || 'your account';
+  const capabilityItems =
+    capabilityLabels.length > 0
+      ? capabilityLabels.map((label) => `<li style="margin:0 0 5px 0;">${escapeHtml(label)}</li>`).join('')
+      : '<li style="margin:0;">No actions are enabled yet.</li>';
+  const inviteUrl = `${publicEnv.appUrl}/invite/${encodeURIComponent(params.token)}`;
+
+  const { html, text } = renderAuthEmail({
+    preheader: 'You have a Moche.AI account invitation.',
+    heading: 'You’re invited to Moche.AI',
+    intro: `${safeInviter} invited you to join ${safeAccount} as a ${safeRole}.`,
+    detailsHtml: `<div style="margin:-8px 0 24px 0;padding:14px 16px;background:#122036;border:1px solid rgba(157,176,198,0.14);border-radius:10px;">
+      <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#EAF1FA;">You’ll be able to:</p>
+      <ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.55;color:#9DB0C6;">${capabilityItems}</ul>
+    </div>`,
+    detailsText: `You’ll be able to:\n${capabilityLabels.length ? capabilityLabels.map((label) => `• ${label}`).join('\n') : '• No actions are enabled yet.'}`,
+    buttonLabel: 'Accept your invitation',
+    url: inviteUrl,
+    outro: 'This link expires in 7 days. Sign in with the invited email address, or create an account and agree to the terms to join.',
+  });
+
+  return send(params.email, `You’re invited to ${subjectAccount} on Moche.AI`, html, text);
 }

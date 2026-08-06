@@ -9,7 +9,7 @@ const CATEGORIES = Constants.public.Enums.brain_category as readonly BrainCatego
 
 // Human-readable guidance so the model routes consistently. Kept terse to hold the
 // classification prompt small and cheap.
-const CATEGORY_HINTS: Record<BrainCategory, string> = {
+export const CATEGORY_HINTS: Record<BrainCategory, string> = {
   core: 'essential property facts (wifi password, address, general how-tos)',
   appliances: 'how to use appliances/devices (TV, oven, thermostat, washer, coffee maker)',
   house_rules: 'rules & policies (quiet hours, pets, smoking, parties, max guests)',

@@ -149,8 +149,10 @@ export function CodeInput(props: {
             padding: 0,
             borderRadius: 12,
             border: `1px solid ${error ? '#ff6b6b' : digit ? accent : 'rgba(255,255,255,0.18)'}`,
-            background: 'rgba(255,255,255,0.05)',
-            color: 'inherit',
+            background: 'var(--bg-2, rgba(255,255,255,0.05))',
+            color: 'var(--text, #E9EEF5)',
+            WebkitTextFillColor: 'var(--text, #E9EEF5)',
+            caretColor: accent,
             outlineColor: accent,
             transition: 'border-color .15s',
           }}

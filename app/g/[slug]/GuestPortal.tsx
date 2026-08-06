@@ -224,6 +224,7 @@ export function GuestPortal(props: {
         minHeight: '100dvh',
         background: BG,
         color: '#ece7dd',
+        colorScheme: 'dark',
         fontFamily: 'var(--font-portal-sans), system-ui, sans-serif',
         ['--gp-gold' as string]: GOLD,
       }}
@@ -295,6 +296,23 @@ export function GuestPortal(props: {
       {/* Portal-scoped styles + motion. Standalone from dashboard CSS. */}
       <style jsx global>{`
         .gp-serif { font-family: var(--font-portal-serif), Georgia, serif; }
+        .gp-root input,
+        .gp-root textarea,
+        .gp-root select,
+        .gp-sheet input,
+        .gp-sheet textarea,
+        .gp-sheet select {
+          color: #fbf7ef;
+          -webkit-text-fill-color: #fbf7ef;
+          caret-color: #e7d3a6;
+        }
+        .gp-root input::placeholder,
+        .gp-root textarea::placeholder,
+        .gp-sheet input::placeholder,
+        .gp-sheet textarea::placeholder {
+          color: rgba(236,231,221,.62);
+          opacity: 1;
+        }
         .gp-hero { position: relative; min-height: 58dvh; display: flex; overflow: hidden; }
         .gp-hero-bg {
           position: absolute; inset: 0; background-size: cover; background-position: center;
@@ -1250,8 +1268,8 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                 data-testid="input-host-message"
                 style={{
                   width: '100%', resize: 'vertical', borderRadius: 12,
-                  border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.04)',
-                  color: '#ece7dd', padding: '.7rem .85rem', fontSize: '.92rem', lineHeight: 1.45,
+                  border: '1px solid rgba(255,255,255,0.14)', background: '#1b202a',
+                  color: '#fbf7ef', WebkitTextFillColor: '#fbf7ef', padding: '.7rem .85rem', fontSize: '.92rem', lineHeight: 1.45,
                   fontFamily: 'inherit',
                 }}
               />
@@ -1503,11 +1521,27 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           width: 7px; height: 7px; border-radius: 50%; background: ${GOLD};
           box-shadow: 0 0 0 0 ${GOLD}; animation: gpPulse 2s infinite;
         }
-        .gp-cats { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; }
-        @media (min-width: 520px) { .gp-cats { grid-template-columns: repeat(4, 1fr); } }
+        /* Responsive guest-card grids: a single, even mobile column avoids
+           scattered half-width cards; wider viewports use tidy equal-height
+           pairs, with an odd final card spanning rather than orphaning. */
+        .gp-cats,
+        .gp-req-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          grid-auto-flow: dense;
+          grid-auto-rows: 1fr;
+          align-items: stretch;
+          gap: .75rem;
+        }
+        @media (min-width: 561px) {
+          .gp-cats,
+          .gp-req-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .gp-cats > :last-child:nth-child(odd),
+          .gp-req-row > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+        }
         .gp-cat {
-          display: flex; flex-direction: column; align-items: flex-start; gap: .1rem;
-          padding: .95rem .85rem; cursor: pointer; text-align: left; color: inherit;
+          display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: .1rem;
+          min-width: 0; min-height: 100%; padding: var(--pad-card); cursor: pointer; text-align: left; color: inherit;
           transition: transform .2s cubic-bezier(.16,1,.3,1), border-color .2s, background .2s, box-shadow .2s;
         }
         .gp-cat:hover {
@@ -1525,8 +1559,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         /* Change 2 & 3 — Extras / Report-an-issue cards: same visual family as .gp-cat
            (via shared classNames) but laid out as a standalone row so they read as their
            own clearly-tappable surfaces rather than part of the conversational grid. */
-        .gp-req-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; margin-top: .9rem; }
-        .gp-req-row:has(.gp-req-card:only-child) { grid-template-columns: 1fr; }
+        .gp-req-row { margin-top: .9rem; }
         .gp-req-card { min-height: 44px; }
         .gp-pills { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .85rem; animation: gpFade .4s ease both; }
         .gp-pill {
@@ -1915,7 +1948,7 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
                 key={offer.id}
                 type="button"
                 onClick={() => openDetail(offer)}
-                style={{ ...cardStyle, padding: '1.05rem', textAlign: 'left', width: '100%', cursor: 'pointer' }}
+                style={{ ...gridCardStyle, textAlign: 'left', width: '100%', cursor: 'pointer' }}
                 className="gp-card gp-extra-item"
                 data-testid={`extra-offer-${offer.id}`}
               >
@@ -1949,7 +1982,7 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
                 key={group.category.id}
                 type="button"
                 onClick={() => setOpenCategory(group.category.id)}
-                style={{ ...cardStyle, padding: '1.05rem', textAlign: 'left', width: '100%', cursor: 'pointer' }}
+                style={{ ...gridCardStyle, textAlign: 'left', width: '100%', cursor: 'pointer' }}
                 className="gp-card gp-extra-item"
                 data-testid={`extras-category-${group.category.id}`}
               >
@@ -1970,9 +2003,15 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
       )}
 
       <style jsx>{`
-        .gp-extras { display: grid; grid-template-columns: 1fr; gap: .6rem; }
-        @media (min-width: 520px) { .gp-extras { grid-template-columns: repeat(2, 1fr); } }
-        .gp-extra-item { display: block; }
+        .gp-extras {
+          display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem;
+          grid-auto-flow: dense; grid-auto-rows: 1fr; align-items: stretch;
+        }
+        @media (min-width: 561px) {
+          .gp-extras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .gp-extras > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+        }
+        .gp-extra-item { display: block; min-width: 0; min-height: 100%; padding: var(--pad-card); }
         .gp-extra-item-foot {
           display: inline-flex; align-items: center; gap: .3rem; margin-top: .75rem;
           font-size: .8rem; font-weight: 600; color: ${GOLD};
@@ -2005,9 +2044,10 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
         }
         .gp-extra-note {
           width: 100%; box-sizing: border-box; padding: .65rem .8rem; font: inherit;
-          font-size: .88rem; color: #fbf7ef; border-radius: 12px; resize: vertical;
-          border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04);
+          font-size: .88rem; color: #fbf7ef; -webkit-text-fill-color: #fbf7ef; border-radius: 12px; resize: vertical;
+          border: 1px solid rgba(255,255,255,.14); background: #1b202a;
         }
+        .gp-extra-note::placeholder { color: rgba(236,231,221,.62); opacity: 1; }
         .gp-extra-note:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 1px; }
         .gp-extra-cta {
           display: inline-flex; align-items: center; gap: .4rem; padding: .6rem 1rem;
@@ -2139,9 +2179,10 @@ function FeedbackWidget({ state, onRate }: { state: 'idle' | 'rated'; onRate: (r
 
 // --- Inline styles (portal is brand-scoped, standalone from dashboard CSS) ---
 const cardStyle: React.CSSProperties = { position: 'relative', background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 18, padding: '1.5rem', backdropFilter: 'blur(12px)', boxShadow: '0 20px 50px -30px rgba(0,0,0,.8)' };
+const gridCardStyle: React.CSSProperties = { ...cardStyle, padding: undefined };
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: '.82rem', opacity: 0.7, marginBottom: '.4rem' };
-const inputStyle: React.CSSProperties = { width: '100%', padding: '.8rem .9rem', borderRadius: 12, border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.03)', color: 'inherit', fontSize: '1rem', marginBottom: '1rem', outline: 'none' };
-const mutedInputStyle: React.CSSProperties = { flex: 1, padding: '.7rem .9rem', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.025)', color: 'inherit', fontSize: '.9rem', outline: 'none', opacity: 0.85 };
+const inputStyle: React.CSSProperties = { width: '100%', padding: '.8rem .9rem', borderRadius: 12, border: '1px solid rgba(255,255,255,0.14)', background: '#1b202a', color: '#fbf7ef', WebkitTextFillColor: '#fbf7ef', caretColor: '#e7d3a6', fontSize: '1rem', marginBottom: '1rem', outline: 'none' };
+const mutedInputStyle: React.CSSProperties = { flex: 1, padding: '.7rem .9rem', borderRadius: 12, border: '1px solid rgba(255,255,255,0.16)', background: '#171c25', color: '#fbf7ef', WebkitTextFillColor: '#fbf7ef', caretColor: '#e7d3a6', fontSize: '.9rem', outline: 'none' };
 const btnStyle: React.CSSProperties = { width: '100%', padding: '.85rem', borderRadius: 12, border: 'none', background: `linear-gradient(145deg, #e7d3a6, ${GOLD})`, color: '#1a1206', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', marginTop: '.25rem' };
 const linkBtn: React.CSSProperties = { width: '100%', background: 'none', border: 'none', color: 'inherit', opacity: 0.6, marginTop: '.75rem', cursor: 'pointer', fontSize: '.82rem' };
 const teaserPill: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '.3rem', padding: '.4rem .7rem', borderRadius: 999, border: '1px solid rgba(201,169,110,0.25)', background: 'rgba(255,255,255,0.03)', fontSize: '.78rem', fontWeight: 600 };
