@@ -15,20 +15,20 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",
     "@aws-sdk/s3-request-presigner": "^3.1101.0",
-    "@sentry/nextjs": "^8.55.2",
+    "@sentry/nextjs": "^10.69.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.45.4",
     "@trigger.dev/sdk": "^4.5.9",
     "lucide-react": "^1.27.0",
-    "mammoth": "^1.8.0",
-    "next": "14.2.15",
+    "mammoth": "^1.11.0",
+    "next": "16.3.0",
     "pdf-parse": "^1.1.1",
     "posthog-js": "^1.404.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "resend": "^4.8.0",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.0",
     "stripe": "^16.12.0",
     "zod": "^3.23.8"
   },
@@ -39,11 +39,11 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.15",
+    "eslint": "^10.8.1",
+    "eslint-config-next": "16.3.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.2"
+    "vitest": "^3.2.6"
   }
 }
