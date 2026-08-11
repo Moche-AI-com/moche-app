@@ -3,29 +3,20 @@ import styles from './landing.module.css';
 
 // Native <details>/<summary> rather than a JS accordion: keyboard support,
 // screen-reader semantics, and in-page find all work with no client bundle.
-//
-// Two answers were retired rather than reworded. The old "what if it gives a
-// wrong answer" copy said guests can see a cited source, which the supplied
-// guest-facing screenshot does not show, and the old setup-time answer quoted
-// 15 to 20 minutes, which is not a measured, approved metric. Both are
-// replaced by the approved escalation wording below. The data-export answer is
-// unchanged.
+// Answers are carried over from the retired public/landing.html so the claims
+// stay identical to what was already published.
 const FAQS = [
   {
     q: 'Do I have to connect my Airbnb account?',
     a: 'No. Moche-AI is platform-agnostic. Guests reach the portal by QR code or link during the stay, with no Airbnb login, no Vrbo connection, and no PMS integration. Your property data belongs to you, not to a platform API.',
   },
   {
-    q: 'What happens if Moche does not know the answer?',
-    a: 'Moche is designed to use property information provided and controlled by the host. When it cannot provide a reliable answer, or the topic needs host confirmation, it routes the question to the host.',
+    q: 'What if the assistant gives a wrong answer?',
+    a: 'It answers only from the documents and details you have uploaded, and it can cite the source. When confidence is low it escalates to you instead of inventing something. The instruction is simple: inform, never invent.',
   },
   {
-    q: 'Will Moche sound generic?',
-    a: "Moche is shaped around each property's information and the host's preferences, so guest support can reflect the stay rather than a generic script.",
-  },
-  {
-    q: 'Do I need to replace my PMS?',
-    a: 'No. Moche is designed to fit your existing hosting workflow without requiring a PMS migration.',
+    q: 'How long does setup take?',
+    a: 'Most hosts finish onboarding in 15 to 20 minutes, and the portal can be live before the next check-in. A completeness score tracks what is still missing and suggests the gaps worth filling first.',
   },
   {
     q: 'Is this just a chatbot?',
