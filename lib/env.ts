@@ -141,10 +141,18 @@ export const serverEnv = {
   // Host SMS fan-out master switch (default OFF — see notify() consent TODO before enabling in prod).
   notifySmsEnabled: bool(process.env.NOTIFY_SMS_ENABLED, false),
 
-  // Publish gates. Default OFF so a property with required fields alone can go live —
-  // this makes demoing/testing frictionless (Brain/knowledge can be added later).
-  // Set both to true in production billing mode to require a paid plan + core Brain before publishing.
-  requirePlanToPublish: bool(process.env.REQUIRE_PLAN_TO_PUBLISH, false),
+  // Publish gates.
+  //
+  // The plan gate fails CLOSED in production: if REQUIRE_PLAN_TO_PUBLISH is unset on a
+  // production deployment, a paid plan is still required. Leaving a paywall to an
+  // optional env var means one missing variable silently gives the product away, so the
+  // default follows NODE_ENV rather than a hardcoded false. Local and preview builds keep
+  // the frictionless default so demoing and testing need no extra setup.
+  //
+  // The Brain gate stays opt-in everywhere — it is a content-quality guard, not a revenue
+  // guard, and enabling it by default would block a host who has paid but not yet filled
+  // in their knowledge base.
+  requirePlanToPublish: bool(process.env.REQUIRE_PLAN_TO_PUBLISH, process.env.NODE_ENV === 'production'),
   requireBrainToPublish: bool(process.env.REQUIRE_BRAIN_TO_PUBLISH, false),
 
   // Observability (server-only secrets).
