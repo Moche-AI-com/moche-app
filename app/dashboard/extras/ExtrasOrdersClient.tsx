@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Sparkles, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import {
-  EXTRAS_ORDER_STATUS_LABEL,
-  primaryExtrasOrderActions,
-  type ExtrasOrderStatus,
-} from '@/lib/dashboard/extras-orders';
+  EXTRAS_STATUS_LABEL,
+  isTerminalExtrasStatus,
+  nextStatesFor,
+  type ExtrasFulfillmentStatus,
+} from '@/lib/extras/lifecycle';
 
 export type ExtrasOrderRow = {
   id: string;
@@ -20,9 +21,14 @@ export type ExtrasOrderRow = {
   quantity: number;
   guest_note: string | null;
   host_note: string | null;
-  status: ExtrasOrderStatus;
+  fulfillment_status: ExtrasFulfillmentStatus;
+  request_number: string;
+  quoted_amount_cents: number | null;
+  quote_currency: string;
+  scheduled_for: string | null;
+  declined_reason: string | null;
+  expires_at: string | null;
   created_at: string;
-  archived_at: string | null;
 };
 
 function fmt(value: string | null) {
@@ -45,14 +51,46 @@ export function ExtrasOrdersClient({
   const [error, setError] = useState<string | null>(null);
   const manageable = new Set(manageableProperties);
 
-  async function move(order: ExtrasOrderRow, to: ExtrasOrderStatus) {
+  async function move(order: ExtrasOrderRow, to: ExtrasFulfillmentStatus) {
+    let hostNote: string | undefined;
+    let scheduledFor: string | undefined;
+    let quotedAmountCents: number | undefined;
+    if (to === 'needs_details') {
+      hostNote = window.prompt('What details do you need from the guest?')?.trim();
+      if (!hostNote) return;
+    }
+    if (to === 'declined') {
+      hostNote = window.prompt('Why can this request not be accommodated?')?.trim();
+      if (!hostNote) return;
+    }
+    if (to === 'scheduled') {
+      const rawDate = window.prompt('When is this scheduled? Use a date and time.');
+      if (!rawDate) return;
+      const date = new Date(rawDate);
+      if (Number.isNaN(date.getTime())) {
+        setError('Enter a valid date and time to schedule this request.');
+        return;
+      }
+      scheduledFor = date.toISOString();
+    }
+    if (to === 'accepted') {
+      const rawEstimate = window.prompt('Optional estimate in USD. This is not a charge and your guest must confirm arrangements.');
+      if (rawEstimate?.trim()) {
+        const amount = Number(rawEstimate);
+        if (!Number.isFinite(amount) || amount < 0) {
+          setError('Enter a non-negative estimate or leave it blank.');
+          return;
+        }
+        quotedAmountCents = Math.round(amount * 100);
+      }
+    }
     setBusy(`${order.id}:${to}`);
     setError(null);
     try {
       const res = await fetch(`/api/host/properties/${order.property_id}/extras-orders/${order.id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: to }),
+        body: JSON.stringify({ status: to, hostNote, scheduledFor, quotedAmountCents }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -88,7 +126,8 @@ export function ExtrasOrdersClient({
       )}
       <div className="report-list">
         {orders.map((o) => {
-          const actions = manageable.has(o.property_id) ? primaryExtrasOrderActions(o.status) : [];
+          const displayedStatus = isRequestExpired(o) ? 'expired' : o.fulfillment_status;
+          const actions = manageable.has(o.property_id) ? nextStatesFor(displayedStatus, 'host') : [];
           return (
             <div key={o.id} className="report-list-row" data-testid="extras-order-row">
               <div style={{ minWidth: 0 }}>
@@ -99,8 +138,13 @@ export function ExtrasOrdersClient({
                 </p>
                 <p className="report-list-meta">
                   {propertyNames[o.property_id] ?? 'Property'} &middot;{' '}
-                  <span data-testid="extras-order-status">{EXTRAS_ORDER_STATUS_LABEL[o.status]}</span> &middot;{' '}
-                  {fmt(o.archived_at ?? o.created_at)}
+                  <span data-testid="extras-order-status">{EXTRAS_STATUS_LABEL[displayedStatus]}</span> &middot;{' '}
+                  {fmt(o.created_at)}
+                </p>
+                <p className="faint" style={{ fontSize: '.75rem', marginTop: '.2rem' }}>
+                  Request {o.request_number}
+                  {o.scheduled_for ? ` · Scheduled ${fmt(o.scheduled_for)}` : ''}
+                  {o.quoted_amount_cents !== null ? ` · Estimate ${(o.quoted_amount_cents / 100).toFixed(2)} ${o.quote_currency.toUpperCase()}` : ''}
                 </p>
                 {o.guest_note && (
                   <p className="report-list-meta" style={{ fontStyle: 'italic' }}>
@@ -118,17 +162,17 @@ export function ExtrasOrdersClient({
                     <ExternalLink size={13} aria-hidden /> Thread
                   </Link>
                 )}
-                {actions.map((a) => (
+                {actions.map((to) => (
                   <button
-                    key={a.to}
+                    key={to}
                     type="button"
-                    className={`btn btn-sm ${a.tone === 'primary' ? 'btn-primary' : 'btn-ghost'}`}
-                    style={a.tone === 'danger' ? { color: 'var(--coral)' } : undefined}
+                    className={`btn btn-sm ${to === 'accepted' || to === 'scheduled' || to === 'fulfilled' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={to === 'declined' || to === 'canceled' ? { color: 'var(--coral)' } : undefined}
                     disabled={busy !== null}
-                    onClick={() => move(o, a.to)}
-                    data-testid={`extras-order-action-${a.to}`}
+                    onClick={() => move(o, to)}
+                    data-testid={`extras-order-action-${to}`}
                   >
-                    {busy === `${o.id}:${a.to}` ? 'Saving\u2026' : a.label}
+                    {busy === `${o.id}:${to}` ? 'Saving\u2026' : hostActionLabel(to)}
                   </button>
                 ))}
               </div>
@@ -138,4 +182,22 @@ export function ExtrasOrdersClient({
       </div>
     </>
   );
+}
+
+function isRequestExpired(order: ExtrasOrderRow): boolean {
+  return !isTerminalExtrasStatus(order.fulfillment_status)
+    && order.expires_at !== null
+    && new Date(order.expires_at).getTime() <= Date.now();
+}
+
+function hostActionLabel(status: ExtrasFulfillmentStatus): string {
+  switch (status) {
+    case 'needs_details': return 'Ask for details';
+    case 'payment_pending': return 'Awaiting off-platform payment';
+    case 'scheduled': return 'Schedule';
+    case 'fulfilled': return 'Mark fulfilled';
+    case 'declined': return 'Decline';
+    case 'canceled': return 'Cancel';
+    default: return EXTRAS_STATUS_LABEL[status];
+  }
 }

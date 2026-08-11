@@ -12,15 +12,10 @@ import { AttentionStrip, ActivityTrendCard, TopTopicsCard, ActivityFeedCard } fr
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { ExtrasRequestsCard, type ExtrasRequestRow } from '@/components/dashboard/ExtrasRequestsCard';
 import { UpdateQueueCard, type UpdateQueueCardRow } from '@/components/dashboard/UpdateQueueCard';
-import { extrasRequestSummary, knowledgeReviewSummary, resolveScope } from '@/lib/dashboard/scope';
+import { knowledgeReviewSummary, resolveScope } from '@/lib/dashboard/scope';
+import { isTerminalExtrasStatus, type ExtrasFulfillmentStatus } from '@/lib/extras/lifecycle';
 
 export const dynamic = 'force-dynamic';
-
-// Guest "Enhancement request:" escalations are how Extras requests actually land today
-// (see app/api/guest/[slug]/extras-request/route.ts — it reuses the escalations pipeline
-// rather than a dedicated table). This prefix is the only signal that distinguishes an
-// Extras request from an ordinary guest question inside that same table.
-const EXTRAS_REQUEST_PREFIX = 'Enhancement request:';
 
 export default async function DashboardHome({
   searchParams,
@@ -119,8 +114,8 @@ export default async function DashboardHome({
   // failure in any one of them degrades to an empty state instead of blanking
   // the dashboard. Extras requests have no dedicated table (see the
   // EXTRAS_REQUEST_PREFIX comment above) so they're read straight out of
-  // `escalations`, the same table/RLS the Escalations page already uses.
-  const [metrics, feedback, trend, topics, feed, extrasEscalations, proposalRows] = await Promise.all([
+  // `extras_orders`, which is the durable request lifecycle rather than an alert.
+  const [metrics, feedback, trend, topics, feed, extrasOrders, proposalRows] = await Promise.all([
     loadValueMetrics(supabase, propertyIds, {
       activeStays,
       openEscalations: escCount,
@@ -133,11 +128,10 @@ export default async function DashboardHome({
     loadActivityFeed(supabase, propertyIds, propertyNames, 8),
     propertyIds.length > 0
       ? supabase
-          .from('escalations')
-          .select('id, property_id, status')
+          .from('extras_orders')
+          .select('id, property_id, fulfillment_status, scheduled_for')
           .in('property_id', propertyIds)
-          .ilike('question', `${EXTRAS_REQUEST_PREFIX}%`)
-      : Promise.resolve({ data: [] as { id: string; property_id: string; status: string }[] }),
+      : Promise.resolve({ data: [] as { id: string; property_id: string; fulfillment_status: ExtrasFulfillmentStatus; scheduled_for: string | null }[] }),
     // Pending AI drafts, for the review-queue tile. Only pending rows are read:
     // the tile answers "is anything waiting on me", not "what have I decided".
     propertyIds.length > 0
@@ -155,25 +149,30 @@ export default async function DashboardHome({
   const lowRatings = feedback.recent.filter((f) => f.rating != null && f.rating <= 2).length;
 
   // Group Extras requests per property for the summary card.
-  const extrasByProperty = new Map<string, { count: number; openCount: number; resolvedCount: number }>();
-  for (const row of extrasEscalations.data ?? []) {
+  const extrasByProperty = new Map<string, { count: number; openCount: number; resolvedCount: number; paymentPending: number; scheduledToday: number }>();
+  const today = new Date().toDateString();
+  for (const row of extrasOrders.data ?? []) {
     const pid = row.property_id as string;
-    const entry = extrasByProperty.get(pid) ?? { count: 0, openCount: 0, resolvedCount: 0 };
-    const summary = extrasRequestSummary([{ status: row.status as string }]);
-    entry.count += summary.total;
-    entry.openCount += summary.needsResponse;
-    entry.resolvedCount += summary.resolved;
+    const entry = extrasByProperty.get(pid) ?? { count: 0, openCount: 0, resolvedCount: 0, paymentPending: 0, scheduledToday: 0 };
+    const status = row.fulfillment_status as ExtrasFulfillmentStatus;
+    entry.count += 1;
+    if (status === 'requested' || status === 'needs_details') entry.openCount += 1;
+    if (isTerminalExtrasStatus(status)) entry.resolvedCount += 1;
+    if (status === 'payment_pending') entry.paymentPending += 1;
+    if (status === 'scheduled' && row.scheduled_for && new Date(row.scheduled_for).toDateString() === today) entry.scheduledToday += 1;
     extrasByProperty.set(pid, entry);
   }
   const extrasRequestRows: ExtrasRequestRow[] = (properties ?? [])
     .map((p) => {
-      const entry = extrasByProperty.get(p.id) ?? { count: 0, openCount: 0, resolvedCount: 0 };
+      const entry = extrasByProperty.get(p.id) ?? { count: 0, openCount: 0, resolvedCount: 0, paymentPending: 0, scheduledToday: 0 };
       return {
         propertyId: p.id,
         propertyName: p.display_name as string,
         count: entry.count,
         openCount: entry.openCount,
         resolvedCount: entry.resolvedCount,
+        paymentPending: entry.paymentPending,
+        scheduledToday: entry.scheduledToday,
       };
     })
     .sort((a, b) => b.count - a.count);

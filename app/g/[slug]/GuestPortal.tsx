@@ -1461,13 +1461,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         {extraOffers.length > 0 && (
           <button
             type="button"
-            onClick={() => {
-              setExtrasOpen((o) => {
-                const next = !o;
-                if (next) setTimeout(() => extrasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
-                return next;
-              });
-            }}
+            onClick={() => { window.location.assign(`/g/${slug}/extras`); }}
             className="gp-cat gp-card gp-cat-accent"
             data-testid="card-extras"
             aria-expanded={extrasOpen}
