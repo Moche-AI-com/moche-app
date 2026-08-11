@@ -27,6 +27,10 @@ export default async function RecommendationsPage({ params }: { params: { id: st
         ← Local
       </Link>
       <h1 style={{ marginTop: '.5rem' }}>Your picks</h1>
+      <div className="card" style={{ marginBottom: '1rem', fontSize: '.9rem' }}>
+        Local is now the single overview for guest-visible places, favorites, discovery, and curation.{' '}
+        <Link href={`/dashboard/properties/${params.id}/local`}>Open Local →</Link>
+      </div>
       <p className="muted" style={{ maxWidth: 640 }}>
         The places you personally send guests to. Approved picks are shared with your concierge, which
         offers your favorites first. Unapproved and hidden picks are never mentioned.{' '}

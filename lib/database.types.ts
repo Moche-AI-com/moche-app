@@ -1999,6 +1999,57 @@ export type Database = {
           },
         ]
       }
+      places: {
+        Row: {
+          address: string | null
+          category: string
+          first_seen_at: string
+          id: string
+          last_refreshed_at: string
+          lat: number | null
+          lon: number | null
+          name: string
+          normalized_name: string
+          phone: string | null
+          provider: string
+          provider_payload: Json | null
+          provider_place_id: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          category: string
+          first_seen_at?: string
+          id?: string
+          last_refreshed_at?: string
+          lat?: number | null
+          lon?: number | null
+          name: string
+          normalized_name: string
+          phone?: string | null
+          provider: string
+          provider_payload?: Json | null
+          provider_place_id?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          category?: string
+          first_seen_at?: string
+          id?: string
+          last_refreshed_at?: string
+          lat?: number | null
+          lon?: number | null
+          name?: string
+          normalized_name?: string
+          phone?: string | null
+          provider?: string
+          provider_payload?: Json | null
+          provider_place_id?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
       product_feedback: {
         Row: {
           comment: string | null
@@ -2609,6 +2660,76 @@ export type Database = {
           },
           {
             foreignKeyName: "property_members_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      property_place_recommendations: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          distance_miles: number | null
+          host_note: string | null
+          id: string
+          intent_tags: string[]
+          is_favorite: boolean
+          place_id: string
+          property_id: string
+          status: Database["public"]["Enums"]["place_recommendation_status"]
+          tags: string[]
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          distance_miles?: number | null
+          host_note?: string | null
+          id?: string
+          intent_tags?: string[]
+          is_favorite?: boolean
+          place_id: string
+          property_id: string
+          status?: Database["public"]["Enums"]["place_recommendation_status"]
+          tags?: string[]
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          distance_miles?: number | null
+          host_note?: string | null
+          id?: string
+          intent_tags?: string[]
+          is_favorite?: boolean
+          place_id?: string
+          property_id?: string
+          status?: Database["public"]["Enums"]["place_recommendation_status"]
+          tags?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_place_recommendations_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_place_recommendations_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_place_recommendations_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
@@ -3351,6 +3472,7 @@ export type Database = {
         | "billing"
         | "review_nudge"
         | "system"
+      place_recommendation_status: "suggested" | "approved" | "hidden"
       processing_status: "pending" | "processing" | "ready" | "failed" | "stale"
       property_import_job_status:
         | "queued"
@@ -3617,6 +3739,7 @@ export const Constants = {
         "review_nudge",
         "system",
       ],
+      place_recommendation_status: ["suggested", "approved", "hidden"],
       processing_status: ["pending", "processing", "ready", "failed", "stale"],
       property_import_job_status: [
         "queued",

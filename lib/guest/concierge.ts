@@ -18,6 +18,7 @@ import {
   type DiscoveredPlaceInput,
   type MergedLocalPlace,
 } from '@/lib/local/merge';
+import { loadCanonicalPlaces } from '@/lib/local/canonical';
 
 type Admin = SupabaseClient<Database>;
 type IntentType = Database['public']['Enums']['intent_type'];
@@ -335,7 +336,7 @@ export interface NearbyPlaceRow {
 // single fetch backs both the model's context AND the server-trusted validation
 // of what it cites (WS-5). Either query failing degrades to the other source
 // rather than dropping local recommendations entirely.
-async function fetchLocalPlaces(admin: Admin, propertyId: string): Promise<MergedLocalPlace[]> {
+async function fetchLegacyLocalPlaces(admin: Admin, propertyId: string): Promise<MergedLocalPlace[]> {
   const [discoveredRes, curatedRes] = await Promise.all([
     admin
       .from('nearby_places')
@@ -370,6 +371,37 @@ async function fetchLocalPlaces(admin: Admin, propertyId: string): Promise<Merge
   // Cap the merged set so a portfolio host with a large curated list cannot
   // crowd the rest of the prompt out of the context window.
   return mergeLocalPlaces(curated, discovered).slice(0, 60);
+}
+
+async function fetchLocalPlaces(admin: Admin, propertyId: string): Promise<MergedLocalPlace[]> {
+  try {
+    const canonical = await loadCanonicalPlaces(admin, propertyId);
+    if (canonical.length > 0) {
+      return canonical.map((place) => ({
+        id: place.recommendationId,
+        name: place.name,
+        category: place.category,
+        host_notes: place.hostNote,
+        host_starred: place.isFavorite,
+        rating: null,
+        distance_m: place.distanceMiles == null ? null : place.distanceMiles * 1609.344,
+        source: 'discovered',
+        detail: null,
+        distanceNote: null,
+        priority: 0,
+      }));
+    }
+  } catch (error) {
+    log.warn('concierge.local.canonical_failed', {
+      propertyId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Canonical migration is rolling out while legacy rows remain available.
+  // Falling back only when no canonical relationship exists keeps old properties
+  // useful without mixing the two ranking systems for migrated properties.
+  return fetchLegacyLocalPlaces(admin, propertyId);
 }
 
 // Build a concise, host-curated local-places block for the concierge. Hierarchy:
