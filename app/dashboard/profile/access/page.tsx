@@ -2,18 +2,9 @@ import Link from 'next/link';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { CAPABILITIES } from '@/lib/auth/member-capabilities';
+import { roleLabel } from '@/lib/dashboard/roles';
 
 export const dynamic = 'force-dynamic';
-
-const ROLE_LABEL: Record<string, string> = {
-  owner: 'Owner',
-  co_host: 'Co-host',
-  property_manager: 'Property manager',
-  support: 'Support',
-  maintenance: 'Maintenance',
-  cleaner: 'Cleaner',
-  viewer: 'Viewer',
-};
 
 /**
  * Every property this person can reach, and exactly what they can do on each.
@@ -25,6 +16,11 @@ export default async function ProfileAccessPage() {
   const ctx = await requireSession();
   const supabase = createClient();
   const isOwner = ctx.account.owner_id === ctx.user.id;
+  const currentRole = roleLabel({
+    userId: ctx.user.id,
+    accountOwnerId: ctx.account.owner_id,
+    isAdmin: ctx.isFounder,
+  });
 
   const [propsRes, membershipRes] = await Promise.all([
     supabase
@@ -38,18 +34,28 @@ export default async function ProfileAccessPage() {
       .eq('profile_id', ctx.profile.id),
   ]);
 
-  const properties = propsRes.data ?? [];
+  const allProperties = propsRes.data ?? [];
   const memberships = new Map(
     (membershipRes.data ?? []).map((m) => [m.property_id, m as Record<string, unknown>]),
   );
+  // Members only see their assigned properties in this list. Owners and
+  // account admins retain their accessible portfolio-wide view.
+  const properties = isOwner || currentRole === 'Admin'
+    ? allProperties
+    : allProperties.filter((property) => memberships.has(property.id));
 
   return (
     <section>
-      <h2 style={{ fontSize: '1.15rem', marginTop: 0 }}>Properties and access</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem', flexWrap: 'wrap' }}>
+        <h2 style={{ fontSize: '1.15rem', margin: 0 }}>Properties and access</h2>
+        <span className="badge badge-teal" data-testid="access-role-badge">{currentRole}</span>
+      </div>
       <p className="muted" style={{ fontSize: '.88rem', maxWidth: 620 }}>
         {isOwner
           ? 'You own this account, so you have every permission on every property. Invited people appear with the role you gave them.'
-          : 'What you can do is set per property by the account owner.'}
+          : currentRole === 'Admin'
+            ? 'You are an admin, so your effective permissions apply across every accessible property.'
+            : 'What you can do is set per property by the account owner.'}
       </p>
 
       {properties.length === 0 ? (
@@ -65,8 +71,7 @@ export default async function ProfileAccessPage() {
         <ul className="report-list" style={{ margin: 0, maxWidth: 680 }}>
           {properties.map((p) => {
             const m = memberships.get(p.id);
-            const role = isOwner ? 'owner' : ((m?.role as string) ?? 'viewer');
-            const caps = isOwner
+            const caps = isOwner || currentRole === 'Admin'
               ? CAPABILITIES.map((capability) => capability.label)
               : CAPABILITIES.filter((capability) => m?.[capability.key] === true).map((capability) => capability.label);
             const place = [p.city, p.region].filter(Boolean).join(', ');
@@ -75,7 +80,7 @@ export default async function ProfileAccessPage() {
                 <div className="report-list-title" style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <Link href={`/dashboard/properties/${p.id}`}>{p.display_name}</Link>
                   <span className="badge" style={{ fontSize: '.7rem' }}>
-                    {ROLE_LABEL[role] ?? role}
+                    {currentRole}
                   </span>
                   {p.status !== 'live' && (
                     <span className="badge badge-coral" style={{ fontSize: '.7rem' }}>{p.status}</span>

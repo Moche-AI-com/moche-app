@@ -27,11 +27,15 @@ export function UpdateQueueCard({
   rows,
   detail,
   pending,
+  affectedProperties,
+  oldestLabel,
 }: {
   rows: UpdateQueueCardRow[];
   /** Pre-computed subtitle from queueSummary() so the copy has one definition. */
   detail: string;
   pending: number;
+  affectedProperties: number;
+  oldestLabel: string | null;
 }) {
   const { isCollapsed, toggle } = useCollapsedCards();
   const collapsed = isCollapsed('update-queue');
@@ -42,9 +46,9 @@ export function UpdateQueueCard({
       <div className="dash-panel-head">
         <div>
           <h2 className="dash-section-title">
-            <ShieldCheck size={16} aria-hidden /> Knowledge Queue
+            <ShieldCheck size={16} aria-hidden /> Knowledge awaiting review
           </h2>
-          <p className="dash-section-sub">Knowledge the assistant drafted, waiting on your approval.</p>
+          <p className="dash-section-sub">Draft knowledge waiting for your approval.</p>
         </div>
         <div className="dash-panel-head-aside">
           {hasPending && (
@@ -56,7 +60,7 @@ export function UpdateQueueCard({
             collapsed={collapsed}
             onToggle={() => toggle('update-queue')}
             panelId="update-queue-body"
-            label="Knowledge Queue"
+            label="Knowledge awaiting review"
           />
         </div>
       </div>
@@ -67,28 +71,52 @@ export function UpdateQueueCard({
             <p className="muted" style={{ margin: '0 0 .6rem', fontSize: '.85rem' }} data-testid="update-queue-detail">
               {detail}
             </p>
-            <ul className="dash-topics" data-testid="update-queue-list">
-              {rows
-                .filter((r) => r.pending > 0)
-                .map((r) => (
-                  <li key={r.propertyId} className="dash-topic" data-testid="update-queue-row">
-                    <Link
-                      href="/dashboard/updates"
-                      className="dash-topic-row"
-                      style={{ textDecoration: 'none', color: 'inherit' }}
-                    >
-                      <span className="dash-topic-label" style={{ minWidth: 0 }}>
-                        {r.propertyName}
-                      </span>
-                      <span className="dash-topic-count">
-                        {r.pending} draft{r.pending === 1 ? '' : 's'}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-            </ul>
+            <dl
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: '.45rem',
+                margin: '0 0 .85rem',
+              }}
+              data-testid="update-queue-facts"
+            >
+              <div>
+                <dt className="faint" style={{ fontSize: '.72rem' }}>Pending</dt>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>{pending}</dd>
+              </div>
+              <div>
+                <dt className="faint" style={{ fontSize: '.72rem' }}>Affected properties</dt>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>{affectedProperties}</dd>
+              </div>
+              <div>
+                <dt className="faint" style={{ fontSize: '.72rem' }}>Oldest item</dt>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>{oldestLabel ?? 'None'}</dd>
+              </div>
+            </dl>
+            {affectedProperties > 1 && (
+              <ul className="dash-topics" data-testid="update-queue-list">
+                {rows
+                  .filter((r) => r.pending > 0)
+                  .map((r) => (
+                    <li key={r.propertyId} className="dash-topic" data-testid="update-queue-row">
+                      <Link
+                        href="/dashboard/updates"
+                        className="dash-topic-row"
+                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <span className="dash-topic-label" style={{ minWidth: 0 }}>
+                          {r.propertyName}
+                        </span>
+                        <span className="dash-topic-count">
+                          {r.pending} draft{r.pending === 1 ? '' : 's'}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+            )}
             <Link href="/dashboard/updates" className="dash-panel-link">
-              Open the queue <ArrowUpRight size={14} aria-hidden />
+              Open Knowledge Queue <ArrowUpRight size={14} aria-hidden />
             </Link>
           </>
         ) : (

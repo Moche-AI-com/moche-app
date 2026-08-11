@@ -16,6 +16,7 @@ export interface ExtrasRequestRow {
   propertyName: string;
   count: number;
   openCount: number;
+  resolvedCount: number;
 }
 
 export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
@@ -23,6 +24,7 @@ export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
   const collapsed = isCollapsed('extras-requests');
   const totalRequests = rows.reduce((a, r) => a + r.count, 0);
   const totalOpen = rows.reduce((a, r) => a + r.openCount, 0);
+  const totalResolved = rows.reduce((a, r) => a + r.resolvedCount, 0);
   const hasRequests = totalRequests > 0;
 
   return (
@@ -46,27 +48,55 @@ export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
 
       <CollapsibleBody id="extras-requests-body" collapsed={collapsed}>
         {hasRequests ? (
-          <ul className="dash-topics" data-testid="extras-requests-list">
-            {rows
-              .filter((r) => r.count > 0)
-              .map((r) => (
-                <li key={r.propertyId} className="dash-topic" data-testid="extras-requests-row">
-                  <Link
-                    href={`/dashboard/escalations?property=${r.propertyId}`}
-                    className="dash-topic-row"
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                  >
-                    <span className="dash-topic-label" style={{ minWidth: 0 }}>
-                      {r.propertyName}
-                    </span>
-                    <span className="dash-topic-count">
-                      {r.count} request{r.count === 1 ? '' : 's'}
-                      {r.openCount > 0 && <span className="faint"> · {r.openCount} open</span>}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-          </ul>
+          <>
+            <dl
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: '.45rem',
+                margin: '0 0 .65rem',
+              }}
+              data-testid="extras-requests-breakdown"
+            >
+              <div>
+                <dt className="faint" style={{ fontSize: '.72rem' }}>Needs response</dt>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>{totalOpen}</dd>
+              </div>
+              <div title="Payment status is not recorded on escalation-backed Extras requests.">
+                <dt className="faint" style={{ fontSize: '.72rem' }}>Payment pending</dt>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>0</dd>
+              </div>
+              <div title="Scheduling data is not recorded on escalation-backed Extras requests.">
+                <dt className="faint" style={{ fontSize: '.72rem' }}>Scheduled today</dt>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>0</dd>
+              </div>
+            </dl>
+            <p className="faint" style={{ margin: '0 0 .85rem', fontSize: '.75rem' }}>
+              Payment and scheduling are not recorded for Extras requests yet, so those counts are shown as zero.
+              {totalResolved > 0 ? ` ${totalResolved} closed or resolved request${totalResolved === 1 ? '' : 's'}.` : ''}
+            </p>
+            <ul className="dash-topics" data-testid="extras-requests-list">
+              {rows
+                .filter((r) => r.count > 0)
+                .map((r) => (
+                  <li key={r.propertyId} className="dash-topic" data-testid="extras-requests-row">
+                    <Link
+                      href={`/dashboard/escalations?property=${r.propertyId}`}
+                      className="dash-topic-row"
+                      style={{ textDecoration: 'none', color: 'inherit' }}
+                    >
+                      <span className="dash-topic-label" style={{ minWidth: 0 }}>
+                        {r.propertyName}
+                      </span>
+                      <span className="dash-topic-count">
+                        {r.count} request{r.count === 1 ? '' : 's'}
+                        {r.openCount > 0 && <span className="faint"> · {r.openCount} need response</span>}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+            </ul>
+          </>
         ) : (
           <div className="dash-panel-empty" data-testid="extras-requests-empty">
             <span className="dash-panel-empty-icon" aria-hidden>

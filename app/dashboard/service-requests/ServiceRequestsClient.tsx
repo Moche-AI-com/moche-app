@@ -7,6 +7,7 @@ import {
   MapPin, Wrench, KeyRound, Clock3, UserRound, CheckCircle2, Printer, Archive,
 } from 'lucide-react';
 import { LifecycleToggle, type LifecycleView } from '@/components/dashboard/LifecycleToggle';
+import { ALLOWED_TRANSITIONS, type ServiceRequestStatus } from '@/lib/service-requests/lifecycle';
 
 // Which statuses the database projects to lifecycle_status = 'archived'.
 // Kept in one place so the optimistic client-side filter below cannot disagree
@@ -59,12 +60,12 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  new: 'New',
-  acknowledged: 'Acknowledged',
+  new: 'Open',
+  acknowledged: 'Open',
   in_progress: 'In progress',
-  waiting_on_guest: 'Waiting on guest',
-  resolved: 'Resolved',
-  closed: 'Closed',
+  waiting_on_guest: 'In progress',
+  resolved: 'Completed',
+  closed: 'Completed',
 };
 
 const URGENCY_COLOR: Record<string, string> = {
@@ -75,17 +76,6 @@ const URGENCY_COLOR: Record<string, string> = {
 };
 
 const URGENCY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-
-// Forward-only next-step suggestions per status, mirroring the server's allowed-transition
-// map. Buttons only ever offer moves the API will actually accept.
-const NEXT_STATUSES: Record<string, string[]> = {
-  new: ['acknowledged', 'resolved'],
-  acknowledged: ['in_progress', 'waiting_on_guest', 'resolved'],
-  in_progress: ['waiting_on_guest', 'resolved'],
-  waiting_on_guest: ['in_progress', 'resolved'],
-  resolved: ['closed', 'in_progress'],
-  closed: [],
-};
 
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -117,26 +107,43 @@ function TicketCard({
   const [busyStatus, setBusyStatus] = useState<string | null>(null);
   const [busyAssign, setBusyAssign] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolutionNotes, setResolutionNotes] = useState('');
   const [mediaUrls, setMediaUrls] = useState<{ key: string; url: string }[] | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
 
   const mediaKeys = asStringList(ticket.media_urls);
   const likelyCauses = asStringList(ticket.likely_causes);
   const suggestedParts = asStringList(ticket.suggested_parts);
-  const nextOptions = NEXT_STATUSES[ticket.status] ?? [];
+  // The detailed database states stay available to the API, while hosts operate a
+  // simpler Open -> (optional In progress) -> Completed path.
+  const nextOptions = (ALLOWED_TRANSITIONS[ticket.status as ServiceRequestStatus] ?? [])
+    .filter((status) => {
+      if (ticket.status === 'resolved') return status === 'in_progress' || status === 'closed';
+      return status === 'in_progress' || status === 'resolved';
+    });
   const assignedContact = contacts.find((c) => c.id === ticket.assigned_contact_id) ?? null;
 
   async function changeStatus(next: string) {
     if (!canResolve || busyStatus) return;
+    if (next === 'resolved' && !resolutionNotes.trim()) {
+      setError('Add a completion outcome before marking this request completed.');
+      return;
+    }
     setBusyStatus(next);
     setError(null);
     try {
       const res = await fetch(`/api/host/properties/${ticket.property_id}/service-requests/${ticket.id}/status`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: next }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+          status: next,
+          ...(next === 'resolved' ? { resolutionNotes: resolutionNotes.trim() } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not update status.');
-      onChanged({ status: next });
+      onChanged(next === 'resolved'
+        ? { status: next, resolution_notes: resolutionNotes.trim() }
+        : { status: next });
+      if (next === 'resolved') setResolutionNotes('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
@@ -291,6 +298,21 @@ function TicketCard({
           {canResolve && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem', marginTop: '.25rem' }}>
               {error && <span className="badge badge-coral">{error}</span>}
+              {nextOptions.includes('resolved') && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>
+                  Completion outcome
+                  <textarea
+                    className="input"
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
+                    maxLength={1000}
+                    rows={2}
+                    placeholder="What was completed or resolved?"
+                    disabled={busyStatus !== null}
+                    data-testid="input-completion-outcome"
+                  />
+                </label>
+              )}
               {nextOptions.length > 0 && (
                 <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
                   {nextOptions.map((s) => (
@@ -302,7 +324,13 @@ function TicketCard({
                       onClick={() => changeStatus(s)}
                       data-testid={`button-status-${s}`}
                     >
-                      {busyStatus === s ? 'Updating…' : (s === 'resolved' ? <><CheckCircle2 size={13} aria-hidden /> Mark resolved</> : `Move to ${STATUS_LABEL[s]}`)}
+                      {busyStatus === s ? 'Updating…' : (
+                        s === 'resolved'
+                          ? <><CheckCircle2 size={13} aria-hidden /> Mark completed</>
+                          : s === 'closed'
+                            ? 'Close request'
+                            : `Move to ${STATUS_LABEL[s]}`
+                      )}
                     </button>
                   ))}
                 </div>
