@@ -1,115 +1,122 @@
-// Launch readiness for a single property (backlog P2-09).
-//
-// DELIBERATELY NOT A SECOND SCORING ENGINE.
-//
-// The backlog is explicit that readiness must not become a duplicate of Brain
-// Health, and there was a real risk of exactly that: two functions, two weight
-// tables, two numbers on the same screen disagreeing about whether a property is
-// ready. So this module *composes* the existing computeCardHealth() result
-// rather than recomputing anything from brain_items. It adds precisely one thing
-// health cannot know about — whether AI-proposed changes are still sitting
-// unreviewed — and derives both the number and the checklist from a single
-// `items` array, so the score and the list of what's missing cannot drift apart:
-// the score IS the weighted sum of that list.
+// Property readiness has one canonical calculation. Consumers must render both
+// the percentage and their checklist from this result so they cannot drift.
 
-import type { CardBrainHealth } from '@/lib/brain/health';
+export type RequirementStatus = 'missing' | 'partial' | 'satisfied' | 'not_applicable';
 
-export interface ReadinessItem {
+export interface KnowledgeRequirement {
+  key: string;
+  category: string;
+  label: string;
+  why: string;
+  fieldPaths: string[];
+}
+
+export const READINESS_CATEGORIES = [
+  { key: 'arrival_access_departure', label: 'Arrival, access, and departure', weight: 0.25 },
+  { key: 'safety_contacts', label: 'Safety and contacts', weight: 0.20 },
+  { key: 'rules', label: 'Rules', weight: 0.15 },
+  { key: 'essential_amenities', label: 'Essential amenities', weight: 0.15 },
+  { key: 'basics', label: 'Basics', weight: 0.10 },
+  { key: 'appliance_guidance', label: 'Appliance guidance', weight: 0.05 },
+  { key: 'local_recommendations', label: 'Local recommendations', weight: 0.05 },
+  { key: 'faqs', label: 'FAQs', weight: 0.05 },
+] as const;
+
+export const KNOWLEDGE_REQUIREMENTS: readonly KnowledgeRequirement[] = [
+  { key: 'arrival_instructions', category: 'arrival_access_departure', label: 'Arrival instructions', why: 'Guests need to know how to arrive and get in.', fieldPaths: ['brain.arrival_instructions'] },
+  { key: 'departure_instructions', category: 'arrival_access_departure', label: 'Departure instructions', why: 'Guests need clear check-out steps.', fieldPaths: ['brain.departure_instructions'] },
+  { key: 'emergency_contact', category: 'safety_contacts', label: 'Emergency contact', why: 'Guests need a reliable contact for urgent issues.', fieldPaths: ['brain.emergency_contact'] },
+  { key: 'safety_information', category: 'safety_contacts', label: 'Safety information', why: 'Guests need to find essential safety information quickly.', fieldPaths: ['brain.safety_information'] },
+  { key: 'house_rules', category: 'rules', label: 'House rules', why: 'Clear rules prevent avoidable guest issues.', fieldPaths: ['brain.house_rules'] },
+  { key: 'essential_amenities', category: 'essential_amenities', label: 'Essential amenities', why: 'Guests need to know what essential amenities are available.', fieldPaths: ['brain.essential_amenities'] },
+  { key: 'property_basics', category: 'basics', label: 'Property basics', why: 'Guests need the key facts about the property.', fieldPaths: ['brain.property_basics'] },
+  { key: 'appliance_guidance', category: 'appliance_guidance', label: 'Appliance guidance', why: 'Guests need safe instructions for major appliances.', fieldPaths: ['property_appliances'] },
+  { key: 'local_recommendations', category: 'local_recommendations', label: 'Local recommendations', why: 'Guests benefit from a few host-approved nearby recommendations.', fieldPaths: ['recommendations'] },
+  { key: 'frequently_asked_questions', category: 'faqs', label: 'Frequently asked questions', why: 'Answers to common questions reduce avoidable messages.', fieldPaths: ['brain.faqs'] },
+] as const;
+
+export interface ReadinessMissing {
+  /** Legacy aliases retained while existing cards migrate to the canonical key. */
+  key: string;
+  required: boolean;
+  requirementKey: string;
+  label: string;
+  why: string;
+}
+
+export interface ReadinessCategory {
   key: string;
   label: string;
-  /** Contribution to the score. Health cards keep their own weights. */
   weight: number;
-  done: boolean;
-  /** True items block "ready to share"; false items are polish. */
-  required: boolean;
-  /** Optional deep link so the checklist is actionable, not just a verdict. */
-  href?: string;
+  /** Weighted percentage points earned by this category, between 0 and weight * 100. */
+  earned: number;
+  missing: ReadinessMissing[];
 }
 
 export interface Readiness {
-  score: number; // 0-100
-  label: 'Needs work' | 'Almost there' | 'Ready to share';
-  items: ReadinessItem[];
-  /** Everything not done, required first. Rendered as the checklist. */
-  missing: ReadinessItem[];
+  score: number;
+  categories: ReadinessCategory[];
+  missing: ReadinessMissing[];
+  /** Retained for existing UI callers; pending proposals are not scored as requirements. */
   pendingReviews: number;
-  /** Every required item satisfied. */
   ready: boolean;
+  label: 'Needs work' | 'Almost there' | 'Ready to share';
 }
 
-/**
- * Weight of the "review the AI's suggestions" item.
- *
- * Sized to matter without dominating: the nine health cards total 100, so an
- * unreviewed queue costs roughly a tenth of the score. Enough that the number
- * visibly moves when a host clears the queue, not enough that a single stale
- * suggestion makes an otherwise complete property look broken.
- */
-export const REVIEW_ITEM_WEIGHT = 12;
+export interface ReadinessStatusInput {
+  requirementKey: string;
+  status: RequirementStatus;
+}
 
 export interface ReadinessInput {
-  health: CardBrainHealth;
-  /** Count of proposed_updates rows still in 'pending' for this property. */
-  pendingReviews: number;
-  propertyId: string;
-  /** Whether the property has been published. Polish, not a blocker. */
-  published?: boolean;
+  statuses?: readonly ReadinessStatusInput[];
+  pendingReviews?: number;
 }
 
-export function computeReadiness(input: ReadinessInput): Readiness {
-  const { health, pendingReviews, propertyId } = input;
+const CREDIT: Record<RequirementStatus, number> = {
+  missing: 0,
+  partial: 0.5,
+  satisfied: 1,
+  not_applicable: 1,
+};
 
-  const items: ReadinessItem[] = health.cards.map((card) => ({
-    key: `card:${card.key}`,
-    label: card.title,
-    weight: card.weight,
-    // A card counts as done at the same threshold health itself uses for
-    // "recommendedComplete", so the two views never contradict each other.
-    done: card.recommendedComplete,
-    required: card.critical,
-    href: `/dashboard/properties/${propertyId}/brain`,
-  }));
+/**
+ * Computes every readiness output from the same requirement statuses. Do not
+ * calculate a percentage in a component: this is the only readiness engine.
+ */
+export function computeReadiness(input: ReadinessInput = {}): Readiness {
+  const statuses = new Map(input.statuses?.map(({ requirementKey, status }) => [requirementKey, status]) ?? []);
 
-  items.push({
-    key: 'review:pending',
-    label:
-      pendingReviews === 0
-        ? 'AI suggestions reviewed'
-        : `Review ${pendingReviews} AI suggestion${pendingReviews === 1 ? '' : 's'}`,
-    weight: REVIEW_ITEM_WEIGHT,
-    done: pendingReviews === 0,
-    // Required: unreviewed AI output is the exact risk this queue exists to
-    // remove. A property is not ready to face guests while a hallucination
-    // might still be one tap from going live.
-    required: true,
-    href: '/dashboard/updates',
+  const categories = READINESS_CATEGORIES.map((category) => {
+    const requirements = KNOWLEDGE_REQUIREMENTS.filter((requirement) => requirement.category === category.key);
+    const missing = requirements
+      .filter((requirement) => (statuses.get(requirement.key) ?? 'missing') !== 'satisfied' && (statuses.get(requirement.key) ?? 'missing') !== 'not_applicable')
+      .map(({ key, label, why }) => ({ key, required: true, requirementKey: key, label, why }));
+    const credit = requirements.reduce(
+      (sum, requirement) => sum + CREDIT[statuses.get(requirement.key) ?? 'missing'],
+      0,
+    ) / requirements.length;
+
+    return {
+      key: category.key,
+      label: category.label,
+      weight: category.weight,
+      earned: Number((category.weight * credit * 100).toFixed(2)),
+      missing,
+    };
   });
 
-  if (input.published === false) {
-    items.push({
-      key: 'published',
-      label: 'Publish the guide',
-      weight: 8,
-      done: false,
-      required: false,
-      href: `/dashboard/properties/${propertyId}`,
-    });
-  }
-
-  // Partial credit for partially-complete cards would mean the score and the
-  // binary checklist disagree, which is the drift the backlog warns about. So
-  // the score is the plain weighted fraction of the same done/not-done items the
-  // host sees listed.
-  const totalWeight = items.reduce((a, i) => a + i.weight, 0);
-  const doneWeight = items.reduce((a, i) => a + (i.done ? i.weight : 0), 0);
-  const score = totalWeight === 0 ? 0 : Math.round((doneWeight / totalWeight) * 100);
-
-  const missing = items
-    .filter((i) => !i.done)
-    .sort((a, b) => (a.required === b.required ? b.weight - a.weight : a.required ? -1 : 1));
-
-  const ready = items.filter((i) => i.required).every((i) => i.done);
+  const score = Number(categories.reduce((sum, category) => sum + category.earned, 0).toFixed(2));
+  const missing = categories.flatMap((category) => category.missing);
+  const ready = missing.length === 0;
   const label: Readiness['label'] = ready ? 'Ready to share' : score >= 70 ? 'Almost there' : 'Needs work';
 
-  return { score, label, items, missing, pendingReviews, ready };
+  return {
+    score,
+    categories,
+    missing,
+    pendingReviews: input.pendingReviews ?? 0,
+    ready,
+    label,
+  };
 }
