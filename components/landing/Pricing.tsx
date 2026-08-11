@@ -4,6 +4,9 @@ import styles from './landing.module.css';
 
 const TIERS = [
   { name: 'Starter', properties: '1 property', monthly: 29, conversations: 50, popular: false },
+  // `popular` no longer prints a "most chosen" badge -- there is no documented
+  // usage data behind that claim. It still marks the recommended tier: the one
+  // panel that opens by default and gets the primary-styled CTA.
   { name: 'Pro', properties: '2-5 properties', monthly: 69, conversations: 200, popular: true },
   { name: 'Growth', properties: '6-10 properties', monthly: 119, conversations: 500, popular: false },
   { name: 'Scale', properties: '11-15 properties', monthly: 169, conversations: 800, popular: false },
@@ -50,9 +53,6 @@ export function Pricing() {
               dataAttrs={{ 'data-featured': tier.popular ? '' : undefined }}
             >
               <div className={styles.pricingRail}>
-                <span className={styles.pricingFlag} data-visible={tier.popular ? '' : undefined}>
-                  Most chosen
-                </span>
                 <h3 className={styles.pricingTier}>{tier.name}</h3>
                 <p className={styles.pricingPrice}>
                   <span className={styles.pricingAmount}>${tier.monthly}</span>

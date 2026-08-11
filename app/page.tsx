@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getUser } from '@/lib/auth/guards';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { Hero } from '@/components/landing/Hero';
+import { Trust } from '@/components/landing/Trust';
 import { WhoStrip } from '@/components/landing/WhoStrip';
 import { Benefits } from '@/components/landing/Benefits';
 import { System } from '@/components/landing/System';
@@ -57,6 +58,10 @@ export const metadata: Metadata = {
 // The standalone gallery section was folded into the hero and the "demo video
 // coming soon" placeholder was removed -- an empty state on a marketing page
 // costs more trust than the section earns.
+//
+// <Trust> sits directly under the hero because the objection it answers (what
+// happens when the assistant does not know) is the one a cold visitor has
+// before they will read a benefit, let alone a price.
 export default async function Home() {
   const user = await getUser();
   if (user) redirect('/dashboard');
@@ -65,6 +70,7 @@ export default async function Home() {
     <main>
       <LandingHeader />
       <Hero />
+      <Trust />
       <WhoStrip />
       <Benefits />
       <System />

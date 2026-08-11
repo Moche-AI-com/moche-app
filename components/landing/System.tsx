@@ -1,47 +1,44 @@
+import Image from 'next/image';
+import fortMyers from '@/public/landing/moche-guest-portal-fort-myers.webp';
+import serviceReport from '@/public/landing/moche-service-report-example.webp';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
 
-// The page went hero -> four benefit lines -> offer -> price with nothing in
-// between explaining what the product actually is or does, so a visitor who
-// was not already sold had to infer the mechanics from the FAQ. This section
-// carries that weight: three steps for how it runs, then a plain register of
-// the parts of the system.
+// Four steps, rewritten away from the previous abstract "how it works" copy.
 //
-// Copy is deliberately short. The first pass wrote three-sentence steps and a
-// full sentence per part, and at six parts plus three steps that put ~180 words
-// of body text in one section -- the density undid the point of unboxing the
-// benefits above it. Each step is now one line of mechanics plus one line of
-// consequence, and each part is a single clause.
-//
-// Every claim here is already made elsewhere on the page or in the FAQ
-// (platform-agnostic portal, completeness score, cited answers, escalation on
-// low confidence, the concierge/maintenance/review/owner workflows). Nothing
-// new is promised and no numbers are invented.
+// Two claims were removed rather than reworded, because neither can be proved
+// from shipped behaviour on a public page: the 20-minute setup time (no
+// measured, approved metric) and "answers cite the source" (nothing in the
+// supplied guest-facing screenshot shows a guest seeing citations). The
+// escalation claim survives because the product routes unresolved questions to
+// the host, which is what the fourth step and the service report both show.
 const STEPS = [
   {
     n: '01',
-    title: 'Load what you know',
-    detail:
-      'Manual, Wi-Fi, quirks, check-in, parking, rules. A completeness score shows the gaps worth filling first. Most hosts finish in 20 minutes.',
+    title: 'Add what you know',
+    detail: 'Bring together property details, house rules, and stay information.',
   },
   {
     n: '02',
-    title: 'Give guests one link',
-    detail:
-      'One QR code or link per stay. No app, no guest login, no PMS — the same on Airbnb, Vrbo, or direct.',
+    title: 'Review guest-facing information',
+    detail: 'Keep the property knowledge your guests rely on accurate and up to date.',
   },
   {
     n: '03',
-    title: 'Stay in the loop, not in the thread',
-    detail:
-      'Answers come from your own documents and cite the source. Low confidence escalates to you instead of guessing.',
+    title: 'Give guests one place to ask',
+    detail: 'Guests can get help during their stay without another message thread.',
+  },
+  {
+    n: '04',
+    title: 'Step in when it matters',
+    detail: 'Moche routes unresolved or restricted questions back to the host.',
   },
 ] as const;
 
 const PARTS = [
   { title: 'Property Brain', detail: 'The per-property knowledgebase every answer is drawn from.' },
   { title: 'Guest portal', detail: 'One link per stay, on any booking platform.' },
-  { title: 'Concierge requests', detail: 'Late checkout, towels, recommendations — captured and routed.' },
+  { title: 'Concierge requests', detail: 'Late checkout, towels, recommendations, captured and routed.' },
   { title: 'Maintenance triage', detail: 'Issues arrive with detail and priority attached.' },
   { title: 'Review prompts', detail: 'Timed to when a guest will actually leave one.' },
   { title: 'Owner insight', detail: 'What guests keep asking, per property, over time.' },
@@ -55,7 +52,7 @@ export function System() {
           How it works
         </Reveal>
         <Reveal as="h2" id="system-heading" className={styles.sectionHeading}>
-          Live before your next check-in
+          Ready before your next check-in
         </Reveal>
 
         <ol className={styles.steps}>
@@ -72,6 +69,40 @@ export function System() {
             </Reveal>
           ))}
         </ol>
+
+        {/* Both images are real product output, sanitized before commit, and
+            lazy-loaded: they sit well below the fold. */}
+        <div className={styles.systemProof}>
+          <Reveal as="figure" className={styles.proofFigure}>
+            <Image
+              src={fortMyers}
+              alt="The Moche guest portal for a second property, Fort Myers Vacation House, showing the same set of help cards as the first property."
+              width={716}
+              height={900}
+              sizes="(min-width: 900px) 40vw, 90vw"
+              className={styles.proofImage}
+              loading="lazy"
+            />
+            <figcaption className={styles.proofCaption}>
+              The same guest experience, shaped by each property&apos;s own information.
+            </figcaption>
+          </Reveal>
+
+          <Reveal as="figure" delay={80} className={styles.proofFigure}>
+            <Image
+              src={serviceReport}
+              alt="A Moche service report for a leaking bathroom faucet, listing the property, type, urgency, status, reported time, location, reported issue, access instructions, guest availability, likely causes, suggested parts, and a timeline."
+              width={644}
+              height={900}
+              sizes="(min-width: 900px) 40vw, 90vw"
+              className={styles.proofImage}
+              loading="lazy"
+            />
+            <figcaption className={styles.proofCaption}>
+              When a guest reports a problem, it reaches you with the detail you need to act on it.
+            </figcaption>
+          </Reveal>
+        </div>
 
         <Reveal as="h3" className={styles.partsHeading}>
           What is running underneath
