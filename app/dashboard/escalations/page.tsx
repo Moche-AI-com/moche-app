@@ -1,6 +1,6 @@
-import { requireSession } from '@/lib/auth/guards';
+import { getPropertyAccess, requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { EscalationsList, type EscalationRowData } from './EscalationsList';
+import { EscalationInbox, type EscalationRowData } from '@/components/dashboard/EscalationInbox';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,9 @@ export default async function EscalationsPage({
     .is('deleted_at', null)
     .order('display_name', { ascending: true });
 
-  const propList = properties ?? [];
+  const accessible = await Promise.all((properties ?? []).map((property) => getPropertyAccess(property.id as string)));
+  const capabilities = new Map(accessible.filter((access): access is NonNullable<typeof access> => Boolean(access && access.can.receiveEscalations)).map((access) => [access.property.id, access]));
+  const propList = (properties ?? []).filter((property) => capabilities.has(property.id as string));
   const propMap = new Map<string, string>(propList.map((p) => [p.id, p.display_name as string]));
   const propertyIds = propList.map((p) => p.id);
 
@@ -77,11 +79,12 @@ export default async function EscalationsPage({
         </div>
       </div>
 
-      <EscalationsList
+      <EscalationInbox
         rows={rows}
         properties={propList.map((p) => ({ id: p.id as string, name: p.display_name as string }))}
         openCountByProperty={Object.fromEntries(openCountByProperty)}
         activeFilter={activeFilter}
+        propertyPermissions={Object.fromEntries([...capabilities.entries()].map(([id, access]) => [id, { canReceiveEscalations: access.can.receiveEscalations, canReplyGuests: access.can.replyGuests, canEditBrain: access.can.editBrain }]))}
       />
     </div>
   );

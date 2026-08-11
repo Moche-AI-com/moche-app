@@ -24,13 +24,15 @@ const CATEGORY_OPTIONS: { value: string; label: string }[] = [
 export function EscalationAnswerForm({
   escalationId,
   defaultValue,
+  canTeachBrain = true,
 }: {
   escalationId: string;
   defaultValue?: string;
+  canTeachBrain?: boolean;
 }) {
   const [state, action] = useFormState<EscalationActionState, FormData>(answerEscalationAction, {});
   // Default to teaching the Brain — most answers are reusable. Host can uncheck for one-offs.
-  const [saveToBrain, setSaveToBrain] = useState(true);
+  const [saveToBrain, setSaveToBrain] = useState(canTeachBrain);
 
   return (
     <form action={action} style={{ display: 'flex', flexDirection: 'column', gap: '.85rem' }}>
@@ -57,8 +59,8 @@ export function EscalationAnswerForm({
         style={{ resize: 'vertical' }}
       />
 
-      {/* Save-to-Brain choice: teach the Brain (reusable) vs one-off reply. */}
-      <div
+      {/* Save-to-Brain choice is visible only to members allowed to edit this Brain. */}
+      {canTeachBrain && <div
         style={{
           border: '1px solid rgba(255,255,255,.08)',
           borderRadius: '.7rem',
@@ -116,13 +118,13 @@ export function EscalationAnswerForm({
             </span>
           </div>
         )}
-      </div>
+      </div>}
 
       <div>
         <SubmitButton className="btn btn-primary">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}>
             <MessageSquareReply size={16} aria-hidden />
-            {saveToBrain ? 'Send reply & teach the Brain' : 'Send reply'}
+            {canTeachBrain && saveToBrain ? 'Send reply & teach the Brain' : 'Send reply'}
           </span>
         </SubmitButton>
       </div>

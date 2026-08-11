@@ -83,3 +83,23 @@ describe('assertPublicUrl', () => {
     expect(isSsrfError(new Error('x'))).toBe(false);
   });
 });
+
+describe('expanded SSRF range protections', () => {
+  it('blocks protocol, documentation, benchmarking and future-use IPv4 ranges', () => {
+    for (const ip of ['192.0.0.8', '192.0.2.5', '198.18.0.1', '198.19.255.254', '198.51.100.3', '203.0.113.9', '240.0.0.1']) {
+      expect(isBlockedIp(ip), ip).toBe(true);
+    }
+  });
+
+  it('blocks NAT64, 6to4 and mapped private IPv6 forms', () => {
+    for (const ip of ['64:ff9b::808:808', '2002:c000:0204::1', '::ffff:192.168.1.2']) {
+      expect(isBlockedIp(ip), ip).toBe(true);
+    }
+  });
+
+  it('rejects shorthand, octal, hex and decimal-integer IPv4 host forms before DNS', async () => {
+    for (const url of ['http://0177.0.0.1/', 'http://0x7f000001/', 'http://2130706433/', 'http://127.1/']) {
+      await expect(assertPublicUrl(url), url).rejects.toBeInstanceOf(SsrfError);
+    }
+  });
+});

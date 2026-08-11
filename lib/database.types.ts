@@ -1118,6 +1118,30 @@ export type Database = {
           },
         ]
       }
+      ingestion_artifacts: {
+        Row: { agrees_with_primary: boolean | null; byte_length: number | null; content_sha256: string | null; created_at: string; error_reason: string | null; http_status: number | null; id: string; is_shadow: boolean; latency_ms: number | null; profile: string; property_id: string; provider: string; similarity_score: number | null; source_id: string | null; text_length: number; truncated: boolean; job_id: string | null }
+        Insert: { agrees_with_primary?: boolean | null; byte_length?: number | null; content_sha256?: string | null; created_at?: string; error_reason?: string | null; http_status?: number | null; id?: string; is_shadow?: boolean; latency_ms?: number | null; profile: string; property_id: string; provider: string; similarity_score?: number | null; source_id?: string | null; text_length?: number; truncated?: boolean; job_id?: string | null }
+        Update: { agrees_with_primary?: boolean | null; byte_length?: number | null; content_sha256?: string | null; created_at?: string; error_reason?: string | null; http_status?: number | null; id?: string; is_shadow?: boolean; latency_ms?: number | null; profile?: string; property_id?: string; provider?: string; similarity_score?: number | null; source_id?: string | null; text_length?: number; truncated?: boolean; job_id?: string | null }
+        Relationships: []
+      }
+      ingestion_sources: {
+        Row: { created_at: string; created_by: string | null; document_id: string | null; enabled: boolean; id: string; kind: Database["public"]["Enums"]["ingestion_source_kind"]; label: string; last_acquired_at: string | null; last_status: string | null; profile: string; property_id: string; updated_at: string; url: string | null }
+        Insert: { created_at?: string; created_by?: string | null; document_id?: string | null; enabled?: boolean; id?: string; kind: Database["public"]["Enums"]["ingestion_source_kind"]; label: string; last_acquired_at?: string | null; last_status?: string | null; profile: string; property_id: string; updated_at?: string; url?: string | null }
+        Update: { created_at?: string; created_by?: string | null; document_id?: string | null; enabled?: boolean; id?: string; kind?: Database["public"]["Enums"]["ingestion_source_kind"]; label?: string; last_acquired_at?: string | null; last_status?: string | null; profile?: string; property_id?: string; updated_at?: string; url?: string | null }
+        Relationships: []
+      }
+      source_documents: {
+        Row: { artifact_id: string; created_at: string; id: string; language: string | null; property_id: string; text: string; text_sha256: string; title: string }
+        Insert: { artifact_id: string; created_at?: string; id?: string; language?: string | null; property_id: string; text: string; text_sha256: string; title: string }
+        Update: { artifact_id?: string; created_at?: string; id?: string; language?: string | null; property_id?: string; text?: string; text_sha256?: string; title?: string }
+        Relationships: []
+      }
+      extracted_facts: {
+        Row: { confidence: number | null; conflict_with: string | null; created_at: string; field_path: string; id: string; label: string; property_id: string; proposed_update_id: string | null; reviewed_at: string | null; sensitivity: Database["public"]["Enums"]["extracted_fact_sensitivity"]; source_document_id: string; status: Database["public"]["Enums"]["extracted_fact_status"]; value: Json }
+        Insert: { confidence?: number | null; conflict_with?: string | null; created_at?: string; field_path: string; id?: string; label: string; property_id: string; proposed_update_id?: string | null; reviewed_at?: string | null; sensitivity?: Database["public"]["Enums"]["extracted_fact_sensitivity"]; source_document_id: string; status?: Database["public"]["Enums"]["extracted_fact_status"]; value: Json }
+        Update: { confidence?: number | null; conflict_with?: string | null; created_at?: string; field_path?: string; id?: string; label?: string; property_id?: string; proposed_update_id?: string | null; reviewed_at?: string | null; sensitivity?: Database["public"]["Enums"]["extracted_fact_sensitivity"]; source_document_id?: string; status?: Database["public"]["Enums"]["extracted_fact_status"]; value?: Json }
+        Relationships: []
+      }
       legal_acceptances: {
         Row: {
           accepted_at: string
@@ -2583,6 +2607,9 @@ export type Database = {
       feedback_value: "helpful" | "not_helpful"
       host_preference: "loved" | "neutral" | "disliked"
       ingestion_kind: "document" | "url"
+      ingestion_source_kind: "property_site" | "listing" | "manual_site" | "local_source" | "document"
+      extracted_fact_status: "extracted" | "validated" | "conflict" | "proposed" | "rejected"
+      extracted_fact_sensitivity: "normal" | "sensitive"
       intent_type:
         | "information"
         | "wifi"
@@ -2798,6 +2825,9 @@ export const Constants = {
       feedback_value: ["helpful", "not_helpful"],
       host_preference: ["loved", "neutral", "disliked"],
       ingestion_kind: ["document", "url"],
+      ingestion_source_kind: ["property_site", "listing", "manual_site", "local_source", "document"],
+      extracted_fact_status: ["extracted", "validated", "conflict", "proposed", "rejected"],
+      extracted_fact_sensitivity: ["normal", "sensitive"],
       intent_type: [
         "information",
         "wifi",

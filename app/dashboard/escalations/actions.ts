@@ -220,7 +220,10 @@ export async function answerEscalationAction(
   if (!esc) return { error: 'Escalation not found.' };
 
   const access = await requirePropertyAccess(esc.property_id);
-  if (!access.can.editBrain) {
+  if (!access.can.receiveEscalations || !access.can.replyGuests) {
+    return { error: 'You do not have permission to reply to guests for this property.' };
+  }
+  if (convertToBrain && !access.can.editBrain) {
     return { error: 'You do not have permission to teach this property Brain.' };
   }
 

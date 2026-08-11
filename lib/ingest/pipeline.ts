@@ -6,6 +6,7 @@ import { chunkText } from '@/lib/ingest/chunk';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { log } from '@/lib/log';
 import { logAiUsage } from '@/lib/ai/usage';
+import { ensureIngestionSource, recordManualSource } from '@/lib/acquisition/audit';
 
 type Client = SupabaseClient<Database>;
 type BrainCategory = Database['public']['Enums']['brain_category'];
@@ -38,6 +39,17 @@ export interface IngestResult {
 // Untrusted content (docs/URLs) is stored as reference DATA only.
 export async function ingestText(client: Client, input: IngestInput): Promise<IngestResult> {
   const provider = getAIProvider();
+
+  // The pipeline is called only for a host edit or an approved proposal. Record the
+  // source copy independently from Brain rows so the original reference remains auditable.
+  const sourceId = await ensureIngestionSource(client, {
+    propertyId: input.propertyId, kind: input.documentId ? 'document' : input.sourceUrl ? 'listing' : 'manual_site',
+    url: input.sourceUrl ?? null, documentId: input.documentId ?? null, profile: 'approved_pipeline_v1',
+    label: input.title, createdBy: input.createdBy ?? null,
+  });
+  await recordManualSource(client, {
+    propertyId: input.propertyId, sourceId, profile: 'approved_pipeline_v1', title: input.title, text: input.text, provider: 'approved-pipeline',
+  });
 
   // 1. Create the brain item in a processing state.
   const { data: item, error: itemErr } = await client

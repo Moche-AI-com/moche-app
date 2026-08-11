@@ -118,6 +118,10 @@ export const serverEnv = {
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',
   firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev',
+  // Optional self-hosted Crawl4AI endpoint. No provider is attempted until this is configured.
+  crawl4aiBaseUrl: process.env.CRAWL4AI_BASE_URL ?? '',
+  // Optional non-blocking provider comparison. The named provider must be configured.
+  acquisitionShadowProvider: process.env.ACQUISITION_SHADOW_PROVIDER ?? '',
 
   resendApiKey: process.env.RESEND_API_KEY ?? '', // Server-only. Email delivery via Resend.
 
