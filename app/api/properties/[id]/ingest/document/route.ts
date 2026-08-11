@@ -3,11 +3,10 @@ import { getPropertyAccess, getSessionContext } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractText } from '@/lib/ingest/extract';
-import { segmentSourceContent } from '@/lib/ingest/segment';
 import { createProposal } from '@/lib/brain/proposal-store';
-import { autofillBrainFromSegments, isInitialSetup } from '@/lib/brain/setup-autofill';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
+import { ensureIngestionSource, recordManualSource } from '@/lib/acquisition/audit';
 import type { Database } from '@/lib/database.types';
 
 export const runtime = 'nodejs';
@@ -26,12 +25,7 @@ const VALID_CATEGORIES = new Set<Database['public']['Enums']['brain_category']>(
   'transportation',
 ]);
 
-/**
- * Document ingestion seeds an empty draft Brain with validated sections, then
- * returns to proposals for every later import. The first-import exception avoids
- * an unusable empty setup state; once any Brain item exists, a host approval is
- * required before new extracted material can become guest-visible.
- */
+/** Document content is untrusted reference data and always becomes a host-reviewed proposal. */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const access = await getPropertyAccess(params.id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
@@ -103,37 +97,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const title = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 200) || 'Document';
 
-  // 4. The narrow first-setup exception files each validated source section
-  // through the normal ingestion pipeline; subsequent documents remain drafts.
-  if (await isInitialSetup(admin, params.id)) {
-    const segmented = await segmentSourceContent(text);
-    const result = await autofillBrainFromSegments(admin, {
-      propertyId: params.id,
-      hostAccountId: access.property.host_account_id,
-      actorProfileId: ctx?.user.id ?? null,
-      sourceType: 'document',
-      sourceRef: documentId,
-      segments: segmented.segments,
-    });
-    await supabase
-      .from('documents')
-      .update({
-        status: result.created > 0 ? 'ready' : 'failed',
-        brain_item_id: result.filed[0]?.brainItemId ?? null,
-        error_detail: result.created > 0 ? null : 'ingest_failed',
-      } as never)
-      .eq('id', documentId);
-    const sectionCount = new Set(result.filed.map((item) => item.category)).size;
-    return NextResponse.json({
-      ok: true,
-      autofilled: true,
-      created: result.created,
-      filed: result.filed,
-      message: `Added ${result.created} details to your Brain, sorted into ${sectionCount} sections. Check anything that looks off.`,
-    });
-  }
+  const sourceId = await ensureIngestionSource(admin, {
+    propertyId: params.id, kind: 'document', documentId, profile: 'document_url_v1', label: title, createdBy: ctx?.user.id ?? null,
+  });
+  await recordManualSource(admin, { propertyId: params.id, sourceId, profile: 'document_url_v1', title, text, provider: 'uploaded-document' });
 
-  // 5. Once the Brain has content, preserve the normal human approval boundary.
+  // Imported document content always remains a host-reviewed proposal.
   try {
     const proposal = await createProposal(admin, {
       propertyId: params.id,

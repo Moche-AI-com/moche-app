@@ -1,7 +1,8 @@
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
+import { LifecycleToggle, parseLifecycleView } from '@/components/dashboard/LifecycleToggle';
 import { ExtrasOrdersClient, type ExtrasOrderRow } from './ExtrasOrdersClient';
+import { isTerminalExtrasStatus, type ExtrasFulfillmentStatus } from '@/lib/extras/lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,30 +34,22 @@ export default async function ExtrasPage({ searchParams }: { searchParams?: { vi
   let manageable = new Set<string>(isOwner ? propIds : []);
 
   if (propIds.length) {
-    const [{ data: rows }, activeRes, pastRes] = await Promise.all([
-      supabase
-        .from('extras_orders')
-        .select(
-          'id, property_id, stay_id, escalation_id, item_title, item_price_text, quantity, guest_note, host_note, status, created_at, archived_at',
-        )
-        .in('property_id', propIds)
-        .eq('lifecycle_status', lifecycleStatusFor(view))
-        .order('created_at', { ascending: false })
-        .limit(200),
-      supabase
-        .from('extras_orders')
-        .select('id', { count: 'exact', head: true })
-        .in('property_id', propIds)
-        .eq('lifecycle_status', 'active'),
-      supabase
-        .from('extras_orders')
-        .select('id', { count: 'exact', head: true })
-        .in('property_id', propIds)
-        .eq('lifecycle_status', 'archived'),
-    ]);
-    orders = (rows ?? []) as ExtrasOrderRow[];
-    activeCount = activeRes.count ?? 0;
-    pastCount = pastRes.count ?? 0;
+    const { data: rows } = await supabase
+      .from('extras_orders')
+      .select(
+        'id, property_id, stay_id, escalation_id, item_title, item_price_text, quantity, guest_note, host_note, fulfillment_status, request_number, quoted_amount_cents, quote_currency, scheduled_for, declined_reason, expires_at, created_at',
+      )
+      .in('property_id', propIds)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    const allOrders = (rows ?? []) as ExtrasOrderRow[];
+    orders = allOrders.filter((order) =>
+      view === 'past'
+        ? isTerminalExtrasStatus(order.fulfillment_status as ExtrasFulfillmentStatus)
+        : !isTerminalExtrasStatus(order.fulfillment_status as ExtrasFulfillmentStatus),
+    );
+    activeCount = allOrders.filter((order) => !isTerminalExtrasStatus(order.fulfillment_status as ExtrasFulfillmentStatus)).length;
+    pastCount = allOrders.filter((order) => isTerminalExtrasStatus(order.fulfillment_status as ExtrasFulfillmentStatus)).length;
 
     if (!isOwner) {
       const { data: members } = await supabase
@@ -73,8 +66,8 @@ export default async function ExtrasPage({ searchParams }: { searchParams?: { vi
       <div style={{ marginBottom: '1.1rem' }}>
         <h1 style={{ fontSize: '1.5rem', margin: '0 0 .3rem' }}>Extras</h1>
         <p className="muted" style={{ margin: 0, fontSize: '.92rem' }}>
-          Requests your guests made from the Extras list in their guide. Confirm one to let your guest know it is on the
-          way, then mark it fulfilled once it is done.
+          Requests your guests made from the Extras list in their guide. Confirm arrangements here; any payment is arranged
+          directly with the guest, outside Moche.
         </p>
       </div>
 

@@ -1,11 +1,14 @@
 import { requirePropertyAccess } from '@/lib/auth/guards';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { EscalationsList, type EscalationRowData } from '@/app/dashboard/escalations/EscalationsList';
+import { EscalationInbox, type EscalationRowData } from '@/components/dashboard/EscalationInbox';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PropertyEscalationsPage({ params }: { params: { id: string } }) {
-  const { property } = await requirePropertyAccess(params.id);
+  const propertyAccess = await requirePropertyAccess(params.id);
+  const { property } = propertyAccess;
+  if (!propertyAccess.can.receiveEscalations) redirect(`/dashboard/properties/${params.id}`);
   const supabase = createClient();
   const { data: escalations } = await supabase
     .from('escalations')
@@ -32,11 +35,12 @@ export default async function PropertyEscalationsPage({ params }: { params: { id
       <p className="muted" style={{ fontSize: '.9rem', margin: '0 0 1.25rem' }}>
         Questions your AI concierge couldn&apos;t answer on its own for this property.
       </p>
-      <EscalationsList
+      <EscalationInbox
         rows={rows}
         properties={[{ id: property.id, name: property.display_name }]}
         openCountByProperty={{ [property.id]: openCount }}
         activeFilter={property.id}
+        propertyPermissions={{ [property.id]: { canReceiveEscalations: propertyAccess.can.receiveEscalations, canReplyGuests: propertyAccess.can.replyGuests, canEditBrain: propertyAccess.can.editBrain } }}
       />
     </div>
   );

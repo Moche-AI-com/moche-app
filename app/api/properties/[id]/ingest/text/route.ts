@@ -3,18 +3,15 @@ import { getPropertyAccess, getSessionContext } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { ingestTextSchema } from '@/lib/validation';
 import { standardizeListing } from '@/lib/ingest/standardize';
-import { segmentSourceContent } from '@/lib/ingest/segment';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createProposal } from '@/lib/brain/proposal-store';
-import { autofillBrainFromSegments, isInitialSetup } from '@/lib/brain/setup-autofill';
 import { audit } from '@/lib/audit';
+import { ensureIngestionSource, recordManualSource } from '@/lib/acquisition/audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Paste / typed-text ingestion has the same narrow setup exception as URL and
-// document imports. An empty draft Brain receives validated sections directly;
-// later imports are proposals so existing guest knowledge remains host-reviewed.
+// Pasted text is source material only. It always becomes a host-reviewed proposal.
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const access = await getPropertyAccess(params.id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
@@ -36,24 +33,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const supabase = createClient();
   const admin = createAdminClient();
 
-  if (await isInitialSetup(admin, params.id)) {
-    const segmented = await segmentSourceContent(text);
-    const result = await autofillBrainFromSegments(admin, {
-      propertyId: params.id,
-      hostAccountId: access.property.host_account_id,
-      actorProfileId: ctx?.user.id ?? null,
-      sourceType: 'text_paste',
-      segments: segmented.segments,
-    });
-    const sectionCount = new Set(result.filed.map((item) => item.category)).size;
-    return NextResponse.json({
-      ok: true,
-      autofilled: true,
-      created: result.created,
-      filed: result.filed,
-      message: `Added ${result.created} details to your Brain, sorted into ${sectionCount} sections. Check anything that looks off.`,
-    });
-  }
+  const sourceId = await ensureIngestionSource(admin, {
+    propertyId: params.id, kind: 'manual_site', profile: 'manual_site_v1', label: (title && title.trim()) || 'Pasted notes', createdBy: ctx?.user.id ?? null,
+    // A manual source deliberately has no URL or stored document, so it is represented by its artifact only.
+    documentId: null,
+  });
+  // Pasted source text is untrusted reference data; it still gets an auditable artifact.
+  await recordManualSource(admin, { propertyId: params.id, sourceId, profile: 'manual_site_v1', title: (title && title.trim()) || 'Pasted notes', text, provider: 'manual-text' });
 
   // Later imports remain a single reviewable proposal. The optional
   // standardization is retained from the prior ingestion flow.

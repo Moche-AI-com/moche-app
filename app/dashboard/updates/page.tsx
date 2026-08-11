@@ -1,5 +1,7 @@
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { knowledgeQueueHref } from '@/lib/dashboard/knowledge-queue-link';
+import { resolveScope } from '@/lib/dashboard/scope';
 import { UpdateQueueClient, type ProposalRow } from './UpdateQueueClient';
 
 export const dynamic = 'force-dynamic';
@@ -18,9 +20,16 @@ export const dynamic = 'force-dynamic';
  * whether anything is waiting, and the risk being managed here (unreviewed AI
  * output going live) is the same risk regardless of which property produced it.
  */
-export default async function UpdatesPage({ searchParams }: { searchParams?: { view?: string | string[] } }) {
+export default async function UpdatesPage({
+  searchParams,
+}: {
+  searchParams?: { view?: string | string[]; property?: string | string[] };
+}) {
   const raw = Array.isArray(searchParams?.view) ? searchParams?.view[0] : searchParams?.view;
   const view: 'pending' | 'reviewed' = raw === 'reviewed' ? 'reviewed' : 'pending';
+  const requestedProperty = Array.isArray(searchParams?.property)
+    ? searchParams?.property[0]
+    : searchParams?.property;
 
   const ctx = await requireSession();
   const supabase = createClient();
@@ -32,8 +41,15 @@ export default async function UpdatesPage({ searchParams }: { searchParams?: { v
     .eq('host_account_id', ctx.account.id)
     .is('deleted_at', null);
 
-  const propIds = (properties ?? []).map((p) => p.id);
+  const allPropIds = (properties ?? []).map((p) => p.id);
   const propertyNames = Object.fromEntries((properties ?? []).map((p) => [p.id, p.display_name]));
+
+  // The ?property deep-link is resolved against the caller's already-authorized
+  // property list, so an arbitrary id in the URL narrows the view at most — it
+  // can never widen it or leak another account's rows into the counts below.
+  const scopedPropertyId = resolveScope(requestedProperty, allPropIds);
+  const propIds = scopedPropertyId ? [scopedPropertyId] : allPropIds;
+  const scopeMismatch = Boolean(requestedProperty) && !scopedPropertyId;
 
   let rows: ProposalRow[] = [];
   let pendingCount = 0;
@@ -99,6 +115,17 @@ export default async function UpdatesPage({ searchParams }: { searchParams?: { v
           When the assistant reads a listing page or a document, it drafts the details here first. Nothing reaches your
           guests until you approve it, and you can correct a draft before approving.
         </p>
+        {scopedPropertyId && (
+          <p style={{ margin: '.55rem 0 0', fontSize: '.85rem' }} data-testid="queue-scope-note">
+            Showing <strong>{propertyNames[scopedPropertyId]}</strong> only.{' '}
+            <a href={knowledgeQueueHref({ view })}>Show all properties</a>
+          </p>
+        )}
+        {scopeMismatch && (
+          <p className="muted" style={{ margin: '.55rem 0 0', fontSize: '.85rem' }} data-testid="queue-scope-invalid">
+            That property link is no longer available to you, so the full account queue is shown instead.
+          </p>
+        )}
       </div>
 
       <div
@@ -107,14 +134,14 @@ export default async function UpdatesPage({ searchParams }: { searchParams?: { v
         style={{ display: 'flex', gap: '.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}
       >
         <a
-          href="/dashboard/updates"
+          href={knowledgeQueueHref({ propertyId: scopedPropertyId })}
           className={`btn btn-sm ${view === 'pending' ? 'btn-primary' : 'btn-ghost'}`}
           aria-current={view === 'pending' ? 'page' : undefined}
         >
           Waiting for you ({pendingCount})
         </a>
         <a
-          href="/dashboard/updates?view=reviewed"
+          href={knowledgeQueueHref({ propertyId: scopedPropertyId, view: 'reviewed' })}
           className={`btn btn-sm ${view === 'reviewed' ? 'btn-primary' : 'btn-ghost'}`}
           aria-current={view === 'reviewed' ? 'page' : undefined}
         >

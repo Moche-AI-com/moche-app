@@ -23,6 +23,7 @@ export default async function EscalationDetailPage({ params }: { params: { id: s
 
   // Confirm the host can act on this property (redirects otherwise).
   const access = await requirePropertyAccess(esc.property_id);
+  if (!access.can.receiveEscalations) redirect('/dashboard/escalations');
 
   // Conversation context. messages have no host-side SELECT RLS policy (they are a
   // server-controlled artifact), so read via the service-role client after the access
@@ -93,7 +94,7 @@ export default async function EscalationDetailPage({ params }: { params: { id: s
             <p style={{ margin: 0 }}>{esc.host_response}</p>
           </div>
         ) : (
-          <EscalationAnswerForm escalationId={esc.id} defaultValue={esc.host_response ?? ''} />
+          access.can.replyGuests ? <EscalationAnswerForm escalationId={esc.id} defaultValue={esc.host_response ?? ''} canTeachBrain={access.can.editBrain} /> : <p className="muted" style={{ margin: 0 }}>You can view this escalation but do not have permission to reply to guests.</p>
         )}
       </div>
     </div>

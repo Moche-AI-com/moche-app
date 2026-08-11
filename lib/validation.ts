@@ -329,6 +329,17 @@ export const guestExtraRequestSchema = z.object({
   // offer row knows which strings are legitimate.
   variant: z.string().trim().max(120).optional(),
   language: z.string().trim().max(16).optional(),
+  // This is a preference for the host to confirm, never a booking or payment.
+  preferredFor: z.string().datetime({ offset: true }).optional(),
+});
+
+export const guestExtraUpdateSchema = z.object({
+  action: z.enum(['supply_details', 'cancel']),
+  note: z.string().trim().min(1).max(1000).optional(),
+}).superRefine((value, ctx) => {
+  if (value.action === 'supply_details' && !value.note) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Add the requested details.', path: ['note'] });
+  }
 });
 
 // Add-on — one-tap product feedback (guest path, via admin client).
