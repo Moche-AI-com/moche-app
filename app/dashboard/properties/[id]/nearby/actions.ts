@@ -45,7 +45,7 @@ export async function refreshNearbyPlacesAction(
     targetId: propertyId,
   });
 
-  revalidatePath(`/dashboard/properties/${propertyId}/nearby`);
+  revalidatePath(`/dashboard/properties/${propertyId}/local`);
   return { ok: true, found: result.found };
 }
 
@@ -86,6 +86,6 @@ export async function updateNearbyPlaceAction(
     return { error: 'Could not update that place.' };
   }
 
-  revalidatePath(`/dashboard/properties/${propertyId}/nearby`);
+  revalidatePath(`/dashboard/properties/${propertyId}/local`);
   return { ok: true };
 }

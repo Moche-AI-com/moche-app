@@ -3,21 +3,9 @@
 import { useState } from 'react';
 import { Check, EyeOff, Heart, MapPin, Pencil, Plus, X } from 'lucide-react';
 import { addManualLocalPlaceAction, updateLocalPlaceAction } from './actions';
+import type { LocalPlaceRow } from '@/lib/local/canonical';
 
-export interface LocalPlaceRow {
-  recommendationId: string;
-  name: string;
-  category: string;
-  address: string | null;
-  status: 'suggested' | 'approved' | 'hidden';
-  hostNote: string | null;
-  tags: string[];
-  intentTags: string[];
-  isFavorite: boolean;
-  distanceMiles: number | null;
-  lastRefreshedAt: string | null;
-  provider: string;
-}
+export type { LocalPlaceRow } from '@/lib/local/canonical';
 
 function PlaceEditor({ propertyId, place }: { propertyId: string; place: LocalPlaceRow }) {
   const [editing, setEditing] = useState(false);

@@ -1,6 +1,8 @@
 export type PlaceRecommendationStatus = 'suggested' | 'approved' | 'hidden';
 
 export interface RankedPlace {
+  /** Stable canonical relationship id; final tie-break for deterministic ranking. */
+  recommendationId: string;
   status: PlaceRecommendationStatus;
   intentTags: string[];
   hostNote: string | null;
@@ -46,7 +48,9 @@ export function comparePlacesForGuest(a: RankedPlace, b: RankedPlace, guestInten
 
   const refreshed = freshness(b.lastRefreshedAt) - freshness(a.lastRefreshedAt);
   if (refreshed) return refreshed;
-  return a.name.localeCompare(b.name);
+  const name = a.name.localeCompare(b.name);
+  if (name) return name;
+  return a.recommendationId.localeCompare(b.recommendationId);
 }
 
 export function rankPlacesForGuest(places: RankedPlace[], guestIntentTags: readonly string[] = []): RankedPlace[] {

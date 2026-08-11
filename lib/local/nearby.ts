@@ -2,6 +2,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { geoNearbyPlaces } from '@/lib/local/geo';
 import { log } from '@/lib/log';
+import { normalizePlaceName } from '@/lib/local/dedupe';
 
 // Refresh cadence: a property's nearby set is re-fetched from the geo provider
 // (Mapbox when a key is present, Overpass otherwise) at most once every 30 days
@@ -69,6 +70,60 @@ export async function refreshNearbyPlaces(
   if (error) {
     log.warn('nearby_upsert_failed', { error: error.message });
     return { ok: false, found: 0, error: error.message };
+  }
+
+  // Mapbox search data is temporary-use and intentionally stays in the legacy
+  // cache. OSM places are durable, so mirror those results into the canonical
+  // tables. Relationship upserts use `ignoreDuplicates` to retain every host
+  // decision (status, note, tags, intents, favorite) on a subsequent refresh.
+  if (provider === 'osm') {
+    const canonicalRows = places.map((place) => ({
+      provider: 'osm',
+      provider_place_id: place.placeId,
+      name: place.name,
+      normalized_name: normalizePlaceName(place.name),
+      category: place.category,
+      address: place.address ?? null,
+      lat: place.lat,
+      lon: place.lng,
+      phone: place.phone ?? null,
+      website: place.url ?? null,
+      provider_payload: null,
+      last_refreshed_at: now,
+    }));
+    const { data: canonicalPlaces, error: canonicalError } = await admin
+      .from('places')
+      .upsert(canonicalRows as never, { onConflict: 'provider,provider_place_id', ignoreDuplicates: false })
+      .select('id, provider_place_id');
+    if (canonicalError) {
+      log.warn('canonical_places_upsert_failed', { propertyId, error: canonicalError.message });
+      return { ok: false, found: 0, error: canonicalError.message };
+    }
+
+    const idsByProviderId = new Map((canonicalPlaces ?? []).map((place) => [place.provider_place_id, place.id]));
+    const recommendationRows = places.flatMap((place) => {
+      const placeId = idsByProviderId.get(place.placeId);
+      return placeId
+        ? [{
+          property_id: propertyId,
+          place_id: placeId,
+          status: 'approved',
+          distance_miles: place.distanceMeters / 1609.344,
+        }]
+        : [];
+    });
+    if (recommendationRows.length > 0) {
+      const { error: relationshipError } = await admin
+        .from('property_place_recommendations')
+        .upsert(recommendationRows as never, {
+          onConflict: 'property_id,place_id',
+          ignoreDuplicates: true,
+        });
+      if (relationshipError) {
+        log.warn('canonical_place_relationship_upsert_failed', { propertyId, error: relationshipError.message });
+        return { ok: false, found: 0, error: relationshipError.message };
+      }
+    }
   }
 
   log.info('nearby_refreshed', { provider, found: rows.length });

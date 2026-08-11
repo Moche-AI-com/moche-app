@@ -23,29 +23,47 @@ export async function GET(_req: Request, { params }: { params: { slug: string; i
   }
 
   const { data: place, error } = await admin
-    .from('nearby_places')
-    .select('id, name, category, address, phone, url, rating, review_count, price_level, distance_m, host_notes, host_starred, lat, lng, place_id')
+    .from('property_place_recommendations')
+    .select(`
+      id,
+      host_note,
+      is_favorite,
+      distance_miles,
+      places!inner(name, category, address, phone, website, lat, lon, provider_place_id)
+    `)
     .eq('id', params.id)
     .eq('property_id', session.propertyId)
-    .eq('hidden', false)
+    .neq('status', 'hidden')
     .maybeSingle();
 
   if (error || !place) {
     return NextResponse.json({ error: 'not_found', verified: false }, { status: 404 });
   }
+  const canonical = place as typeof place & {
+    places: {
+      name: string;
+      category: string;
+      address: string | null;
+      phone: string | null;
+      website: string | null;
+      lat: number | null;
+      lon: number | null;
+      provider_place_id: string | null;
+    };
+  };
 
   // Build outbound links ourselves from trusted fields only — never surface a raw
   // model- or host-provided string as an href without validation (WS-5 security).
-  const mapsUrl = place.lat != null && place.lng != null
-    ? `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`
-    : place.place_id
-      ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(place.place_id)}`
+  const mapsUrl = canonical.places.lat != null && canonical.places.lon != null
+    ? `https://www.google.com/maps/search/?api=1&query=${canonical.places.lat},${canonical.places.lon}`
+    : canonical.places.address
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(canonical.places.address)}`
       : null;
 
   const websiteUrl = (() => {
-    if (!place.url) return null;
+    if (!canonical.places.website) return null;
     try {
-      const u = new URL(place.url);
+      const u = new URL(canonical.places.website);
       return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null;
     } catch {
       return null;
@@ -53,30 +71,30 @@ export async function GET(_req: Request, { params }: { params: { slug: string; i
   })();
 
   const telHref = (() => {
-    if (!place.phone) return null;
-    const digits = place.phone.replace(/[^\d+]/g, '');
+    if (!canonical.places.phone) return null;
+    const digits = canonical.places.phone.replace(/[^\d+]/g, '');
     return digits.length >= 7 ? `tel:${digits}` : null;
   })();
 
   void capture('place_link_click', session.propertyId, {
     property_id: session.propertyId,
     place_id: place.id,
-    category: place.category,
+    category: canonical.places.category,
   });
 
   return NextResponse.json({
     verified: true,
     place: {
       id: place.id,
-      name: place.name,
-      category: place.category,
-      address: place.address,
-      rating: place.rating,
-      reviewCount: place.review_count,
-      priceLevel: place.price_level,
-      distanceM: place.distance_m,
-      hostNote: place.host_notes,
-      hostFavorite: place.host_starred,
+      name: canonical.places.name,
+      category: canonical.places.category,
+      address: canonical.places.address,
+      rating: null,
+      reviewCount: null,
+      priceLevel: null,
+      distanceM: canonical.distance_miles == null ? null : canonical.distance_miles * 1609.344,
+      hostNote: canonical.host_note,
+      hostFavorite: canonical.is_favorite,
       mapsUrl,
       websiteUrl,
       telHref,

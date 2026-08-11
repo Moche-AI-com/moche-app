@@ -16,7 +16,7 @@ export interface ProviderPlace {
   distanceMeters: number | null;
 }
 
-export type RecoveryStep = 'category_retry' | 'wider_radius' | 'osm_fallback' | 'prefix_match' | 'browse' | 'manual';
+export type RecoveryStep = 'exact_match' | 'category_retry' | 'wider_radius' | 'osm_fallback' | 'prefix_match' | 'browse' | 'manual';
 
 export interface RecoveryResult {
   results: ProviderPlace[];
@@ -47,19 +47,19 @@ export async function searchWithRecovery(
 ): Promise<RecoveryResult> {
   const initial = { query, category, radiusMeters: 8_000 };
   const exact = await providers.mapbox(initial);
-  if (exact.length) return { results: exact, step: 'category_retry', browseCategory: null, manualAvailable: true };
+  if (exact.length) return { results: exact, step: 'exact_match', browseCategory: null, manualAvailable: true };
 
   const withoutCategory = await providers.mapbox({ ...initial, category: null });
-  if (withoutCategory.length) return { results: withoutCategory, step: 'wider_radius', browseCategory: null, manualAvailable: true };
+  if (withoutCategory.length) return { results: withoutCategory, step: 'category_retry', browseCategory: null, manualAvailable: true };
 
   const wider = await providers.mapbox({ ...initial, category: null, radiusMeters: 25_000 });
-  if (wider.length) return { results: wider, step: 'osm_fallback', browseCategory: null, manualAvailable: true };
+  if (wider.length) return { results: wider, step: 'wider_radius', browseCategory: null, manualAvailable: true };
 
   const osm = await providers.osm({ ...initial, category: null, radiusMeters: 25_000 });
-  if (osm.length) return { results: osm, step: 'prefix_match', browseCategory: null, manualAvailable: true };
+  if (osm.length) return { results: osm, step: 'osm_fallback', browseCategory: null, manualAvailable: true };
 
   const prefix = (await providers.osm({ ...initial, category: null, radiusMeters: 40_000 })).filter((place) => prefixMatches(query, place));
-  if (prefix.length) return { results: prefix, step: 'browse', browseCategory: null, manualAvailable: true };
+  if (prefix.length) return { results: prefix, step: 'prefix_match', browseCategory: null, manualAvailable: true };
 
   return { results: [], step: 'manual', browseCategory: category ?? 'restaurant', manualAvailable: true };
 }

@@ -60,6 +60,8 @@ create index if not exists property_place_recommendations_property_status_idx
   on public.property_place_recommendations (property_id, status);
 create index if not exists property_place_recommendations_place_idx
   on public.property_place_recommendations (place_id);
+create index if not exists property_place_recommendations_approved_by_idx
+  on public.property_place_recommendations (approved_by);
 
 drop trigger if exists property_place_recommendations_set_updated_at on public.property_place_recommendations;
 create trigger property_place_recommendations_set_updated_at
