@@ -1793,6 +1793,87 @@ export type Database = {
         }
         Relationships: []
       }
+      appliance_manual_sections: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          appliance_id: string
+          body: string
+          created_at: string
+          id: string
+          page_ref: string | null
+          property_id: string
+          requires_licensed_technician: boolean
+          section_title: string
+          source_document_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          appliance_id: string
+          body: string
+          created_at?: string
+          id?: string
+          page_ref?: string | null
+          property_id: string
+          requires_licensed_technician?: boolean
+          section_title: string
+          source_document_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          appliance_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          page_ref?: string | null
+          property_id?: string
+          requires_licensed_technician?: boolean
+          section_title?: string
+          source_document_id?: string | null
+        }
+        Relationships: []
+      }
+      knowledge_requirements: {
+        Row: {
+          active: boolean
+          category: string
+          created_at: string
+          field_paths: string[]
+          key: string
+          label: string
+          updated_at: string
+          version: number
+          weight_hint: number
+          why: string
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          created_at?: string
+          field_paths?: string[]
+          key: string
+          label: string
+          updated_at?: string
+          version: number
+          weight_hint: number
+          why: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          field_paths?: string[]
+          key?: string
+          label?: string
+          updated_at?: string
+          version?: number
+          weight_hint?: number
+          why?: string
+        }
+        Relationships: []
+      }
       properties: {
         Row: {
           address_line1: string | null
@@ -1884,6 +1965,168 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      property_appliances: {
+        Row: {
+          brand: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          display_name: string
+          id: string
+          last_verified_at: string | null
+          location_note: string | null
+          manual_document_id: string | null
+          manual_url: string | null
+          model_number: string | null
+          property_id: string
+          serial_number: string | null
+          updated_at: string
+          verification_status: Database["public"]["Enums"]["appliance_verification_status"]
+        }
+        Insert: {
+          brand?: string | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          display_name: string
+          id?: string
+          last_verified_at?: string | null
+          location_note?: string | null
+          manual_document_id?: string | null
+          manual_url?: string | null
+          model_number?: string | null
+          property_id: string
+          serial_number?: string | null
+          updated_at?: string
+          verification_status?: Database["public"]["Enums"]["appliance_verification_status"]
+        }
+        Update: {
+          brand?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          display_name?: string
+          id?: string
+          last_verified_at?: string | null
+          location_note?: string | null
+          manual_document_id?: string | null
+          manual_url?: string | null
+          model_number?: string | null
+          property_id?: string
+          serial_number?: string | null
+          updated_at?: string
+          verification_status?: Database["public"]["Enums"]["appliance_verification_status"]
+        }
+        Relationships: []
+      }
+      property_import_artifacts: {
+        Row: {
+          created_at: string
+          id: string
+          job_id: string
+          kind: string
+          payload: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_id: string
+          kind: string
+          payload: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_id?: string
+          kind?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
+      property_import_jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          error_message: string | null
+          error_reason: string | null
+          host_account_id: string
+          id: string
+          progress_pct: number
+          property_id: string | null
+          provider: string
+          source_url: string
+          stage_detail: string | null
+          status: Database["public"]["Enums"]["property_import_job_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          error_message?: string | null
+          error_reason?: string | null
+          host_account_id: string
+          id?: string
+          progress_pct?: number
+          property_id?: string | null
+          provider?: string
+          source_url: string
+          stage_detail?: string | null
+          status?: Database["public"]["Enums"]["property_import_job_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          error_message?: string | null
+          error_reason?: string |null
+          host_account_id?: string
+          id?: string
+          progress_pct?: number
+          property_id?: string | null
+          provider?: string
+          source_url?: string
+          stage_detail?: string | null
+          status?: Database["public"]["Enums"]["property_import_job_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      property_knowledge_requirement_status: {
+        Row: {
+          evidence: Json
+          property_id: string
+          requirement_key: string
+          requirement_version: number
+          satisfied_at: string | null
+          status: Database["public"]["Enums"]["knowledge_requirement_status"]
+          updated_at: string
+        }
+        Insert: {
+          evidence?: Json
+          property_id: string
+          requirement_key: string
+          requirement_version: number
+          satisfied_at?: string | null
+          status?: Database["public"]["Enums"]["knowledge_requirement_status"]
+          updated_at?: string
+        }
+        Update: {
+          evidence?: Json
+          property_id?: string
+          requirement_key?: string
+          requirement_version?: number
+          satisfied_at?: string | null
+          status?: Database["public"]["Enums"]["knowledge_requirement_status"]
+          updated_at?: string
+        }
+        Relationships: []
       }
       property_brain_versions: {
         Row: {
@@ -2663,6 +2906,9 @@ export type Database = {
       }
     }
     Enums: {
+      appliance_verification_status: "unverified" | "model_confirmed" | "manual_ingested",
+      knowledge_requirement_status: "missing" | "partial" | "satisfied" | "not_applicable",
+      property_import_job_status: "queued" | "acquiring" | "extracting" | "drafting" | "awaiting_review" | "completed" | "failed" | "canceled",
       access_status: "pending" | "verified" | "expired" | "revoked"
       brain_category:
         | "core"
@@ -2935,6 +3181,7 @@ export const Constants = {
       ingestion_source_kind: ["property_site", "listing", "manual_site", "local_source", "document"],
       extracted_fact_status: ["extracted", "validated", "conflict", "proposed", "rejected"],
       extracted_fact_sensitivity: ["normal", "sensitive"],
+      knowledge_requirement_status: ["missing", "partial", "satisfied", "not_applicable"],
       intent_type: [
         "information",
         "wifi",
@@ -2970,6 +3217,7 @@ export const Constants = {
       ],
       processing_status: ["pending", "processing", "ready", "failed", "stale"],
       property_status: ["draft", "live", "paused", "archived"],
+      property_import_job_status: ["queued", "acquiring", "extracting", "drafting", "awaiting_review", "completed", "failed", "canceled"],
       proposed_update_status: ["pending", "approved", "modified", "denied"],
       service_status: [
         "new",

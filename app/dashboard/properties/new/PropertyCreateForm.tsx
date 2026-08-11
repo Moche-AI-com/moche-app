@@ -56,24 +56,6 @@ export function PropertyCreateForm() {
           <option value="it">Italiano</option>
         </select>
       </div>
-      <div className="field">
-        <label className="label" htmlFor="listingUrl">Listing link (optional)</label>
-        <input
-          className="input"
-          id="listingUrl"
-          name="listingUrl"
-          type="url"
-          inputMode="url"
-          maxLength={2000}
-          placeholder="https://airbnb.com/rooms/…"
-          style={{ minHeight: 44 }}
-        />
-        <p className="faint" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>
-          Paste your Airbnb, Vrbo, or direct booking page and we&apos;ll build your Brain from it
-          automatically — sorted into the right sections, ready for you to look over and edit.
-          Your property is created either way, even if the page cannot be read.
-        </p>
-      </div>
       <SubmitButton>Create property</SubmitButton>
       <p className="faint" style={{ fontSize: '.75rem', marginTop: '.75rem' }}>
         That&apos;s all you need to launch a guest portal — you can add branding, the Brain

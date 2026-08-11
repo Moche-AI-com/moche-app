@@ -22,7 +22,7 @@ export default async function BrainPage({
   const access = await requirePropertyAccess(params.id);
   const supabase = createClient();
 
-  const [{ data: items }, { data: settings }, { count: recCount }, { count: emergencyContacts }, { count: primaryContacts }, { count: pendingReviews }] =
+  const [{ data: items }, { data: settings }, { count: recCount }, { count: emergencyContacts }, { count: primaryContacts }, { count: pendingReviews }, { data: requirementStatuses }] =
     await Promise.all([
       supabase
         .from('brain_items')
@@ -38,6 +38,7 @@ export default async function BrainPage({
       // Pending AI drafts count toward readiness: a property whose Brain is
       // full but whose queue is untouched is not actually reviewed.
       supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('status', 'pending'),
+      supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', params.id),
     ]);
 
   const brainItems = (items ?? []).map((i) => ({ category: i.category, status: i.status, deleted_at: i.deleted_at, visibility: i.visibility }));
@@ -53,10 +54,8 @@ export default async function BrainPage({
   });
 
   const readiness = computeReadiness({
-    health: cardHealth,
+    statuses: (requirementStatuses ?? []).map((item) => ({ requirementKey: item.requirement_key, status: item.status })),
     pendingReviews: pendingReviews ?? 0,
-    propertyId: params.id,
-    published: !!access.property.published_at,
   });
 
   // Optional card filter: when a card is opened, scope the editor list + add form to that card's categories.
