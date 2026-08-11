@@ -309,6 +309,7 @@ export default async function DashboardHome({
             pending={proposalSummary.pending}
             affectedProperties={proposalSummary.affectedProperties}
             oldestLabel={proposalSummary.oldestLabel}
+            scopedPropertyId={activeFilter}
           />
           <ExtrasRequestsCard rows={extrasRequestRows} />
           <GuestFeedbackPanel feedback={feedback} />

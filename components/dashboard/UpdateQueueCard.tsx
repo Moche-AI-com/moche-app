@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ShieldCheck, ArrowUpRight, Sparkles } from 'lucide-react';
 import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
+import { knowledgeQueueHref, primaryQueueHref } from '@/lib/dashboard/knowledge-queue-link';
 import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
 
 // Dashboard tile for the Knowledge Queue (backlog P2-08).
@@ -29,6 +30,7 @@ export function UpdateQueueCard({
   pending,
   affectedProperties,
   oldestLabel,
+  scopedPropertyId,
 }: {
   rows: UpdateQueueCardRow[];
   /** Pre-computed subtitle from queueSummary() so the copy has one definition. */
@@ -36,10 +38,13 @@ export function UpdateQueueCard({
   pending: number;
   affectedProperties: number;
   oldestLabel: string | null;
+  /** Active dashboard property scope, when the host has narrowed to one property. */
+  scopedPropertyId?: string | null;
 }) {
   const { isCollapsed, toggle } = useCollapsedCards();
   const collapsed = isCollapsed('update-queue');
   const hasPending = pending > 0;
+  const primaryHref = primaryQueueHref(rows, scopedPropertyId);
 
   return (
     <section className="card dash-panel rise-in" data-testid="update-queue-card">
@@ -100,7 +105,7 @@ export function UpdateQueueCard({
                   .map((r) => (
                     <li key={r.propertyId} className="dash-topic" data-testid="update-queue-row">
                       <Link
-                        href="/dashboard/updates"
+                        href={knowledgeQueueHref({ propertyId: r.propertyId })}
                         className="dash-topic-row"
                         style={{ textDecoration: 'none', color: 'inherit' }}
                       >
@@ -115,7 +120,7 @@ export function UpdateQueueCard({
                   ))}
               </ul>
             )}
-            <Link href="/dashboard/updates" className="dash-panel-link">
+            <Link href={primaryHref} className="dash-panel-link">
               Open Knowledge Queue <ArrowUpRight size={14} aria-hidden />
             </Link>
           </>
