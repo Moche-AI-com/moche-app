@@ -28,12 +28,7 @@ export const SITE_NAME = 'Moche-AI';
  */
 export const IS_PRODUCTION_HOST = SITE_URL === 'https://www.moche-ai.com';
 
-// Updated with the homepage positioning shift. The previous title and
-// description promised a workspace and "instant" answers; the page now leads
-// with property-aware guest support built from host-approved information, and
-// metadata that describes the old page is metadata that misrepresents the new
-// one in search and social previews.
-export const DEFAULT_TITLE = 'Moche-AI — Property-aware guest support for short-term rentals';
+export const DEFAULT_TITLE = 'Moche-AI — Run every property from one workspace';
 
 export const DEFAULT_DESCRIPTION =
-  'Moche helps guests find answers from the property information you approve, then routes questions to you when an answer is missing, restricted, or unclear. Guest support for short-term rental hosts.';
+  'Answer guest questions instantly, keep every property detail in one place, and turn more stays into five-star reviews. Guest operations for short-term rental hosts.';
