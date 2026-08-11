@@ -7,7 +7,7 @@ import {
   ConciergeBell, X, ArrowRight, Zap, MapPin, Eye,
   AlertTriangle, ExternalLink, Check, Plus, UserRound, Send, Wrench,
   Paperclip, Loader2, CheckCircle2, Phone, Globe, ShoppingCart, ChevronLeft, ChevronRight,
-  Minus, Search, Mail, Package, type LucideIcon,
+  Minus, Search, Mail, Package, Home, type LucideIcon,
 } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { PremiumImage } from '@/components/PremiumImage';
@@ -39,6 +39,72 @@ const FOCUS_INPUT = '__FOCUS_INPUT__';
 const MESSAGE_HOST = '__MESSAGE_HOST__';
 // Opens the structured "Report an issue" interview panel instead of sending a chat message.
 const SERVICE_REQUEST = '__SERVICE_REQUEST__';
+
+/**
+ * Keeps a portaled sheet self-contained without a dependency: focus moves into the
+ * sheet, Tab cycles inside it, Escape dismisses it, and the invoking control regains
+ * focus after close. It also prevents the underlying portal from scrolling.
+ */
+function useSheetDismiss({ active, onClose }: { active: boolean; onClose: () => void }) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  useEffect(() => {
+    if (!active || typeof document === 'undefined') return;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const bodyOverflow = document.body.style.overflow;
+    const focusable = () => Array.from(sheetRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? []).filter((element) => !element.hasAttribute('hidden'));
+    const focusTimer = window.setTimeout(() => (focusable()[0] ?? sheetRef.current)?.focus(), 0);
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const targets = focusable();
+      if (targets.length === 0) {
+        event.preventDefault();
+        sheetRef.current?.focus();
+        return;
+      }
+      const first = targets[0];
+      const last = targets[targets.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = bodyOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      window.setTimeout(() => {
+        if (previouslyFocused?.isConnected) previouslyFocused.focus();
+      }, 0);
+    };
+  }, [active]);
+
+  return sheetRef;
+}
+
+function scrollToPortalHome() {
+  if (typeof window === 'undefined') return;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+}
 
 interface SubChoice { label: string; query: string }
 interface Category {
@@ -368,7 +434,14 @@ export function GuestPortal(props: {
         )}
 
         {historyOpen && (
-          <ChatHistorySheet slug={props.slug} onClose={() => setHistoryOpen(false)} />
+          <ChatHistorySheet
+            slug={props.slug}
+            onClose={() => setHistoryOpen(false)}
+            onHome={() => {
+              setHistoryOpen(false);
+              scrollToPortalHome();
+            }}
+          />
         )}
 
         <footer className="gp-footer">
@@ -982,15 +1055,19 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [entries, busy]);
 
-  // Lock body scroll while a bottom sheet is open so the underlying portal can't scroll
-  // behind the sheet on mobile (a common bottom-sheet UX defect). Restored on close.
-  const anySheetOpen = !!activeCategory || hostComposerOpen || srOpen || !!placeDetailId || langOpen;
-  useEffect(() => {
-    if (!anySheetOpen || typeof document === 'undefined') return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [anySheetOpen]);
+  const categorySheetRef = useSheetDismiss({ active: !!activeCategory, onClose: () => setActiveCategory(null) });
+  const hostComposerSheetRef = useSheetDismiss({ active: hostComposerOpen, onClose: () => setHostComposerOpen(false) });
+  const serviceRequestSheetRef = useSheetDismiss({ active: srOpen, onClose: closeServiceRequest });
+  const placeDetailSheetRef = useSheetDismiss({ active: !!placeDetailId, onClose: closePlaceDetail });
+
+  function returnToPortalHome() {
+    setActiveCategory(null);
+    setHostComposerOpen(false);
+    closeServiceRequest();
+    closePlaceDetail();
+    setLangOpen(false);
+    scrollToPortalHome();
+  }
 
   const send = useCallback(async (text: string) => {
     if (!text.trim() || busy) return;
@@ -1619,7 +1696,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           trap position:fixed). Scrollable, searchable, and labelled in each language's
           own script. */}
       {mounted && langOpen && createPortal(
-        <LanguageSheet current={language} onPick={chooseLanguage} onClose={() => setLangOpen(false)} />,
+        <LanguageSheet
+          current={language}
+          onPick={chooseLanguage}
+          onClose={() => setLangOpen(false)}
+          onHome={returnToPortalHome}
+        />,
         document.body,
       )}
 
@@ -1628,7 +1710,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           the sheet pins to the bottom of the screen (not below the tapped card). */}
       {mounted && activeCategory && createPortal(
         <div className="gp-sheet-scrim" onClick={() => setActiveCategory(null)} data-testid="subchoice-overlay">
-          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`${activeCategory.label} options`} data-testid={`subchoice-${activeCategory.key}`}>
+          <div ref={categorySheetRef} tabIndex={-1} className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`${activeCategory.label} options`} data-testid={`subchoice-${activeCategory.key}`}>
             <div className="gp-sheet-grip" aria-hidden />
             <div className="gp-sheet-head">
               <span className="gp-cat-icon gp-sheet-badge"><activeCategory.Icon size={22} aria-hidden /></span>
@@ -1636,6 +1718,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                 <div className="gp-serif gp-sheet-title">{activeCategory.label}</div>
                 <div className="gp-sheet-sub">{activeCategory.subtitle}</div>
               </div>
+              <button type="button" onClick={returnToPortalHome} className="gp-sheet-home" data-testid="button-portal-home-subchoice">
+                <Home size={15} aria-hidden /> Portal home
+              </button>
               <button onClick={() => setActiveCategory(null)} className="gp-sheet-close" data-testid="button-close-subchoice" aria-label="Close">
                 <X size={18} aria-hidden />
               </button>
@@ -1666,7 +1751,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           fixed-positioning reason as the sub-choice sheet above. */}
       {mounted && hostComposerOpen && createPortal(
         <div className="gp-sheet-scrim" onClick={() => !hostSending && setHostComposerOpen(false)} data-testid="host-composer-overlay">
-          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Message your host" data-testid="host-composer">
+          <div ref={hostComposerSheetRef} tabIndex={-1} className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Message your host" data-testid="host-composer">
             <div className="gp-sheet-grip" aria-hidden />
             <div className="gp-sheet-head">
               <span className="gp-cat-icon gp-sheet-badge"><UserRound size={22} aria-hidden /></span>
@@ -1674,6 +1759,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                 <div className="gp-serif gp-sheet-title">Message your host</div>
                 <div className="gp-sheet-sub">Type your question or issue — we&rsquo;ll pass it straight to them.</div>
               </div>
+              <button type="button" onClick={returnToPortalHome} className="gp-sheet-home" data-testid="button-portal-home-host-composer">
+                <Home size={15} aria-hidden /> Portal home
+              </button>
               <button onClick={() => !hostSending && setHostComposerOpen(false)} className="gp-sheet-close" data-testid="button-close-host-composer" aria-label="Close">
                 <X size={18} aria-hidden />
               </button>
@@ -1693,7 +1781,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                 data-testid="input-host-message"
                 style={{
                   width: '100%', resize: 'vertical', borderRadius: 12,
-                  border: '1px solid rgba(255,255,255,0.14)', background: '#1b202a',
+                  border: '1px solid rgba(255,255,255,0.14)', background: '#171c25',
                   color: '#fbf7ef', WebkitTextFillColor: '#fbf7ef', padding: '.7rem .85rem', fontSize: '.92rem', lineHeight: 1.45,
                   fontFamily: 'inherit',
                 }}
@@ -1721,7 +1809,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           server can short-circuit straight to a "we've alerted your host" message. */}
       {mounted && srOpen && createPortal(
         <div className="gp-sheet-scrim" onClick={() => !srBusy && closeServiceRequest()} data-testid="service-request-overlay">
-          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Report an issue" data-testid="service-request-panel">
+          <div ref={serviceRequestSheetRef} tabIndex={-1} className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Report an issue" data-testid="service-request-panel">
             <div className="gp-sheet-grip" aria-hidden />
             <div className="gp-sheet-head">
               <span className="gp-cat-icon gp-sheet-badge"><Wrench size={22} aria-hidden /></span>
@@ -1734,6 +1822,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                   {srStatus === 'safety_escalated' && 'Your host has been alerted right away.'}
                 </div>
               </div>
+              <button type="button" onClick={returnToPortalHome} className="gp-sheet-home" data-testid="button-portal-home-service-request">
+                <Home size={15} aria-hidden /> Portal home
+              </button>
               <button onClick={() => !srBusy && closeServiceRequest()} className="gp-sheet-close" data-testid="button-close-service-request" aria-label="Close">
                 <X size={18} aria-hidden />
               </button>
@@ -1844,7 +1935,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
 
       {mounted && !!placeDetailId && createPortal(
         <div className="gp-sheet-scrim" onClick={closePlaceDetail} data-testid="place-detail-overlay">
-          <div className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Place details" data-testid="place-detail-panel">
+          <div ref={placeDetailSheetRef} tabIndex={-1} className="gp-sheet gp-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Place details" data-testid="place-detail-panel">
             <div className="gp-sheet-grip" aria-hidden />
             <div className="gp-sheet-head">
               <span className="gp-cat-icon gp-sheet-badge"><MapPin size={22} aria-hidden /></span>
@@ -1857,6 +1948,9 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
                   </div>
                 )}
               </div>
+              <button type="button" onClick={returnToPortalHome} className="gp-sheet-home" data-testid="button-portal-home-place-detail">
+                <Home size={15} aria-hidden /> Portal home
+              </button>
               <button onClick={closePlaceDetail} className="gp-sheet-close" data-testid="button-close-place-detail" aria-label="Close">
                 <X size={18} aria-hidden />
               </button>
@@ -2003,7 +2097,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         */
         .gp-cat {
           display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: .08rem;
-          min-width: 0; min-height: 88px; padding: .8rem .85rem; cursor: pointer; text-align: left; color: inherit;
+          min-width: 0; min-height: 88px; padding: var(--pad-card); cursor: pointer; text-align: left; color: inherit;
           transition: transform .2s cubic-bezier(.16,1,.3,1), border-color .2s, background .2s, box-shadow .2s;
         }
         @media (min-width: 561px) { .gp-cat { padding: var(--pad-card); min-height: 104px; } }
@@ -2109,7 +2203,8 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           opacity: 1;
         }
         .gp-lang-search input::placeholder { color: rgba(251,247,239,.45); -webkit-text-fill-color: rgba(251,247,239,.45); opacity: 1; }
-        .gp-lang-search:focus-within { border-color: rgba(201,169,110,.55); }
+        .gp-lang-search:hover { background: #1b202a; border-color: rgba(201,169,110,.38); }
+        .gp-lang-search:focus-within { border-color: rgba(201,169,110,.7); box-shadow: 0 0 0 3px rgba(201,169,110,.2); }
         /* Small, quiet note at the top of a resumed chat, pointing at where the earlier
            conversation went. Not a bubble — it is chrome, not a message. */
         .gp-chat-earlier {
@@ -2218,6 +2313,21 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         .gp-sheet-scrim input::placeholder, .gp-sheet-scrim textarea::placeholder {
           color: rgba(251,247,239,.45); -webkit-text-fill-color: rgba(251,247,239,.45); opacity: 1;
         }
+        .gp-sheet-scrim input:-webkit-autofill,
+        .gp-sheet-scrim textarea:-webkit-autofill,
+        .gp-sheet-scrim select:-webkit-autofill {
+          -webkit-box-shadow: inset 0 0 0 1000px #171c25;
+          -webkit-text-fill-color: #fbf7ef;
+          caret-color: ${GOLD};
+        }
+        .gp-sheet-scrim input:focus-visible,
+        .gp-sheet-scrim textarea:focus-visible,
+        .gp-sheet-scrim select:focus-visible,
+        .gp-sheet button:focus-visible,
+        .gp-sheet a:focus-visible {
+          outline: 3px solid #e7d3a6;
+          outline-offset: 2px;
+        }
         @media (min-width: 560px) { .gp-sheet-scrim { align-items: center; padding: 1rem; } }
         .gp-sheet {
           width: 100%; max-width: 560px; border-radius: 22px 22px 0 0;
@@ -2248,6 +2358,12 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
           display: grid; place-items: center; opacity: .75; transition: opacity .18s, background .18s;
         }
         .gp-sheet-close:hover { opacity: 1; background: rgba(255,255,255,.08); }
+        .gp-sheet-home {
+          display: inline-flex; align-items: center; gap: .3rem; min-height: 36px; padding: .35rem .55rem;
+          border-radius: 999px; cursor: pointer; color: #fbf7ef; flex-shrink: 0; font-size: .72rem; font-weight: 600;
+          border: 1px solid rgba(201,169,110,.4); background: rgba(201,169,110,.1);
+        }
+        .gp-sheet-home:hover { background: rgba(201,169,110,.18); border-color: rgba(201,169,110,.7); }
         .gp-sheet-choices { display: grid; grid-template-columns: 1fr; gap: .5rem; }
         @media (min-width: 460px) { .gp-sheet-choices { grid-template-columns: repeat(2, 1fr); } }
         .gp-subchoice {
@@ -2315,20 +2431,21 @@ const GUEST_NOTIFY_FINE_PRINT =
  *    The explicit picker exists for the guest who wants to READ in their language while
  *    typing in imperfect English, which the auto behaviour can't infer.
  */
-function LanguageSheet({ current, onPick, onClose }: { current: string; onPick: (code: string) => void; onClose: () => void }) {
+function LanguageSheet({ current, onPick, onClose, onHome }: {
+  current: string;
+  onPick: (code: string) => void;
+  onClose: () => void;
+  onHome: () => void;
+}) {
   const [query, setQuery] = useState('');
   const results = useMemo(() => (query.trim() ? searchLanguages(query) : PORTAL_LANGUAGES), [query]);
-
-  // Escape closes, matching the other sheets and giving keyboard users a way out.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const sheetRef = useSheetDismiss({ active: true, onClose });
 
   return (
     <div className="gp-sheet-scrim" onClick={onClose} data-testid="language-overlay">
       <div
+        ref={sheetRef}
+        tabIndex={-1}
         className="gp-sheet gp-card"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -2343,6 +2460,9 @@ function LanguageSheet({ current, onPick, onClose }: { current: string; onPick: 
             <div className="gp-serif gp-sheet-title">Language</div>
             <div className="gp-sheet-sub">Your concierge will reply in it</div>
           </div>
+          <button type="button" onClick={onHome} className="gp-sheet-home" data-testid="button-portal-home-language">
+            <Home size={15} aria-hidden /> Portal home
+          </button>
           <button onClick={onClose} className="gp-sheet-close" data-testid="button-close-language" aria-label="Close">
             <X size={18} aria-hidden />
           </button>
@@ -2411,7 +2531,7 @@ function LanguageSheet({ current, onPick, onClose }: { current: string; onPick: 
  * from the hero (outside <Concierge>), and giving it its own fetch avoids lifting chat
  * state up through the whole portal for a panel most guests open rarely, if ever.
  */
-function ChatHistorySheet({ slug, onClose }: { slug: string; onClose: () => void }) {
+function ChatHistorySheet({ slug, onClose, onHome }: { slug: string; onClose: () => void; onHome: () => void }) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [sections, setSections] = useState<HistorySection[]>([]);
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
@@ -2419,18 +2539,7 @@ function ChatHistorySheet({ slug, onClose }: { slug: string; onClose: () => void
 
   useEffect(() => { setMounted(true); }, []);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  const sheetRef = useSheetDismiss({ active: mounted, onClose });
 
   useEffect(() => {
     let cancelled = false;
@@ -2474,6 +2583,8 @@ function ChatHistorySheet({ slug, onClose }: { slug: string; onClose: () => void
   return createPortal(
     <div className="gp-sheet-scrim" onClick={onClose} data-testid="chat-history-overlay">
       <div
+        ref={sheetRef}
+        tabIndex={-1}
         className="gp-sheet gp-card gp-history-sheet"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -2488,6 +2599,9 @@ function ChatHistorySheet({ slug, onClose }: { slug: string; onClose: () => void
             <div className="gp-serif gp-sheet-title">Your conversations</div>
             <div className="gp-sheet-sub">Everything you have asked during this stay</div>
           </div>
+          <button type="button" onClick={onHome} className="gp-sheet-home" data-testid="button-portal-home-history">
+            <Home size={15} aria-hidden /> Portal home
+          </button>
           <button onClick={onClose} className="gp-sheet-close" data-testid="button-close-history" aria-label="Close">
             <X size={18} aria-hidden />
           </button>
@@ -2616,7 +2730,7 @@ function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => 
   }
 
   return (
-    <div style={{ ...cardStyle, marginTop: '.9rem', padding: '1.15rem' }} className="gp-card gp-rise" data-testid="notify-me-card">
+    <div style={{ ...cardStyle, marginTop: '.9rem' }} className="gp-card gp-rise" data-testid="notify-me-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.35rem' }}>
         <ConciergeBell size={18} aria-hidden style={{ color: GOLD }} />
         <span className="gp-serif" style={{ fontSize: '1.15rem', color: '#fbf7ef' }}>Want a heads-up when your host replies?</span>
@@ -2770,7 +2884,7 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
 
       {/* --- Step 3: detail + quantity ------------------------------------ */}
       {openOffer ? (
-        <div style={{ ...cardStyle, padding: '1.15rem' }} className="gp-card" data-testid={`extra-detail-${openOffer.id}`}>
+        <div style={cardStyle} className="gp-card" data-testid={`extra-detail-${openOffer.id}`}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '.6rem' }}>
             <span className="gp-serif" style={{ fontSize: '1.25rem', color: '#fbf7ef', lineHeight: 1.2 }}>{openOffer.title}</span>
             {openOffer.price_text && (
@@ -3020,7 +3134,7 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
 
       <style jsx>{`
         .gp-extras {
-          display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem;
+          display: grid; grid-template-columns: minmax(0, 1fr); gap: .55rem;
           grid-auto-flow: dense; grid-auto-rows: 1fr; align-items: stretch;
         }
         /* Image-led category tiles. The photo is edge-to-edge at the top of the card
@@ -3047,11 +3161,11 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
         }
         .gp-extra-cat-body {
           display: flex; flex-direction: column; flex: 1;
-          padding: .8rem .85rem .85rem;
+          padding: var(--pad-card);
         }
         .gp-extra-cat .gp-extra-item-foot { margin-top: auto; padding-top: .55rem; }
         @media (min-width: 561px) {
-          .gp-extras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .gp-extras { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
           .gp-extras:not(.gp-extras-cats) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
         }
         /* Same no-orphan rule the main card grid uses: a lone trailing tile takes the
@@ -3150,7 +3264,7 @@ function ExtrasSection({ slug, offers, hostPreview }: { slug: string; offers: Ex
 // opens the host-configured review URL in a new tab. Never blocks the concierge.
 function ReviewNudgeCard({ url, propertyName, onDismiss }: { url: string; propertyName: string; onDismiss: () => void }) {
   return (
-    <div style={{ ...cardStyle, marginTop: '.9rem', padding: '1.15rem' }} className="gp-card gp-rise" data-testid="review-nudge-card">
+    <div style={{ ...cardStyle, marginTop: '.9rem' }} className="gp-card gp-rise" data-testid="review-nudge-card">
       <button
         onClick={onDismiss}
         aria-label="Dismiss"
@@ -3258,7 +3372,7 @@ function FeedbackWidget({ state, onRate }: { state: 'idle' | 'rated'; onRate: (r
 }
 
 // --- Inline styles (portal is brand-scoped, standalone from dashboard CSS) ---
-const cardStyle: React.CSSProperties = { position: 'relative', background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 18, padding: '1.5rem', backdropFilter: 'blur(12px)', boxShadow: '0 20px 50px -30px rgba(0,0,0,.8)' };
+const cardStyle: React.CSSProperties = { position: 'relative', background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 18, padding: 'var(--pad-card)', backdropFilter: 'blur(12px)', boxShadow: '0 20px 50px -30px rgba(0,0,0,.8)' };
 const gridCardStyle: React.CSSProperties = { ...cardStyle, padding: undefined };
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: '.82rem', opacity: 0.7, marginBottom: '.4rem' };
 const inputStyle: React.CSSProperties = { width: '100%', padding: '.8rem .9rem', borderRadius: 12, border: '1px solid rgba(255,255,255,0.14)', background: '#1b202a', color: '#fbf7ef', WebkitTextFillColor: '#fbf7ef', caretColor: '#e7d3a6', fontSize: '1rem', marginBottom: '1rem', outline: 'none' };

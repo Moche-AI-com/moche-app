@@ -2,18 +2,13 @@ import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, gapPrompts } from '@/lib/brain/health';
-import { publicEnv, serverEnv } from '@/lib/env';
 import { listPropertySessions } from '@/lib/guest/sessions';
-import { PropertyStatusControls } from './StatusControls';
 import { SessionsPanel } from './SessionsPanel';
 import { PropertyLinkMinter } from './PropertyLinkMinter';
-import { CopyPortalLink } from './CopyPortalLink';
 import { ListingImportKickoff } from './ListingImportKickoff';
 import { DangerZone } from './DangerZone';
 
 export const dynamic = 'force-dynamic';
-
-const STATUS_BADGE: Record<string, string> = { live: 'badge-teal', paused: 'badge-coral' };
 
 export default async function PropertyDetailPage({
   params,
@@ -28,181 +23,94 @@ export default async function PropertyDetailPage({
 
   const [
     { data: items },
-    { data: settings },
     { count: stayCount },
     { count: openEsc },
     { count: curatedCount },
     { count: discoveredCount },
   ] = await Promise.all([
     supabase.from('brain_items').select('category, status, deleted_at, visibility').eq('property_id', property.id),
-    supabase.from('property_settings').select('*').eq('property_id', property.id).maybeSingle(),
     supabase.from('stays').select('id', { count: 'exact', head: true }).eq('property_id', property.id).is('deleted_at', null),
     supabase.from('escalations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('status', 'open'),
-    // Both local sources are counted so the Local tile reflects everything the
-    // concierge can recommend, not just the auto-discovered half.
     supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('approved', true).eq('hidden', false).is('deleted_at', null),
     supabase.from('nearby_places').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('hidden', false),
   ]);
 
   const health = computeBrainHealth(items ?? []);
-  // Upper bound, not the merged total: dedupe happens at read time in
-  // lib/local/merge and would cost two full table reads to reproduce here.
-  const localCount = (curatedCount ?? 0) + (discoveredCount ?? 0);
   const prompts = gapPrompts(health);
-  const portalUrl = `${publicEnv.appUrl}/g/${property.slug}`;
+  // Upper bound, not the merged total: dedupe happens at read time in lib/local/merge.
+  const localCount = (curatedCount ?? 0) + (discoveredCount ?? 0);
 
   // Only an https listing link is ever handed to the client importer; anything
   // else in the query string is ignored outright.
   const rawImport = typeof searchParams.import === 'string' ? searchParams.import.trim() : '';
   const listingImportUrl = /^https?:\/\//i.test(rawImport) && rawImport.length <= 2000 ? rawImport : null;
 
-  // Guest access management is available to owners and co-hosts who can reply to guests.
+  // Stays is the natural home for guest access management. It cannot be moved
+  // there in this scoped change, so it remains available here behind a collapsed
+  // disclosure rather than removing host functionality.
   const canManageAccess = can.replyGuests;
   const sessions = canManageAccess ? await listPropertySessions(property.id, true) : [];
+  const needsAttention = (openEsc ?? 0) + health.gaps.length;
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', margin: '.5rem 0 1.5rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
-            <h1 style={{ fontSize: '1.8rem' }}>{property.display_name}</h1>
-            <span className={`badge ${STATUS_BADGE[property.status] ?? ''}`}>{property.status}</span>
-          </div>
-          <p className="faint" style={{ fontSize: '.85rem', marginTop: '.25rem' }}>
-            {[property.city, property.region, property.country].filter(Boolean).join(', ') || 'No location set'} · {property.timezone}
-          </p>
-        </div>
-        {can.editProperty && (
-          <PropertyStatusControls
-            propertyId={property.id}
-            status={property.status}
-            canGoLive={health.canGoLive}
-            brainRequired={serverEnv.requireBrainToPublish}
-          />
-        )}
-      </div>
-
       {listingImportUrl && can.editBrain && (
         <ListingImportKickoff propertyId={property.id} listingUrl={listingImportUrl} />
       )}
 
-      {/* Brain Health */}
-      <div className="card" style={{ padding: '1.5rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h2 style={{ fontSize: '1.15rem' }}>Brain Health</h2>
-          <Link href={`/dashboard/properties/${property.id}/brain`} className="btn btn-sm btn-ghost">Manage Brain →</Link>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-          <ScoreRing score={health.score} />
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <p style={{ fontSize: '.9rem', marginBottom: '.5rem' }}>
-              {health.totalItems} knowledge item{health.totalItems === 1 ? '' : 's'} across {health.categories.filter((c) => c.present).length} categories.
+      <section className="card" style={{ padding: '1rem 1.1rem', marginBottom: '1.25rem' }} aria-labelledby="needs-attention-heading">
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+          <div>
+            <h2 id="needs-attention-heading" style={{ fontSize: '1rem', margin: 0 }}>Needs attention</h2>
+            <p className="muted" style={{ fontSize: '.84rem', margin: '.25rem 0 0' }}>
+              {needsAttention === 0 ? 'Everything is looking good.' : `${needsAttention} item${needsAttention === 1 ? '' : 's'} to review across guest support and your Brain.`}
             </p>
-            {!health.coreComplete ? (
-              <div className="alert alert-info" style={{ fontSize: '.82rem' }}>
-                Add the core essentials (WiFi/parking, check-in/out, house rules) before this property can go live.
-              </div>
-            ) : (
-              <div className="alert alert-success" style={{ fontSize: '.82rem' }}>Core knowledge complete — ready to go live.</div>
-            )}
+          </div>
+          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+            <Link href={`/dashboard/properties/${property.id}/escalations`} className={`badge ${openEsc ? 'badge-coral' : ''}`} style={{ minHeight: '2.75rem', display: 'inline-flex', alignItems: 'center', textDecoration: 'none', paddingInline: '.65rem' }}>
+              {openEsc ?? 0} open escalation{openEsc === 1 ? '' : 's'}
+            </Link>
+            <Link href={`/dashboard/properties/${property.id}/brain`} className="badge" style={{ minHeight: '2.75rem', display: 'inline-flex', alignItems: 'center', textDecoration: 'none', paddingInline: '.65rem' }}>
+              {health.gaps.length} Brain gap{health.gaps.length === 1 ? '' : 's'}
+            </Link>
           </div>
         </div>
         {prompts.length > 0 && (
-          <ul className="muted" style={{ fontSize: '.82rem', marginTop: '1rem', paddingLeft: '1.1rem' }}>
-            {prompts.map((p, i) => <li key={i} style={{ marginBottom: '.25rem' }}>{p}</li>)}
+          <ul className="muted" style={{ fontSize: '.82rem', margin: '.85rem 0 0', paddingLeft: '1.1rem' }}>
+            {prompts.map((prompt, index) => <li key={index} style={{ marginBottom: '.25rem' }}>{prompt}</li>)}
           </ul>
         )}
-      </div>
+      </section>
 
-      {/* Quick tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
         <Tile href={`/dashboard/properties/${property.id}/brain`} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
         <Tile href={`/dashboard/properties/${property.id}/stays`} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
-        <Tile href={`/dashboard/escalations?property=${property.id}`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
+        <Tile href={`/dashboard/properties/${property.id}/escalations`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
         <Tile href={`/dashboard/properties/${property.id}/local`} title="Local" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras" value="Manage" sub="Add-ons guests can request" />}
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} title="Settings" value="Configure" sub="Branding, tone, modules" />}
       </div>
 
-      {/* Guest portal link */}
-      <div className="card" style={{ padding: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.05rem', marginBottom: '.6rem' }}>Guest portal</h2>
-        <p className="muted" style={{ fontSize: '.85rem', marginBottom: '.75rem' }}>
-          Share this link (or a QR code) with guests. They verify with the contact on their booking before accessing anything.
-        </p>
-        <div className="card-2" style={{ padding: '.6rem .8rem', fontFamily: 'monospace', fontSize: '.82rem', wordBreak: 'break-all' }}>{portalUrl}</div>
-        <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '.75rem' }}>
-          <a
-            href={portalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-primary btn-sm"
-            data-testid="link-view-portal"
-            aria-disabled={property.status !== 'live'}
-            style={property.status !== 'live' ? { pointerEvents: 'none', opacity: 0.5 } : undefined}
-          >
-            Preview as guest ↗
-          </a>
-          <CopyPortalLink url={portalUrl} />
-        </div>
-        <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>
-          Opens the live guest experience in a new tab. Because you’re signed in as the host, you skip guest verification and see a
-          read-only concierge preview — chat with the AI freely; nothing is saved as a guest conversation. On any device where you’re
-          logged in, you can open this link without verifying.
-        </p>
-        {property.status !== 'live' && (
-          <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
-            The portal is only reachable once the property is live. You can go live now — the
-            Brain and branding can be added anytime.
-          </p>
-        )}
-        {property.status === 'live' && (stayCount ?? 0) === 0 && (
-          <p className="faint" style={{ fontSize: '.78rem', marginTop: '.6rem' }}>
-            Use “Preview as guest” above to test it yourself. To try the full guest flow (with real verification), add a
-            stay with your own email under{' '}
-            <Link href={`/dashboard/properties/${property.id}/stays`} className="gradient-text" style={{ fontWeight: 600 }}>Stays</Link>{' '}
-            — guests verify with the contact on their booking before entering.
-          </p>
-        )}
-      </div>
-
       {canManageAccess && (
-        <div style={{ marginTop: '1.25rem' }}>
-          <PropertyLinkMinter propertyId={property.id} />
-          <SessionsPanel propertyId={property.id} initialSessions={sessions} />
-        </div>
+        <details className="card" style={{ padding: '0 1rem', marginBottom: '1.25rem' }}>
+          <summary style={{ cursor: 'pointer', minHeight: '2.75rem', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
+            Guest access
+          </summary>
+          <div style={{ paddingBottom: '.25rem' }}>
+            <PropertyLinkMinter propertyId={property.id} />
+            <SessionsPanel propertyId={property.id} initialSessions={sessions} />
+          </div>
+        </details>
       )}
 
-      {/*
-        Last thing on the page, gated on the same permission as every other
-        destructive property action. Kept away from the Archive button in the
-        header on purpose: Archive is reversible, this is not, and putting them
-        side by side is how a host deletes a property they meant to shelve.
-      */}
       {can.editProperty && <DangerZone propertyId={property.id} propertyName={property.display_name} />}
-    </div>
-  );
-}
-
-function ScoreRing({ score }: { score: number }) {
-  const color = score >= 70 ? 'var(--teal)' : score >= 40 ? 'var(--iris)' : 'var(--coral)';
-  return (
-    <div
-      style={{
-        width: 96, height: 96, borderRadius: '50%', display: 'grid', placeItems: 'center',
-        background: `conic-gradient(${color} ${score * 3.6}deg, var(--border) 0deg)`,
-      }}
-    >
-      <div style={{ width: 74, height: 74, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center' }}>
-        <strong style={{ fontSize: '1.4rem' }}>{score}</strong>
-      </div>
     </div>
   );
 }
 
 function Tile({ href, title, value, sub }: { href: string; title: string; value: string; sub: string }) {
   return (
-    <Link href={href} className="card card-interactive rise-in" style={{ padding: '1.1rem', display: 'block' }}>
+    <Link href={href} className="card card-interactive rise-in" style={{ padding: '1.1rem', display: 'block', minHeight: '8.5rem' }}>
       <div className="faint" style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.05em' }}>{title}</div>
       <div style={{ fontSize: '1.3rem', fontWeight: 600, margin: '.2rem 0' }}>{value}</div>
       <div className="muted" style={{ fontSize: '.8rem' }}>{sub}</div>

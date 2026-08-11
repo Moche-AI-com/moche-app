@@ -12,7 +12,7 @@ import { AttentionStrip, ActivityTrendCard, TopTopicsCard, ActivityFeedCard } fr
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { ExtrasRequestsCard, type ExtrasRequestRow } from '@/components/dashboard/ExtrasRequestsCard';
 import { UpdateQueueCard, type UpdateQueueCardRow } from '@/components/dashboard/UpdateQueueCard';
-import { queueSummary } from '@/lib/brain/proposals';
+import { extrasRequestSummary, knowledgeReviewSummary, resolveScope } from '@/lib/dashboard/scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +53,7 @@ export default async function DashboardHome({
   // query already returned — i.e. one RLS actually allowed — so the filter can
   // narrow the view but never widen it beyond what the user can see.
   const requestedFilter = searchParams.property ?? null;
-  const activeFilter = requestedFilter && allPropertyIds.includes(requestedFilter) ? requestedFilter : null;
+  const activeFilter = resolveScope(requestedFilter, allPropertyIds);
 
   const properties = activeFilter ? (allProperties ?? []).filter((p) => p.id === activeFilter) : allProperties;
   const propertyIds = activeFilter ? [activeFilter] : allPropertyIds;
@@ -155,32 +155,33 @@ export default async function DashboardHome({
   const lowRatings = feedback.recent.filter((f) => f.rating != null && f.rating <= 2).length;
 
   // Group Extras requests per property for the summary card.
-  const extrasByProperty = new Map<string, { count: number; openCount: number }>();
+  const extrasByProperty = new Map<string, { count: number; openCount: number; resolvedCount: number }>();
   for (const row of extrasEscalations.data ?? []) {
     const pid = row.property_id as string;
-    const entry = extrasByProperty.get(pid) ?? { count: 0, openCount: 0 };
-    entry.count += 1;
-    if (row.status === 'open') entry.openCount += 1;
+    const entry = extrasByProperty.get(pid) ?? { count: 0, openCount: 0, resolvedCount: 0 };
+    const summary = extrasRequestSummary([{ status: row.status as string }]);
+    entry.count += summary.total;
+    entry.openCount += summary.needsResponse;
+    entry.resolvedCount += summary.resolved;
     extrasByProperty.set(pid, entry);
   }
   const extrasRequestRows: ExtrasRequestRow[] = (properties ?? [])
     .map((p) => {
-      const entry = extrasByProperty.get(p.id) ?? { count: 0, openCount: 0 };
+      const entry = extrasByProperty.get(p.id) ?? { count: 0, openCount: 0, resolvedCount: 0 };
       return {
         propertyId: p.id,
         propertyName: p.display_name as string,
         count: entry.count,
         openCount: entry.openCount,
+        resolvedCount: entry.resolvedCount,
       };
     })
     .sort((a, b) => b.count - a.count);
 
-  // Review-queue summary. queueSummary() owns the wording so the tile, the
-  // empty state, and any future banner cannot drift apart.
+  // Review-queue summary. knowledgeReviewSummary() delegates its shared queue
+  // wording to queueSummary(), while adding the property-level dashboard facts.
   const pendingProposals = (proposalRows.data ?? []) as Array<{ property_id: string; status: string; created_at: string }>;
-  const proposalSummary = queueSummary(
-    pendingProposals.map((r) => ({ status: r.status as 'pending', created_at: r.created_at })),
-  );
+  const proposalSummary = knowledgeReviewSummary(pendingProposals);
   const pendingByProperty = new Map<string, number>();
   for (const row of pendingProposals) {
     pendingByProperty.set(row.property_id, (pendingByProperty.get(row.property_id) ?? 0) + 1);
@@ -302,7 +303,13 @@ export default async function DashboardHome({
 
         <div className="dash-col-side" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-section)' }}>
           <ActivityFeedCard events={feed} />
-          <UpdateQueueCard rows={updateQueueRows} detail={proposalSummary.detail} pending={proposalSummary.pending} />
+          <UpdateQueueCard
+            rows={updateQueueRows}
+            detail={proposalSummary.detail}
+            pending={proposalSummary.pending}
+            affectedProperties={proposalSummary.affectedProperties}
+            oldestLabel={proposalSummary.oldestLabel}
+          />
           <ExtrasRequestsCard rows={extrasRequestRows} />
           <GuestFeedbackPanel feedback={feedback} />
         </div>

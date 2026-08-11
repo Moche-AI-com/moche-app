@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
 import { PLANS, type PlanId } from '@/lib/constants';
 import { visibleProfileSections } from '@/lib/dashboard/profile-nav';
+import { roleLabel } from '@/lib/dashboard/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,11 @@ export const dynamic = 'force-dynamic';
 export default async function ProfileOverviewPage() {
   const ctx = await requireSession();
   const isOwner = ctx.account.owner_id === ctx.user.id;
+  const currentRole = roleLabel({
+    userId: ctx.user.id,
+    accountOwnerId: ctx.account.owner_id,
+    isAdmin: ctx.isFounder,
+  });
   const sections = visibleProfileSections(isOwner).filter((s) => s.key !== 'overview');
 
   const supabase = createClient();
@@ -49,7 +55,7 @@ export default async function ProfileOverviewPage() {
           : `${ctx.profile.phone} (unverified)`,
     },
     { label: 'Two-factor', value: ctx.profile.two_factor_enabled ? 'On' : 'Off' },
-    { label: 'Role', value: isOwner ? 'Account owner' : 'Invited member' },
+    { label: 'Role', value: currentRole },
   ];
 
   if (planLabel && ent && gate) {
@@ -59,7 +65,10 @@ export default async function ProfileOverviewPage() {
 
   return (
     <section>
-      <h2 style={{ fontSize: '1.15rem', marginTop: 0 }}>Overview</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem', flexWrap: 'wrap', marginBottom: '.8rem' }}>
+        <h2 style={{ fontSize: '1.15rem', margin: 0 }}>Profile</h2>
+        <span className="badge badge-teal" data-testid="profile-role-badge">{currentRole}</span>
+      </div>
 
       {ent?.isReadOnly && (
         <div className="alert alert-warn" style={{ marginBottom: '1.25rem' }}>
