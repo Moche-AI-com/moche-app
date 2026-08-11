@@ -5,18 +5,16 @@ import { Gift, ArrowUpRight, Sparkles } from 'lucide-react';
 import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
 import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
 
-// A guest tapping "Request" on an Extra doesn't create its own row anywhere —
-// it reuses the existing escalation pipeline (see app/api/guest/[slug]/extras-request/route.ts),
-// landing in `escalations` with a `question` prefixed "Enhancement request:". This card
-// summarizes that same data, grouped by property, so hosts can see Extras demand at a
-// glance without a new table. Never say "upsell" here — guest- and host-facing copy is
-// "Extras" only.
+// The card is fed from durable extras_orders rows rather than a notification
+// surrogate, so every count reflects the request lifecycle hosts actually act on.
 export interface ExtrasRequestRow {
   propertyId: string;
   propertyName: string;
   count: number;
   openCount: number;
   resolvedCount: number;
+  paymentPending: number;
+  scheduledToday: number;
 }
 
 export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
@@ -25,6 +23,8 @@ export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
   const totalRequests = rows.reduce((a, r) => a + r.count, 0);
   const totalOpen = rows.reduce((a, r) => a + r.openCount, 0);
   const totalResolved = rows.reduce((a, r) => a + r.resolvedCount, 0);
+  const totalPaymentPending = rows.reduce((a, r) => a + r.paymentPending, 0);
+  const totalScheduledToday = rows.reduce((a, r) => a + r.scheduledToday, 0);
   const hasRequests = totalRequests > 0;
 
   return (
@@ -62,18 +62,18 @@ export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
                 <dt className="faint" style={{ fontSize: '.72rem' }}>Needs response</dt>
                 <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>{totalOpen}</dd>
               </div>
-              <div title="Payment status is not recorded on escalation-backed Extras requests.">
+              <div>
                 <dt className="faint" style={{ fontSize: '.72rem' }}>Payment pending</dt>
-                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>0</dd>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>{totalPaymentPending}</dd>
               </div>
-              <div title="Scheduling data is not recorded on escalation-backed Extras requests.">
+              <div>
                 <dt className="faint" style={{ fontSize: '.72rem' }}>Scheduled today</dt>
-                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>0</dd>
+                <dd style={{ margin: '.1rem 0 0', fontWeight: 700 }}>{totalScheduledToday}</dd>
               </div>
             </dl>
             <p className="faint" style={{ margin: '0 0 .85rem', fontSize: '.75rem' }}>
-              Payment and scheduling are not recorded for Extras requests yet, so those counts are shown as zero.
-              {totalResolved > 0 ? ` ${totalResolved} closed or resolved request${totalResolved === 1 ? '' : 's'}.` : ''}
+              Payment pending only records an arrangement outside Moche; no guest card is charged.
+              {totalResolved > 0 ? ` ${totalResolved} completed, declined, canceled, expired, or refunded request${totalResolved === 1 ? '' : 's'}.` : ''}
             </p>
             <ul className="dash-topics" data-testid="extras-requests-list">
               {rows
@@ -81,7 +81,7 @@ export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
                 .map((r) => (
                   <li key={r.propertyId} className="dash-topic" data-testid="extras-requests-row">
                     <Link
-                      href={`/dashboard/escalations?property=${r.propertyId}`}
+                      href="/dashboard/extras"
                       className="dash-topic-row"
                       style={{ textDecoration: 'none', color: 'inherit' }}
                     >
@@ -104,13 +104,13 @@ export function ExtrasRequestsCard({ rows }: { rows: ExtrasRequestRow[] }) {
             </span>
             <p className="dash-panel-empty-title">No Extras requests yet</p>
             <p className="dash-panel-empty-sub">
-              When a guest taps &ldquo;Request&rdquo; on an Extra, it lands here and in your escalations, grouped by property.
+              When a guest sends an Extras request, it appears here with a status timeline.
             </p>
           </div>
         )}
         {hasRequests && (
-          <Link href="/dashboard/escalations" className="dash-panel-link">
-            View Extras requests in Escalations <ArrowUpRight size={14} aria-hidden />
+          <Link href="/dashboard/extras" className="dash-panel-link">
+            View Extras queue <ArrowUpRight size={14} aria-hidden />
           </Link>
         )}
       </CollapsibleBody>

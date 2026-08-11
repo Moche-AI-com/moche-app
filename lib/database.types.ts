@@ -558,13 +558,74 @@ export type Database = {
           },
         ]
       }
+      extras_order_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: Database["public"]["Enums"]["extras_order_event_actor"]
+          created_at: string
+          from_status: Database["public"]["Enums"]["extras_fulfillment_status"] | null
+          id: string
+          note: string | null
+          order_id: string
+          property_id: string
+          to_status: Database["public"]["Enums"]["extras_fulfillment_status"]
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: Database["public"]["Enums"]["extras_order_event_actor"]
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["extras_fulfillment_status"] | null
+          id?: string
+          note?: string | null
+          order_id: string
+          property_id: string
+          to_status: Database["public"]["Enums"]["extras_fulfillment_status"]
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: Database["public"]["Enums"]["extras_order_event_actor"]
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["extras_fulfillment_status"] | null
+          id?: string
+          note?: string | null
+          order_id?: string
+          property_id?: string
+          to_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extras_order_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_order_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "extras_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_order_events_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extras_orders: {
         Row: {
           archived_at: string | null
           conversation_id: string | null
           created_at: string
+          declined_reason: string | null
           escalation_id: string | null
           extra_id: string | null
+          expires_at: string | null
+          fulfillment_status: Database["public"]["Enums"]["extras_fulfillment_status"]
           guest_note: string | null
           host_note: string | null
           id: string
@@ -574,7 +635,12 @@ export type Database = {
             | Database["public"]["Enums"]["lifecycle_state"]
             | null
           property_id: string
+          payment_mode: string
           quantity: number
+          quote_currency: string
+          quoted_amount_cents: number | null
+          request_number: string
+          scheduled_for: string | null
           status: Database["public"]["Enums"]["extras_order_status"]
           stay_id: string | null
           updated_at: string
@@ -584,8 +650,11 @@ export type Database = {
           archived_at?: string | null
           conversation_id?: string | null
           created_at?: string
+          declined_reason?: string | null
           escalation_id?: string | null
           extra_id?: string | null
+          expires_at?: string | null
+          fulfillment_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
           guest_note?: string | null
           host_note?: string | null
           id?: string
@@ -595,7 +664,12 @@ export type Database = {
             | Database["public"]["Enums"]["lifecycle_state"]
             | null
           property_id: string
+          payment_mode?: string
           quantity?: number
+          quote_currency?: string
+          quoted_amount_cents?: number | null
+          request_number?: string
+          scheduled_for?: string | null
           status?: Database["public"]["Enums"]["extras_order_status"]
           stay_id?: string | null
           updated_at?: string
@@ -605,8 +679,11 @@ export type Database = {
           archived_at?: string | null
           conversation_id?: string | null
           created_at?: string
+          declined_reason?: string | null
           escalation_id?: string | null
           extra_id?: string | null
+          expires_at?: string | null
+          fulfillment_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
           guest_note?: string | null
           host_note?: string | null
           id?: string
@@ -616,7 +693,12 @@ export type Database = {
             | Database["public"]["Enums"]["lifecycle_state"]
             | null
           property_id?: string
+          payment_mode?: string
           quantity?: number
+          quote_currency?: string
+          quoted_amount_cents?: number | null
+          request_number?: string
+          scheduled_for?: string | null
           status?: Database["public"]["Enums"]["extras_order_status"]
           stay_id?: string | null
           updated_at?: string
@@ -2604,6 +2686,18 @@ export type Database = {
         | "fulfilled"
         | "declined"
         | "cancelled"
+      extras_fulfillment_status:
+        | "requested"
+        | "needs_details"
+        | "accepted"
+        | "payment_pending"
+        | "scheduled"
+        | "fulfilled"
+        | "declined"
+        | "canceled"
+        | "expired"
+        | "refunded"
+      extras_order_event_actor: "guest" | "host" | "system"
       feedback_value: "helpful" | "not_helpful"
       host_preference: "loved" | "neutral" | "disliked"
       ingestion_kind: "document" | "url"
@@ -2822,6 +2916,19 @@ export const Constants = {
         "declined",
         "cancelled",
       ],
+      extras_fulfillment_status: [
+        "requested",
+        "needs_details",
+        "accepted",
+        "payment_pending",
+        "scheduled",
+        "fulfilled",
+        "declined",
+        "canceled",
+        "expired",
+        "refunded",
+      ],
+      extras_order_event_actor: ["guest", "host", "system"],
       feedback_value: ["helpful", "not_helpful"],
       host_preference: ["loved", "neutral", "disliked"],
       ingestion_kind: ["document", "url"],

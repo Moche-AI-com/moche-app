@@ -10,6 +10,7 @@ import { log } from '@/lib/log';
 import { clampExtraQuantity, DEFAULT_EXTRA_QUANTITY, isPackageExtra, resolveExtraVariant } from '@/lib/guest/extras';
 import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { translateForHost, notificationBody } from '@/lib/guest/translate';
+import { generateRequestNumber } from '@/lib/extras/request-number';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,13 +21,9 @@ export const dynamic = 'force-dynamic';
 // alerted in-app, by email, and (Pro+, consented) by SMS, and can answer via the
 // magic link.
 //
-// It ALSO writes an `extras_orders` row. The escalation is the alert; the order
-// is the durable record. Without it a host who dismisses the notification has
-// nothing to come back to, there is no requested/fulfilled/declined state, and
-// extras never reach the Reports hub. The order write is best-effort and
-// non-blocking: if it fails the guest still gets a successful request and the
-// host still gets the alert, because losing the notification would be the worse
-// failure of the two.
+// It ALSO writes an `extras_orders` row and its first append-only timeline
+// event before notifying anyone. The guest never receives a false confirmation:
+// a request number is returned only after that durable record is created.
 export async function POST(req: Request, { params }: { params: { slug: string } }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
@@ -78,7 +75,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     return NextResponse.json({ error: 'Please choose an option before requesting this.' }, { status: 400 });
   }
 
-  const guestNote = parsed.data.note?.trim() || null;
+  const preferredTimeNote = parsed.data.preferredFor ? `Preferred time: ${parsed.data.preferredFor}` : null;
+  const guestNote = [parsed.data.note?.trim(), preferredTimeNote].filter(Boolean).join('\n') || null;
 
   const priceSuffix = offer.price_text ? ` (${offer.price_text})` : '';
   const unit = offer.unit_label?.trim();
@@ -120,6 +118,55 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     } as never);
   }
 
+  // Create the request before its alert. A unique index remains the final
+  // arbiter, so collisions from concurrent guests are retried here rather than
+  // pretending an unpersisted request succeeded.
+  let createdOrder: { id: string; request_number: string } | null = null;
+  let orderErrorMessage: string | null = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const requestNumber = generateRequestNumber();
+    const { data, error } = await admin.from('extras_orders').insert({
+      property_id: session.propertyId,
+      stay_id: session.stayId,
+      conversation_id: conversationId,
+      extra_id: offer.id,
+      item_title: offer.title,
+      item_price_text: offer.price_text ?? null,
+      item_variant: variant,
+      quantity,
+      guest_note: guestNote,
+      status: 'requested',
+      fulfillment_status: 'requested',
+      request_number: requestNumber,
+      payment_mode: 'request_only',
+    } as never).select('id, request_number').maybeSingle();
+
+    if (data) {
+      createdOrder = data as { id: string; request_number: string };
+      break;
+    }
+    orderErrorMessage = error?.message ?? 'Unknown database error';
+    if (error?.code !== '23505') break;
+  }
+  if (!createdOrder) {
+    log.warn('extras_order_insert_failed', { error: orderErrorMessage });
+    return NextResponse.json({ error: 'Could not save your request. Please try again.' }, { status: 500 });
+  }
+
+  const { error: initialEventError } = await admin.from('extras_order_events').insert({
+    order_id: createdOrder.id,
+    property_id: session.propertyId,
+    from_status: null,
+    to_status: 'requested',
+    actor_type: 'guest',
+    note: guestNote ? `Request note: ${guestNote}` : 'Request created',
+  } as never);
+  if (initialEventError) {
+    await admin.from('extras_orders').delete().eq('id', createdOrder.id);
+    log.warn('extras_order_initial_event_failed', { orderId: createdOrder.id, error: initialEventError.message });
+    return NextResponse.json({ error: 'Could not save your request. Please try again.' }, { status: 500 });
+  }
+
   // Reuse the escalation mechanism the chat route uses.
   const { data: esc } = await admin.from('escalations').insert({
     property_id: session.propertyId,
@@ -129,6 +176,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     status: 'open',
   } as never).select('id').single();
   const escId = (esc as { id: string } | null)?.id;
+  if (escId) {
+    await admin.from('extras_orders').update({ escalation_id: escId } as never).eq('id', createdOrder.id);
+  }
 
   const answerUrl = escId ? `${publicEnv.appUrl}/answer/${signEscalationLinkToken(escId)}` : undefined;
   await notify(admin, {
@@ -141,29 +191,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     actionUrl: answerUrl,
   });
 
-  // Durable order record. item_title / item_price_text are SNAPSHOTS: a later
-  // catalog edit must not rewrite what this guest was quoted.
-  const { error: orderError } = await admin.from('extras_orders').insert({
-    property_id: session.propertyId,
-    stay_id: session.stayId,
-    conversation_id: conversationId,
-    escalation_id: escId ?? null,
-    extra_id: offer.id,
-    item_title: offer.title,
-    item_price_text: offer.price_text ?? null,
-    item_variant: variant,
-    quantity,
-    guest_note: guestNote,
-    status: 'requested',
-  } as never);
-  if (orderError) {
-    // Deliberately not a 500: the host has already been alerted, so failing the
-    // guest's request here would be a worse outcome than a missing queue row.
-    log.warn('extras_order_insert_failed', { escalationId: escId, error: orderError.message });
-  }
-
-  log.info('guest_extra_request', { escalationId: escId, quantity });
+  log.info('guest_extra_request', { escalationId: escId, orderId: createdOrder.id, quantity });
   await capture('extra_requested', session.propertyId, { property_id: session.propertyId });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, requestNumber: createdOrder.request_number, orderId: createdOrder.id });
 }
