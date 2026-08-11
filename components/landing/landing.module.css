@@ -129,255 +129,255 @@
 
 /* ---- Hero ---------------------------------------------------------------- */
 
-/* Gallery-led, arc layout. The photography fans overhead and the copy sits
-   under it on the centre line, so the frames flank the headline instead of
-   competing with it for the same vertical space.
-   The fan stays in normal flow -- it reserves its own height, and the copy is
-   pulled up into the bottom of the arc with a negative margin rather than the
-   hero carrying a hand-tuned padding that has to be kept in sync with it. */
+/* Two columns on desktop: copy left, the real guest portal right. The previous
+   arc of seven stock property frames is gone -- it filled the top of the page
+   with pictures of houses instead of pictures of the product.
+   The screenshot column is capped rather than fluid: it is a tall phone-shaped
+   surface, and letting it grow with the viewport pushed the headline down and
+   the CTA below the fold on short laptops. */
 .hero {
-  padding-top: clamp(1.75rem, 4vw, 3rem);
-  padding-bottom: clamp(1rem, 3vw, 2.25rem);
+  padding-top: clamp(1.5rem, 3.5vw, 2.75rem);
+  padding-bottom: clamp(1.25rem, 3vw, 2.5rem);
   overflow: hidden;
 }
 
-.heroFan {
-  position: relative;
-  width: min(1220px, 100%);
-  height: clamp(150px, 24vw, 300px);
-  margin: 0 auto;
+.heroLayout {
+  display: grid;
+  gap: clamp(1.75rem, 4vw, 3.5rem);
+  align-items: center;
 }
 
-/* Each frame carries its own --fan-x / --fan-y / --fan-rot. --fan-x and
-   --fan-y are percentages, so they resolve against .heroFan rather than
-   against the frame's own box, which keeps the arc's proportions identical at
-   every width instead of drifting with the card size. */
-.heroFanFrame {
-  position: absolute;
-  top: var(--fan-y);
-  left: calc(50% + var(--fan-x));
-  width: clamp(74px, 11.5vw, 168px);
-  aspect-ratio: 3 / 4;
-  border-radius: clamp(9px, 1.1vw, 16px);
-  overflow: hidden;
-  background: var(--surface-2);
-  box-shadow: var(--shadow-md);
-  transform: translate(-50%, 0) rotate(var(--fan-rot));
-  z-index: calc(4 - var(--fan-rank, 0));
-}
-
-/* The centre frame is upright, largest, and on top: it is the one the eye
-   lands on before it reads the headline underneath. */
-.heroFanFrame[data-rank='0'] {
-  width: clamp(88px, 13vw, 192px);
-}
-
-.heroFanImage {
-  object-fit: cover;
-  object-position: var(--fan-pos, 50% 50%);
-}
-
-/* Under 700px seven frames at a legible size cannot sit side by side without
-   overlapping into an unreadable smear, so the arc thins from the outside in
-   rather than shrinking every frame past the point of being a photograph. */
-@media (max-width: 700px) {
-  .heroFanFrame[data-rank='3'] {
-    display: none;
-  }
-
-  /* The arc gets proportionally taller as it narrows, and the copy stops being
-     pulled up into it: on a phone the headline is three or four lines starting
-     right under the fan, and a few pixels of overlap there reads as a bug
-     rather than as depth. */
-  .heroFan {
-    height: clamp(180px, 46vw, 260px);
-  }
-
-  .heroCopy {
-    margin-top: clamp(0.75rem, 3vw, 1.5rem);
-  }
-
-  .heroFanFrame {
-    width: clamp(78px, 19vw, 122px);
-  }
-
-  .heroFanFrame[data-rank='0'] {
-    width: clamp(90px, 22vw, 140px);
-  }
-}
-
-@media (max-width: 430px) {
-  .heroFanFrame[data-rank='2'] {
-    display: none;
-  }
-
-  .heroFanFrame {
-    width: clamp(88px, 26vw, 128px);
-  }
-
-  .heroFanFrame[data-rank='0'] {
-    width: clamp(104px, 31vw, 150px);
-  }
-}
-
-/* The entrance plays from CSS with no JS involved, the same reasoning as the
-   [data-eager] reveals in globals.css: the hero is the first screen, and
-   gating it on hydration leaves the top of the page visibly empty for a few
-   hundred milliseconds. Frames fan out from a near-centred stack. */
-@media (prefers-reduced-motion: no-preference) {
-  .heroFanFrame {
-    animation: fanIn 760ms var(--ease-out) backwards;
-    animation-delay: calc(40ms + var(--fan-i) * 55ms);
-  }
-}
-
-@keyframes fanIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 22px) rotate(calc(var(--fan-rot) * 0.35)) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0) rotate(var(--fan-rot));
-  }
-}
-
-/* Scroll parallax: the outer frames travel further than the centre, which is
-   what makes the arc read as having depth rather than being a flat decal.
-   Animated via the `translate` property, NOT `transform` -- transform already
-   holds the frame's fixed position and rotation, and the two would overwrite
-   each other. Progressive enhancement: browsers without scroll-driven
-   animations get the static arc and lose nothing they can name. */
-@supports (animation-timeline: scroll()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .heroFanFrame {
-      animation:
-        fanIn 760ms var(--ease-out) backwards,
-        fanDrift 1s linear both;
-      animation-delay: calc(40ms + var(--fan-i) * 55ms), 0s;
-      animation-timeline: auto, scroll(root block);
-      animation-range: normal, 0 80vh;
-    }
-  }
-}
-
-@keyframes fanDrift {
-  from {
-    translate: 0 0;
-  }
-  to {
-    translate: 0 calc(var(--fan-rank, 0) * -14px - 6px);
-  }
-}
-
-/* Hovering a frame borrows the pricing rail's grammar so the two interactions
-   read as the same system: the pointed-at thing comes forward in full colour
-   and everything around it recedes. The frame lifts, straightens most of the
-   way out of its tilt, and rises above its neighbours -- the tilt is what makes
-   the arc read as a stack of prints, so releasing it is what makes one feel
-   picked up out of that stack. Gated behind a fine pointer: on touch there is
-   no hover, and leaving it ungated leaves frames stuck in the lifted state
-   after a tap. Fill mode on the entrance is `backwards`, not `both`, so the
-   finished keyframe stops outranking these transforms. The dimming is keyed off
-   `:has()` rather than `.heroFan:hover`, because the outer frames hang outside
-   their container's box: pointing at one of those never puts the pointer inside
-   .heroFan, so an ancestor :hover would silently do nothing there. */
-@media (hover: hover) and (pointer: fine) {
-  .heroFanFrame {
-    transition:
-      filter 300ms var(--ease-out),
-      box-shadow 420ms var(--ease-out);
-  }
-
-  .heroFan:has(.heroFanFrame:hover) .heroFanFrame,
-  .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame {
-    filter: saturate(0.72) opacity(0.72);
-  }
-
-  .heroFan:has(.heroFanFrame:hover) .heroFanFrame:hover,
-  .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame:focus-visible {
-    filter: saturate(1.02) opacity(1);
-    box-shadow: var(--shadow-lg);
-    z-index: 9;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .heroFanFrame {
-      transition:
-        transform 420ms var(--ease-out),
-        filter 300ms var(--ease-out),
-        box-shadow 420ms var(--ease-out);
-    }
-
-    .heroFan:has(.heroFanFrame:hover) .heroFanFrame:hover,
-    .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame:focus-visible {
-      transform: translate(-50%, -14px) rotate(calc(var(--fan-rot) * 0.3)) scale(1.055);
-    }
-
-    /* The image drifts the opposite way to the frame, so the crop opens
-       slightly as the frame rises instead of the whole thing scaling as one
-       flat sticker. */
-    .heroFanFrame:hover .heroFanImage {
-      transform: scale(1.06);
-    }
-
-    .heroFanImage {
-      transition: transform 520ms var(--ease-out);
-    }
+@media (min-width: 900px) {
+  .heroLayout {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   }
 }
 
 .heroCopy {
-  position: relative;
-  /* Above the frames: the outermost pair hangs below the fan's own box and
-     would otherwise sit on top of the headline. */
-  z-index: 5;
-  max-width: 48rem;
-  margin-top: calc(-1 * clamp(0.5rem, 2vw, 2rem));
-  text-align: center;
+  max-width: 36rem;
 }
 
 .heroKicker {
-  font-size: clamp(0.86rem, 1.4vw, 0.98rem);
+  font-size: clamp(0.82rem, 1.3vw, 0.92rem);
   font-weight: 600;
   letter-spacing: -0.005em;
   color: var(--teal);
-  margin: 0 auto 0.85rem;
-  max-width: 32rem;
+  margin: 0 0 0.85rem;
   text-wrap: balance;
 }
 
 .heroTitle {
-  font-size: clamp(2.4rem, 6.4vw, 4.25rem);
-  line-height: 1.02;
-  letter-spacing: -0.035em;
-  margin-bottom: 1.1rem;
+  font-size: clamp(2.05rem, 3.7vw, 3.05rem);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  margin-bottom: 1rem;
   text-wrap: balance;
 }
 
 .heroSubtitle {
-  font-size: clamp(1.02rem, 1.8vw, 1.22rem);
+  font-size: clamp(1rem, 1.6vw, 1.15rem);
   line-height: 1.55;
   color: var(--text-muted);
-  max-width: 34rem;
-  margin: 0 auto 1.75rem;
+  margin: 0 0 1.6rem;
   text-wrap: pretty;
 }
 
 .heroActions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Three short factual signals, not a badge row. Dots are drawn in CSS so the
+   list still reads as a list to assistive tech. */
+.heroTrust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.heroTrust li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.heroTrust li::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--teal);
+  flex: none;
 }
 
 .heroTrialNote {
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   line-height: 1.5;
   color: var(--text-faint);
   max-width: 30rem;
-  margin: 0 auto;
+  margin: 0;
+}
+
+.heroMedia {
+  justify-self: center;
+  width: min(340px, 100%);
+}
+
+.heroShot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+/* ---- Product trust ------------------------------------------------------- */
+
+.trust {
+  padding-block: clamp(2.5rem, 5.5vw, 4rem);
+}
+
+.trustLead {
+  max-width: 42rem;
+  margin: 0 0 clamp(1.5rem, 3vw, 2.25rem);
+}
+
+.trustGrid {
+  display: grid;
+  gap: clamp(1.5rem, 3.5vw, 2.75rem);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .trustGrid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  }
+}
+
+.trustPillars {
+  display: grid;
+  gap: 1.35rem;
+  margin: 0;
+}
+
+.trustPillarTitle {
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  margin-bottom: 0.3rem;
+}
+
+.trustPillarDetail {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 34rem;
+}
+
+/* Deliberately typographic. This is a written example of intended behaviour,
+   not a screenshot, so it must not be dressed up as chat bubbles -- a visitor
+   should never be able to mistake it for a captured conversation. */
+.example {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  padding: clamp(1.1rem, 2.4vw, 1.5rem);
+}
+
+.exampleLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 0.9rem;
+}
+
+.exampleBody {
+  display: grid;
+  gap: 0.35rem 0;
+  margin: 0 0 1rem;
+}
+
+.exampleBody dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.exampleBody dd {
+  margin: 0 0 0.75rem;
+  font-size: 0.97rem;
+  line-height: 1.55;
+}
+
+.exampleBody dd:last-of-type {
+  margin-bottom: 0;
+}
+
+.exampleStatus {
+  display: inline-block;
+  margin: 0 0 0.75rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-strong);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--teal);
+}
+
+.exampleNote {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* ---- Workflow proof screenshots ------------------------------------------ */
+
+.systemProof {
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2.25rem);
+  margin: clamp(2rem, 4.5vw, 3rem) 0;
+}
+
+@media (min-width: 760px) {
+  .systemProof {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.proofFigure {
+  margin: 0;
+  justify-self: center;
+  max-width: 340px;
+}
+
+.proofImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.proofCaption {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 /* ---- Who it serves / compatibility band --------------------------------- */
@@ -837,23 +837,6 @@
   border-color: var(--teal);
 }
 
-.pricingFlag {
-  display: none;
-}
-
-.pricingFlag[data-visible] {
-  display: inline-block;
-  margin-bottom: 0.55rem;
-  padding: 0.15rem 0.6rem;
-  border-radius: 9999px;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-fg);
-}
-
 .pricingRail {
   min-width: 0;
 }
@@ -1047,13 +1030,6 @@
      wrap their facts to six lines, which sets the height of the whole row. */
   .pricingDetailInner {
     width: 12.5rem;
-  }
-
-  .pricingFlag[data-visible] {
-    position: absolute;
-    top: -0.65rem;
-    left: 1.05rem;
-    margin-bottom: 0;
   }
 
   .pricingTier {
