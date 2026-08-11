@@ -126,6 +126,77 @@ export type Database = {
         }
         Relationships: []
       }
+      appliance_manual_sections: {
+        Row: {
+          appliance_id: string
+          approved_at: string | null
+          approved_by: string | null
+          body: string
+          created_at: string
+          id: string
+          page_ref: string | null
+          property_id: string
+          requires_licensed_technician: boolean
+          section_title: string
+          source_document_id: string | null
+        }
+        Insert: {
+          appliance_id: string
+          approved_at?: string | null
+          approved_by?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          page_ref?: string | null
+          property_id: string
+          requires_licensed_technician?: boolean
+          section_title: string
+          source_document_id?: string | null
+        }
+        Update: {
+          appliance_id?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          page_ref?: string | null
+          property_id?: string
+          requires_licensed_technician?: boolean
+          section_title?: string
+          source_document_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appliance_manual_sections_appliance_id_fkey"
+            columns: ["appliance_id"]
+            isOneToOne: false
+            referencedRelation: "property_appliances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appliance_manual_sections_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appliance_manual_sections_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appliance_manual_sections_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -304,24 +375,24 @@ export type Database = {
           id: string
           property_id: string
           stay_id: string
-          updated_at: string
           title: string | null
+          updated_at: string
         }
         Insert: {
           created_at?: string
           id?: string
           property_id: string
           stay_id: string
-          updated_at?: string
           title?: string | null
+          updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
           property_id?: string
           stay_id?: string
-          updated_at?: string
           title?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -558,12 +629,91 @@ export type Database = {
           },
         ]
       }
+      extracted_facts: {
+        Row: {
+          confidence: number | null
+          conflict_with: string | null
+          created_at: string
+          field_path: string
+          id: string
+          label: string
+          property_id: string
+          proposed_update_id: string | null
+          reviewed_at: string | null
+          sensitivity: Database["public"]["Enums"]["extracted_fact_sensitivity"]
+          source_document_id: string
+          status: Database["public"]["Enums"]["extracted_fact_status"]
+          value: Json
+        }
+        Insert: {
+          confidence?: number | null
+          conflict_with?: string | null
+          created_at?: string
+          field_path: string
+          id?: string
+          label: string
+          property_id: string
+          proposed_update_id?: string | null
+          reviewed_at?: string | null
+          sensitivity?: Database["public"]["Enums"]["extracted_fact_sensitivity"]
+          source_document_id: string
+          status?: Database["public"]["Enums"]["extracted_fact_status"]
+          value: Json
+        }
+        Update: {
+          confidence?: number | null
+          conflict_with?: string | null
+          created_at?: string
+          field_path?: string
+          id?: string
+          label?: string
+          property_id?: string
+          proposed_update_id?: string | null
+          reviewed_at?: string | null
+          sensitivity?: Database["public"]["Enums"]["extracted_fact_sensitivity"]
+          source_document_id?: string
+          status?: Database["public"]["Enums"]["extracted_fact_status"]
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extracted_facts_conflict_with_fkey"
+            columns: ["conflict_with"]
+            isOneToOne: false
+            referencedRelation: "extracted_facts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracted_facts_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracted_facts_proposed_update_id_fkey"
+            columns: ["proposed_update_id"]
+            isOneToOne: false
+            referencedRelation: "proposed_updates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracted_facts_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "source_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extras_order_events: {
         Row: {
           actor_id: string | null
           actor_type: Database["public"]["Enums"]["extras_order_event_actor"]
           created_at: string
-          from_status: Database["public"]["Enums"]["extras_fulfillment_status"] | null
+          from_status:
+            | Database["public"]["Enums"]["extras_fulfillment_status"]
+            | null
           id: string
           note: string | null
           order_id: string
@@ -574,7 +724,9 @@ export type Database = {
           actor_id?: string | null
           actor_type: Database["public"]["Enums"]["extras_order_event_actor"]
           created_at?: string
-          from_status?: Database["public"]["Enums"]["extras_fulfillment_status"] | null
+          from_status?:
+            | Database["public"]["Enums"]["extras_fulfillment_status"]
+            | null
           id?: string
           note?: string | null
           order_id: string
@@ -585,7 +737,9 @@ export type Database = {
           actor_id?: string | null
           actor_type?: Database["public"]["Enums"]["extras_order_event_actor"]
           created_at?: string
-          from_status?: Database["public"]["Enums"]["extras_fulfillment_status"] | null
+          from_status?:
+            | Database["public"]["Enums"]["extras_fulfillment_status"]
+            | null
           id?: string
           note?: string | null
           order_id?: string
@@ -623,19 +777,20 @@ export type Database = {
           created_at: string
           declined_reason: string | null
           escalation_id: string | null
-          extra_id: string | null
           expires_at: string | null
+          extra_id: string | null
           fulfillment_status: Database["public"]["Enums"]["extras_fulfillment_status"]
           guest_note: string | null
           host_note: string | null
           id: string
           item_price_text: string | null
           item_title: string
+          item_variant: string | null
           lifecycle_status:
             | Database["public"]["Enums"]["lifecycle_state"]
             | null
-          property_id: string
           payment_mode: string
+          property_id: string
           quantity: number
           quote_currency: string
           quoted_amount_cents: number | null
@@ -644,7 +799,6 @@ export type Database = {
           status: Database["public"]["Enums"]["extras_order_status"]
           stay_id: string | null
           updated_at: string
-          item_variant: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -652,28 +806,28 @@ export type Database = {
           created_at?: string
           declined_reason?: string | null
           escalation_id?: string | null
-          extra_id?: string | null
           expires_at?: string | null
+          extra_id?: string | null
           fulfillment_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
           guest_note?: string | null
           host_note?: string | null
           id?: string
           item_price_text?: string | null
           item_title: string
+          item_variant?: string | null
           lifecycle_status?:
             | Database["public"]["Enums"]["lifecycle_state"]
             | null
-          property_id: string
           payment_mode?: string
+          property_id: string
           quantity?: number
           quote_currency?: string
           quoted_amount_cents?: number | null
-          request_number?: string
+          request_number: string
           scheduled_for?: string | null
           status?: Database["public"]["Enums"]["extras_order_status"]
           stay_id?: string | null
           updated_at?: string
-          item_variant?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -681,19 +835,20 @@ export type Database = {
           created_at?: string
           declined_reason?: string | null
           escalation_id?: string | null
-          extra_id?: string | null
           expires_at?: string | null
+          extra_id?: string | null
           fulfillment_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
           guest_note?: string | null
           host_note?: string | null
           id?: string
           item_price_text?: string | null
           item_title?: string
+          item_variant?: string | null
           lifecycle_status?:
             | Database["public"]["Enums"]["lifecycle_state"]
             | null
-          property_id?: string
           payment_mode?: string
+          property_id?: string
           quantity?: number
           quote_currency?: string
           quoted_amount_cents?: number | null
@@ -702,7 +857,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["extras_order_status"]
           stay_id?: string | null
           updated_at?: string
-          item_variant?: string | null
         }
         Relationships: [
           {
@@ -903,17 +1057,17 @@ export type Database = {
           created_at: string
           cta_label: string | null
           description: string | null
+          details: string | null
           id: string
           is_favorite: boolean
+          kind: string
           max_quantity: number | null
+          option_label: string | null
+          options: string[]
           price_text: string | null
           property_id: string
           sort_order: number
           title: string
-          details: string | null
-          kind: string
-          option_label: string | null
-          options: string[] | null
           unit_label: string | null
         }
         Insert: {
@@ -922,17 +1076,17 @@ export type Database = {
           created_at?: string
           cta_label?: string | null
           description?: string | null
+          details?: string | null
           id?: string
           is_favorite?: boolean
+          kind?: string
           max_quantity?: number | null
+          option_label?: string | null
+          options?: string[]
           price_text?: string | null
           property_id: string
           sort_order?: number
           title: string
-          details?: string | null
-          kind?: string
-          option_label?: string | null
-          options?: string[] | null
           unit_label?: string | null
         }
         Update: {
@@ -941,17 +1095,17 @@ export type Database = {
           created_at?: string
           cta_label?: string | null
           description?: string | null
+          details?: string | null
           id?: string
           is_favorite?: boolean
+          kind?: string
           max_quantity?: number | null
+          option_label?: string | null
+          options?: string[]
           price_text?: string | null
           property_id?: string
           sort_order?: number
           title?: string
-          details?: string | null
-          kind?: string
-          option_label?: string | null
-          options?: string[] | null
           unit_label?: string | null
         }
         Relationships: [
@@ -1133,6 +1287,88 @@ export type Database = {
         }
         Relationships: []
       }
+      ingestion_artifacts: {
+        Row: {
+          agrees_with_primary: boolean | null
+          byte_length: number | null
+          content_sha256: string | null
+          created_at: string
+          error_reason: string | null
+          http_status: number | null
+          id: string
+          is_shadow: boolean
+          job_id: string | null
+          latency_ms: number | null
+          profile: string
+          property_id: string
+          provider: string
+          similarity_score: number | null
+          source_id: string | null
+          text_length: number
+          truncated: boolean
+        }
+        Insert: {
+          agrees_with_primary?: boolean | null
+          byte_length?: number | null
+          content_sha256?: string | null
+          created_at?: string
+          error_reason?: string | null
+          http_status?: number | null
+          id?: string
+          is_shadow?: boolean
+          job_id?: string | null
+          latency_ms?: number | null
+          profile: string
+          property_id: string
+          provider: string
+          similarity_score?: number | null
+          source_id?: string | null
+          text_length?: number
+          truncated?: boolean
+        }
+        Update: {
+          agrees_with_primary?: boolean | null
+          byte_length?: number | null
+          content_sha256?: string | null
+          created_at?: string
+          error_reason?: string | null
+          http_status?: number | null
+          id?: string
+          is_shadow?: boolean
+          job_id?: string | null
+          latency_ms?: number | null
+          profile?: string
+          property_id?: string
+          provider?: string
+          similarity_score?: number | null
+          source_id?: string | null
+          text_length?: number
+          truncated?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_artifacts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "ingestion_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingestion_artifacts_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingestion_artifacts_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "ingestion_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingestion_jobs: {
         Row: {
           attempts: number
@@ -1200,28 +1436,113 @@ export type Database = {
           },
         ]
       }
-      ingestion_artifacts: {
-        Row: { agrees_with_primary: boolean | null; byte_length: number | null; content_sha256: string | null; created_at: string; error_reason: string | null; http_status: number | null; id: string; is_shadow: boolean; latency_ms: number | null; profile: string; property_id: string; provider: string; similarity_score: number | null; source_id: string | null; text_length: number; truncated: boolean; job_id: string | null }
-        Insert: { agrees_with_primary?: boolean | null; byte_length?: number | null; content_sha256?: string | null; created_at?: string; error_reason?: string | null; http_status?: number | null; id?: string; is_shadow?: boolean; latency_ms?: number | null; profile: string; property_id: string; provider: string; similarity_score?: number | null; source_id?: string | null; text_length?: number; truncated?: boolean; job_id?: string | null }
-        Update: { agrees_with_primary?: boolean | null; byte_length?: number | null; content_sha256?: string | null; created_at?: string; error_reason?: string | null; http_status?: number | null; id?: string; is_shadow?: boolean; latency_ms?: number | null; profile?: string; property_id?: string; provider?: string; similarity_score?: number | null; source_id?: string | null; text_length?: number; truncated?: boolean; job_id?: string | null }
-        Relationships: []
-      }
       ingestion_sources: {
-        Row: { created_at: string; created_by: string | null; document_id: string | null; enabled: boolean; id: string; kind: Database["public"]["Enums"]["ingestion_source_kind"]; label: string; last_acquired_at: string | null; last_status: string | null; profile: string; property_id: string; updated_at: string; url: string | null }
-        Insert: { created_at?: string; created_by?: string | null; document_id?: string | null; enabled?: boolean; id?: string; kind: Database["public"]["Enums"]["ingestion_source_kind"]; label: string; last_acquired_at?: string | null; last_status?: string | null; profile: string; property_id: string; updated_at?: string; url?: string | null }
-        Update: { created_at?: string; created_by?: string | null; document_id?: string | null; enabled?: boolean; id?: string; kind?: Database["public"]["Enums"]["ingestion_source_kind"]; label?: string; last_acquired_at?: string | null; last_status?: string | null; profile?: string; property_id?: string; updated_at?: string; url?: string | null }
-        Relationships: []
+        Row: {
+          created_at: string
+          created_by: string | null
+          document_id: string | null
+          enabled: boolean
+          id: string
+          kind: Database["public"]["Enums"]["ingestion_source_kind"]
+          label: string
+          last_acquired_at: string | null
+          last_status: string | null
+          profile: string
+          property_id: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          enabled?: boolean
+          id?: string
+          kind: Database["public"]["Enums"]["ingestion_source_kind"]
+          label: string
+          last_acquired_at?: string | null
+          last_status?: string | null
+          profile: string
+          property_id: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          enabled?: boolean
+          id?: string
+          kind?: Database["public"]["Enums"]["ingestion_source_kind"]
+          label?: string
+          last_acquired_at?: string | null
+          last_status?: string | null
+          profile?: string
+          property_id?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_sources_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingestion_sources_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingestion_sources_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      source_documents: {
-        Row: { artifact_id: string; created_at: string; id: string; language: string | null; property_id: string; text: string; text_sha256: string; title: string }
-        Insert: { artifact_id: string; created_at?: string; id?: string; language?: string | null; property_id: string; text: string; text_sha256: string; title: string }
-        Update: { artifact_id?: string; created_at?: string; id?: string; language?: string | null; property_id?: string; text?: string; text_sha256?: string; title?: string }
-        Relationships: []
-      }
-      extracted_facts: {
-        Row: { confidence: number | null; conflict_with: string | null; created_at: string; field_path: string; id: string; label: string; property_id: string; proposed_update_id: string | null; reviewed_at: string | null; sensitivity: Database["public"]["Enums"]["extracted_fact_sensitivity"]; source_document_id: string; status: Database["public"]["Enums"]["extracted_fact_status"]; value: Json }
-        Insert: { confidence?: number | null; conflict_with?: string | null; created_at?: string; field_path: string; id?: string; label: string; property_id: string; proposed_update_id?: string | null; reviewed_at?: string | null; sensitivity?: Database["public"]["Enums"]["extracted_fact_sensitivity"]; source_document_id: string; status?: Database["public"]["Enums"]["extracted_fact_status"]; value: Json }
-        Update: { confidence?: number | null; conflict_with?: string | null; created_at?: string; field_path?: string; id?: string; label?: string; property_id?: string; proposed_update_id?: string | null; reviewed_at?: string | null; sensitivity?: Database["public"]["Enums"]["extracted_fact_sensitivity"]; source_document_id?: string; status?: Database["public"]["Enums"]["extracted_fact_status"]; value?: Json }
+      knowledge_requirements: {
+        Row: {
+          active: boolean
+          category: string
+          created_at: string
+          field_paths: string[]
+          key: string
+          label: string
+          updated_at: string
+          version: number
+          weight_hint: number
+          why: string
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          created_at?: string
+          field_paths?: string[]
+          key: string
+          label: string
+          updated_at?: string
+          version: number
+          weight_hint: number
+          why: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          field_paths?: string[]
+          key?: string
+          label?: string
+          updated_at?: string
+          version?: number
+          weight_hint?: number
+          why?: string
+        }
         Relationships: []
       }
       legal_acceptances: {
@@ -1793,87 +2114,6 @@ export type Database = {
         }
         Relationships: []
       }
-      appliance_manual_sections: {
-        Row: {
-          approved_at: string | null
-          approved_by: string | null
-          appliance_id: string
-          body: string
-          created_at: string
-          id: string
-          page_ref: string | null
-          property_id: string
-          requires_licensed_technician: boolean
-          section_title: string
-          source_document_id: string | null
-        }
-        Insert: {
-          approved_at?: string | null
-          approved_by?: string | null
-          appliance_id: string
-          body: string
-          created_at?: string
-          id?: string
-          page_ref?: string | null
-          property_id: string
-          requires_licensed_technician?: boolean
-          section_title: string
-          source_document_id?: string | null
-        }
-        Update: {
-          approved_at?: string | null
-          approved_by?: string | null
-          appliance_id?: string
-          body?: string
-          created_at?: string
-          id?: string
-          page_ref?: string | null
-          property_id?: string
-          requires_licensed_technician?: boolean
-          section_title?: string
-          source_document_id?: string | null
-        }
-        Relationships: []
-      }
-      knowledge_requirements: {
-        Row: {
-          active: boolean
-          category: string
-          created_at: string
-          field_paths: string[]
-          key: string
-          label: string
-          updated_at: string
-          version: number
-          weight_hint: number
-          why: string
-        }
-        Insert: {
-          active?: boolean
-          category: string
-          created_at?: string
-          field_paths?: string[]
-          key: string
-          label: string
-          updated_at?: string
-          version: number
-          weight_hint: number
-          why: string
-        }
-        Update: {
-          active?: boolean
-          category?: string
-          created_at?: string
-          field_paths?: string[]
-          key?: string
-          label?: string
-          updated_at?: string
-          version?: number
-          weight_hint?: number
-          why?: string
-        }
-        Relationships: []
-      }
       properties: {
         Row: {
           address_line1: string | null
@@ -2018,115 +2258,29 @@ export type Database = {
           updated_at?: string
           verification_status?: Database["public"]["Enums"]["appliance_verification_status"]
         }
-        Relationships: []
-      }
-      property_import_artifacts: {
-        Row: {
-          created_at: string
-          id: string
-          job_id: string
-          kind: string
-          payload: Json
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          job_id: string
-          kind: string
-          payload: Json
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          job_id?: string
-          kind?: string
-          payload?: Json
-        }
-        Relationships: []
-      }
-      property_import_jobs: {
-        Row: {
-          attempts: number
-          completed_at: string | null
-          created_at: string
-          created_by: string
-          error_message: string | null
-          error_reason: string | null
-          host_account_id: string
-          id: string
-          progress_pct: number
-          property_id: string | null
-          provider: string
-          source_url: string
-          stage_detail: string | null
-          status: Database["public"]["Enums"]["property_import_job_status"]
-          updated_at: string
-        }
-        Insert: {
-          attempts?: number
-          completed_at?: string | null
-          created_at?: string
-          created_by: string
-          error_message?: string | null
-          error_reason?: string | null
-          host_account_id: string
-          id?: string
-          progress_pct?: number
-          property_id?: string | null
-          provider?: string
-          source_url: string
-          stage_detail?: string | null
-          status?: Database["public"]["Enums"]["property_import_job_status"]
-          updated_at?: string
-        }
-        Update: {
-          attempts?: number
-          completed_at?: string | null
-          created_at?: string
-          created_by?: string
-          error_message?: string | null
-          error_reason?: string |null
-          host_account_id?: string
-          id?: string
-          progress_pct?: number
-          property_id?: string | null
-          provider?: string
-          source_url?: string
-          stage_detail?: string | null
-          status?: Database["public"]["Enums"]["property_import_job_status"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      property_knowledge_requirement_status: {
-        Row: {
-          evidence: Json
-          property_id: string
-          requirement_key: string
-          requirement_version: number
-          satisfied_at: string | null
-          status: Database["public"]["Enums"]["knowledge_requirement_status"]
-          updated_at: string
-        }
-        Insert: {
-          evidence?: Json
-          property_id: string
-          requirement_key: string
-          requirement_version: number
-          satisfied_at?: string | null
-          status?: Database["public"]["Enums"]["knowledge_requirement_status"]
-          updated_at?: string
-        }
-        Update: {
-          evidence?: Json
-          property_id?: string
-          requirement_key?: string
-          requirement_version?: number
-          satisfied_at?: string | null
-          status?: Database["public"]["Enums"]["knowledge_requirement_status"]
-          updated_at?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "property_appliances_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_appliances_manual_document_id_fkey"
+            columns: ["manual_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_appliances_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       property_brain_versions: {
         Row: {
@@ -2201,6 +2355,114 @@ export type Database = {
           },
         ]
       }
+      property_import_artifacts: {
+        Row: {
+          created_at: string
+          id: string
+          job_id: string
+          kind: string
+          payload: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_id: string
+          kind: string
+          payload: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_id?: string
+          kind?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_import_artifacts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "property_import_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      property_import_jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          error_message: string | null
+          error_reason: string | null
+          host_account_id: string
+          id: string
+          progress_pct: number
+          property_id: string | null
+          provider: string
+          source_url: string
+          stage_detail: string | null
+          status: Database["public"]["Enums"]["property_import_job_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          error_message?: string | null
+          error_reason?: string | null
+          host_account_id: string
+          id?: string
+          progress_pct?: number
+          property_id?: string | null
+          provider?: string
+          source_url: string
+          stage_detail?: string | null
+          status?: Database["public"]["Enums"]["property_import_job_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          error_message?: string | null
+          error_reason?: string | null
+          host_account_id?: string
+          id?: string
+          progress_pct?: number
+          property_id?: string | null
+          provider?: string
+          source_url?: string
+          stage_detail?: string | null
+          status?: Database["public"]["Enums"]["property_import_job_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_import_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_import_jobs_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_import_jobs_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       property_knowledge_nodes: {
         Row: {
           content: string
@@ -2251,6 +2513,51 @@ export type Database = {
             columns: ["source_brain_item_id"]
             isOneToOne: false
             referencedRelation: "brain_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      property_knowledge_requirement_status: {
+        Row: {
+          evidence: Json
+          property_id: string
+          requirement_key: string
+          requirement_version: number
+          satisfied_at: string | null
+          status: Database["public"]["Enums"]["knowledge_requirement_status"]
+          updated_at: string
+        }
+        Insert: {
+          evidence?: Json
+          property_id: string
+          requirement_key: string
+          requirement_version: number
+          satisfied_at?: string | null
+          status?: Database["public"]["Enums"]["knowledge_requirement_status"]
+          updated_at?: string
+        }
+        Update: {
+          evidence?: Json
+          property_id?: string
+          requirement_key?: string
+          requirement_version?: number
+          satisfied_at?: string | null
+          status?: Database["public"]["Enums"]["knowledge_requirement_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_knowledge_requiremen_requirement_key_requirement__fkey"
+            columns: ["requirement_key", "requirement_version"]
+            isOneToOne: false
+            referencedRelation: "knowledge_requirements"
+            referencedColumns: ["key", "version"]
+          },
+          {
+            foreignKeyName: "property_knowledge_requirement_status_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
         ]
@@ -2316,6 +2623,7 @@ export type Database = {
           concierge_tone: string
           confidence_threshold: number
           grace_period_hours: number
+          host_language: string
           is_premium_override: boolean
           language: string
           legacy_tone_ack_at: string | null
@@ -2330,7 +2638,6 @@ export type Database = {
           review_url: string | null
           system_prompt_override: string | null
           updated_at: string
-          host_language: string
         }
         Insert: {
           ai_temperature?: number
@@ -2338,6 +2645,7 @@ export type Database = {
           concierge_tone?: string
           confidence_threshold?: number
           grace_period_hours?: number
+          host_language?: string
           is_premium_override?: boolean
           language?: string
           legacy_tone_ack_at?: string | null
@@ -2352,7 +2660,6 @@ export type Database = {
           review_url?: string | null
           system_prompt_override?: string | null
           updated_at?: string
-          host_language?: string
         }
         Update: {
           ai_temperature?: number
@@ -2360,6 +2667,7 @@ export type Database = {
           concierge_tone?: string
           confidence_threshold?: number
           grace_period_hours?: number
+          host_language?: string
           is_premium_override?: boolean
           language?: string
           legacy_tone_ack_at?: string | null
@@ -2374,7 +2682,6 @@ export type Database = {
           review_url?: string | null
           system_prompt_override?: string | null
           updated_at?: string
-          host_language?: string
         }
         Relationships: [
           {
@@ -2676,6 +2983,54 @@ export type Database = {
           },
         ]
       }
+      source_documents: {
+        Row: {
+          artifact_id: string
+          created_at: string
+          id: string
+          language: string | null
+          property_id: string
+          text: string
+          text_sha256: string
+          title: string
+        }
+        Insert: {
+          artifact_id: string
+          created_at?: string
+          id?: string
+          language?: string | null
+          property_id: string
+          text: string
+          text_sha256: string
+          title: string
+        }
+        Update: {
+          artifact_id?: string
+          created_at?: string
+          id?: string
+          language?: string | null
+          property_id?: string
+          text?: string
+          text_sha256?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_documents_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "ingestion_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_documents_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stays: {
         Row: {
           archived_at: string | null
@@ -2691,6 +3046,7 @@ export type Database = {
           guest_count: number
           guest_display_name: string
           guest_identity_id: string | null
+          guest_language: string | null
           host_notes: string | null
           id: string
           lifecycle_status:
@@ -2699,7 +3055,6 @@ export type Database = {
           property_id: string
           status: Database["public"]["Enums"]["stay_status"]
           updated_at: string
-          guest_language: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -2715,6 +3070,7 @@ export type Database = {
           guest_count?: number
           guest_display_name: string
           guest_identity_id?: string | null
+          guest_language?: string | null
           host_notes?: string | null
           id?: string
           lifecycle_status?:
@@ -2723,7 +3079,6 @@ export type Database = {
           property_id: string
           status?: Database["public"]["Enums"]["stay_status"]
           updated_at?: string
-          guest_language?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -2739,6 +3094,7 @@ export type Database = {
           guest_count?: number
           guest_display_name?: string
           guest_identity_id?: string | null
+          guest_language?: string | null
           host_notes?: string | null
           id?: string
           lifecycle_status?:
@@ -2747,7 +3103,6 @@ export type Database = {
           property_id?: string
           status?: Database["public"]["Enums"]["stay_status"]
           updated_at?: string
-          guest_language?: string | null
         }
         Relationships: [
           {
@@ -2906,10 +3261,11 @@ export type Database = {
       }
     }
     Enums: {
-      appliance_verification_status: "unverified" | "model_confirmed" | "manual_ingested",
-      knowledge_requirement_status: "missing" | "partial" | "satisfied" | "not_applicable",
-      property_import_job_status: "queued" | "acquiring" | "extracting" | "drafting" | "awaiting_review" | "completed" | "failed" | "canceled",
       access_status: "pending" | "verified" | "expired" | "revoked"
+      appliance_verification_status:
+        | "unverified"
+        | "model_confirmed"
+        | "manual_ingested"
       brain_category:
         | "core"
         | "appliances"
@@ -2926,12 +3282,13 @@ export type Database = {
       consent_kind: "terms" | "privacy" | "marketing" | "guest_comms"
       conversation_role: "guest" | "assistant" | "host" | "system"
       escalation_status: "open" | "answered" | "resolved" | "dismissed"
-      extras_order_status:
-        | "requested"
-        | "confirmed"
-        | "fulfilled"
-        | "declined"
-        | "cancelled"
+      extracted_fact_sensitivity: "normal" | "sensitive"
+      extracted_fact_status:
+        | "extracted"
+        | "validated"
+        | "conflict"
+        | "proposed"
+        | "rejected"
       extras_fulfillment_status:
         | "requested"
         | "needs_details"
@@ -2944,12 +3301,21 @@ export type Database = {
         | "expired"
         | "refunded"
       extras_order_event_actor: "guest" | "host" | "system"
+      extras_order_status:
+        | "requested"
+        | "confirmed"
+        | "fulfilled"
+        | "declined"
+        | "cancelled"
       feedback_value: "helpful" | "not_helpful"
       host_preference: "loved" | "neutral" | "disliked"
       ingestion_kind: "document" | "url"
-      ingestion_source_kind: "property_site" | "listing" | "manual_site" | "local_source" | "document"
-      extracted_fact_status: "extracted" | "validated" | "conflict" | "proposed" | "rejected"
-      extracted_fact_sensitivity: "normal" | "sensitive"
+      ingestion_source_kind:
+        | "property_site"
+        | "listing"
+        | "manual_site"
+        | "local_source"
+        | "document"
       intent_type:
         | "information"
         | "wifi"
@@ -2964,6 +3330,11 @@ export type Database = {
         | "safety"
         | "emergency"
         | "other"
+      knowledge_requirement_status:
+        | "missing"
+        | "partial"
+        | "satisfied"
+        | "not_applicable"
       lifecycle_state: "active" | "archived"
       member_role:
         | "owner"
@@ -2981,6 +3352,15 @@ export type Database = {
         | "review_nudge"
         | "system"
       processing_status: "pending" | "processing" | "ready" | "failed" | "stale"
+      property_import_job_status:
+        | "queued"
+        | "acquiring"
+        | "extracting"
+        | "drafting"
+        | "awaiting_review"
+        | "completed"
+        | "failed"
+        | "canceled"
       property_status: "draft" | "live" | "paused" | "archived"
       proposed_update_status: "pending" | "approved" | "modified" | "denied"
       service_status:
@@ -3138,6 +3518,11 @@ export const Constants = {
   public: {
     Enums: {
       access_status: ["pending", "verified", "expired", "revoked"],
+      appliance_verification_status: [
+        "unverified",
+        "model_confirmed",
+        "manual_ingested",
+      ],
       brain_category: [
         "core",
         "appliances",
@@ -3155,12 +3540,13 @@ export const Constants = {
       consent_kind: ["terms", "privacy", "marketing", "guest_comms"],
       conversation_role: ["guest", "assistant", "host", "system"],
       escalation_status: ["open", "answered", "resolved", "dismissed"],
-      extras_order_status: [
-        "requested",
-        "confirmed",
-        "fulfilled",
-        "declined",
-        "cancelled",
+      extracted_fact_sensitivity: ["normal", "sensitive"],
+      extracted_fact_status: [
+        "extracted",
+        "validated",
+        "conflict",
+        "proposed",
+        "rejected",
       ],
       extras_fulfillment_status: [
         "requested",
@@ -3175,13 +3561,23 @@ export const Constants = {
         "refunded",
       ],
       extras_order_event_actor: ["guest", "host", "system"],
+      extras_order_status: [
+        "requested",
+        "confirmed",
+        "fulfilled",
+        "declined",
+        "cancelled",
+      ],
       feedback_value: ["helpful", "not_helpful"],
       host_preference: ["loved", "neutral", "disliked"],
       ingestion_kind: ["document", "url"],
-      ingestion_source_kind: ["property_site", "listing", "manual_site", "local_source", "document"],
-      extracted_fact_status: ["extracted", "validated", "conflict", "proposed", "rejected"],
-      extracted_fact_sensitivity: ["normal", "sensitive"],
-      knowledge_requirement_status: ["missing", "partial", "satisfied", "not_applicable"],
+      ingestion_source_kind: [
+        "property_site",
+        "listing",
+        "manual_site",
+        "local_source",
+        "document",
+      ],
       intent_type: [
         "information",
         "wifi",
@@ -3196,6 +3592,12 @@ export const Constants = {
         "safety",
         "emergency",
         "other",
+      ],
+      knowledge_requirement_status: [
+        "missing",
+        "partial",
+        "satisfied",
+        "not_applicable",
       ],
       lifecycle_state: ["active", "archived"],
       member_role: [
@@ -3216,8 +3618,17 @@ export const Constants = {
         "system",
       ],
       processing_status: ["pending", "processing", "ready", "failed", "stale"],
+      property_import_job_status: [
+        "queued",
+        "acquiring",
+        "extracting",
+        "drafting",
+        "awaiting_review",
+        "completed",
+        "failed",
+        "canceled",
+      ],
       property_status: ["draft", "live", "paused", "archived"],
-      property_import_job_status: ["queued", "acquiring", "extracting", "drafting", "awaiting_review", "completed", "failed", "canceled"],
       proposed_update_status: ["pending", "approved", "modified", "denied"],
       service_status: [
         "new",
