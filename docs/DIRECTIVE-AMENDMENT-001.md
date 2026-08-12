@@ -229,3 +229,73 @@ branch. They are listed here so nothing is hidden behind a green CI badge.
 | E3 | `test:e2e` in `package.json` runs `playwright test` but no Playwright config or spec directory exists | `package.json` | Dead script. The runtime verification for this branch was therefore a manual smoke test of the changed dynamic-param and cookie paths against `next start`, not an e2e run. Recorded so the gap is not mistaken for coverage. |
 | E4 | `tsconfig.json` was rewritten by the Next 16 build (`jsx: preserve` -> `react-jsx`, `.next/dev/types` added, whitespace reflowed) | `tsconfig.json` | Next writes this file itself on every build; reverting it produces a dirty tree on the next run. Change is Next-authored, not hand-authored. |
 | E5 | `SUPABASE_SERVICE_ROLE_KEY` is inlined at build time, so a placeholder-env build cannot serve guest routes | build config | Surfaced during smoke testing: `/stay/[slug]` and `/g/[slug]` return 500 under a placeholder build. Not a defect in this branch, but it means those two routes cannot be smoke-tested without real secrets. |
+
+---
+
+## F. Amendment F — §12 embeddings stay on `text-embedding-3-small` (Ollama is dev-only)
+
+**Directive text amended:** §12, which reads the local Ollama stack as the embedding
+provider.
+
+**As written it is unimplementable without a re-embed and new inference infrastructure.**
+
+| Constraint | Value |
+|---|---|
+| `EMBED_DIM` locked in `lib/env.ts` | 1536 |
+| `nomic-embed-text` native dimension | 768 |
+| `mxbai-embed-large` native dimension | 1024 |
+| Existing `document_chunks` rows in production | 17, all embedded at 1536 |
+
+No stock local model emits 1536 dimensions. Switching providers therefore means
+changing the locked dimension, rebuilding the `vector(1536)` columns and their indexes,
+and re-embedding every existing chunk — while also standing up inference capacity that,
+per the owner, is not currently hosted on AWS.
+
+**Decision:** embeddings remain pinned to `text-embedding-3-small` (1536 dims) via the
+OpenAI-compatible base URL. Ollama stays a **development-only** provider. This is already
+enforced in code: `isProductionRuntime()` in `lib/ai/index.ts` hard-blocks the Ollama
+provider outside development, so a misconfigured production env cannot silently route
+embeddings to a local model and write dimension-mismatched vectors.
+
+**Forecloses:** nothing permanently. A future local-embedding migration is a scoped
+project (dimension change + index rebuild + backfill + parity eval), not a config flip.
+
+---
+
+## G. Amendment G — §0.1a superseded: native Supabase auth is retained
+
+**Directive text amended:** §0.1a, which mandates a migration to Clerk and describes
+reliance on `auth.uid()` as fatal.
+
+**Decision:** the application **stays on native Supabase auth**. No Clerk migration.
+
+**Reasoning:**
+
+1. `auth.uid()` is the subject identity in **every** RLS policy in the schema, including
+   the two tables added by Gate 2/3 (`field_registry`, `brain_values`) and the
+   `can_access_property()` / `can_edit_property()` / `is_account_member()` /
+   `is_account_owner()` helpers those policies call. It appears in 26 call sites in
+   application code.
+2. Both isolation suites assert against `auth.uid()`-derived identity. Replacing the
+   identity source invalidates the isolation evidence at the same moment it changes the
+   isolation mechanism — the two things that should never move together.
+3. `AGENTS.md` already lists a Clerk migration as an explicit **non-goal**.
+4. The stated motivation was that Clerk would be "easier and safer". Under the §0.0
+   tiebreaker (Isolation first), moving the identity source that every tenant boundary
+   depends on is the highest-risk change available, not the safest.
+
+**Forecloses:** nothing permanently, but note that a later migration would require
+re-deriving `auth.uid()` for every policy (e.g. a JWT-claim shim) and re-running both
+isolation suites before the cutover, not after.
+
+---
+
+## H. Amendment status (revised)
+
+| Item | Status |
+|---|---|
+| A — completeness denominator | DECIDED, implemented in `lib/brain/completeness.ts` |
+| B — audience enum + matrix | DECIDED, implemented as `audience_tier` enum + CHECK constraint |
+| C — Gate renaming | DECIDED, no code impact beyond documentation |
+| F — embeddings provider | DECIDED, `text-embedding-3-small` retained, Ollama dev-only |
+| G — auth provider | DECIDED, native Supabase auth retained, §0.1a superseded |
