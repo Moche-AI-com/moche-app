@@ -129,6 +129,13 @@ export const serverEnv = {
   openrouterProviderAllowlist:
     process.env.OPENROUTER_PROVIDER_ALLOWLIST ?? 'azure,google-vertex,openai,anthropic',
 
+  // Directive §7.1. Local llama.cpp-compatible cross-encoder reranker sidecar. Empty
+  // means reranking is off and retrieval uses pre-rerank RRF order; there is no cloud
+  // fallback, because a hosted reranker would send guest question text plus candidate
+  // property facts to a third party.
+  rerankerBaseUrl: process.env.RERANKER_BASE_URL ?? '',
+  rerankerModel: process.env.RERANKER_MODEL ?? 'bge-reranker-v2-m3',
+
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',
   firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev',
