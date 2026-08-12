@@ -190,6 +190,10 @@ export const serverEnv = {
   posthogServerHost: process.env.POSTHOG_HOST ?? process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com',
 
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? '',
+
+  // Stripe Billing Meters (§10). Off by default: usage recorded before a live price
+  // exists is unbilled usage nobody reconciles later. Flip only after autopilot.
+  stripeMetersEnabled: process.env.STRIPE_METERS_ENABLED === 'true',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
   // One entry per plan id + interval. Keys are `${planId}_${interval}` so
   // lib/billing/stripe.ts can resolve them without string surgery. The two
@@ -226,6 +230,20 @@ export const serverEnv = {
   s3Bucket: process.env.S3_BUCKET ?? '',
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
+
+  // Cloudflare Queues — candidate mining and event-driven ingestion (directive §8/§9).
+  // Empty queue id means the stage is not provisioned; producers then refuse rather than
+  // silently running mining work inline on a guest-facing request.
+  cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? '',
+  cloudflareQueuesToken: process.env.CLOUDFLARE_QUEUES_TOKEN ?? '',
+  cloudflareMiningQueueId: process.env.CLOUDFLARE_MINING_QUEUE_ID ?? '',
+
+  // AWS background worker that executes an approved brain write off the request path
+  // (§9). Separate stage from mining, not an alternative transport for it. Unprovisioned
+  // by default: the flag exists so the adapter is exercised in tests before it is real.
+  brainWriteWorkerEnabled: process.env.BRAIN_WRITE_WORKER_ENABLED === 'true',
+  brainWriteWorkerUrl: process.env.BRAIN_WRITE_WORKER_URL ?? '',
+  brainWriteWorkerSecret: process.env.BRAIN_WRITE_WORKER_SECRET ?? '',
 };
 
 export function hasServiceRole(): boolean {
