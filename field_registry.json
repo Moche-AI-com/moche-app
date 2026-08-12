@@ -1,0 +1,1543 @@
+{
+  "registry_version": 1,
+  "governing_documents": [
+    "Moche-AI Unified Build Directive (Merged Execution Contract) Section 3",
+    "docs/DIRECTIVE-AMENDMENT-001.md"
+  ],
+  "generator": "scripts/build-field-registry.py",
+  "sensitivity_tiers": [
+    "public_guest",
+    "guest_after_verification",
+    "stay_scoped_secret",
+    "host_only"
+  ],
+  "audience_tiers": [
+    "system_internal",
+    "host_private",
+    "staff_ops",
+    "guest_instay",
+    "guest_prearrival",
+    "guest_public"
+  ],
+  "audience_matrix": {
+    "public_guest": [
+      "guest_public",
+      "guest_prearrival",
+      "guest_instay",
+      "staff_ops",
+      "host_private"
+    ],
+    "guest_after_verification": [
+      "guest_prearrival",
+      "guest_instay",
+      "staff_ops",
+      "host_private"
+    ],
+    "stay_scoped_secret": [
+      "guest_instay",
+      "staff_ops",
+      "host_private"
+    ],
+    "host_only": [
+      "host_private",
+      "staff_ops",
+      "system_internal"
+    ]
+  },
+  "phases": [
+    "booking",
+    "pre-arrival",
+    "check-in",
+    "mid-stay",
+    "checkout"
+  ],
+  "applicability_predicates": [
+    "always",
+    "has_wifi",
+    "has_pool",
+    "has_hot_tub",
+    "has_laundry",
+    "has_parking",
+    "allows_pets",
+    "is_multi_story",
+    "has_elevator",
+    "has_smart_lock",
+    "has_security_cameras",
+    "charges_deposit"
+  ],
+  "completeness": {
+    "ship_threshold_pct": 65,
+    "credit": {
+      "satisfied": 1.0,
+      "partial": 0.5,
+      "missing": 0.0
+    },
+    "denominator_rule": "gap_weight > 0 AND system_section = false AND applicability resolves true for the property. not_applicable is removed from the denominator, never credited as satisfied. See docs/DIRECTIVE-AMENDMENT-001.md Section A."
+  },
+  "domains": [
+    {
+      "domain_id": "connectivity",
+      "label": "Connectivity",
+      "order": 1,
+      "system_section": false
+    },
+    {
+      "domain_id": "access_security",
+      "label": "Access & Security",
+      "order": 2,
+      "system_section": false
+    },
+    {
+      "domain_id": "policies_money",
+      "label": "Policies & Money",
+      "order": 3,
+      "system_section": false
+    },
+    {
+      "domain_id": "space_details",
+      "label": "Space Details",
+      "order": 4,
+      "system_section": false
+    },
+    {
+      "domain_id": "parking",
+      "label": "Parking",
+      "order": 5,
+      "system_section": false
+    },
+    {
+      "domain_id": "amenities",
+      "label": "Amenities",
+      "order": 6,
+      "system_section": false
+    },
+    {
+      "domain_id": "local_area",
+      "label": "Local Area",
+      "order": 7,
+      "system_section": false
+    },
+    {
+      "domain_id": "house_rules",
+      "label": "House Rules",
+      "order": 8,
+      "system_section": false
+    },
+    {
+      "domain_id": "checkout",
+      "label": "Checkout",
+      "order": 9,
+      "system_section": false
+    },
+    {
+      "domain_id": "maintenance_escalation",
+      "label": "Maintenance & Escalation",
+      "order": 10,
+      "system_section": false
+    },
+    {
+      "domain_id": "sys_provenance_audit",
+      "label": "Provenance / Audit",
+      "order": 101,
+      "system_section": true
+    },
+    {
+      "domain_id": "sys_automations_rules",
+      "label": "Automations / Rules",
+      "order": 102,
+      "system_section": true
+    },
+    {
+      "domain_id": "sys_sources_scrape_log",
+      "label": "Sources / Scrape Log",
+      "order": 103,
+      "system_section": true
+    },
+    {
+      "domain_id": "sys_safety_escalations",
+      "label": "Safety / Escalations",
+      "order": 104,
+      "system_section": true
+    }
+  ],
+  "fields": [
+    {
+      "field_id": "access_backup_method",
+      "label": "Backup access method",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_instay",
+      "phase": [
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 2.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "If the keypad is dead or the code fails, how else does a guest get in tonight?"
+    },
+    {
+      "field_id": "access_code_lifecycle",
+      "label": "Access code lifecycle",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "host_only",
+      "default_audience": "host_private",
+      "phase": [
+        "pre-arrival"
+      ],
+      "ttl_days": 90,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "has_smart_lock",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Does the code change between stays? Who rotates it, and when?"
+    },
+    {
+      "field_id": "checkin_flexibility",
+      "label": "Early check-in policy & fee",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "booking",
+        "pre-arrival"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Can guests check in early, and is there a fee?"
+    },
+    {
+      "field_id": "checkin_time",
+      "label": "Check-in time",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "time",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "pre-arrival"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 2.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "House rules / 'Check-in' row on the listing page.",
+      "interview_prompt": "What time can guests check in?"
+    },
+    {
+      "field_id": "checkout_time",
+      "label": "Checkout time",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "time",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "mid-stay",
+        "checkout"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 3.0,
+      "hard_block": true,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "House rules / 'Checkout' row on the listing page.",
+      "interview_prompt": "What time must guests check out?"
+    },
+    {
+      "field_id": "door_code_or_entry_method",
+      "label": "Door / access code",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "secret",
+      "sensitivity_tier": "stay_scoped_secret",
+      "default_audience": "guest_instay",
+      "phase": [
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 90,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "secret_ref_or_ciphertext",
+        "vault": true
+      },
+      "gap_weight": 3.0,
+      "hard_block": true,
+      "applicability": "always",
+      "requires_on_failure": true,
+      "on_failure_field": "access_backup_method",
+      "scrape_hint": null,
+      "interview_prompt": "What is the door or building access code? Stored encrypted; never auto-sent."
+    },
+    {
+      "field_id": "entry_method",
+      "label": "Entry method / lock type",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "enum",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "pre-arrival",
+        "check-in"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 2.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": true,
+      "on_failure_field": "access_backup_method",
+      "scrape_hint": null,
+      "interview_prompt": "How do guests get in \u2014 smart lock, keypad, lockbox, key handoff, or doorman?",
+      "enum_values": [
+        "smart_lock",
+        "keypad",
+        "lockbox",
+        "physical_key",
+        "doorman",
+        "other"
+      ]
+    },
+    {
+      "field_id": "security_camera_disclosure",
+      "label": "Security camera disclosure",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "pre-arrival"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.5,
+      "hard_block": false,
+      "applicability": "has_security_cameras",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Safety & property section; 'Security cameras on property' row.",
+      "interview_prompt": "Are there any exterior cameras or recording devices? Disclosure is legally required."
+    },
+    {
+      "field_id": "appliance_list",
+      "label": "Appliance list",
+      "domain": "amenities",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Amenities section; kitchen and laundry groups.",
+      "interview_prompt": "Which major appliances are available to guests?"
+    },
+    {
+      "field_id": "climate_control",
+      "label": "Heating & cooling",
+      "domain": "amenities",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Amenities section plus review text mentioning hot/cold rooms.",
+      "interview_prompt": "How do guests control heat and AC, and are there any known weak spots (e.g. 'AC struggles upstairs')?"
+    },
+    {
+      "field_id": "hot_tub_instructions",
+      "label": "Hot tub instructions & hours",
+      "domain": "amenities",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "has_hot_tub",
+      "requires_on_failure": true,
+      "on_failure_field": "maintenance_emergency_contact",
+      "scrape_hint": null,
+      "interview_prompt": "How is the hot tub operated, what are its hours, and any safety notes?"
+    },
+    {
+      "field_id": "laundry_access",
+      "label": "Laundry access & instructions",
+      "domain": "amenities",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "has_laundry",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Amenities section; 'Washer' / 'Dryer' rows.",
+      "interview_prompt": "Is there laundry, where is it, and how is it operated?"
+    },
+    {
+      "field_id": "pool_instructions",
+      "label": "Pool instructions & hours",
+      "domain": "amenities",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "has_pool",
+      "requires_on_failure": true,
+      "on_failure_field": "maintenance_emergency_contact",
+      "scrape_hint": null,
+      "interview_prompt": "What are the pool hours, rules, and any heating or safety notes?"
+    },
+    {
+      "field_id": "checkout_checklist",
+      "label": "Checkout checklist",
+      "domain": "checkout",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "checkout"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "What must a guest do before leaving \u2014 dishes, linens, thermostat, lights?"
+    },
+    {
+      "field_id": "key_return_process",
+      "label": "Key or code return",
+      "domain": "checkout",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_instay",
+      "phase": [
+        "checkout"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "How are keys returned, or is the code simply retired?"
+    },
+    {
+      "field_id": "late_checkout_policy",
+      "label": "Late checkout policy",
+      "domain": "checkout",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "mid-stay",
+        "checkout"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Can a guest check out late, and is there a fee?"
+    },
+    {
+      "field_id": "wifi_network_name",
+      "label": "Wi-Fi network name",
+      "domain": "connectivity",
+      "system_section": false,
+      "type": "string",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "pre-arrival",
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 2.0,
+      "hard_block": false,
+      "applicability": "has_wifi",
+      "requires_on_failure": true,
+      "on_failure_field": "wifi_troubleshooting",
+      "scrape_hint": "Amenities section; look for 'Wifi' or 'Internet' amenity rows.",
+      "interview_prompt": "What is the exact Wi-Fi network name (SSID) guests should join?"
+    },
+    {
+      "field_id": "wifi_password",
+      "label": "Wi-Fi password",
+      "domain": "connectivity",
+      "system_section": false,
+      "type": "secret",
+      "sensitivity_tier": "stay_scoped_secret",
+      "default_audience": "guest_instay",
+      "phase": [
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "secret_ref_or_ciphertext",
+        "vault": true
+      },
+      "gap_weight": 3.0,
+      "hard_block": true,
+      "applicability": "has_wifi",
+      "requires_on_failure": true,
+      "on_failure_field": "wifi_troubleshooting",
+      "scrape_hint": null,
+      "interview_prompt": "What is the Wi-Fi password? It is stored encrypted and never sent to a model."
+    },
+    {
+      "field_id": "wifi_speed_tier",
+      "label": "Internet speed",
+      "domain": "connectivity",
+      "system_section": false,
+      "type": "string",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "pre-arrival"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Amenities section; 'Fast wifi' badge often states Mbps.",
+      "interview_prompt": "Roughly what download speed can guests expect?"
+    },
+    {
+      "field_id": "wifi_troubleshooting",
+      "label": "Wi-Fi troubleshooting / fallback",
+      "domain": "connectivity",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "If the Wi-Fi is down at 11pm, what should a guest do? Where is the router, and who do they call?"
+    },
+    {
+      "field_id": "extra_guest_policy",
+      "label": "Extra guest & visitor policy",
+      "domain": "house_rules",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Are visitors or additional guests allowed, and at what cost?"
+    },
+    {
+      "field_id": "quiet_hours",
+      "label": "Quiet hours",
+      "domain": "house_rules",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "House rules section; 'Quiet hours' row.",
+      "interview_prompt": "What are the quiet hours, and is there an HOA or city noise rule?"
+    },
+    {
+      "field_id": "smoking_policy",
+      "label": "Smoking policy",
+      "domain": "house_rules",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "House rules section; 'No smoking' row.",
+      "interview_prompt": "Is smoking or vaping permitted anywhere on the property?"
+    },
+    {
+      "field_id": "trash_schedule",
+      "label": "Trash & recycling",
+      "domain": "house_rules",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay",
+        "checkout"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Where does trash go, and is there a collection day guests must handle?"
+    },
+    {
+      "field_id": "area_safety_notes",
+      "label": "Area safety notes",
+      "domain": "local_area",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "pre-arrival",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Anything guests should know about the area after dark?"
+    },
+    {
+      "field_id": "nearest_grocery",
+      "label": "Nearest grocery",
+      "domain": "local_area",
+      "system_section": false,
+      "type": "place",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "pre-arrival",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 3.0,
+      "hard_block": true,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Neighborhood / 'Where you'll be' section.",
+      "interview_prompt": "What is the closest grocery store, and how far is it?"
+    },
+    {
+      "field_id": "nearest_pharmacy",
+      "label": "Nearest pharmacy",
+      "domain": "local_area",
+      "system_section": false,
+      "type": "place",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "What is the closest pharmacy, and how far is it?"
+    },
+    {
+      "field_id": "restaurant_recommendations",
+      "label": "Restaurant recommendations",
+      "domain": "local_area",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "pre-arrival",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Name two or three nearby places you would actually send a guest to."
+    },
+    {
+      "field_id": "transit_options",
+      "label": "Transit options",
+      "domain": "local_area",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "pre-arrival",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "'Getting around' / neighborhood section.",
+      "interview_prompt": "What transit, rideshare, or airport options do guests use?"
+    },
+    {
+      "field_id": "after_hours_escalation",
+      "label": "After-hours escalation",
+      "domain": "maintenance_escalation",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Who handles a 2am problem if the primary contact does not answer?"
+    },
+    {
+      "field_id": "appliance_troubleshooting",
+      "label": "Appliance troubleshooting",
+      "domain": "maintenance_escalation",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": true,
+      "on_failure_field": "maintenance_emergency_contact",
+      "scrape_hint": null,
+      "interview_prompt": "Any appliance with a known trick \u2014 breaker location, reset button, quirk?"
+    },
+    {
+      "field_id": "maintenance_emergency_contact",
+      "label": "Maintenance / emergency contact",
+      "domain": "maintenance_escalation",
+      "system_section": false,
+      "type": "contact",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_instay",
+      "phase": [
+        "check-in",
+        "mid-stay",
+        "checkout"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 3.0,
+      "hard_block": true,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Who does a guest reach for an urgent maintenance problem, and on what number? This anchors every other fallback."
+    },
+    {
+      "field_id": "plumbing_troubleshooting",
+      "label": "Plumbing troubleshooting",
+      "domain": "maintenance_escalation",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": true,
+      "on_failure_field": "maintenance_emergency_contact",
+      "scrape_hint": null,
+      "interview_prompt": "What should a guest try for a clogged toilet or slow drain before calling you?"
+    },
+    {
+      "field_id": "utility_shutoff_locations",
+      "label": "Utility shutoff locations",
+      "domain": "maintenance_escalation",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "host_only",
+      "default_audience": "staff_ops",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Where are the water shutoff, breaker panel, and gas valve?"
+    },
+    {
+      "field_id": "parking",
+      "label": "Parking type & location",
+      "domain": "parking",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "booking",
+        "pre-arrival",
+        "check-in"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 3.0,
+      "hard_block": true,
+      "applicability": "always",
+      "requires_on_failure": true,
+      "on_failure_field": "parking_overflow_fallback",
+      "scrape_hint": "Amenities section; 'Free parking on premises' / 'Paid parking' rows.",
+      "interview_prompt": "Where exactly do guests park \u2014 driveway, street, garage, assigned spot? Include the quirks."
+    },
+    {
+      "field_id": "parking_access_instructions",
+      "label": "Parking access instructions",
+      "domain": "parking",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_instay",
+      "phase": [
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "has_parking",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Any gate code, permit, or garage clearance height guests need?"
+    },
+    {
+      "field_id": "parking_cost",
+      "label": "Parking cost",
+      "domain": "parking",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "has_parking",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Is parking free or paid, and how much?"
+    },
+    {
+      "field_id": "parking_overflow_fallback",
+      "label": "Parking fallback",
+      "domain": "parking",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_instay",
+      "phase": [
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "has_parking",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "If the spot is taken or the garage is full, where should a guest go instead?"
+    },
+    {
+      "field_id": "age_child_policy",
+      "label": "Age & child policy",
+      "domain": "policies_money",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "House rules; 'Suitable for children' / 'infants' rows.",
+      "interview_prompt": "Any age restrictions? Is the space suitable for infants or children?"
+    },
+    {
+      "field_id": "deposit_damage_policy",
+      "label": "Deposit & damage policy",
+      "domain": "policies_money",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "booking",
+        "checkout"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "charges_deposit",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Is there a security deposit or damage policy guests should know about?"
+    },
+    {
+      "field_id": "minimum_stay",
+      "label": "Minimum stay",
+      "domain": "policies_money",
+      "system_section": false,
+      "type": "number",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "What is the minimum number of nights?"
+    },
+    {
+      "field_id": "pet_fee",
+      "label": "Pet fee",
+      "domain": "policies_money",
+      "system_section": false,
+      "type": "number",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "allows_pets",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "What is the pet fee, and is it per stay or per night?"
+    },
+    {
+      "field_id": "pet_policy",
+      "label": "Pet policy & fees",
+      "domain": "policies_money",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "House rules section; 'Pets allowed' row.",
+      "interview_prompt": "Are pets allowed? Any fee, size, or breed limits?"
+    },
+    {
+      "field_id": "unexpected_charge_disclosure",
+      "label": "Additional charges",
+      "domain": "policies_money",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Are there any charges a guest could be surprised by \u2014 resort fee, cleaning, utilities, extra guest?"
+    },
+    {
+      "field_id": "bed_configuration",
+      "label": "Bed count, sizes & configuration",
+      "domain": "space_details",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "pre-arrival"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.5,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "'Where you'll sleep' section; per-room bed cards.",
+      "interview_prompt": "How many beds, what sizes, and in which rooms?"
+    },
+    {
+      "field_id": "elevator_stairs",
+      "label": "Elevator or stairs",
+      "domain": "space_details",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking",
+        "pre-arrival"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "is_multi_story",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Accessibility features section.",
+      "interview_prompt": "Is there an elevator, or how many flights of stairs?"
+    },
+    {
+      "field_id": "floor_number",
+      "label": "Floor number",
+      "domain": "space_details",
+      "system_section": false,
+      "type": "string",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "pre-arrival",
+        "check-in"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.5,
+      "hard_block": false,
+      "applicability": "is_multi_story",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Which floor is the unit on?"
+    },
+    {
+      "field_id": "max_occupancy",
+      "label": "Maximum occupancy",
+      "domain": "space_details",
+      "system_section": false,
+      "type": "number",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_public",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": "Listing header; 'N guests' in the summary row.",
+      "interview_prompt": "How many guests can stay?"
+    },
+    {
+      "field_id": "automation_gate_decision",
+      "label": "Auto-publish gate decision",
+      "domain": "sys_automations_rules",
+      "system_section": true,
+      "type": "enum",
+      "sensitivity_tier": "host_only",
+      "default_audience": "system_internal",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": null,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "System field. Not host-facing.",
+      "enum_values": [
+        "would_have_published",
+        "held_for_host"
+      ]
+    },
+    {
+      "field_id": "audit_verified_at",
+      "label": "Verified at",
+      "domain": "sys_provenance_audit",
+      "system_section": true,
+      "type": "date",
+      "sensitivity_tier": "host_only",
+      "default_audience": "system_internal",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": null,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "verified_at",
+        "vault": false
+      },
+      "gap_weight": 0.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "System field. Not host-facing."
+    },
+    {
+      "field_id": "provenance_source_rank",
+      "label": "Provenance source rank",
+      "domain": "sys_provenance_audit",
+      "system_section": true,
+      "type": "enum",
+      "sensitivity_tier": "host_only",
+      "default_audience": "system_internal",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": null,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "source",
+        "vault": false
+      },
+      "gap_weight": 0.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "System field. Not host-facing.",
+      "enum_values": [
+        "host_verified",
+        "pms_sync",
+        "host_chat",
+        "escalation",
+        "firecrawl",
+        "inferred"
+      ]
+    },
+    {
+      "field_id": "safety_escalation_record",
+      "label": "Safety escalation record",
+      "domain": "sys_safety_escalations",
+      "system_section": true,
+      "type": "text",
+      "sensitivity_tier": "host_only",
+      "default_audience": "system_internal",
+      "phase": [
+        "mid-stay"
+      ],
+      "ttl_days": null,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "System field. Not host-facing."
+    },
+    {
+      "field_id": "scrape_log_entry",
+      "label": "Scrape log entry",
+      "domain": "sys_sources_scrape_log",
+      "system_section": true,
+      "type": "text",
+      "sensitivity_tier": "host_only",
+      "default_audience": "system_internal",
+      "phase": [
+        "booking"
+      ],
+      "ttl_days": null,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 0.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "System field. Not host-facing."
+    }
+  ]
+}

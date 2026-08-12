@@ -67,6 +67,39 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm test
 
+  registry-drift:
+    name: Field registry drift
+    runs-on: ubuntu-latest
+    # field_registry.json and the seed migration are both GENERATED. If someone
+    # hand-edits either one, the pinned contract and the database diverge
+    # silently, and every downstream completeness number is computed against a
+    # registry the database does not have. This job is the pin.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Registry regenerates byte-identically
+        run: python3 scripts/build-field-registry.py --check
+      - name: Seed migration matches the registry
+        run: python3 scripts/registry-sql.py drift
+
+  sql-contract:
+    name: SQL contract tests
+    runs-on: ubuntu-latest
+    # 35 assertions against a real Postgres: registry invariants, the
+    # brain_values envelope CHECK matrix, and cross-property RLS isolation with
+    # positive controls. A denial-only suite passes trivially against a table
+    # that returns nothing, so the positive controls are load-bearing.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql postgresql-contrib
+      - name: Run Gate 2 contract suite
+        run: bash scripts/verify-gate2-sql.sh
+
   build:
     name: Production build
     runs-on: ubuntu-latest
