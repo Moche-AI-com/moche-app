@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic';
 // Public, session-less escalation answer page reached from the SMS/email magic link.
 // Authorization is the HMAC token alone; nothing here reveals data unless the token
 // verifies AND is unexpired. The token is single-purpose and scoped to one escalation.
-export default async function AnswerLinkPage({ params }: { params: { token: string } }) {
-  const verified = verifyEscalationLinkToken(params.token);
+export default async function AnswerLinkPage({ params }: { params: Promise<{ token: string }> }) {
+  const verified = verifyEscalationLinkToken((await params).token);
 
   let question: string | null = null;
   let answered = false;
@@ -41,7 +41,7 @@ export default async function AnswerLinkPage({ params }: { params: { token: stri
           This question has already been answered. Nothing more to do here.
         </div>
       ) : (
-        <AnswerLinkForm token={params.token} question={question} />
+        <AnswerLinkForm token={(await params).token} question={question} />
       )}
     </main>
   );

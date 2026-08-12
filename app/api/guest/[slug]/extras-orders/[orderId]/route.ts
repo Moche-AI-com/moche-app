@@ -12,7 +12,7 @@ import { log } from '@/lib/log';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function PATCH(req: Request, { params }: { params: { slug: string; orderId: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ slug: string; orderId: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
@@ -22,11 +22,11 @@ export async function PATCH(req: Request, { params }: { params: { slug: string; 
   const admin = createAdminClient();
   const { data: property } = await admin.from('properties').select('id, slug')
     .eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
+  if (!property || property.slug !== (await params).slug) return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
 
   const { data: order } = await admin.from('extras_orders')
     .select('id, property_id, stay_id, status, fulfillment_status, guest_note')
-    .eq('id', params.orderId)
+    .eq('id', (await params).orderId)
     .eq('property_id', session.propertyId)
     .eq('stay_id', session.stayId)
     .maybeSingle();

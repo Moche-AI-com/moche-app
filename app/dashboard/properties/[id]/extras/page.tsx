@@ -5,8 +5,8 @@ import { ExtrasOrdersClient, type ExtrasOrderRow } from '@/app/dashboard/extras/
 
 export const dynamic = 'force-dynamic';
 
-export default async function ExtrasPage({ params }: { params: { id: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export default async function ExtrasPage({ params }: { params: Promise<{ id: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   const { property } = access;
   const supabase = createClient();
 

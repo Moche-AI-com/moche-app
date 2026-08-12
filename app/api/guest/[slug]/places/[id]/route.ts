@@ -11,14 +11,14 @@ export const dynamic = 'force-dynamic';
 // against THIS guest's own property (session-scoped, defense in depth against IDOR)
 // and never trusts anything the model said about the place. Hidden places 404 exactly
 // like a place that does not exist, so a guest cannot probe host-hidden listings.
-export async function GET(_req: Request, { params }: { params: { slug: string; id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ slug: string; id: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
   const admin = createAdminClient();
   const { data: property } = await admin
     .from('properties').select('id, slug').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 
@@ -31,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: { slug: string; i
       distance_miles,
       places!inner(name, category, address, phone, website, lat, lon, provider_place_id)
     `)
-    .eq('id', params.id)
+    .eq('id', (await params).id)
     .eq('property_id', session.propertyId)
     .neq('status', 'hidden')
     .maybeSingle();

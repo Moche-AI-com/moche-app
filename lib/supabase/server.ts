@@ -5,18 +5,25 @@ import { publicEnv } from '@/lib/env';
 
 // Server client bound to the request cookies. Respects RLS as the signed-in user.
 // Use inside Server Components, Route Handlers, and Server Actions.
+//
+// Next 16 made cookies() async. This function stays SYNCHRONOUS on purpose:
+// @supabase/ssr accepts async cookie adapters, so awaiting inside getAll/setAll
+// confines the change to this file instead of forcing `await` onto all 87
+// createClient() call sites. Eighty-seven mechanical edits across every auth and
+// data path is a far larger blast radius than two awaits here, and a missed one
+// would silently produce an unauthenticated client rather than a type error.
 export function createClient() {
-  const cookieStore = cookies();
   return createServerClient<Database>(
     publicEnv.supabaseUrl,
     publicEnv.supabaseAnonKey,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        async getAll() {
+          return (await cookies()).getAll();
         },
-        setAll(cookiesToSet) {
+        async setAll(cookiesToSet) {
           try {
+            const cookieStore = await cookies();
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),
             );

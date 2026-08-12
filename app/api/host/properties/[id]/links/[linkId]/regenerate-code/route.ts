@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 
 // Overwrites the link row's code_hash in place — the URL/token is unchanged, only the
 // code changes. The old code is implicitly dead once the row holds the new hash.
-export async function POST(req: Request, { params }: { params: { id: string; linkId: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string; linkId: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   if (!access.isOwner && !access.can.replyGuests) {
     return NextResponse.json({ error: 'You do not have permission to manage this link.' }, { status: 403 });
   }
@@ -23,7 +23,7 @@ export async function POST(req: Request, { params }: { params: { id: string; lin
   const { data: link } = await admin
     .from('guest_access_links')
     .select('id, stay_id, kind, code_hash')
-    .eq('id', params.linkId)
+    .eq('id', (await params).linkId)
     .eq('property_id', property.id)
     .maybeSingle();
   if (!link || link.kind !== 'stay' || !link.stay_id) {

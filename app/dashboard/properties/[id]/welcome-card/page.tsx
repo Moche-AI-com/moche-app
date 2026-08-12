@@ -14,16 +14,16 @@ export const dynamic = 'force-dynamic';
 // (kind='property', require_otp=true) and renders its QR. We can't rebuild a QR from an
 // existing link because only the token_hash is stored (never the raw token), so a freshly
 // minted token is the clean, honest source. Property links are OTP-gated and TTL-bounded.
-function baseUrl(): string {
-  const h = headers();
+async function baseUrl(): Promise<string> {
+  const h = await headers();
   const host = h.get('x-forwarded-host') ?? h.get('host');
   const proto = h.get('x-forwarded-proto') ?? 'https';
   if (host) return `${proto}://${host}`;
   return publicEnv.appUrl.replace(/\/$/, '');
 }
 
-export default async function WelcomeCardPage({ params }: { params: { id: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export default async function WelcomeCardPage({ params }: { params: Promise<{ id: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   const { property } = access;
   const admin = createAdminClient();
   const user = await getUser();
@@ -43,7 +43,7 @@ export default async function WelcomeCardPage({ params }: { params: { id: string
     created_by: user?.id ?? null,
   } as never);
 
-  const url = `${baseUrl()}/stay/${property.slug}?k=${token}`;
+  const url = `${await baseUrl()}/stay/${property.slug}?k=${token}`;
   const qrDataUrl = await QRCode.toDataURL(url, { width: 640, margin: 1 });
   const location = [property.city, property.region, property.country].filter(Boolean).join(', ');
 

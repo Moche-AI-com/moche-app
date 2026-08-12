@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  const h = headers();
+  const h = await headers();
   await recordAcceptances(createClient(), {
     userId: ctx.user.id,
     hostAccountId: ctx.account.id,

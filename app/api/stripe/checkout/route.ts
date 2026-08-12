@@ -84,7 +84,7 @@ export async function POST(req: Request) {
 
   // Record the checkout clickwrap consent against the authenticated user (RLS lets a
   // user insert their own acceptance rows). Best-effort — never blocks checkout.
-  const h = headers();
+  const h = await headers();
   await recordAcceptances(supabase, {
     userId: ctx.user.id,
     hostAccountId,

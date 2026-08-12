@@ -44,10 +44,10 @@ function extFromContentType(contentType: string): string {
   }
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!hasS3()) return NextResponse.json({ error: 'Storage is not configured.' }, { status: 503 });
 
-  const access = await getPropertyAccess(params.id);
+  const access = await getPropertyAccess((await params).id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   if (!access.can.editProperty) return NextResponse.json({ error: 'You cannot upload to this property.' }, { status: 403 });
 
@@ -62,7 +62,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const ctx = await getSessionContext();
   const admin = createAdminClient();
   const rate = await checkRateLimit(admin, {
-    key: ctx?.user.id ?? params.id,
+    key: ctx?.user.id ?? (await params).id,
     limit: 30,
     windowSeconds: 60,
     action: 'storage.presign',
@@ -73,7 +73,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // Key prefix is always scoped to the property id — never trust a caller-supplied path.
   const ext = extFromContentType(contentType);
-  const key = `properties/${params.id}/${crypto.randomUUID()}.${ext}`;
+  const key = `properties/${(await params).id}/${crypto.randomUUID()}.${ext}`;
 
   try {
     const presigned = await createPresignedPutUrl({ key, contentType, contentLengthBytes });
@@ -81,13 +81,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       action: 'storage.presign.put',
       actorProfileId: ctx?.user.id,
       hostAccountId: access.property.host_account_id,
-      propertyId: params.id,
+      propertyId: (await params).id,
       targetType: 's3_object',
       targetId: key,
     });
     return NextResponse.json(presigned);
   } catch (e) {
-    log.warn('storage_presign_failed', { propertyId: params.id, error: e instanceof Error ? e.message : String(e) });
+    log.warn('storage_presign_failed', { propertyId: (await params).id, error: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ error: 'Could not create an upload URL.' }, { status: 500 });
   }
 }

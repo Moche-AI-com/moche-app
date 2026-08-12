@@ -20,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // cookie) before reaching the dashboard, even if they navigate here directly after
   // the password step.
   if (ctx.profile.two_factor_enabled && ctx.profile.phone_verified_at) {
-    const trusted = verifyTrustedDeviceValue(ctx.user.id, cookies().get(TRUSTED_DEVICE_COOKIE)?.value);
+    const trusted = verifyTrustedDeviceValue(ctx.user.id, (await cookies()).get(TRUSTED_DEVICE_COOKIE)?.value);
     if (!trusted) redirect('/login/verify?next=/dashboard');
   }
 

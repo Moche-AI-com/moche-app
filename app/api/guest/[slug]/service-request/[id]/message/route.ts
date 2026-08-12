@@ -16,7 +16,7 @@ type Json = Database['public']['Tables']['service_requests']['Row']['interview_t
 type Row = Database['public']['Tables']['service_requests']['Row'];
 
 // WS-7 — continues an in-progress guest interview one turn at a time.
-export async function POST(req: Request, { params }: { params: { slug: string; id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string; id: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
@@ -34,14 +34,14 @@ export async function POST(req: Request, { params }: { params: { slug: string; i
 
   const { data: property } = await admin
     .from('properties').select('id, slug, host_account_id, display_name').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 
   const { data: ticket } = await admin
     .from('service_requests')
     .select('id, property_id, stay_id, description, interview_status, interview_transcript, timeline, media_urls')
-    .eq('id', params.id)
+    .eq('id', (await params).id)
     .eq('property_id', session.propertyId)
     .eq('stay_id', session.stayId)
     .maybeSingle();

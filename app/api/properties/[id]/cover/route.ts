@@ -81,18 +81,19 @@ async function fetchRemoteImage(rawUrl: string): Promise<Buffer> {
   }
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  if (!UUID_RE.test(params.id)) return bad('Not found.', 404);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: propertyId } = await params;
+  if (!UUID_RE.test(propertyId)) return bad('Not found.', 404);
   if (!hasS3()) return bad('Image storage is not configured yet.', 503);
 
-  const access = await getPropertyAccess(params.id);
+  const access = await getPropertyAccess(propertyId);
   if (!access) return bad('Not found.', 404);
   if (!access.can.editProperty) return bad('You cannot change this property\u2019s cover image.', 403);
 
   const ctx = await getSessionContext();
   const admin = createAdminClient();
   const rate = await checkRateLimit(admin, {
-    key: ctx?.user.id ?? params.id,
+    key: ctx?.user.id ?? propertyId,
     limit: 12,
     windowSeconds: 60,
     action: 'property.cover.upload',
@@ -123,7 +124,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       if (isSsrfError(e)) return bad(e.message);
       const msg = e instanceof Error ? e.message : COVER_ERRORS.urlUnreachable;
       const known = (Object.values(COVER_ERRORS) as string[]).includes(msg);
-      log.warn('cover_url_fetch_failed', { propertyId: params.id, error: msg });
+      log.warn('cover_url_fetch_failed', { propertyId: propertyId, error: msg });
       return bad(known ? msg : COVER_ERRORS.urlUnreachable, 502);
     }
   }
@@ -140,11 +141,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   let derivatives: { key: string; body: Buffer }[];
   try {
     derivatives = (await buildCoverDerivatives(source)).map((d) => ({
-      key: coverKey(params.id, version, d.size),
+      key: coverKey(propertyId, version, d.size),
       body: d.body,
     }));
   } catch (e) {
-    log.warn('cover_resize_failed', { propertyId: params.id, error: e instanceof Error ? e.message : 'unknown' });
+    log.warn('cover_resize_failed', { propertyId: propertyId, error: e instanceof Error ? e.message : 'unknown' });
     return bad(COVER_ERRORS.unreadable, 422);
   }
 
@@ -156,33 +157,33 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       ),
     );
   } catch (e) {
-    log.warn('cover_store_failed', { propertyId: params.id, error: e instanceof Error ? e.message : 'unknown' });
+    log.warn('cover_store_failed', { propertyId: propertyId, error: e instanceof Error ? e.message : 'unknown' });
     return bad('Could not save that image. Please try again.', 502);
   }
 
   const previousUrl = access.property.cover_image_url ?? null;
-  const url = coverPublicUrl(params.id, version, DEFAULT_COVER_SIZE);
+  const url = coverPublicUrl(propertyId, version, DEFAULT_COVER_SIZE);
   const { error: updateError } = await admin
     .from('properties')
     .update({ cover_image_url: url, updated_at: new Date().toISOString() })
-    .eq('id', params.id);
+    .eq('id', propertyId);
   if (updateError) {
-    log.warn('cover_update_failed', { propertyId: params.id, error: updateError.message });
+    log.warn('cover_update_failed', { propertyId: propertyId, error: updateError.message });
     return bad('Could not save that image. Please try again.', 500);
   }
 
   // Best-effort cleanup of the previous version's objects. A leftover object is
   // harmless (lifecycle expiry catches it); a failed cleanup must not fail the
   // request the host is waiting on.
-  await removeManagedCover(params.id, previousUrl);
+  await removeManagedCover(propertyId, previousUrl);
 
   await audit(admin, {
     action: 'property.cover.updated',
     actorProfileId: ctx?.user.id,
     hostAccountId: access.property.host_account_id,
-    propertyId: params.id,
+    propertyId: propertyId,
     targetType: 'property',
-    targetId: params.id,
+    targetId: propertyId,
     metadata: { origin, version, sourceType: sniffed, sourceUrl, sizes: COVER_SIZES.map((s) => s.id) },
   });
 
@@ -190,13 +191,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     ok: true,
     url,
     version,
-    sizes: COVER_SIZES.map((s) => ({ ...s, url: coverPublicUrl(params.id, version, s.id) })),
+    sizes: COVER_SIZES.map((s) => ({ ...s, url: coverPublicUrl(propertyId, version, s.id) })),
   });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  if (!UUID_RE.test(params.id)) return bad('Not found.', 404);
-  const access = await getPropertyAccess(params.id);
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: propertyId } = await params;
+  if (!UUID_RE.test(propertyId)) return bad('Not found.', 404);
+  const access = await getPropertyAccess(propertyId);
   if (!access) return bad('Not found.', 404);
   if (!access.can.editProperty) return bad('You cannot change this property\u2019s cover image.', 403);
 
@@ -205,19 +207,19 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const { error } = await admin
     .from('properties')
     .update({ cover_image_url: null, updated_at: new Date().toISOString() })
-    .eq('id', params.id);
+    .eq('id', propertyId);
   if (error) return bad('Could not remove the cover image. Please try again.', 500);
 
-  await removeManagedCover(params.id, previousUrl);
+  await removeManagedCover(propertyId, previousUrl);
 
   const ctx = await getSessionContext();
   await audit(admin, {
     action: 'property.cover.removed',
     actorProfileId: ctx?.user.id,
     hostAccountId: access.property.host_account_id,
-    propertyId: params.id,
+    propertyId: propertyId,
     targetType: 'property',
-    targetId: params.id,
+    targetId: propertyId,
   });
   return NextResponse.json({ ok: true });
 }
@@ -228,8 +230,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
  * the version currently recorded on the property row, and only the three fixed
  * derivative keys.
  */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  if (!UUID_RE.test(params.id)) return bad('Not found.', 404);
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: propertyId } = await params;
+  if (!UUID_RE.test(propertyId)) return bad('Not found.', 404);
   if (!hasS3()) return bad('Not found.', 404);
 
   const { searchParams } = new URL(req.url);
@@ -242,7 +245,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const { data: property } = await admin
     .from('properties')
     .select('cover_image_url')
-    .eq('id', params.id)
+    .eq('id', propertyId)
     .maybeSingle();
   if (!property) return bad('Not found.', 404);
 
@@ -253,9 +256,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   let object: { body: Buffer; contentType: string } | null;
   try {
-    object = await getObjectBytes(coverKey(params.id, version, sizeParam));
+    object = await getObjectBytes(coverKey(propertyId, version, sizeParam));
   } catch (e) {
-    log.warn('cover_read_failed', { propertyId: params.id, error: e instanceof Error ? e.message : 'unknown' });
+    log.warn('cover_read_failed', { propertyId: propertyId, error: e instanceof Error ? e.message : 'unknown' });
     return bad('Not found.', 404);
   }
   if (!object) return bad('Not found.', 404);

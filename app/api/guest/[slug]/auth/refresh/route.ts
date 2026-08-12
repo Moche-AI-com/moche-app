@@ -13,11 +13,11 @@ export async function POST() {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ ok: false }, { status: 401 });
 
-  const token = cookies().get(GUEST_SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(GUEST_SESSION_COOKIE)?.value;
   if (!token) return NextResponse.json({ ok: false }, { status: 401 });
 
   // Session expiry mirrors the DB row: checkout + grace. Never extends past it.
   const expiresAt = new Date(new Date(session.checkOut).getTime() + DEFAULT_GRACE_PERIOD_HOURS * 60 * 60 * 1000);
-  cookies().set({ ...guestSessionCookieOptions(expiresAt), value: token });
+  (await cookies()).set({ ...guestSessionCookieOptions(expiresAt), value: token });
   return NextResponse.json({ ok: true });
 }

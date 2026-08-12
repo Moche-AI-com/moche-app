@@ -81,7 +81,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   }
 
   // Persist consent + acceptances (best-effort — never block a successful signup).
-  const h = headers();
+  const h = await headers();
   const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   const userAgent = h.get('user-agent');
 
@@ -130,7 +130,7 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   const needs2fa =
     !!profile?.two_factor_enabled && !!profile.phone_verified_at && !!profile.phone;
   if (needs2fa) {
-    const trusted = verifyTrustedDeviceValue(data.user.id, cookies().get(TRUSTED_DEVICE_COOKIE)?.value);
+    const trusted = verifyTrustedDeviceValue(data.user.id, (await cookies()).get(TRUSTED_DEVICE_COOKIE)?.value);
     if (!trusted && hasServiceRole()) {
       await createAndSendHostOtp(createAdminClient(), {
         userId: data.user.id,
@@ -160,7 +160,7 @@ export async function verifyLoginOtpAction(_prev: FormState, formData: FormData)
   });
   if (!ok) return { error: 'That code is invalid or has expired. Request a new one.' };
 
-  cookies().set({
+  (await cookies()).set({
     ...trustedDeviceCookieOptions(),
     value: signTrustedDeviceValue(ctx.user.id),
   });

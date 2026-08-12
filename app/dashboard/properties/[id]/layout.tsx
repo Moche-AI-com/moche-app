@@ -13,9 +13,9 @@ export default async function PropertyWorkspaceLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { property, can } = await requirePropertyAccess(params.id);
+  const { property, can } = await requirePropertyAccess((await params).id);
   const supabase = createClient();
   const { data: items } = await supabase
     .from('brain_items')

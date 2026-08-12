@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 // an escalation we may ping them (best-effort, only if they opted in). The contact itself
 // is never logged. Requires a live verified session (cookie); the slug is checked against
 // the session's property as defense-in-depth.
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   // Defense in depth: the slug in the URL must match the session's property.
   const { data: property } = await admin
     .from('properties').select('id, slug').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 

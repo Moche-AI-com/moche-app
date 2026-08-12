@@ -17,7 +17,7 @@ export interface GuestSession {
 // Guests are unauthenticated to Postgres, so this uses the service-role client;
 // all reads are explicitly scoped by the session's own stay_id/property_id.
 export async function getGuestSession(): Promise<GuestSession | null> {
-  const token = cookies().get(GUEST_SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(GUEST_SESSION_COOKIE)?.value;
   if (!token) return null;
 
   const admin = createAdminClient();

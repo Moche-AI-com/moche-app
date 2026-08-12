@@ -27,8 +27,8 @@ function appBaseUrl(req: Request): string {
   }
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   if (!access.isOwner && !access.can.replyGuests) {
     return NextResponse.json({ error: 'You do not have permission to mint links.' }, { status: 403 });
   }

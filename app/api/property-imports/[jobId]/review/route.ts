@@ -13,7 +13,7 @@ const bodySchema = z.object({
   text: z.string().trim().min(20).max(4000).optional(),
 }).strict();
 
-export async function POST(request: Request, { params }: { params: { jobId: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ jobId: string }> }) {
   const ctx = await getSessionContext();
   if (!ctx) return NextResponse.json({ error: 'Sign in to review this import.' }, { status: 401 });
   let body: unknown;
@@ -22,7 +22,7 @@ export async function POST(request: Request, { params }: { params: { jobId: stri
   if (!parsed.success) return NextResponse.json({ error: 'Choose a valid review group.' }, { status: 400 });
 
   const client = createClient();
-  const { data: job } = await client.from('property_import_jobs').select('id, property_id, host_account_id').eq('id', params.jobId).maybeSingle();
+  const { data: job } = await client.from('property_import_jobs').select('id, property_id, host_account_id').eq('id', (await params).jobId).maybeSingle();
   if (!job?.property_id) return NextResponse.json({ error: 'This import is not ready for review.' }, { status: 409 });
   const access = await getPropertyAccess(job.property_id);
   if (!access || !access.can.editBrain || access.property.host_account_id !== job.host_account_id) return NextResponse.json({ error: 'You cannot apply this import.' }, { status: 403 });

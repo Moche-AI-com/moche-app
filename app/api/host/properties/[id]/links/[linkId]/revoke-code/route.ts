@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 // Manual host revoke. Fails closed everywhere: marks the code revoked AND kills any
 // currently-live guest_access_sessions for the same stay (defense in depth — a guest
 // mid-session loses access immediately, not just on their next redeem attempt).
-export async function POST(_req: Request, { params }: { params: { id: string; linkId: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string; linkId: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   if (!access.isOwner && !access.can.replyGuests) {
     return NextResponse.json({ error: 'You do not have permission to manage this link.' }, { status: 403 });
   }
@@ -22,7 +22,7 @@ export async function POST(_req: Request, { params }: { params: { id: string; li
   const { data: link } = await admin
     .from('guest_access_links')
     .select('id, stay_id, kind, code_hash')
-    .eq('id', params.linkId)
+    .eq('id', (await params).linkId)
     .eq('property_id', property.id)
     .maybeSingle();
   if (!link || link.kind !== 'stay' || !link.code_hash) {

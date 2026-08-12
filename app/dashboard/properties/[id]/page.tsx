@@ -14,10 +14,10 @@ export default async function PropertyDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   searchParams: { import?: string };
 }) {
-  const access = await requirePropertyAccess(params.id);
+  const access = await requirePropertyAccess((await params).id);
   const { property, can } = access;
   const supabase = createClient();
 

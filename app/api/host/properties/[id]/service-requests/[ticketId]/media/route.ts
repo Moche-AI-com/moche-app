@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 // Returns fresh 5-min presigned GET URLs for a ticket's stored media keys. media_urls
 // holds raw S3 keys (not URLs, which would expire) — this route re-signs them on demand
 // so the host dashboard never renders a stale/expired link.
-export async function GET(_req: Request, { params }: { params: { id: string; ticketId: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string; ticketId: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   if (!access.can.resolveMaintenance) {
     return NextResponse.json({ error: 'You do not have permission to view this.' }, { status: 403 });
   }
@@ -20,8 +20,8 @@ export async function GET(_req: Request, { params }: { params: { id: string; tic
   const { data: ticket } = await admin
     .from('service_requests')
     .select('media_urls')
-    .eq('id', params.ticketId)
-    .eq('property_id', params.id)
+    .eq('id', (await params).ticketId)
+    .eq('property_id', (await params).id)
     .maybeSingle();
   if (!ticket) return NextResponse.json({ error: 'Service request not found.' }, { status: 404 });
 

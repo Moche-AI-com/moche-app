@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 // live and drive the two-way chat continuation. Scoped strictly to the session's own
 // stay/property; guests are unauthenticated to Postgres so all reads go through the
 // service-role client with explicit stay/property filters.
-export async function GET(req: Request, { params }: { params: { slug: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Session expired.' }, { status: 401 });
 
@@ -21,7 +21,7 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
     .select('id, slug')
     .eq('id', session.propertyId)
     .maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 

@@ -5,11 +5,11 @@ import { createClient } from '@/lib/supabase/server';
 
 const paramsSchema = z.string().uuid();
 
-export async function GET(_request: Request, { params }: { params: { jobId: string } }) {
-  if (!paramsSchema.safeParse(params.jobId).success) return NextResponse.json({ error: 'Invalid job.' }, { status: 400 });
+export async function GET(_request: Request, { params }: { params: Promise<{ jobId: string }> }) {
+  if (!paramsSchema.safeParse((await params).jobId).success) return NextResponse.json({ error: 'Invalid job.' }, { status: 400 });
   if (!await getSessionContext()) return NextResponse.json({ error: 'Sign in to view this import.' }, { status: 401 });
   const client = createClient();
-  const { data: job, error } = await client.from('property_import_jobs').select('id, property_id, status, stage_detail, progress_pct, error_reason, error_message, updated_at').eq('id', params.jobId).maybeSingle();
+  const { data: job, error } = await client.from('property_import_jobs').select('id, property_id, status, stage_detail, progress_pct, error_reason, error_message, updated_at').eq('id', (await params).jobId).maybeSingle();
   if (error || !job) return NextResponse.json({ error: 'Import not found.' }, { status: 404 });
   const active = new Set(['queued', 'acquiring', 'extracting', 'drafting']);
   const stale = active.has(job.status) && Date.now() - new Date(job.updated_at).getTime() > 10 * 60 * 1000;

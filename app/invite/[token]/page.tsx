@@ -29,8 +29,8 @@ const UNAVAILABLE_COPY: Record<string, { title: string; body: string }> = {
   },
 };
 
-export default async function InvitePage({ params }: { params: { token: string } }) {
-  const lookup = await getMemberInviteByToken(params.token);
+export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
+  const lookup = await getMemberInviteByToken((await params).token);
 
   if (lookup.status !== 'ready') {
     const copy = UNAVAILABLE_COPY[lookup.status];
@@ -51,7 +51,7 @@ export default async function InvitePage({ params }: { params: { token: string }
       properties={lookup.value.properties.map((property) => property.display_name)}
       hasAllProperties={lookup.value.invite.property_ids.length === 0}
       signedInEmail={user?.email ?? null}
-      action={acceptInviteAction.bind(null, params.token)}
+      action={acceptInviteAction.bind(null, (await params).token)}
     />
   );
 }

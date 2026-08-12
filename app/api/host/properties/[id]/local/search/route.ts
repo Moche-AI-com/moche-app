@@ -35,8 +35,8 @@ const querySchema = z.object({
  * writes to any table - the provider tier is display-only until a host chooses to
  * add a place through the existing managers.
  */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const access = await getPropertyAccess(params.id);
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await getPropertyAccess((await params).id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   if (!access.isOwner && !access.can.editBrain) {
     return NextResponse.json({ error: 'You do not have permission.' }, { status: 403 });
@@ -59,7 +59,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   // The provider tier costs money per call, so the limit is on searches per host
   // per property, generous enough for real typing-and-refining but not for a loop.
   const rate = await checkRateLimit(admin, {
-    key: `local-search:${params.id}:${user?.id ?? 'anon'}`,
+    key: `local-search:${(await params).id}:${user?.id ?? 'anon'}`,
     limit: 60,
     windowSeconds: 300,
     action: 'local_search',
@@ -75,13 +75,13 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     admin
       .from('recommendations')
       .select('id, name, category, host_preference, approved, hidden, host_note, description, distance_note, priority_weight')
-      .eq('property_id', params.id)
+      .eq('property_id', (await params).id)
       .is('deleted_at', null)
       .order('priority_weight', { ascending: false }),
     admin
       .from('nearby_places')
       .select('id, name, category, host_notes, host_starred, hidden, rating, distance_m')
-      .eq('property_id', params.id),
+      .eq('property_id', (await params).id),
   ]);
 
   const merged = mergeLocalPlaces(

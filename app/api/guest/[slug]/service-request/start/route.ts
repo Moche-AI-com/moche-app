@@ -16,7 +16,7 @@ type Json = Database['public']['Tables']['service_requests']['Row']['interview_t
 
 // WS-7 — guest taps "Report an issue" and sends their first free-text message.
 // Deterministic safety triage runs first and can bypass the AI interview entirely.
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
 
   const { data: property } = await admin
     .from('properties').select('id, slug, host_account_id, display_name').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 

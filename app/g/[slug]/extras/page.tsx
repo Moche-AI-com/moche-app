@@ -5,16 +5,16 @@ import { GuestExtrasExperience, type GuestExtraOffer } from './GuestExtrasExperi
 
 export const dynamic = 'force-dynamic';
 
-export default async function GuestExtrasPage({ params }: { params: { slug: string } }) {
+export default async function GuestExtrasPage({ params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
-  if (!session) redirect(`/g/${params.slug}`);
+  if (!session) redirect(`/g/${(await params).slug}`);
 
   const admin = createAdminClient();
   const { data: property } = await admin.from('properties')
     .select('id, slug, display_name')
     .eq('id', session.propertyId)
     .maybeSingle();
-  if (!property || property.slug !== params.slug) redirect(`/g/${params.slug}`);
+  if (!property || property.slug !== (await params).slug) redirect(`/g/${(await params).slug}`);
 
   const { data: offers } = await admin.from('guest_extras')
     .select('id, title, description, details, price_text, cta_label, category, max_quantity, kind, unit_label, option_label, options')
@@ -25,7 +25,7 @@ export default async function GuestExtrasPage({ params }: { params: { slug: stri
 
   return (
     <GuestExtrasExperience
-      slug={params.slug}
+      slug={(await params).slug}
       propertyName={property.display_name}
       offers={(offers ?? []) as GuestExtraOffer[]}
     />
