@@ -120,3 +120,73 @@ elapsed time. "Gate N" never implies "week N".
   real guest auth flow; then deploy production as a separate, independently reviewed step.
 - **Forecloses:** Nothing permanently. This is a sequencing decision, reversible by the
   owner at any time with explicit acknowledgement of items 1-4.
+
+---
+
+## D-0008 — Gate 2/3 schema applied directly to production
+
+- **Date:** 2026-08-12
+- **Decided by:** owner (explicit: "Straight to production")
+- **Decision:** apply the Gate 2 registry and Gate 3 `brain_values` envelope DDL to the
+  production project `sqpdzhannyskdiyuarhp` without a staging rehearsal.
+- **Applied as six migrations:** `gate2_registry_enums`, `gate2_field_registry_table`,
+  `gate3_brain_values_envelope`, `gate3_registry_and_brain_values_rls`,
+  `gate2_registry_seed_01` .. `_04`.
+- **Risk accepted:** no staging rehearsal. Mitigated by the DDL being purely additive —
+  two new tables, four new enums, one new IMMUTABLE function. No existing table, column,
+  policy, or function was altered or dropped, so the blast radius on existing reads is
+  nil. `brain_values` has no application readers yet (see D-0010).
+- **Post-DDL verification:** `get_advisors(security)` returns no new findings; neither new
+  table appears under `rls_enabled_no_policy`.
+
+## D-0009 — Registry seed verified by cross-transport digest, not by inspection
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** prove the 53 seeded `field_registry` rows byte-faithful to
+  `field_registry.json` by computing the same canonical sha256 digest on both sides —
+  in Python over the JSON, and in SQL over the live table — rather than by reviewing the
+  generated SQL.
+- **Canonical form:** the 21 registry columns joined by `\x1f`, rows ordered by `field_id`
+  under `C` collation and joined by `\x1e`, sha256 of the whole. Defined by
+  `canonical_rows()` in `scripts/registry-seed-chunks.py`.
+- **Why:** the 3,575-line seed file exceeds what the migration transport accepts in one
+  call, so it was applied as four hand-transcribed chunks. Transcription is exactly the
+  step where silent corruption is invisible to review.
+- **This caught a real defect.** The first full-table digest was
+  `2e742f2e…f735c078` against an expected `edb38875…ec8a8d1a`. Per-row comparison
+  isolated two rows — `bed_configuration` and `nearest_grocery` — whose `scrape_hint`
+  had acquired a doubled apostrophe (`you''ll` instead of `you'll`) from double-escaping
+  during transcription. Both were corrected; the digest now matches exactly, at 53 rows /
+  48 scored / 6 hard blocks / 14 domains.
+- **Consequence:** any future registry seed must be digest-verified. A reviewed diff is
+  not sufficient evidence of a faithful load.
+- **Forecloses:** nothing. Adds a required verification step.
+
+## D-0010 — `brain_items` is NOT auto-migrated into `brain_values`
+
+- **Date:** 2026-08-12
+- **Decided by:** agent — **STOP-AND-ASK raised under directive §13**
+- **Decision:** do not backfill. `brain_values` remains empty of production data.
+- **Reason the planned backfill is not executable as conceived:** `brain_items` has
+  **no `field_id` column**. Its shape is `(category, title, body)` free text — a
+  document model, not a field-keyed model. There is no mechanical mapping onto the
+  registry's 53 `field_id`s. Deriving one means inferring which registry field each
+  free-text item answers, which under §0 is `source = 'inferred'` — the lowest rank in
+  the precedence order — and under §0.2 auto-publish of inferred values is **disabled**.
+  `AGENTS.md` independently forbids any Brain publish without a `proposed_update` row and
+  human approval. An agent-authored mapping written straight into `brain_values` would
+  violate all three.
+- **Correct path (requires owner decision):** generate `proposed_update` rows from the
+  free-text items for host review, so the host's approval is what supplies
+  `host_verified` provenance. That is Phase 1 work and is gated on the §0.4 decisions.
+- **Live finding surfaced while checking this:** three `guest`-visible `brain_items` rows
+  contain credential-shaped content — titles "What is the check-in process and time?",
+  "What's the WiFi password?", and "WiFI". Under the Gate 3 envelope these values belong
+  at `stay_scoped_secret` in `secret_ref_or_ciphertext`, never as plaintext readable by a
+  guest-visible document row, and never in a model prompt. The new envelope enforces this
+  for `brain_values` (proven: a plaintext `wifi_password` write is rejected). It does
+  **not** retroactively protect the legacy `brain_items` rows, because nothing reads
+  `brain_values` yet. This is an open exposure on the legacy path, not a regression
+  introduced here.
+- **Forecloses:** nothing. Defers the migration to a reviewed, host-approved path.
