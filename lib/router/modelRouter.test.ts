@@ -25,6 +25,9 @@ function routerEnv(over: Partial<RouterEnv> = {}): RouterEnv {
     openrouterModelConcierge: 'anthropic/claude-haiku-4.5',
     openrouterModelGeneral: 'openai/gpt-4o-mini',
     openrouterConciergeEnabled: false,
+    openrouterGuestModelAllowlist:
+      'google/gemini-2.5-flash,openai/gpt-4o-mini,anthropic/claude-haiku-4.5',
+    openrouterProviderAllowlist: 'azure,google-vertex,openai,anthropic',
     ...over,
   };
 }
@@ -97,8 +100,18 @@ describe('assertNoResidualPII', () => {
 });
 
 describe('ZDR_PROVIDER_RESTRICTION', () => {
-  it('is hardened: zdr on, data collection denied, no fallbacks', () => {
-    expect(ZDR_PROVIDER_RESTRICTION).toEqual({ zdr: true, data_collection: 'deny', allow_fallbacks: false });
+  // Corrected to directive §1: `require_parameters` and the nested `sort` are part of
+  // the mandated block, and `allow_fallbacks` is true because zdr + data_collection
+  // (plus `provider.only`, when configured) already bound what a fallback can be.
+  // Field-for-field assertions live in providerAllowlist.test.ts.
+  it('is hardened: zdr on, data collection denied, parameters required', () => {
+    expect(ZDR_PROVIDER_RESTRICTION).toEqual({
+      require_parameters: true,
+      zdr: true,
+      data_collection: 'deny',
+      allow_fallbacks: true,
+      sort: { by: 'latency', partition: 'model' },
+    });
   });
 });
 
@@ -172,7 +185,14 @@ describe('routedCompletion', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = lastBody(fetchMock);
     expect(body.model).toBe('openai/gpt-4o-mini');
-    expect(body.provider).toEqual({ zdr: true, data_collection: 'deny', allow_fallbacks: false });
+    expect(body.provider).toEqual({
+      require_parameters: true,
+      zdr: true,
+      data_collection: 'deny',
+      allow_fallbacks: true,
+      sort: { by: 'latency', partition: 'model' },
+      only: ['azure', 'google-vertex', 'openai', 'anthropic'],
+    });
     const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer test-key');
     expect(headers['X-OpenRouter-ZDR']).toBe('true');
@@ -237,20 +257,52 @@ describe('routedCompletion', () => {
     expect(models.length).toBeGreaterThan(1);
   });
 
-  it('never sends a duplicate slug when an override equals a fallback', async () => {
+  // The routine-guest chain comes from the reviewed allowlist, in the operator's order,
+  // and ignores OPENROUTER_MODEL_CONCIERGE entirely — a per-tier slug is not a review.
+  it('builds the concierge chain from the reviewed allowlist, in order, without duplicates', async () => {
     const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
       OPENROUTER_CONCIERGE_ENABLED: 'true',
-      // Deliberately set the primary to one of the concierge fallbacks.
-      OPENROUTER_MODEL_CONCIERGE: 'openai/gpt-4o-mini',
+      OPENROUTER_GUEST_MODEL_ALLOWLIST: 'openai/gpt-4o-mini,openai/gpt-4o-mini,unreviewed/model',
+      // Ignored on the guest route; present to prove the allowlist wins.
+      OPENROUTER_MODEL_CONCIERGE: 'anthropic/claude-haiku-4.5',
     });
 
     await routedCompletion(MESSAGES, undefined, { task: 'concierge' });
-    const models = lastBody(fetchMock).models as string[];
-    expect(models[0]).toBe('openai/gpt-4o-mini');
-    expect(new Set(models).size).toBe(models.length);
+    const body = lastBody(fetchMock);
+    expect(body.models).toEqual(['openai/gpt-4o-mini']);
+    expect(body.model).toBe('openai/gpt-4o-mini');
+  });
+
+  // Directive §0.2 row 3 fail-closed path: an empty allowlist must never reach
+  // OpenRouter at all, and must not degrade the answer — the in-house provider serves.
+  it('refuses the external guest route when the allowlist is empty', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_CONCIERGE_ENABLED: 'true',
+      OPENROUTER_GUEST_MODEL_ALLOWLIST: '',
+    });
+
+    const res = await routedCompletion(MESSAGES, undefined, { task: 'concierge' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.text).not.toBe('external-answer');
+  });
+
+  it('drops `only` when no provider is reviewed, keeping the zdr filters', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_PROVIDER_ALLOWLIST: 'some-random-host',
+    });
+
+    await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+    expect(lastBody(fetchMock).provider).not.toHaveProperty('only');
   });
 
   it('honors a per-tier env override', async () => {

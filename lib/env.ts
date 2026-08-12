@@ -115,6 +115,20 @@ export const serverEnv = {
   // soon as a key is set.
   openrouterConciergeEnabled: bool(process.env.OPENROUTER_CONCIERGE_ENABLED, false),
 
+  // Directive §0.2 row 3. Ordered, comma-separated OpenRouter model slugs eligible to
+  // serve a routine-guest answer, and the upstream providers OpenRouter may dispatch
+  // to. Both are intersected against the reviewed sets in lib/router/providerAllowlist
+  // so an env value can only ever narrow, never widen, what routing may pick.
+  //
+  // The default is deliberately non-empty now that the owner supplied an allowlist
+  // (decision D-0019); it stays gated behind openrouterConciergeEnabled, so shipping a
+  // default here does not by itself send any guest text off our infrastructure.
+  openrouterGuestModelAllowlist:
+    process.env.OPENROUTER_GUEST_MODEL_ALLOWLIST ??
+    'google/gemini-2.5-flash,openai/gpt-4o-mini,anthropic/claude-haiku-4.5',
+  openrouterProviderAllowlist:
+    process.env.OPENROUTER_PROVIDER_ALLOWLIST ?? 'azure,google-vertex,openai,anthropic',
+
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',
   firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev',

@@ -4,6 +4,7 @@ import type { Database } from '@/lib/database.types';
 import { log } from '@/lib/log';
 import { resolveTwilioAuth, serverEnv, publicEnv } from '@/lib/env';
 import { getEntitlements } from '@/lib/billing/entitlements';
+import { TRANSACTIONAL_SENDER } from '@/lib/mail/senders';
 
 type Client = SupabaseClient<Database>;
 type NotificationKind = Database['public']['Enums']['notification_kind'];
@@ -27,7 +28,11 @@ const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['e
 // Host notification kinds that MAY fan out to SMS (subject to all gates below).
 const SMS_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance']);
 
-const EMAIL_FROM = 'Moche-AI <noreply@moche-ai.com>';
+// Every send site below is transactional (escalation, maintenance, billing, system,
+// guest OTP), so it uses the monitored identity. The digest identity lives in
+// lib/mail/senders and is deliberately not reachable from here — see §0.2 row 6.
+const EMAIL_FROM = TRANSACTIONAL_SENDER.from;
+const EMAIL_REPLY_TO = TRANSACTIONAL_SENDER.replyTo;
 
 // Sends an SMS via the Twilio Messages REST API using native fetch.
 // Auth is resolved by resolveTwilioAuth (API-Key first, Auth-Token fallback). The
@@ -73,7 +78,13 @@ async function sendHostEmail(to: string, subject: string, text: string): Promise
   try {
     const { Resend } = await import('resend');
     const resend = new Resend(serverEnv.resendApiKey);
-    const { error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, text });
+    const { error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      replyTo: EMAIL_REPLY_TO,
+      to,
+      subject,
+      text,
+    });
     if (error) {
       log.error('host_email_failed', { error: error.message });
       return false;
