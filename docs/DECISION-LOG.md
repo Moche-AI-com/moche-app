@@ -190,3 +190,129 @@ elapsed time. "Gate N" never implies "week N".
   `brain_values` yet. This is an open exposure on the legacy path, not a regression
   introduced here.
 - **Forecloses:** nothing. Defers the migration to a reviewed, host-approved path.
+
+## D-0011 — Credential exposure on the legacy path is fixed at retrieval, then at rest
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, under owner instruction "you decide the best path here… I want out of
+  the loop for this part"
+- **Decision:** two independent controls, in this order.
+  1. **Retrieval-path redaction guard** (`lib/brain/redact.ts`, wired into
+     `lib/guest/concierge.ts`). Every candidate chunk is scanned before it can reach a model
+     prompt or a guest answer. Credential-shaped content is replaced with a placeholder and
+     the event is logged as `concierge.credential_redacted`. 32 unit tests.
+  2. **Envelope migration.** Real credential values move into the Gate 3 `brain_values`
+     envelope, where secrets live in `secret_ref_or_ciphertext` and never in `value`.
+- **Why retrieval first:** the 30 legacy `brain_items` rows include plaintext WiFi passwords in
+  `guest`-visible rows today. A schema migration takes review cycles; a retrieval guard closes
+  the live exposure on deploy. The guard is also the control that keeps working if a future
+  ingestion path reintroduces a credential in free text, which the migration alone would not.
+- **Forecloses:** nothing. The guard is defence in depth and stays after the migration.
+
+## D-0012 — Secret envelope references use a `vault:<uuid>` scheme
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** `brain_values.secret_ref_or_ciphertext` holds `vault:<uuid>` pointing at a
+  `supabase_vault` (0.3.1) secret, not ciphertext inline.
+- **Why:** a reference keeps key rotation and decryption authority in one audited place. Inline
+  ciphertext puts key management in application code and makes rotation a table rewrite.
+- **Forecloses:** inline-ciphertext storage for secrets. Deliberate.
+
+## D-0013 — Imports: host-pasted URL, recorded attestation, retained provenance, one-action purge
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, under owner instruction "you decide the best and most effective path"
+- **Decision:** the §0.4 legal position for listing import is procedural, and all four parts are
+  implemented, not asserted:
+  1. **Host-pasted URL only.** No discovery, no crawling of adjacent listings. The only URL
+     fetched is one the host typed. (`app/api/property-imports/route.ts`)
+  2. **Ownership attestation at import time.** The request schema requires `attested: true` as a
+     literal, so an omitted flag is a 400 rather than a silent import. The exact sentence shown
+     is stored on the job (`attestation_text`), so revising the copy later does not rewrite what
+     an earlier host actually agreed to. Single source of wording:
+     `lib/property-import/attestation.ts`.
+  3. **Retained provenance.** `property_import_provenance(property_id)` returns source URL,
+     provider, fetch time, status, attestation, and stored-capture count. Surfaced to the host in
+     `ImportProvenancePanel`.
+  4. **One-action purge.** `property_import_purge(property_id, actor)` deletes the captured page
+     text, the extracted draft, and the job rows, and writes
+     `property.import_provenance_purged` to `audit_logs`. It deliberately does **not** delete the
+     property or anything the host has since approved — this is erasure of third-party source
+     material, not a property delete.
+- **Both functions are `security invoker` with `search_path = ''`.** RLS on
+  `property_import_jobs` decides whose imports a caller can reach, so the purge cannot be aimed
+  at another host's property.
+- **Verified in production** (`sqpdzhannyskdiyuarhp`): P1 provenance_visible=PASS,
+  P2 purge jobs=2 artifacts=3, P3 job_gone=PASS, P4 artifacts_gone=PASS, P5 property_intact=PASS,
+  P6 empty_purge jobs=0, P7 audited=PASS.
+- **Forecloses:** any automated or agent-initiated listing discovery. An import must originate
+  from a host action carrying an attestation.
+
+## D-0014 — One gating threshold, per-category display
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, under owner instruction "you decide best path for this"
+- **Decision:** publishability is gated by the **single** 65% overall threshold from Amendment A.
+  Per-category percentages are **displayed** but never gate.
+- **Why:** per-category minimums multiply the ways a property can be blocked and make the
+  blocking reason harder to state in one sentence. Ten thresholds also mean ten numbers to
+  re-tune whenever the registry changes. The host still needs to know *where* the gap is, which
+  is a display problem, so the panel shows a bar per domain and the five heaviest gaps.
+- **Forecloses:** nothing. Adding a category minimum later is a config change, not a rework.
+
+## D-0015 — `isRegistryProposable()` excludes secrets and system sections
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** no proposal may target a field with `type = 'secret'` or
+  `system_section = true`. 53 registry fields → 46 proposable.
+- **Why:** a proposal is a value that passes through a review queue and is rendered back to a
+  host in a diff. Door codes and WiFi passwords must not exist in that path in plaintext at all,
+  and system sections are not host-authored.
+- **Forecloses:** proposing a credential. Secrets are set directly by the host through the
+  envelope, never suggested.
+
+## D-0016 — `brain_values_superseded_by_fkey` is DEFERRABLE INITIALLY DEFERRED
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** the self-referencing supersession FK defers to transaction commit.
+- **Why:** setting a new version live and pointing the old row at it is one logical operation.
+  A non-deferrable FK forces an ordering that makes the two-statement form fail on the first
+  statement, which would push callers toward doing it in two transactions — the state where a
+  crash leaves two live versions.
+- **Forecloses:** nothing.
+
+## D-0017 — `property_applicability` writes require edit permission, not access
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** migration `gate3_property_applicability_write_requires_editor` moves the
+  insert/update/delete policies from `can_access_property` to `can_edit_property`.
+- **Why:** asserting "this property has a pool" adds fields to the completeness denominator and
+  can therefore change whether the property is publishable. That is an edit, not a read, and it
+  should not be available to a read-only co-host.
+- **Forecloses:** nothing.
+
+## D-0018 — Legacy note migration is deterministic and never uses a model
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, implementing the owner's choice "generate proposed_update rows for host
+  review"
+- **Decision:** `lib/brain/legacy-migration.ts` extracts candidates from `brain_items` free text
+  with deterministic regex only — ten extractors, no LLM call — and writes them as pending
+  `proposed_updates` rows for host approval.
+- **Why no model:** the corpus being scanned demonstrably contains door codes and WiFi passwords
+  (see D-0010). Sending it to an inference provider to improve extraction quality would ship
+  exactly the credentials D-0011 exists to contain. Deterministic extraction finds less and
+  leaks nothing.
+- **Other properties:** secrets are never proposed (D-0015); `source_ref` is the originating
+  `brain_items.id`; confidence is always < 1 because the value is `inferred`; the run is
+  idempotent, skipping fields that already have an active value or an open proposal; and it is
+  host-triggered from the completeness panel rather than run automatically, because it fills the
+  host's own review queue.
+- **Dead-predicate finding:** `has_elevator` is declared in the registry but no field depends on
+  it. `APPLICABILITY_PREDICATES` now exposes only predicates that gate at least one scored
+  field, so the panel cannot ask a question that changes nothing. The database CHECK deliberately
+  still allows the wider set, so adding an elevator-dependent field later needs no migration.

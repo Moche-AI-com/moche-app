@@ -154,6 +154,13 @@ export const serverEnv = {
   // in their knowledge base.
   requirePlanToPublish: bool(process.env.REQUIRE_PLAN_TO_PUBLISH, process.env.NODE_ENV === 'production'),
   requireBrainToPublish: bool(process.env.REQUIRE_BRAIN_TO_PUBLISH, false),
+  // Registry completeness gate (Amendment 001-A.4): 65% weighted plus every
+  // hard-block field answered. Defaults OFF for the same reason as the legacy
+  // brain gate above — turning it on retroactively would block hosts from
+  // publishing properties that publish today, since no property has
+  // brain_values rows yet. The score and the exact blockers are always shown on
+  // the Brain page whether or not the gate is enforced.
+  requireCompletenessToPublish: bool(process.env.REQUIRE_COMPLETENESS_TO_PUBLISH, false),
 
   // Observability (server-only secrets).
   sentryDsn: process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN ?? '',

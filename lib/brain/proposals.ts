@@ -14,6 +14,7 @@
 
 import type { Database } from '@/lib/database.types';
 import { TONE_PRESET_IDS, type TonePresetId } from '@/lib/constants';
+import { REGISTRY_FIELDS, type RegistryField } from '@/lib/brain/completeness';
 
 export type ProposedUpdateStatus = Database['public']['Enums']['proposed_update_status'];
 
@@ -30,7 +31,8 @@ export type ProposalSourceType =
   | 'text_paste'
   | 'tone_migration'
   | 'nearby_refresh'
-  | 'ai_suggestion';
+  | 'ai_suggestion'
+  | 'registry_migration';
 
 export const PROPOSAL_SOURCE_LABEL: Record<ProposalSourceType, string> = {
   listing_url: 'Read from a listing page',
@@ -39,6 +41,7 @@ export const PROPOSAL_SOURCE_LABEL: Record<ProposalSourceType, string> = {
   tone_migration: 'Existing tone setting needs confirming',
   nearby_refresh: 'Refreshed from the map',
   ai_suggestion: 'Suggested to fill a gap',
+  registry_migration: 'Found in your existing notes',
 };
 
 // ---------------------------------------------------------------------------
@@ -50,7 +53,47 @@ export const PROPOSAL_SOURCE_LABEL: Record<ProposalSourceType, string> = {
  * on approval. `text` fields overwrite a single scalar column. `tone_preset` is
  * a `text` field whose value must additionally be one of the five preset ids.
  */
-export type ProposableKind = 'brain_item' | 'text' | 'tone_preset';
+export type ProposableKind = 'brain_item' | 'text' | 'tone_preset' | 'brain_value';
+
+/**
+ * Prefix for registry-backed paths: `brain_value.<field_id>`.
+ *
+ * These are NOT hand-listed in PROPOSABLE_FIELDS. field_registry.json is
+ * generated and is already the allowlist the database trigger enforces, so
+ * hand-copying 53 entries here would create a second list to drift out of sync
+ * with the first. Resolution goes through the registry, which means an unknown
+ * field_id fails the same way an unknown path does.
+ */
+export const BRAIN_VALUE_PREFIX = 'brain_value.';
+
+/**
+ * Secrets are deliberately not proposable. A proposal row holds its value as
+ * plaintext jsonb in `proposed_updates`, so routing a Wi-Fi password or door
+ * code through this queue would reintroduce exactly the plaintext-at-rest
+ * exposure the brain_values envelope exists to prevent. Secrets are entered by
+ * the host directly and go straight to Vault.
+ */
+export function isRegistryProposable(f: RegistryField): boolean {
+  return !f.system_section && f.type !== 'secret';
+}
+
+const REGISTRY_BY_ID: ReadonlyMap<string, RegistryField> = new Map(
+  REGISTRY_FIELDS.filter(isRegistryProposable).map((f) => [f.field_id, f]),
+);
+
+export function registryProposableField(fieldId: string): ProposableField | null {
+  const reg = REGISTRY_BY_ID.get(fieldId);
+  if (!reg) return null;
+  return {
+    path: `${BRAIN_VALUE_PREFIX}${fieldId}`,
+    label: reg.label,
+    kind: 'brain_value',
+    target: 'brain_values',
+    fieldId,
+    valueType: reg.type,
+    maxLength: reg.type === 'text' ? 2000 : 200,
+  };
+}
 
 export interface ProposableField {
   path: string;
@@ -58,9 +101,13 @@ export interface ProposableField {
   label: string;
   kind: ProposableKind;
   /** Which table the approved value lands in. */
-  target: 'brain_items' | 'properties' | 'property_settings';
+  target: 'brain_items' | 'properties' | 'property_settings' | 'brain_values';
   /** Column name for `properties` / `property_settings` targets. */
   column?: string;
+  /** Registry field_id for `brain_values` targets. */
+  fieldId?: string;
+  /** Registry value type for `brain_values` targets. */
+  valueType?: string;
   /** Character ceiling for `text` values. */
   maxLength?: number;
 }
@@ -104,6 +151,9 @@ export const PROPOSABLE_FIELDS: Record<string, ProposableField> = {
 };
 
 export function proposableField(path: string): ProposableField | null {
+  if (path.startsWith(BRAIN_VALUE_PREFIX)) {
+    return registryProposableField(path.slice(BRAIN_VALUE_PREFIX.length));
+  }
   // Object.prototype keys ('constructor', '__proto__', …) would otherwise
   // resolve to inherited members and pass a truthy check.
   if (!Object.prototype.hasOwnProperty.call(PROPOSABLE_FIELDS, path)) return null;
@@ -178,6 +228,10 @@ export function normalizeProposedValue(field: ProposableField, raw: unknown): No
   const trimmed = raw.trim();
   if (trimmed.length === 0) return { ok: false, error: 'That value cannot be empty.' };
 
+  if (field.kind === 'brain_value') {
+    return normalizeRegistryValue(field, trimmed);
+  }
+
   if (field.kind === 'tone_preset') {
     if (!(TONE_PRESET_IDS as readonly string[]).includes(trimmed)) {
       return { ok: false, error: 'Pick one of the available tones.' };
@@ -188,6 +242,43 @@ export function normalizeProposedValue(field: ProposableField, raw: unknown): No
   const max = field.maxLength ?? 500;
   if (trimmed.length > max) return { ok: false, error: `Keep this under ${max} characters.` };
   return { ok: true, value: trimmed };
+}
+
+const TIME_24H = /^([01]\d|2[0-3]):[0-5]\d$/;
+const ISO_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/**
+ * Type validation for registry-backed values. The database trigger enforces
+ * tier, audience and payload shape but has no opinion on whether a `time` field
+ * holds "11:00" or "whenever" — that check belongs here, where the host still
+ * gets a sentence they can act on.
+ */
+function normalizeRegistryValue(field: ProposableField, trimmed: string): NormalizeResult {
+  const max = field.maxLength ?? 500;
+  if (trimmed.length > max) return { ok: false, error: `Keep this under ${max} characters.` };
+
+  switch (field.valueType) {
+    case 'time':
+      if (!TIME_24H.test(trimmed)) {
+        return { ok: false, error: 'Use a 24-hour time like 11:00.' };
+      }
+      return { ok: true, value: trimmed };
+    case 'date':
+      if (!ISO_DATE.test(trimmed)) {
+        return { ok: false, error: 'Use a date like 2026-08-12.' };
+      }
+      return { ok: true, value: trimmed };
+    case 'number': {
+      const n = Number(trimmed);
+      if (!Number.isFinite(n)) return { ok: false, error: 'That needs to be a number.' };
+      return { ok: true, value: n };
+    }
+    default:
+      // text / string / enum / place / contact all land as trimmed text. The
+      // three enum fields carry no value list in the registry, so constraining
+      // them here would be inventing a contract the generator never declared.
+      return { ok: true, value: trimmed };
+  }
 }
 
 // ---------------------------------------------------------------------------

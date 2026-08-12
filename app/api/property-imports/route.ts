@@ -9,7 +9,9 @@ import { createImportJob, runPropertyImportJob } from '@/lib/property-import/job
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const requestSchema = z.object({ url: z.string().url().max(2000) }).strict();
+// attested is a literal true, not a boolean: a request that omits it or sends
+// false fails validation instead of quietly importing without an attestation.
+const requestSchema = z.object({ url: z.string().url().max(2000), attested: z.literal(true) }).strict();
 
 export async function POST(request: Request) {
   const ctx = await getSessionContext();
@@ -17,7 +19,12 @@ export async function POST(request: Request) {
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid request.' }, { status: 400 }); }
   const parsed = requestSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: 'Enter a valid public listing URL.' }, { status: 400 });
+  if (!parsed.success) {
+    const message = parsed.error.issues.some((issue) => issue.path[0] === 'attested')
+      ? 'Confirm that you own or manage this listing before importing it.'
+      : 'Enter a valid public listing URL.';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
   const client = createClient();
   const gate = await canCreateProperty(client, ctx.account.id);

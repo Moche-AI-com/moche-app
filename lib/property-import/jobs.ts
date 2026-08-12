@@ -5,6 +5,7 @@ import type { Database, Json } from '@/lib/database.types';
 import { DEFAULT_MODULES } from '@/lib/constants';
 import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { slugWithSuffix } from '@/lib/slug';
+import { IMPORT_ATTESTATION_TEXT } from './attestation';
 import { buildListingDraft, detectListingProvider, type ImportedListingDraft } from './extract';
 
 type Client = SupabaseClient<Database>;
@@ -15,10 +16,17 @@ export async function createImportJob(client: Client, input: {
   createdBy: string;
   sourceUrl: string;
 }) {
+  const now = new Date().toISOString();
   return client.from('property_import_jobs').insert({
     host_account_id: input.hostAccountId,
     created_by: input.createdBy,
     source_url: input.sourceUrl,
+    // The caller only reaches this function after the host checked the box, so the
+    // attestation is recorded with the job rather than in a separate table: the
+    // provenance and the permission to hold it are the same record.
+    ownership_attested_at: now,
+    ownership_attested_by: input.createdBy,
+    attestation_text: IMPORT_ATTESTATION_TEXT,
     provider: detectListingProvider(input.sourceUrl),
     status: 'queued',
     stage_detail: 'Waiting to read the listing',

@@ -27,6 +27,8 @@ export interface RegistryField {
   label: string;
   domain: string;
   system_section: boolean;
+  /** Registry value type. Drives validation on the proposal path. */
+  type: string;
   sensitivity_tier: string;
   default_audience: string;
   gap_weight: number;
@@ -42,6 +44,55 @@ export const REGISTRY_FIELDS = registry.fields as unknown as RegistryField[];
 export const HARD_BLOCK_FIELD_IDS: readonly string[] = REGISTRY_FIELDS
   .filter((f) => f.hard_block)
   .map((f) => f.field_id);
+
+/**
+ * The applicability predicates a host can usefully assert.
+ *
+ * Two exclusions, for different reasons:
+ *   `always` is implicit and must never be storable — a stored `always = false`
+ *   would delete most of the registry from the denominator.
+ *   Predicates that no registry field depends on are dropped because asserting
+ *   one cannot change any score. `has_elevator` is currently in this state: the
+ *   registry declares the predicate but no field uses it. Asking the host about
+ *   it would cost them a click and change nothing.
+ *
+ * The CHECK constraint on property_applicability deliberately allows a superset,
+ * so a future registry field can start using a predicate without a migration.
+ */
+export const APPLICABILITY_PREDICATES: readonly string[] = (
+  registry.applicability_predicates as string[]
+).filter((p) => p !== 'always' && REGISTRY_FIELDS.some((f) => f.applicability === p && f.gap_weight > 0 && !f.system_section));
+
+/** Registry-authored domain labels, so no surface invents its own wording. */
+const DOMAIN_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  (registry.domains as { domain_id: string; label: string }[]).map((d) => [d.domain_id, d.label]),
+);
+
+export function domainLabel(domainId: string): string {
+  return DOMAIN_LABELS[domainId] ?? domainId.replace(/_/g, ' ');
+}
+
+/** Host-facing question for each predicate. Registry-adjacent copy, kept in one place. */
+export const APPLICABILITY_LABELS: Readonly<Record<string, string>> = {
+  has_wifi: 'Wi-Fi for guests',
+  has_pool: 'Pool',
+  has_hot_tub: 'Hot tub',
+  has_laundry: 'Washer or dryer',
+  has_parking: 'Parking',
+  allows_pets: 'Pets allowed',
+  is_multi_story: 'More than one floor',
+  has_elevator: 'Elevator',
+  has_smart_lock: 'Smart lock or keypad',
+  has_security_cameras: 'Exterior cameras',
+  charges_deposit: 'Security deposit',
+};
+
+/** Registry fields that only get scored once a given predicate is asserted. */
+export function fieldsGatedBy(predicate: string): RegistryField[] {
+  return REGISTRY_FIELDS.filter(
+    (f) => f.applicability === predicate && f.gap_weight > 0 && !f.system_section,
+  );
+}
 
 export interface CompletenessInput {
   /** Status per field_id. An absent field_id is treated as `missing`. */

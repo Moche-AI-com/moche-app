@@ -16,6 +16,8 @@ import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
 import { capture } from '@/lib/posthog-server';
 import { serverEnv } from '@/lib/env';
+import { loadCompleteness } from '@/lib/brain/values';
+import { COMPLETENESS_SHIP_THRESHOLD } from '@/lib/brain/completeness';
 
 export interface PropertyFormState {
   error?: string;
@@ -445,6 +447,21 @@ async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft'
       const health = computeBrainHealth(items ?? []);
       if (!health.canGoLive) {
         return { error: 'Add core info (essentials, check-in/out, house rules) before going live.' };
+      }
+    }
+    if (serverEnv.requireCompletenessToPublish) {
+      // Registry completeness, the canonical figure (Amendment 001-A.4). The
+      // threshold and the hard blocks are separate conditions: 100% with an
+      // unanswered door code still cannot publish, because a guest who cannot
+      // get in is not helped by a high score.
+      const completeness = await loadCompleteness(supabase, propertyId);
+      if (!completeness.canPublish) {
+        const blockers = completeness.hardBlocksOutstanding.map((g) => g.label);
+        return {
+          error: blockers.length
+            ? `Answer these before going live: ${blockers.join(', ')}.`
+            : `Your Brain is ${completeness.pct.toFixed(0)}% complete. ${COMPLETENESS_SHIP_THRESHOLD}% is needed to go live.`,
+        };
       }
     }
   }

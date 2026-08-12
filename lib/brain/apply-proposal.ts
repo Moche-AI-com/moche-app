@@ -71,6 +71,33 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
       return { ok: true, targetType: 'brain_item', targetId: result.brainItemId };
     }
 
+    if (field.kind === 'brain_value') {
+      // A brain_values row written with source 'host_verified' records who
+      // verified it. Applying one with no known actor would produce an
+      // unattributable claim of host verification, so refuse rather than write
+      // an anonymous one.
+      if (!input.actorProfileId) {
+        return { ok: false, error: 'Sign in again to approve this value.' };
+      }
+      // Everything about the envelope row — sensitivity tier, audience, TTL,
+      // version, superseding the prior value — is decided by the database from
+      // field_registry. This call deliberately passes no tier and no audience:
+      // the trigger would reject a widened one anyway, and duplicating the
+      // registry here would create a second source of truth for who may see a
+      // value.
+      const { data, error } = await admin.rpc('brain_values_set', {
+        p_property_id: input.propertyId,
+        p_field_id: String(field.fieldId),
+        p_value: normalized.value as never,
+        p_source: 'host_verified',
+        p_confidence: 1,
+        p_actor: input.actorProfileId,
+      });
+
+      if (error) throw error;
+      return { ok: true, targetType: 'brain_value', targetId: (data as string | null) ?? null };
+    }
+
     if (field.target === 'properties') {
       const { error } = await admin
         .from('properties')
