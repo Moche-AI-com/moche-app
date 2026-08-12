@@ -324,6 +324,91 @@ export type Database = {
           },
         ]
       }
+      brain_values: {
+        Row: {
+          audience: Database["public"]["Enums"]["audience_tier"]
+          confidence: number
+          created_at: string
+          created_by: string | null
+          field_id: string
+          id: string
+          property_id: string
+          secret_ref_or_ciphertext: string | null
+          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
+          source: Database["public"]["Enums"]["brain_value_source"]
+          status: Database["public"]["Enums"]["brain_value_status"]
+          superseded_by: string | null
+          ttl_expires_at: string | null
+          updated_at: string
+          value: Json | null
+          verified_at: string | null
+          verified_by: string | null
+          version: number
+        }
+        Insert: {
+          audience: Database["public"]["Enums"]["audience_tier"]
+          confidence?: number
+          created_at?: string
+          created_by?: string | null
+          field_id: string
+          id?: string
+          property_id: string
+          secret_ref_or_ciphertext?: string | null
+          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
+          source: Database["public"]["Enums"]["brain_value_source"]
+          status?: Database["public"]["Enums"]["brain_value_status"]
+          superseded_by?: string | null
+          ttl_expires_at?: string | null
+          updated_at?: string
+          value?: Json | null
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
+        }
+        Update: {
+          audience?: Database["public"]["Enums"]["audience_tier"]
+          confidence?: number
+          created_at?: string
+          created_by?: string | null
+          field_id?: string
+          id?: string
+          property_id?: string
+          secret_ref_or_ciphertext?: string | null
+          sensitivity_tier?: Database["public"]["Enums"]["sensitivity_tier"]
+          source?: Database["public"]["Enums"]["brain_value_source"]
+          status?: Database["public"]["Enums"]["brain_value_status"]
+          superseded_by?: string | null
+          ttl_expires_at?: string | null
+          updated_at?: string
+          value?: Json | null
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brain_values_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "field_registry"
+            referencedColumns: ["field_id"]
+          },
+          {
+            foreignKeyName: "brain_values_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brain_values_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "brain_values"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consent_records: {
         Row: {
           created_at: string
@@ -893,6 +978,86 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "stays"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_registry: {
+        Row: {
+          applicability: string
+          default_audience: Database["public"]["Enums"]["audience_tier"]
+          domain: string
+          enum_values: Json | null
+          field_id: string
+          gap_weight: number
+          hard_block: boolean
+          interview_prompt: string
+          label: string
+          on_failure_field: string | null
+          phase: string[]
+          registry_version: number
+          requires_on_failure: boolean
+          scrape_hint: string | null
+          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
+          storage_column: string
+          storage_table: string
+          storage_vault: boolean
+          system_section: boolean
+          ttl_days: number | null
+          type: string
+        }
+        Insert: {
+          applicability?: string
+          default_audience: Database["public"]["Enums"]["audience_tier"]
+          domain: string
+          enum_values?: Json | null
+          field_id: string
+          gap_weight?: number
+          hard_block?: boolean
+          interview_prompt: string
+          label: string
+          on_failure_field?: string | null
+          phase: string[]
+          registry_version: number
+          requires_on_failure?: boolean
+          scrape_hint?: string | null
+          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
+          storage_column: string
+          storage_table: string
+          storage_vault?: boolean
+          system_section?: boolean
+          ttl_days?: number | null
+          type: string
+        }
+        Update: {
+          applicability?: string
+          default_audience?: Database["public"]["Enums"]["audience_tier"]
+          domain?: string
+          enum_values?: Json | null
+          field_id?: string
+          gap_weight?: number
+          hard_block?: boolean
+          interview_prompt?: string
+          label?: string
+          on_failure_field?: string | null
+          phase?: string[]
+          registry_version?: number
+          requires_on_failure?: boolean
+          scrape_hint?: string | null
+          sensitivity_tier?: Database["public"]["Enums"]["sensitivity_tier"]
+          storage_column?: string
+          storage_table?: string
+          storage_vault?: boolean
+          system_section?: boolean
+          ttl_days?: number | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_registry_on_failure_field_fkey"
+            columns: ["on_failure_field"]
+            isOneToOne: false
+            referencedRelation: "field_registry"
+            referencedColumns: ["field_id"]
           },
         ]
       }
@@ -2333,6 +2498,45 @@ export type Database = {
           },
         ]
       }
+      property_applicability: {
+        Row: {
+          applies: boolean
+          predicate: string
+          property_id: string
+          set_at: string
+          set_by: string | null
+        }
+        Insert: {
+          applies?: boolean
+          predicate: string
+          property_id: string
+          set_at?: string
+          set_by?: string | null
+        }
+        Update: {
+          applies?: boolean
+          predicate?: string
+          property_id?: string
+          set_at?: string
+          set_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_applicability_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_applicability_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       property_brain_versions: {
         Row: {
           property_id: string
@@ -2441,6 +2645,7 @@ export type Database = {
       property_import_jobs: {
         Row: {
           attempts: number
+          attestation_text: string | null
           completed_at: string | null
           created_at: string
           created_by: string
@@ -2448,6 +2653,8 @@ export type Database = {
           error_reason: string | null
           host_account_id: string
           id: string
+          ownership_attested_at: string | null
+          ownership_attested_by: string | null
           progress_pct: number
           property_id: string | null
           provider: string
@@ -2458,6 +2665,7 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          attestation_text?: string | null
           completed_at?: string | null
           created_at?: string
           created_by: string
@@ -2465,6 +2673,8 @@ export type Database = {
           error_reason?: string | null
           host_account_id: string
           id?: string
+          ownership_attested_at?: string | null
+          ownership_attested_by?: string | null
           progress_pct?: number
           property_id?: string | null
           provider?: string
@@ -2475,6 +2685,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          attestation_text?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string
@@ -2482,6 +2693,8 @@ export type Database = {
           error_reason?: string | null
           host_account_id?: string
           id?: string
+          ownership_attested_at?: string | null
+          ownership_attested_by?: string | null
           progress_pct?: number
           property_id?: string | null
           provider?: string
@@ -2503,6 +2716,13 @@ export type Database = {
             columns: ["host_account_id"]
             isOneToOne: false
             referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_import_jobs_ownership_attested_by_fkey"
+            columns: ["ownership_attested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -3341,6 +3561,26 @@ export type Database = {
         Args: { p_host_account_id: string; p_since: string }
         Returns: number
       }
+      audience_permitted_for_tier: {
+        Args: {
+          p_audience: Database["public"]["Enums"]["audience_tier"]
+          p_tier: Database["public"]["Enums"]["sensitivity_tier"]
+        }
+        Returns: boolean
+      }
+      brain_values_set: {
+        Args: {
+          p_actor: string
+          p_audience?: Database["public"]["Enums"]["audience_tier"]
+          p_confidence: number
+          p_field_id: string
+          p_property_id: string
+          p_secret_ref?: string
+          p_source: Database["public"]["Enums"]["brain_value_source"]
+          p_value: Json
+        }
+        Returns: string
+      }
       bump_brain_version: { Args: { p_property_id: string }; Returns: number }
       can_access_property: { Args: { prop: string }; Returns: boolean }
       can_edit_property: { Args: { prop: string }; Returns: boolean }
@@ -3380,6 +3620,26 @@ export type Database = {
           title: string
         }[]
       }
+      property_import_provenance: {
+        Args: { p_property_id: string }
+        Returns: {
+          artifact_count: number
+          attestation_text: string
+          fetched_at: string
+          job_id: string
+          ownership_attested_at: string
+          provider: string
+          source_url: string
+          status: Database["public"]["Enums"]["property_import_job_status"]
+        }[]
+      }
+      property_import_purge: {
+        Args: { p_actor: string; p_property_id: string }
+        Returns: {
+          artifacts_deleted: number
+          jobs_deleted: number
+        }[]
+      }
     }
     Enums: {
       access_status: "pending" | "verified" | "expired" | "revoked"
@@ -3387,6 +3647,13 @@ export type Database = {
         | "unverified"
         | "model_confirmed"
         | "manual_ingested"
+      audience_tier:
+        | "system_internal"
+        | "host_private"
+        | "staff_ops"
+        | "guest_instay"
+        | "guest_prearrival"
+        | "guest_public"
       brain_category:
         | "core"
         | "appliances"
@@ -3399,6 +3666,14 @@ export type Database = {
         | "host_qa"
         | "internal_notes"
         | "transportation"
+      brain_value_source:
+        | "host_verified"
+        | "pms_sync"
+        | "host_chat"
+        | "escalation"
+        | "firecrawl"
+        | "inferred"
+      brain_value_status: "active" | "superseded" | "retired"
       brain_visibility: "guest" | "internal"
       consent_kind: "terms" | "privacy" | "marketing" | "guest_comms"
       conversation_role: "guest" | "assistant" | "host" | "system"
@@ -3485,6 +3760,11 @@ export type Database = {
         | "canceled"
       property_status: "draft" | "live" | "paused" | "archived"
       proposed_update_status: "pending" | "approved" | "modified" | "denied"
+      sensitivity_tier:
+        | "public_guest"
+        | "guest_after_verification"
+        | "stay_scoped_secret"
+        | "host_only"
       service_status:
         | "new"
         | "acknowledged"
@@ -3645,6 +3925,14 @@ export const Constants = {
         "model_confirmed",
         "manual_ingested",
       ],
+      audience_tier: [
+        "system_internal",
+        "host_private",
+        "staff_ops",
+        "guest_instay",
+        "guest_prearrival",
+        "guest_public",
+      ],
       brain_category: [
         "core",
         "appliances",
@@ -3658,6 +3946,15 @@ export const Constants = {
         "internal_notes",
         "transportation",
       ],
+      brain_value_source: [
+        "host_verified",
+        "pms_sync",
+        "host_chat",
+        "escalation",
+        "firecrawl",
+        "inferred",
+      ],
+      brain_value_status: ["active", "superseded", "retired"],
       brain_visibility: ["guest", "internal"],
       consent_kind: ["terms", "privacy", "marketing", "guest_comms"],
       conversation_role: ["guest", "assistant", "host", "system"],
@@ -3753,6 +4050,12 @@ export const Constants = {
       ],
       property_status: ["draft", "live", "paused", "archived"],
       proposed_update_status: ["pending", "approved", "modified", "denied"],
+      sensitivity_tier: [
+        "public_guest",
+        "guest_after_verification",
+        "stay_scoped_secret",
+        "host_only",
+      ],
       service_status: [
         "new",
         "acknowledged",

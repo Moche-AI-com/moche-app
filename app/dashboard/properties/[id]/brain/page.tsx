@@ -3,6 +3,17 @@ import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, computeCardHealth, BRAIN_CARDS, type CardKey } from '@/lib/brain/health';
 import { computeReadiness } from '@/lib/brain/readiness';
+import {
+  APPLICABILITY_LABELS,
+  APPLICABILITY_PREDICATES,
+  COMPLETENESS_SHIP_THRESHOLD,
+  domainLabel,
+  fieldsGatedBy,
+} from '@/lib/brain/completeness';
+import { loadCompleteness } from '@/lib/brain/values';
+import { serverEnv } from '@/lib/env';
+import { CompletenessPanel } from './CompletenessPanel';
+import { ImportProvenancePanel } from './ImportProvenancePanel';
 import { BRAIN_CATEGORY_LABELS } from '@/lib/constants';
 import type { BrainCategory } from '@/lib/constants';
 import { BrainManager } from './BrainManager';
@@ -51,6 +62,22 @@ export default async function BrainPage({
     primaryContactCount: primaryContacts ?? 0,
     hasSettings: !!settings,
     confidenceThresholdSet: !!settings && typeof settings.confidence_threshold === 'number',
+  });
+
+  // Registry completeness, the number the publish gate reads. Loaded with the
+  // request-scoped client so RLS applies: a co-host who cannot see the property
+  // cannot see its score either.
+  const completeness = await loadCompleteness(supabase, (await params).id);
+  const { data: predicateRows } = await supabase
+    .from('property_applicability')
+    .select('predicate, applies')
+    .eq('property_id', (await params).id);
+  const predicateAnswers = new Map((predicateRows ?? []).map((r) => [r.predicate, r.applies]));
+
+  // Import provenance: source URL, fetch time, and the attestation the host gave.
+  // security invoker RPC, so a caller who cannot see the jobs gets no rows.
+  const { data: importRows } = await supabase.rpc('property_import_provenance', {
+    p_property_id: (await params).id,
   });
 
   const readiness = computeReadiness({
@@ -130,6 +157,71 @@ export default async function BrainPage({
             <Link href={`/dashboard/properties/${(await params).id}/recommendations`} className="btn btn-sm btn-ghost btn-block" style={{ marginBottom: '1rem' }}>
               Manage local recommendations →
             </Link>
+          )}
+          <div style={{ marginBottom: '1rem' }}>
+            <CompletenessPanel
+              propertyId={(await params).id}
+              canEdit={access.can.editBrain}
+              pct={completeness.pct}
+              threshold={COMPLETENESS_SHIP_THRESHOLD}
+              numerator={completeness.numerator}
+              denominator={completeness.denominator}
+              canPublish={completeness.canPublish}
+              blockedReason={completeness.blockedReason}
+              enforced={serverEnv.requireCompletenessToPublish}
+              domains={completeness.domains.map((d) => ({
+                domain: d.domain,
+                label: domainLabel(d.domain),
+                pct: d.pct,
+                weight: d.weight,
+                gapCount: d.gaps.length,
+              }))}
+              hardBlocks={completeness.hardBlocksOutstanding.map((g) => ({
+                fieldId: g.fieldId,
+                label: g.label,
+                domain: g.domain,
+                status: g.status,
+                hardBlock: g.hardBlock,
+                interviewPrompt: g.interviewPrompt,
+              }))}
+              // Heaviest gaps first: the list is a work queue, not an inventory,
+              // so five entries that move the number most beats forty that do not.
+              topGaps={[...completeness.gaps]
+                .sort((a, b) => b.gapWeight - a.gapWeight)
+                .slice(0, 5)
+                .map((g) => ({
+                  fieldId: g.fieldId,
+                  label: g.label,
+                  domain: g.domain,
+                  status: g.status,
+                  hardBlock: g.hardBlock,
+                  interviewPrompt: g.interviewPrompt,
+                }))}
+              predicates={APPLICABILITY_PREDICATES.map((p) => ({
+                predicate: p,
+                label: APPLICABILITY_LABELS[p] ?? p.replace(/_/g, ' '),
+                applies: predicateAnswers.has(p) ? !!predicateAnswers.get(p) : null,
+                fieldCount: fieldsGatedBy(p).length,
+              }))}
+            />
+          </div>
+          {(importRows ?? []).length > 0 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <ImportProvenancePanel
+                propertyId={(await params).id}
+                canEdit={access.can.editBrain}
+                imports={(importRows ?? []).map((row) => ({
+                  jobId: row.job_id,
+                  sourceUrl: row.source_url,
+                  provider: row.provider,
+                  fetchedAt: row.fetched_at,
+                  status: row.status,
+                  attestedAt: row.ownership_attested_at,
+                  attestationText: row.attestation_text,
+                  artifactCount: Number(row.artifact_count ?? 0),
+                }))}
+              />
+            </div>
           )}
           {access.can.editBrain && <IngestPanel propertyId={(await params).id} />}
           {access.can.editBrain && (

@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { IMPORT_ATTESTATION_TEXT } from '@/lib/property-import/attestation';
 
 const STAGES = ['Saving import job', 'Reading listing', 'Organizing review groups', 'Creating draft property'];
 
 export function ListingImportForm() {
   const router = useRouter();
   const [url, setUrl] = useState('');
+  const [attested, setAttested] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState(0);
@@ -18,9 +20,10 @@ export function ListingImportForm() {
     try {
       const parsed = new URL(url);
       if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Enter a public Airbnb or VRBO listing URL.');
+      if (!attested) throw new Error('Confirm that you own or manage this listing before importing it.');
       setLoading(true);
       setStage(1);
-      const response = await fetch('/api/property-imports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
+      const response = await fetch('/api/property-imports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, attested: true }) });
       const payload = await response.json() as { jobId?: string; ok?: boolean; error?: string };
       if (!payload.jobId) throw new Error(payload.error ?? 'Could not start that import.');
       setStage(3);
@@ -40,9 +43,25 @@ export function ListingImportForm() {
         <input className="input" id="listingUrl" name="listingUrl" type="url" inputMode="url" required maxLength={2000} value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://www.airbnb.com/rooms/…" style={{ minHeight: 44 }} />
         <p className="faint" style={{ fontSize: '.8rem', marginTop: '.4rem' }}>We organize listing details into review groups. Nothing enters the Brain until you approve it.</p>
       </div>
+      <div className="field">
+        <label style={{ display: 'flex', gap: '.55rem', alignItems: 'flex-start', fontSize: '.85rem', lineHeight: 1.45 }}>
+          <input
+            type="checkbox"
+            name="attested"
+            checked={attested}
+            onChange={(event) => setAttested(event.target.checked)}
+            required
+            style={{ marginTop: '.2rem', width: 18, height: 18, flexShrink: 0 }}
+          />
+          <span>{IMPORT_ATTESTATION_TEXT}</span>
+        </label>
+        <p className="faint" style={{ fontSize: '.75rem', marginTop: '.4rem' }}>
+          We keep the listing URL and the text we read, so you can see where every imported detail came from and delete all of it in one step.
+        </p>
+      </div>
       {loading && <ol className="faint" aria-live="polite" style={{ margin: '.75rem 0', paddingLeft: '1.2rem' }}>{STAGES.map((item, index) => <li key={item}>{index <= stage ? item : 'Waiting'}</li>)}</ol>}
       {error && <p role="alert" className="error">{error}</p>}
-      <button className="button" type="submit" disabled={loading}>{loading ? 'Building property…' : 'Build my property'}</button>
+      <button className="button" type="submit" disabled={loading || !attested}>{loading ? 'Building property…' : 'Build my property'}</button>
     </form>
   );
 }

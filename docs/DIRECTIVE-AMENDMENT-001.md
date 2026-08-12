@@ -290,6 +290,53 @@ isolation suites before the cutover, not after.
 
 ---
 
+## I. Amendment I — §0.4 legal position for listing import (closes §0.4)
+
+**Directive text amended:** §0.4, which left the import legal position "undecided".
+
+**Decision:** the position is procedural and is enforced in code, not asserted in a policy
+document. Four controls, all shipped (see D-0013):
+
+1. The only URL fetched is one the host pasted. There is no discovery and no crawl of
+   adjacent listings.
+2. The host attests ownership at import time. `attested: true` is a required literal in the
+   API schema, and the exact sentence displayed is stored on the job row, so later copy
+   revisions cannot rewrite what an earlier host agreed to.
+3. Provenance is retained and shown to the host: source URL, provider, fetch time, status,
+   attestation, stored-capture count.
+4. A single host action deletes the captured page text, the extracted draft, and the job
+   rows, with an audit entry. It does not delete the property or anything already approved.
+
+**Why not a technical claim of fair use:** the product cannot verify who owns a listing. The
+defensible position is that every import is host-initiated, attributed, attested, and
+erasable on request — which is what these four controls make true of every row.
+
+---
+
+## J. Amendment J — completeness gating stays single-threshold (closes §5 ambiguity)
+
+**Directive text amended:** §5, read by some surfaces as implying per-category minimums.
+
+**Decision:** the 65% overall threshold in Amendment A is the only gate. Per-category
+percentages are display-only (see D-0014). Rationale: one blocking reason the host can act on,
+and one number to re-tune when the registry changes.
+
+---
+
+## K. Amendment K — applicability is an edit, and a dead predicate was removed from the UI
+
+**Decision (D-0017):** `property_applicability` writes require `can_edit_property`. Declaring
+that a property has a pool changes the completeness denominator and therefore publishability,
+so it is an edit and is not available to a read-only co-host.
+
+**Finding:** `has_elevator` is declared in the registry but gates no field.
+`APPLICABILITY_PREDICATES` now surfaces only predicates that gate at least one scored field,
+so the panel cannot ask a question that has no effect on the score. The database CHECK
+constraint deliberately still permits the wider set, so adding an elevator-dependent field
+later requires no migration.
+
+---
+
 ## H. Amendment status (revised)
 
 | Item | Status |
@@ -299,3 +346,6 @@ isolation suites before the cutover, not after.
 | C — Gate renaming | DECIDED, no code impact beyond documentation |
 | F — embeddings provider | DECIDED, `text-embedding-3-small` retained, Ollama dev-only |
 | G — auth provider | DECIDED, native Supabase auth retained, §0.1a superseded |
+| I — §0.4 import legal position | DECIDED, implemented (attestation + provenance RPC + purge RPC) |
+| J — completeness gating | DECIDED, single 65% gate; per-category display only |
+| K — applicability write policy | DECIDED, migration `gate3_property_applicability_write_requires_editor` applied |

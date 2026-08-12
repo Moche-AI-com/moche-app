@@ -19,6 +19,7 @@ import {
   type MergedLocalPlace,
 } from '@/lib/local/merge';
 import { loadCanonicalPlaces } from '@/lib/local/canonical';
+import { redactBlocks, redactCredentials, REDACTION_INSTRUCTION } from '@/lib/brain/redact';
 
 type Admin = SupabaseClient<Database>;
 type IntentType = Database['public']['Enums']['intent_type'];
@@ -590,8 +591,12 @@ export async function answerGuestQuestion(
         latencyMs: Date.now() - startedAt,
         source: opts.source ?? 'guest_chat',
       });
+      // Redact on read, not only on write. Entries cached before the guard
+      // existed can still hold a credential the legacy free-text path leaked,
+      // and the cache outlives a deploy. Redacting here means the fix applies
+      // retroactively without a cache purge.
       return {
-        text: cached.answer,
+        text: redactCredentials(cached.answer).text,
         confidence: cached.confidence,
         intent: 'information',
         model: 'cache',
@@ -614,7 +619,24 @@ export async function answerGuestQuestion(
     : [];
 
   const chunks = await retrieveGuestChunks(admin, opts.propertyId, opts.question, usageSink, embedding);
-  const chunkContext = chunks.map((c, i) => `[${i + 1}] (${c.category}) ${c.content}`).join('\n\n');
+
+  // Credential containment (Directive §0.2). The registry types wifi_password and
+  // door_code_or_entry_method as stay_scoped_secret and brain_values refuses to
+  // hold either as plaintext — but document_chunks predates that envelope and is
+  // whatever the host typed. Everything below is redacted BEFORE it can reach a
+  // model prompt, so a legacy plaintext credential is contained at the retrieval
+  // boundary rather than depending on the storage being clean.
+  const nodeRedaction = redactBlocks(nodes.map((n) => n.content));
+  const chunkRedaction = redactBlocks(chunks.map((c) => c.content));
+  const redactedNodes = nodes.map((n, i) => ({ ...n, content: nodeRedaction.blocks[i] }));
+  const redactedChunks = chunks.map((c, i) => ({ ...c, content: chunkRedaction.blocks[i] }));
+  const redactions = [...new Set([...nodeRedaction.redactions, ...chunkRedaction.redactions])];
+  if (redactions.length > 0) {
+    // Labels only — never the matched value.
+    log.info('concierge.credential_redacted', { propertyId: opts.propertyId, rules: redactions });
+  }
+
+  const chunkContext = redactedChunks.map((c, i) => `[${i + 1}] (${c.category}) ${c.content}`).join('\n\n');
 
   // Extend (never replace) the knowledge context with host-curated nearby places
   // so the concierge can make grounded local recommendations. Excluded when empty.
@@ -644,7 +666,7 @@ export async function answerGuestQuestion(
   const systemPrompt = nodes.length > 0
     ? buildSystemPromptWithGraph(
         opts.propertyName,
-        nodes.map((n, i) => `[${i + 1}] (${n.nodeType}) ${n.title}\n${n.content}`).join('\n\n'),
+        redactedNodes.map((n, i) => `[${i + 1}] (${n.nodeType}) ${n.title}\n${n.content}`).join('\n\n'),
         context,
         cfg,
       )
@@ -653,7 +675,14 @@ export async function answerGuestQuestion(
   const messages: ChatMessage[] = [
     {
       role: 'system',
-      content: systemPrompt + NO_GUESS_INSTRUCTION + SUGGESTIONS_INSTRUCTION + (nearbyPlaces.length > 0 ? PLACES_INSTRUCTION : ''),
+      content:
+        systemPrompt +
+        NO_GUESS_INSTRUCTION +
+        SUGGESTIONS_INSTRUCTION +
+        (nearbyPlaces.length > 0 ? PLACES_INSTRUCTION : '') +
+        // Only when something was actually withheld. A model shown a redaction
+        // marker with no explanation will invent a plausible code instead.
+        (redactions.length > 0 ? REDACTION_INSTRUCTION : ''),
     },
     ...opts.history.slice(-6),
     { role: 'user', content: opts.question },
@@ -702,7 +731,11 @@ export async function answerGuestQuestion(
   // cache. The model's place ids are resolved against the DB-backed list, never trusted
   // as-is (WS-5) — an id it could not have legitimately seen simply drops silently.
   const { answer: cleanText, suggestions, placeIds, unknownNote } = splitTrailingDirectives(text);
-  text = cleanText;
+  // Second pass on the model's own words. The context was already clean, so this
+  // is the last line of defense against a credential arriving by another route
+  // (conversation history, a host-authored master prompt) and against it being
+  // written into the answer cache.
+  text = redactCredentials(cleanText).text;
   const places = resolvePlaceRefs(placeIds, nearbyPlaces);
 
   const rawConfidence = scoreConfidence(chunks, text, nodes[0]?.similarity ?? 0);
