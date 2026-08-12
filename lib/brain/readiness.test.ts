@@ -50,4 +50,33 @@ describe('computeReadiness', () => {
     expect(result.categories.find((category) => category.key === 'arrival_access_departure')?.missing)
       .toEqual(result.missing);
   });
+
+it('excludes not_applicable from the denominator instead of crediting it as satisfied', () => {
+const partialOnly = computeReadiness({
+statuses: [{ requirementKey: 'house_rules', status: 'partial' }],
+});
+const partialWithNa = computeReadiness({
+statuses: [
+{ requirementKey: 'house_rules', status: 'partial' },
+{ requirementKey: 'emergency_contact', status: 'not_applicable' },
+],
+});
+// N/A must not inflate the score: emergency_contact going N/A leaves the
+// safety_contacts denominator, so the remaining safety requirement drives it.
+expect(partialWithNa.score).toBeGreaterThan(partialOnly.score);
+expect(partialWithNa.missing.map((item) => item.requirementKey)).not.toContain('emergency_contact');
+});
+
+it('does not count an all-N/A category as inflating overall completeness beyond its earned weight', () => {
+const result = computeReadiness({
+statuses: KNOWLEDGE_REQUIREMENTS.map((requirement) => ({
+requirementKey: requirement.key,
+status: requirement.category === 'faqs' ? ('not_applicable' as const) : ('satisfied' as const),
+})),
+});
+// Every scored requirement is satisfied and FAQs are all N/A (left out of the
+// denominator), so the property is fully ready at 100 with no missing items.
+expect(result.score).toBe(100);
+expect(result.missing).toEqual([]);
+});
 });
