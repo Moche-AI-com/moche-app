@@ -146,6 +146,11 @@ export const serverEnv = {
 
   resendApiKey: process.env.RESEND_API_KEY ?? '', // Server-only. Email delivery via Resend.
 
+  // Shared secret for scheduled routes under /api/cron. Empty means every cron route
+  // refuses: an unconfigured deployment must not expose an unauthenticated endpoint that
+  // reads with service-role credentials.
+  cronSecret: process.env.CRON_SECRET ?? '',
+
   // Internal business inbox that receives product-feedback pings (host feedback
   // submissions) for follow-up. Server-only. Override via FEEDBACK_INBOX in Vercel.
   feedbackInbox: process.env.FEEDBACK_INBOX ?? 'hostspark.org@gmail.com',

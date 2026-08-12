@@ -117,6 +117,8 @@ export interface PropertyCompleteness extends Completeness {
   applicable: string[];
   /** Field ids with a live stored value, for the host-facing detail view. */
   satisfiedFieldIds: string[];
+  /** Per-field derived status, so a read-only surface can render state without re-deriving it. */
+  statuses: Record<string, FieldStatus>;
 }
 
 export async function loadCompleteness(
@@ -132,6 +134,7 @@ export async function loadCompleteness(
   return {
     ...result,
     applicable,
+    statuses,
     satisfiedFieldIds: Object.entries(statuses)
       .filter(([, s]) => s === 'satisfied')
       .map(([id]) => id),

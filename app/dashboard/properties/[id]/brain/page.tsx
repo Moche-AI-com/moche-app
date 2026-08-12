@@ -12,7 +12,9 @@ import {
 } from '@/lib/brain/completeness';
 import { loadCompleteness } from '@/lib/brain/values';
 import { serverEnv } from '@/lib/env';
+import { buildCoverageMap } from '@/lib/brain/coverage';
 import { CompletenessPanel } from './CompletenessPanel';
+import { CoverageMap } from './CoverageMap';
 import { ImportProvenancePanel } from './ImportProvenancePanel';
 import { BRAIN_CATEGORY_LABELS } from '@/lib/constants';
 import type { BrainCategory } from '@/lib/constants';
@@ -229,7 +231,14 @@ export default async function BrainPage({
               <AppliancePanel propertyId={(await params).id} />
             </div>
           )}
-          <div className="card" style={{ padding: '1.25rem', marginTop: access.can.editBrain ? '1rem' : 0 }}>
+          <CoverageMap
+            view={buildCoverageMap({
+              statuses: completeness.statuses,
+              applicable: completeness.applicable,
+              domains: completeness.domains,
+            })}
+          />
+          <div className="card" style={{ padding: '1.25rem', marginTop: '1rem' }}>
             <h3 style={{ fontSize: '1rem', marginBottom: '.75rem' }}>Coverage</h3>
             {health.categories.map((c) => (
               <div key={c.category} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.82rem', padding: '.3rem 0', borderBottom: '1px solid var(--border)' }}>
