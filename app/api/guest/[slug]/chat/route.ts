@@ -17,7 +17,7 @@ import { translateForHost, notificationBody } from '@/lib/guest/translate';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
@@ -43,7 +43,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   // Confirm the slug matches the session's property (defense in depth).
   const { data: property } = await admin
     .from('properties').select('id, display_name, slug, host_account_id').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 

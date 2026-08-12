@@ -8,8 +8,8 @@ import { SettingsForms } from './SettingsForms';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PropertySettingsPage({ params }: { params: { id: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export default async function PropertySettingsPage({ params }: { params: Promise<{ id: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   if (!access.can.editProperty) {
     return (
       <div>

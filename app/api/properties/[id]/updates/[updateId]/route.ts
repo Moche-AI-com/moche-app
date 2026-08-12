@@ -23,8 +23,8 @@ const bodySchema = z.object({
   note: z.string().max(1000).optional(),
 });
 
-export async function POST(req: Request, { params }: { params: { id: string; updateId: string } }) {
-  const access = await getPropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string; updateId: string }> }) {
+  const access = await getPropertyAccess((await params).id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   // Same permission the database enforces via can_edit_property.
   if (!access.can.editBrain) {
@@ -53,8 +53,8 @@ export async function POST(req: Request, { params }: { params: { id: string; upd
   const { data: row } = await admin
     .from('proposed_updates')
     .select('id, property_id, field_path, status, proposed_value, source_ref')
-    .eq('id', params.updateId)
-    .eq('property_id', params.id)
+    .eq('id', (await params).updateId)
+    .eq('property_id', (await params).id)
     .maybeSingle();
 
   if (!row) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
@@ -89,7 +89,7 @@ export async function POST(req: Request, { params }: { params: { id: string; upd
       action: 'brain.proposal.deny',
       actorProfileId: user?.id,
       hostAccountId: access.property.host_account_id,
-      propertyId: params.id,
+      propertyId: (await params).id,
       targetType: 'proposed_update',
       targetId: row.id,
       metadata: { fieldPath: row.field_path },
@@ -103,7 +103,7 @@ export async function POST(req: Request, { params }: { params: { id: string; upd
   if (!normalized.ok) return NextResponse.json({ error: normalized.error }, { status: 400 });
 
   const applied = await applyProposal(admin, {
-    propertyId: params.id,
+    propertyId: (await params).id,
     fieldPath: row.field_path,
     value: normalized.value,
     actorProfileId: user?.id ?? null,
@@ -136,7 +136,7 @@ export async function POST(req: Request, { params }: { params: { id: string; upd
       action: 'brain.proposal.record_failed',
       actorProfileId: user?.id,
       hostAccountId: access.property.host_account_id,
-      propertyId: params.id,
+      propertyId: (await params).id,
       targetType: 'proposed_update',
       targetId: row.id,
       metadata: { fieldPath: row.field_path, error: error.message },
@@ -147,7 +147,7 @@ export async function POST(req: Request, { params }: { params: { id: string; upd
     action: decision === 'approve' ? 'brain.proposal.approve' : 'brain.proposal.modify',
     actorProfileId: user?.id,
     hostAccountId: access.property.host_account_id,
-    propertyId: params.id,
+    propertyId: (await params).id,
     targetType: 'proposed_update',
     targetId: row.id,
     metadata: { fieldPath: row.field_path, targetType: applied.targetType, targetId: applied.targetId },

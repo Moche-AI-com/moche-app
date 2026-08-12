@@ -23,8 +23,8 @@ const previewSchema = z.object({
     .optional(),
 });
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const access = await getPropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await getPropertyAccess((await params).id);
   if (!access) return NextResponse.json({ error: 'Not authorized for this property.' }, { status: 403 });
 
   let payload: unknown;
@@ -43,11 +43,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { data: settings } = await admin
     .from('property_settings')
     .select('concierge_tone, ai_temperature, confidence_threshold, concierge_name, system_prompt_override, response_length, restricted_topics, restricted_topic_keys, language, legacy_tone_note, legacy_tone_ack_at')
-    .eq('property_id', params.id)
+    .eq('property_id', (await params).id)
     .maybeSingle();
 
   const answer = await answerGuestQuestion(admin, {
-    propertyId: params.id,
+    propertyId: (await params).id,
     propertyName: access.property.display_name,
     question: parsed.data.message,
     history,

@@ -26,7 +26,7 @@ function extFromContentType(contentType: string): string {
   }
 }
 
-export async function POST(req: Request, { params }: { params: { slug: string; id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string; id: string }> }) {
   if (!hasS3()) return NextResponse.json({ error: 'Uploads are not available right now.' }, { status: 503 });
 
   const session = await getGuestSession();
@@ -46,14 +46,14 @@ export async function POST(req: Request, { params }: { params: { slug: string; i
 
   const { data: property } = await admin
     .from('properties').select('id, slug').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 
   const { data: ticket } = await admin
     .from('service_requests')
     .select('id, interview_status')
-    .eq('id', params.id)
+    .eq('id', (await params).id)
     .eq('property_id', session.propertyId)
     .eq('stay_id', session.stayId)
     .maybeSingle();
@@ -71,14 +71,14 @@ export async function POST(req: Request, { params }: { params: { slug: string; i
 
   // Key prefix always scoped to property/stay — never trust a caller-supplied path.
   const ext = extFromContentType(contentType);
-  const key = `service-requests/${session.propertyId}/${session.stayId}/${params.id}/${crypto.randomUUID()}.${ext}`;
+  const key = `service-requests/${session.propertyId}/${session.stayId}/${(await params).id}/${crypto.randomUUID()}.${ext}`;
 
   try {
     const presigned = await createPresignedPutUrl({ key, contentType, contentLengthBytes });
-    log.info('guest_service_request_upload_presigned', { serviceRequestId: params.id });
+    log.info('guest_service_request_upload_presigned', { serviceRequestId: (await params).id });
     return NextResponse.json(presigned);
   } catch (e) {
-    log.warn('guest_service_request_upload_presign_failed', { serviceRequestId: params.id, error: e instanceof Error ? e.message : String(e) });
+    log.warn('guest_service_request_upload_presign_failed', { serviceRequestId: (await params).id, error: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ error: 'Could not create an upload URL.' }, { status: 500 });
   }
 }

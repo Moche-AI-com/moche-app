@@ -25,14 +25,14 @@ export const dynamic = 'force-dynamic';
 // Never cache guest portal responses (per-guest, per-stay data).
 export const fetchCache = 'force-no-store';
 
-export default async function GuestPortalPage({ params }: { params: { slug: string } }) {
+export default async function GuestPortalPage({ params }: { params: Promise<{ slug: string }> }) {
   const admin = createAdminClient();
 
   // Only live properties expose a portal. Fetch public-safe branding only.
   const { data: property } = await admin
     .from('properties')
     .select('id, display_name, slug, status, brand_primary, brand_accent, logo_url, cover_image_url, city, region, country')
-    .eq('slug', params.slug)
+    .eq('slug', (await params).slug)
     .is('deleted_at', null)
     .maybeSingle();
 

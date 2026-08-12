@@ -35,14 +35,14 @@ function toTimeline(value: unknown): TimelineEntry[] {
   return value.filter((v): v is TimelineEntry => typeof v === 'object' && v !== null);
 }
 
-export default async function ServiceRequestReportPage({ params }: { params: { id: string } }) {
+export default async function ServiceRequestReportPage({ params }: { params: Promise<{ id: string }> }) {
   await requireSession();
   const supabase = createClient();
 
   const { data: ticket } = await supabase
     .from('service_requests')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', (await params).id)
     .maybeSingle();
 
   // RLS already scopes this select, but re-checking property access explicitly

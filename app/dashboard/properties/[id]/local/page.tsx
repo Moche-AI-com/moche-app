@@ -8,10 +8,10 @@ import { localCategoryLabel } from '@/lib/local/merge';
 
 export const dynamic = 'force-dynamic';
 
-export default async function LocalOverviewPage({ params }: { params: { id: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export default async function LocalOverviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   const supabase = createClient();
-  const places = await loadCanonicalPlaces(supabase, params.id);
+  const places = await loadCanonicalPlaces(supabase, (await params).id);
 
   const guestVisible = places.filter((place) => place.status !== 'hidden');
   const favorites = guestVisible.filter((place) => place.isFavorite);
@@ -63,7 +63,7 @@ export default async function LocalOverviewPage({ params }: { params: { id: stri
         host notes, tags, favorites, and guest visibility in one place.
       </p>
 
-      {(access.isOwner || access.can.editBrain) && <LocalSearch propertyId={params.id} />}
+      {(access.isOwner || access.can.editBrain) && <LocalSearch propertyId={(await params).id} />}
 
       <div className="card" style={{ margin: '1.25rem 0' }}>
         <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
@@ -114,7 +114,7 @@ export default async function LocalOverviewPage({ params }: { params: { id: stri
       )}
 
       {access.can.editBrain && (
-        <LocalPlaceManager propertyId={params.id} places={places} canEdit={access.can.editBrain} />
+        <LocalPlaceManager propertyId={(await params).id} places={places} canEdit={access.can.editBrain} />
       )}
     </div>
   );

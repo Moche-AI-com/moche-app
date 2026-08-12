@@ -16,10 +16,10 @@ export default async function BrainPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   searchParams: { card?: string; edit?: string };
 }) {
-  const access = await requirePropertyAccess(params.id);
+  const access = await requirePropertyAccess((await params).id);
   const supabase = createClient();
 
   const [{ data: items }, { data: settings }, { count: recCount }, { count: emergencyContacts }, { count: primaryContacts }, { count: pendingReviews }, { data: requirementStatuses }] =
@@ -27,18 +27,18 @@ export default async function BrainPage({
       supabase
         .from('brain_items')
         .select('id, title, body, category, visibility, status, source_type, updated_at, deleted_at')
-        .eq('property_id', params.id)
+        .eq('property_id', (await params).id)
         .is('deleted_at', null)
         .order('category', { ascending: true })
         .order('updated_at', { ascending: false }),
-      supabase.from('property_settings').select('confidence_threshold').eq('property_id', params.id).maybeSingle(),
-      supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', params.id).is('deleted_at', null),
-      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('is_emergency', true),
-      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('is_primary', true),
+      supabase.from('property_settings').select('confidence_threshold').eq('property_id', (await params).id).maybeSingle(),
+      supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).is('deleted_at', null),
+      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).eq('is_emergency', true),
+      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).eq('is_primary', true),
       // Pending AI drafts count toward readiness: a property whose Brain is
       // full but whose queue is untouched is not actually reviewed.
-      supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', params.id).eq('status', 'pending'),
-      supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', params.id),
+      supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).eq('status', 'pending'),
+      supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', (await params).id),
     ]);
 
   const brainItems = (items ?? []).map((i) => ({ category: i.category, status: i.status, deleted_at: i.deleted_at, visibility: i.visibility }));
@@ -80,7 +80,7 @@ export default async function BrainPage({
       )}
 
       <BrainCards
-        propertyId={params.id}
+        propertyId={(await params).id}
         propertyName={access.property.display_name}
         propertySlug={access.property.slug}
         health={cardHealth}
@@ -105,11 +105,11 @@ export default async function BrainPage({
               <span style={{ fontSize: '.85rem' }}>
                 <span aria-hidden>{activeCard.icon}</span> Editing <strong>{activeCard.title}</strong>
               </span>
-              <Link href={`/dashboard/properties/${params.id}/brain`} className="btn btn-sm btn-ghost" data-testid="button-clear-card-filter">Show all</Link>
+              <Link href={`/dashboard/properties/${(await params).id}/brain`} className="btn btn-sm btn-ghost" data-testid="button-clear-card-filter">Show all</Link>
             </div>
           )}
           <BrainManager
-            propertyId={params.id}
+            propertyId={(await params).id}
             canEdit={access.can.editBrain}
             categories={Object.entries(BRAIN_CATEGORY_LABELS) as [BrainCategory, string][]}
             defaultCategory={defaultCategory}
@@ -127,14 +127,14 @@ export default async function BrainPage({
         </div>
         <div className="brain-sidebar">
           {access.can.editBrain && (
-            <Link href={`/dashboard/properties/${params.id}/recommendations`} className="btn btn-sm btn-ghost btn-block" style={{ marginBottom: '1rem' }}>
+            <Link href={`/dashboard/properties/${(await params).id}/recommendations`} className="btn btn-sm btn-ghost btn-block" style={{ marginBottom: '1rem' }}>
               Manage local recommendations →
             </Link>
           )}
-          {access.can.editBrain && <IngestPanel propertyId={params.id} />}
+          {access.can.editBrain && <IngestPanel propertyId={(await params).id} />}
           {access.can.editBrain && (
             <div style={{ marginTop: '1rem' }}>
-              <AppliancePanel propertyId={params.id} />
+              <AppliancePanel propertyId={(await params).id} />
             </div>
           )}
           <div className="card" style={{ padding: '1.25rem', marginTop: access.can.editBrain ? '1rem' : 0 }}>

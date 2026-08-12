@@ -2,6 +2,6 @@ import { permanentRedirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-export default function NearbyPlacesPage({ params }: { params: { id: string } }) {
-  permanentRedirect(`/dashboard/properties/${params.id}/local`);
+export default async function NearbyPlacesPage({ params }: { params: Promise<{ id: string }> }) {
+  permanentRedirect(`/dashboard/properties/${(await params).id}/local`);
 }

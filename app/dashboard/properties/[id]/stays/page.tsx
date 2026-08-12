@@ -9,11 +9,11 @@ export default async function StaysPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   searchParams?: { view?: string | string[] };
 }) {
   const view = parseLifecycleView(searchParams?.view);
-  const access = await requirePropertyAccess(params.id);
+  const access = await requirePropertyAccess((await params).id);
   const supabase = createClient();
 
   // deleted_at is filtered on every branch, including the counts: a soft-deleted
@@ -22,20 +22,20 @@ export default async function StaysPage({
     supabase
       .from('stays')
       .select('id, guest_display_name, contact_type, contact_last4, check_in, check_out, status, booking_reference')
-      .eq('property_id', params.id)
+      .eq('property_id', (await params).id)
       .is('deleted_at', null)
       .eq('lifecycle_status', lifecycleStatusFor(view))
       .order('check_in', { ascending: false }),
     supabase
       .from('stays')
       .select('id', { count: 'exact', head: true })
-      .eq('property_id', params.id)
+      .eq('property_id', (await params).id)
       .is('deleted_at', null)
       .eq('lifecycle_status', 'active'),
     supabase
       .from('stays')
       .select('id', { count: 'exact', head: true })
-      .eq('property_id', params.id)
+      .eq('property_id', (await params).id)
       .is('deleted_at', null)
       .eq('lifecycle_status', 'archived'),
   ]);
@@ -52,7 +52,7 @@ export default async function StaysPage({
       </p>
 
       <LifecycleToggle
-        basePath={`/dashboard/properties/${params.id}/stays`}
+        basePath={`/dashboard/properties/${(await params).id}/stays`}
         view={view}
         activeCount={activeRes.count ?? 0}
         pastCount={pastRes.count ?? 0}
@@ -60,7 +60,7 @@ export default async function StaysPage({
       />
 
       <StaysManager
-        propertyId={params.id}
+        propertyId={(await params).id}
         canManage={canManage}
         stays={(stays ?? []).map((s) => ({
           id: s.id,

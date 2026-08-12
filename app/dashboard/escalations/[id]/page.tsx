@@ -8,7 +8,7 @@ import { EscalationAnswerForm } from './EscalationAnswerForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function EscalationDetailPage({ params }: { params: { id: string } }) {
+export default async function EscalationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireSession();
   const supabase = createClient();
 
@@ -17,7 +17,7 @@ export default async function EscalationDetailPage({ params }: { params: { id: s
   const { data: esc } = await supabase
     .from('escalations')
     .select('id, property_id, question, status, host_response, conversation_id, created_at, responded_at')
-    .eq('id', params.id)
+    .eq('id', (await params).id)
     .maybeSingle();
   if (!esc) redirect('/dashboard/escalations');
 

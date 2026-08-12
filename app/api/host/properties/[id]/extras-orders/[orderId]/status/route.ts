@@ -37,8 +37,8 @@ const BodySchema = z.object({
   }
 });
 
-export async function POST(req: Request, { params }: { params: { id: string; orderId: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string; orderId: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   const canManage = access.can.editProperty || access.can.editBrain;
   if (!canManage) {
     return NextResponse.json({ error: 'You do not have permission to manage extras for this property.' }, { status: 403 });
@@ -51,8 +51,8 @@ export async function POST(req: Request, { params }: { params: { id: string; ord
   const { data: order } = await admin
     .from('extras_orders')
     .select('id, property_id, status, fulfillment_status, host_note, item_title, expires_at, declined_reason, quoted_amount_cents, quote_currency, scheduled_for')
-    .eq('id', params.orderId)
-    .eq('property_id', params.id)
+    .eq('id', (await params).orderId)
+    .eq('property_id', (await params).id)
     .maybeSingle();
   if (!order) return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
 
@@ -69,7 +69,7 @@ export async function POST(req: Request, { params }: { params: { id: string; ord
     if (!expiryError) {
       const { error: expiryEventError } = await admin.from('extras_order_events').insert({
         order_id: order.id,
-        property_id: params.id,
+        property_id: (await params).id,
         from_status: current,
         to_status: 'expired',
         actor_type: 'system',
@@ -106,13 +106,13 @@ export async function POST(req: Request, { params }: { params: { id: string; ord
 
   const { error: updateError } = await admin.from('extras_orders').update(updates as never).eq('id', order.id);
   if (updateError) {
-    log.warn('extras_order_status_update_failed', { orderId: params.orderId, error: updateError.message });
+    log.warn('extras_order_status_update_failed', { orderId: (await params).orderId, error: updateError.message });
     return NextResponse.json({ error: 'Could not update the order.' }, { status: 500 });
   }
 
   const { error: eventError } = await admin.from('extras_order_events').insert({
     order_id: order.id,
-    property_id: params.id,
+    property_id: (await params).id,
     from_status: current,
     to_status: nextStatus,
     actor_type: 'host',
@@ -129,7 +129,7 @@ export async function POST(req: Request, { params }: { params: { id: string; ord
       quote_currency: order.quote_currency,
       scheduled_for: order.scheduled_for,
     } as never).eq('id', order.id);
-    log.error('extras_order_event_insert_failed', { orderId: params.orderId, error: eventError.message });
+    log.error('extras_order_event_insert_failed', { orderId: (await params).orderId, error: eventError.message });
     return NextResponse.json({ error: 'Could not record this request change. Please retry.' }, { status: 500 });
   }
 
@@ -137,9 +137,9 @@ export async function POST(req: Request, { params }: { params: { id: string; ord
     action: 'extras_order.status_changed',
     actorProfileId: user?.id ?? null,
     hostAccountId: access.property.host_account_id,
-    propertyId: params.id,
+    propertyId: (await params).id,
     targetType: 'extras_order',
-    targetId: params.orderId,
+    targetId: (await params).orderId,
     metadata: { from: current, to: nextStatus, item: order.item_title, request_only: true } as unknown as DbJson,
   });
 

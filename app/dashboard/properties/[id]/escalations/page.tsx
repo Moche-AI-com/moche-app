@@ -5,10 +5,10 @@ import { EscalationInbox, type EscalationRowData } from '@/components/dashboard/
 
 export const dynamic = 'force-dynamic';
 
-export default async function PropertyEscalationsPage({ params }: { params: { id: string } }) {
-  const propertyAccess = await requirePropertyAccess(params.id);
+export default async function PropertyEscalationsPage({ params }: { params: Promise<{ id: string }> }) {
+  const propertyAccess = await requirePropertyAccess((await params).id);
   const { property } = propertyAccess;
-  if (!propertyAccess.can.receiveEscalations) redirect(`/dashboard/properties/${params.id}`);
+  if (!propertyAccess.can.receiveEscalations) redirect(`/dashboard/properties/${(await params).id}`);
   const supabase = createClient();
   const { data: escalations } = await supabase
     .from('escalations')

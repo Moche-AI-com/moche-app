@@ -12,14 +12,14 @@ export default async function StayLandingPage({
   params,
   searchParams,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
   searchParams: { k?: string };
 }) {
   const admin = createAdminClient();
   const { data: property } = await admin
     .from('properties')
     .select('display_name, slug, status, brand_accent, logo_url')
-    .eq('slug', params.slug)
+    .eq('slug', (await params).slug)
     .is('deleted_at', null)
     .maybeSingle();
 

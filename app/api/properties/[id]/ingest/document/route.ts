@@ -26,8 +26,8 @@ const VALID_CATEGORIES = new Set<Database['public']['Enums']['brain_category']>(
 ]);
 
 /** Document content is untrusted reference data and always becomes a host-reviewed proposal. */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const access = await getPropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await getPropertyAccess((await params).id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   if (!access.can.editBrain) return NextResponse.json({ error: 'You cannot edit this Brain.' }, { status: 403 });
 
@@ -52,12 +52,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // 1. Upload the raw file to the private bucket at <property_id>/<uuid>-<name>.
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
-  const storagePath = `${params.id}/${crypto.randomUUID()}-${safeName}`;
+  const storagePath = `${(await params).id}/${crypto.randomUUID()}-${safeName}`;
   const { error: upErr } = await supabase.storage
     .from('property-documents')
     .upload(storagePath, buffer, { contentType: mime, upsert: false });
   if (upErr) {
-    log.warn('doc_upload_failed', { propertyId: params.id, error: upErr.message });
+    log.warn('doc_upload_failed', { propertyId: (await params).id, error: upErr.message });
     return NextResponse.json({ error: 'Could not store the file.' }, { status: 500 });
   }
 
@@ -65,7 +65,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { data: doc, error: docErr } = await supabase
     .from('documents')
     .insert({
-      property_id: params.id,
+      property_id: (await params).id,
       file_name: file.name.slice(0, 200),
       mime_type: mime,
       size_bytes: file.size,
@@ -98,14 +98,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const title = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 200) || 'Document';
 
   const sourceId = await ensureIngestionSource(admin, {
-    propertyId: params.id, kind: 'document', documentId, profile: 'document_url_v1', label: title, createdBy: ctx?.user.id ?? null,
+    propertyId: (await params).id, kind: 'document', documentId, profile: 'document_url_v1', label: title, createdBy: ctx?.user.id ?? null,
   });
-  await recordManualSource(admin, { propertyId: params.id, sourceId, profile: 'document_url_v1', title, text, provider: 'uploaded-document' });
+  await recordManualSource(admin, { propertyId: (await params).id, sourceId, profile: 'document_url_v1', title, text, provider: 'uploaded-document' });
 
   // Imported document content always remains a host-reviewed proposal.
   try {
     const proposal = await createProposal(admin, {
-      propertyId: params.id,
+      propertyId: (await params).id,
       hostAccountId: access.property.host_account_id,
       fieldPath: 'brain.document_summary',
       label: title,
@@ -123,7 +123,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       action: 'brain.proposal.create',
       actorProfileId: ctx?.user.id,
       hostAccountId: access.property.host_account_id,
-      propertyId: params.id,
+      propertyId: (await params).id,
       targetType: 'proposed_update',
       targetId: proposal.id,
       metadata: { fieldPath: 'brain.document_summary', sourceRef: documentId },

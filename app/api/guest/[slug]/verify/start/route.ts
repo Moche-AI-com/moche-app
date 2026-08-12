@@ -23,7 +23,7 @@ function clientIp(req: Request): string {
   return req.headers.get('x-real-ip') ?? '0.0.0.0';
 }
 
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   let payload: unknown;
   try {
     payload = await req.json();
@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   const { data: property } = await admin
     .from('properties')
     .select('id, status')
-    .eq('slug', params.slug)
+    .eq('slug', (await params).slug)
     .is('deleted_at', null)
     .maybeSingle();
   if (!property || property.status !== 'live') {

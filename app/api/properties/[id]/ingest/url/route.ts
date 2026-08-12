@@ -15,8 +15,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** URL content is untrusted reference data and always becomes a host-reviewed proposal. */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const access = await getPropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await getPropertyAccess((await params).id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   if (!access.can.editBrain) return NextResponse.json({ error: 'You cannot edit this Brain.' }, { status: 403 });
 
@@ -36,7 +36,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const supabase = createClient();
   const admin = createAdminClient();
   const sourceId = await ensureIngestionSource(admin, {
-    propertyId: params.id, kind: 'listing', url, profile: 'listing_public_v1',
+    propertyId: (await params).id, kind: 'listing', url, profile: 'listing_public_v1',
     label: title?.trim() || new URL(url).hostname, createdBy: ctx?.user.id ?? null,
   });
 
@@ -45,11 +45,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   let page;
   try {
     page = await acquire(url, 'listing_public_v1', acquisitionAuditContext(admin, {
-      propertyId: params.id, sourceId, profile: 'listing_public_v1',
+      propertyId: (await params).id, sourceId, profile: 'listing_public_v1',
     }));
   } catch (e) {
     if (e instanceof AcquisitionError && e.reason === 'unsafe_target') {
-      log.warn('ingest_url_blocked', { propertyId: params.id, reason: e.reason });
+      log.warn('ingest_url_blocked', { propertyId: (await params).id, reason: e.reason });
       return NextResponse.json({ error: e.message }, { status: 400 });
     }
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not fetch that URL.' }, { status: 502 });
@@ -62,7 +62,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const resolvedTitle = (title && title.trim()) || page.title || url;
   const proposal = await createProposal(admin, {
-    propertyId: params.id,
+    propertyId: (await params).id,
     hostAccountId: access.property.host_account_id,
     fieldPath: 'brain.listing_summary',
     label: resolvedTitle.slice(0, 160),
@@ -88,7 +88,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     action: 'brain.proposal.create',
     actorProfileId: ctx?.user.id,
     hostAccountId: access.property.host_account_id,
-    propertyId: params.id,
+    propertyId: (await params).id,
     targetType: 'proposed_update',
     targetId: proposal.id,
     metadata: { fieldPath: 'brain.listing_summary', sourceUrl: page.finalUrl, standardized: standardized.standardized },

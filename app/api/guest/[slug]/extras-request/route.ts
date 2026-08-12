@@ -24,7 +24,7 @@ export const dynamic = 'force-dynamic';
 // It ALSO writes an `extras_orders` row and its first append-only timeline
 // event before notifying anyone. The guest never receives a false confirmation:
 // a request number is returned only after that durable record is created.
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   // Defense in depth: the slug must match the session's property.
   const { data: property } = await admin
     .from('properties').select('id, slug, host_account_id').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 

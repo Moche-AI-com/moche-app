@@ -109,7 +109,7 @@ async function claimAndGrantInvite(
     }
   }
 
-  const h = headers();
+  const h = await headers();
   await recordAcceptances(admin, {
     userId: profileId,
     hostAccountId: invite.invite.host_account_id,

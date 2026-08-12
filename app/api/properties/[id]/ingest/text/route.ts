@@ -12,8 +12,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Pasted text is source material only. It always becomes a host-reviewed proposal.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const access = await getPropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await getPropertyAccess((await params).id);
   if (!access) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   if (!access.can.editBrain) return NextResponse.json({ error: 'You cannot edit this Brain.' }, { status: 403 });
 
@@ -34,12 +34,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const admin = createAdminClient();
 
   const sourceId = await ensureIngestionSource(admin, {
-    propertyId: params.id, kind: 'manual_site', profile: 'manual_site_v1', label: (title && title.trim()) || 'Pasted notes', createdBy: ctx?.user.id ?? null,
+    propertyId: (await params).id, kind: 'manual_site', profile: 'manual_site_v1', label: (title && title.trim()) || 'Pasted notes', createdBy: ctx?.user.id ?? null,
     // A manual source deliberately has no URL or stored document, so it is represented by its artifact only.
     documentId: null,
   });
   // Pasted source text is untrusted reference data; it still gets an auditable artifact.
-  await recordManualSource(admin, { propertyId: params.id, sourceId, profile: 'manual_site_v1', title: (title && title.trim()) || 'Pasted notes', text, provider: 'manual-text' });
+  await recordManualSource(admin, { propertyId: (await params).id, sourceId, profile: 'manual_site_v1', title: (title && title.trim()) || 'Pasted notes', text, provider: 'manual-text' });
 
   // Later imports remain a single reviewable proposal. The optional
   // standardization is retained from the prior ingestion flow.
@@ -48,7 +48,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   try {
     const proposal = await createProposal(admin, {
-      propertyId: params.id,
+      propertyId: (await params).id,
       hostAccountId: access.property.host_account_id,
       fieldPath: 'brain.document_summary',
       label: resolvedTitle,
@@ -61,7 +61,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       action: 'brain.proposal.create',
       actorProfileId: ctx?.user.id,
       hostAccountId: access.property.host_account_id,
-      propertyId: params.id,
+      propertyId: (await params).id,
       targetType: 'proposed_update',
       targetId: proposal.id,
       metadata: { fieldPath: 'brain.document_summary', sourceType: 'text_paste' },

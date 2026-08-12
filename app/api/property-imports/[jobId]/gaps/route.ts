@@ -18,20 +18,20 @@ async function jobForReviewer(jobId: string) {
   return access?.can.editBrain && access.property.host_account_id === job.host_account_id ? { job, access, client } : null;
 }
 
-export async function GET(_request: Request, { params }: { params: { jobId: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ jobId: string }> }) {
   if (!await getSessionContext()) return NextResponse.json({ error: 'Sign in to continue.' }, { status: 401 });
-  const context = await jobForReviewer(params.jobId);
+  const context = await jobForReviewer((await params).jobId);
   if (!context) return NextResponse.json({ error: 'Import not found.' }, { status: 404 });
   const { data: statuses } = await context.client.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', context.job.property_id!);
   const readiness = computeReadiness({ statuses: (statuses ?? []).map((row) => ({ requirementKey: row.requirement_key, status: row.status })) });
   return NextResponse.json({ gaps: readiness.missing.filter((item) => BLOCKING_KEYS.has(item.requirementKey)) });
 }
 
-export async function POST(request: Request, { params }: { params: { jobId: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ jobId: string }> }) {
   const ctx = await getSessionContext(); if (!ctx) return NextResponse.json({ error: 'Sign in to continue.' }, { status: 401 });
   let body: unknown; try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid request.' }, { status: 400 }); }
   const parsed = postSchema.safeParse(body); if (!parsed.success || !BLOCKING_KEYS.has(parsed.data.requirementKey)) return NextResponse.json({ error: 'Invalid gap answer.' }, { status: 400 });
-  const context = await jobForReviewer(params.jobId); if (!context) return NextResponse.json({ error: 'Import not found.' }, { status: 404 });
+  const context = await jobForReviewer((await params).jobId); if (!context) return NextResponse.json({ error: 'Import not found.' }, { status: 404 });
   const requirement = KNOWLEDGE_REQUIREMENTS.find((item) => item.key === parsed.data.requirementKey); if (!requirement) return NextResponse.json({ error: 'Unknown requirement.' }, { status: 400 });
   const category = requirement.key === 'arrival_instructions' ? 'checkin_checkout' : requirement.key === 'emergency_contact' ? 'emergency' : requirement.key === 'house_rules' ? 'house_rules' : 'core';
   const admin = createAdminClient();

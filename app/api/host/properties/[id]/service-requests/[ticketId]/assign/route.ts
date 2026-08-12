@@ -14,8 +14,8 @@ const BodySchema = z.object({
 });
 
 // Assigns (or unassigns, contactId: null) a service request to a property contact.
-export async function POST(req: Request, { params }: { params: { id: string; ticketId: string } }) {
-  const access = await requirePropertyAccess(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string; ticketId: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
   if (!access.can.resolveMaintenance) {
     return NextResponse.json({ error: 'You do not have permission to manage service requests for this property.' }, { status: 403 });
   }
@@ -29,8 +29,8 @@ export async function POST(req: Request, { params }: { params: { id: string; tic
   const { data: ticket } = await admin
     .from('service_requests')
     .select('id, property_id, timeline')
-    .eq('id', params.ticketId)
-    .eq('property_id', params.id)
+    .eq('id', (await params).ticketId)
+    .eq('property_id', (await params).id)
     .maybeSingle();
   if (!ticket) return NextResponse.json({ error: 'Service request not found.' }, { status: 404 });
 
@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: { id: string; tic
       .from('property_contacts')
       .select('id, property_id')
       .eq('id', contactId)
-      .eq('property_id', params.id)
+      .eq('property_id', (await params).id)
       .maybeSingle();
     if (!contact) return NextResponse.json({ error: 'Contact not found for this property.' }, { status: 404 });
   }
@@ -54,10 +54,10 @@ export async function POST(req: Request, { params }: { params: { id: string; tic
       assigned_contact_id: contactId,
       timeline: [...priorTimeline, timelineEvent] as unknown as DbJson,
     } as never)
-    .eq('id', params.ticketId);
+    .eq('id', (await params).ticketId);
 
   if (error) {
-    log.warn('service_request_assign_failed', { ticketId: params.ticketId, error: error.message });
+    log.warn('service_request_assign_failed', { ticketId: (await params).ticketId, error: error.message });
     return NextResponse.json({ error: 'Could not assign this request.' }, { status: 500 });
   }
 
@@ -65,9 +65,9 @@ export async function POST(req: Request, { params }: { params: { id: string; tic
     action: 'service_request.assigned',
     actorProfileId: user?.id ?? null,
     hostAccountId: access.property.host_account_id,
-    propertyId: params.id,
+    propertyId: (await params).id,
     targetType: 'service_request',
-    targetId: params.ticketId,
+    targetId: (await params).ticketId,
     metadata: { contactId } as unknown as DbJson,
   });
 

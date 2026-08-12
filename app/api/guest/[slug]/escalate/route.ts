@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 // and types their own issue. Unlike the low-confidence auto-escalation in the chat
 // route, this is guest-initiated. It creates an OPEN escalation, records the guest's
 // message in their conversation, and notifies the host (in-app + email/SMS fan-out).
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
 
@@ -44,7 +44,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     .select('id, display_name, slug, host_account_id')
     .eq('id', session.propertyId)
     .maybeSingle();
-  if (!property || property.slug !== params.slug) {
+  if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 
