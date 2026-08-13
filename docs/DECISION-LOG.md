@@ -429,6 +429,14 @@ elapsed time. "Gate N" never implies "week N".
   negative-epoch case). A final `typeof` sweep asserts every wire member is a primitive
   string before the function returns. The residual risk that remains is in-process arbitrary
   code execution, which is out of scope for a serialization boundary.
+- **Four-digit years only (fifth correction):** the hand-rolled formatter emitted malformed
+  output for instants outside 0001-9999, where the platform switches to expanded-year
+  notation (`+010000-…`, `-000001-…`). Replacing a platform call earns this scrutiny, and
+  independent review found it. The range is enforced at validation rather than handled at
+  formatting: a mining signal is always timestamped from a database row, so an out-of-range
+  instant is a caller bug, not an input to render. A four-digit year is also the only form
+  RFC 3339 accepts and the only form a `timestamptz` round-trips. Covered by a differential
+  test over 20,000 seeded instants plus both bounds and three rejected out-of-range cases.
 - **`too_large` is unreachable by construction:** with every member bounded, no input can
   approach the 128 KiB ceiling. The test asserts the bound rather than the branch, and fails
   first if a future field makes the branch reachable again. Why an enum for `signal`: the consumer branches

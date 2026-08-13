@@ -118,6 +118,16 @@ function snapshotString(value: unknown): string | null {
 
 const EPOCH_DAYS_TO_1970 = 719468;
 
+// `isoFromEpoch` emits a four-digit year, which is the only form the ISO-8601 profile in
+// RFC 3339 accepts and the only form a Postgres `timestamptz` round-trips. Outside this
+// range the platform switches to expanded-year notation (`+010000-…`, `-000001-…`) and a
+// four-digit formatter would emit something malformed instead. The range is therefore
+// enforced at validation rather than handled at formatting: a mining signal is always
+// timestamped from a database row, so an out-of-range instant is a bug in the caller, not
+// an input to render.
+const MIN_EPOCH_MS = -62135596800000; // 0001-01-01T00:00:00.000Z
+const MAX_EPOCH_MS = 253402300799999; // 9999-12-31T23:59:59.999Z
+
 /**
  * Formats an epoch-millisecond value as an ISO-8601 instant using only integer arithmetic
  * and string padding on primitives.
@@ -130,7 +140,7 @@ const EPOCH_DAYS_TO_1970 = 719468;
  *
  * Civil-date conversion follows Howard Hinnant's days_from_civil inverse.
  */
-function isoFromEpoch(epochMs: number): string {
+export function isoFromEpoch(epochMs: number): string {
   const totalMs = Math.trunc(epochMs);
   const msPerDay = 86400000;
   // Floor division, so pre-1970 instants carry a negative day count and a positive time.
@@ -194,7 +204,8 @@ export function normalizeMiningMessage(
   const occurredAt = snapshotString(message.occurred_at);
   if (occurredAt === null) return { ok: false, detail: 'occurred_at' };
   const parsed = Date.parse(occurredAt);
-  if (Number.isNaN(parsed)) return { ok: false, detail: 'occurred_at' };
+  if (!Number.isFinite(parsed)) return { ok: false, detail: 'occurred_at' };
+  if (parsed < MIN_EPOCH_MS || parsed > MAX_EPOCH_MS) return { ok: false, detail: 'occurred_at' };
 
   const wire: MiningWireMessage = {
       kind,

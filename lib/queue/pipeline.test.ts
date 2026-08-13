@@ -16,7 +16,13 @@ const { env } = vi.hoisted(() => ({
 
 vi.mock('@/lib/env', () => ({ serverEnv: env, publicEnv: {} }));
 
-import { enqueueMining, miningQueueConfigured, miningDedupeKey, type MiningMessage } from './cloudflare';
+import {
+  enqueueMining,
+  miningQueueConfigured,
+  miningDedupeKey,
+  isoFromEpoch,
+  type MiningMessage,
+} from './cloudflare';
 import { dispatchBrainWrite, brainWriteWorkerConfigured, type BrainWriteJob } from './brain-write';
 import { REGISTRY_FIELDS } from '@/lib/brain/completeness';
 
@@ -387,10 +393,64 @@ describe('enqueueMining', () => {
     });
   });
 
+  // The formatter emits a four-digit year. Outside 0001-9999 the platform switches to
+  // expanded-year notation, which a four-digit formatter cannot represent, so those
+  // instants are rejected rather than rendered into something malformed. Found by
+  // independent review, which reached malformed output before this bound existed.
+  describe('rejects instants it cannot represent', () => {
+    it.each([
+      ['+010000-01-01T00:00:00.000Z', 'year 10000'],
+      ['-000001-01-01T00:00:00.000Z', 'a negative year'],
+      ['+275760-09-13T00:00:00.000Z', 'the maximum representable Date'],
+    ])('refuses %s (%s)', async (iso) => {
+      configureQueue();
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(enqueueMining({ ...MSG, occurred_at: iso })).resolves.toEqual({
+        ok: false,
+        queued: false,
+        reason: 'invalid',
+        detail: 'occurred_at',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['0001-01-01T00:00:00.000Z', 'the lower bound'],
+      ['9999-12-31T23:59:59.999Z', 'the upper bound'],
+    ])('accepts %s (%s) and formats it exactly', async (iso) => {
+      configureQueue();
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(enqueueMining({ ...MSG, occurred_at: iso })).resolves.toEqual({ ok: true, queued: true });
+      expect(JSON.parse(wireBody(fetchMock)).body.occurred_at).toBe(new Date(iso).toISOString());
+    });
+  });
+
   // The ISO formatter is hand-rolled arithmetic, which is only worth doing if it is exactly
   // right. Cross-checked against the platform implementation across eras, leap years, and
   // the pre-1970 negative-epoch case that naive floor division gets wrong.
   describe('timestamp formatting matches the platform', () => {
+    // Hand-rolled arithmetic replacing a platform call earns a differential test, not a
+    // spot check. Deterministic seed so a failure is reproducible from the output alone.
+    it('matches across 20000 pseudorandom instants in range', () => {
+      let seed = 0x2f6e2b1;
+      const next = () => {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return seed / 0x7fffffff;
+      };
+
+      const mismatches: string[] = [];
+      for (let i = 0; i < 20000; i += 1) {
+        // Years ~0001-9999, the range the formatter is defined over.
+        const ms = Math.trunc(-62135596800000 + next() * (253402300799999 + 62135596800000));
+        const expected = new Date(ms).toISOString();
+        const actual = isoFromEpoch(ms);
+        if (actual !== expected) mismatches.push(`${ms}: ${actual} !== ${expected}`);
+      }
+      expect(mismatches).toEqual([]);
+    });
+
     it.each([
       '1970-01-01T00:00:00.000Z',
       '1969-07-20T20:17:40.000Z',
