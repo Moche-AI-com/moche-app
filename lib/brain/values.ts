@@ -117,6 +117,8 @@ export interface PropertyCompleteness extends Completeness {
   applicable: string[];
   /** Field ids with a live stored value, for the host-facing detail view. */
   satisfiedFieldIds: string[];
+  /** Per-field derived status, so a read-only surface can render state without re-deriving it. */
+  statuses: Record<string, FieldStatus>;
 }
 
 export async function loadCompleteness(
@@ -132,10 +134,43 @@ export async function loadCompleteness(
   return {
     ...result,
     applicable,
+    statuses,
     satisfiedFieldIds: Object.entries(statuses)
       .filter(([, s]) => s === 'satisfied')
       .map(([id]) => id),
   };
+}
+
+/**
+ * Stores a secret-tier value through the Vault envelope (D-0011 part b).
+ *
+ * The plaintext is passed once, as an RPC argument, and is never held in a JS variable
+ * beyond this call, never returned, and never logged. The database refuses the
+ * alternative: `brain_values_set` rejects a vault-routed field, and the row this
+ * produces has `value IS NULL` by construction.
+ *
+ * Callers must have already authorized the write (PropertyAccess.can.editBrain). The
+ * RPC re-checks for JWT-scoped callers, but the admin client presents as service_role,
+ * which the function trusts.
+ */
+export async function setSecretValue(
+  admin: Admin,
+  input: { propertyId: string; fieldId: string; plaintext: string; actorProfileId: string },
+): Promise<string> {
+  const field = REGISTRY_BY_ID.get(input.fieldId);
+  // Checked here as well as in SQL so a typo fails as a programming error at the call
+  // site rather than as a database exception surfaced to a host.
+  if (!field) throw new Error(`unknown field_id: ${input.fieldId}`);
+
+  const { data, error } = await admin.rpc('brain_values_set_secret', {
+    p_property_id: input.propertyId,
+    p_field_id: input.fieldId,
+    p_plaintext: input.plaintext,
+    p_actor: input.actorProfileId,
+  });
+  // The error message can echo an argument, so only the code is surfaced upward.
+  if (error) throw new Error(`secret write failed (${error.code ?? 'unknown'})`);
+  return data as string;
 }
 
 export function registryField(fieldId: string): RegistryField | null {

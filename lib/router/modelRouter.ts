@@ -4,6 +4,11 @@ import type { ChatMessage, GenerateOptions, GenerateResult } from '@/lib/ai/prov
 import { serverEnv } from '@/lib/env';
 import { log } from '@/lib/log';
 import { redactPII, redactMessages, containsLikelyPII } from '@/lib/ai/redaction';
+import {
+  providerBlock,
+  routineGuestModelChain,
+  ProviderIneligibleError,
+} from '@/lib/router/providerAllowlist';
 
 // PII redaction lives in lib/ai/redaction.ts (single source of truth). Re-exported
 // here so existing importers of `@/lib/router/modelRouter` keep working unchanged.
@@ -46,6 +51,8 @@ export type RouterEnv = Pick<
   | 'openrouterModelConcierge'
   | 'openrouterModelGeneral'
   | 'openrouterConciergeEnabled'
+  | 'openrouterGuestModelAllowlist'
+  | 'openrouterProviderAllowlist'
 >;
 
 // Per-task model tier. Falls back to the legacy `openrouterModel` default only via the
@@ -77,10 +84,17 @@ const TASK_FALLBACKS: Record<TaskType, readonly string[]> = {
   general: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
 };
 
-// Full ordered model chain for a task: the configured primary tier followed by its
-// verified fallbacks, de-duplicated so an override that matches a fallback slug does
-// not send the same model twice.
+// Full ordered model chain for a task.
+//
+// `concierge` is the routine-guest route and is governed by the reviewed allowlist
+// (directive §0.2 row 3) rather than by the per-tier env slug: only slugs a human
+// reviewed may answer a guest, and an empty allowlist throws ProviderIneligibleError
+// so the caller fails closed to the in-house provider instead of picking a default.
+//
+// Every other task keeps the configured primary tier plus its verified fallbacks,
+// de-duplicated so an override matching a fallback slug is not sent twice.
 export function modelChainForTask(task: TaskType, env: RouterEnv = serverEnv): string[] {
+  if (task === 'concierge') return routineGuestModelChain(env);
   const primary = modelForTask(task, env);
   return [primary, ...TASK_FALLBACKS[task].filter((m) => m !== primary)];
 }
@@ -107,17 +121,14 @@ export class ExternalRouteRefused extends Error {
   }
 }
 
-// Hardened Zero-Data-Retention provider restriction sent on every external request.
-//   zdr: true             — request Zero-Data-Retention (no prompt/response retention).
-//   data_collection:'deny'— refuse any downstream provider that collects/trains on data.
-//   allow_fallbacks:false — never silently fall through to a provider that lacks the
-//                           above guarantees; fail closed so the caller falls back to
-//                           the in-house provider instead.
-export const ZDR_PROVIDER_RESTRICTION = {
-  zdr: true,
-  data_collection: 'deny',
-  allow_fallbacks: false,
-} as const;
+// The hardened provider restriction now lives in lib/router/providerAllowlist as
+// PROVIDER_ROUTING_POLICY, corrected to directive §1's exact field set (adds
+// `require_parameters` and the nested `sort: { by, partition }`; `partition: 'model'`
+// is what actually prevents routing from drifting off the reviewed model).
+//
+// Re-exported under the old name so existing importers and tests keep working.
+export { PROVIDER_ROUTING_POLICY as ZDR_PROVIDER_RESTRICTION } from '@/lib/router/providerAllowlist';
+export { ProviderIneligibleError } from '@/lib/router/providerAllowlist';
 
 // Defense-in-depth: after redaction, refuse the external route if any message content
 // still trips the PII detector. Pure + exported so the guarantee is directly testable.
@@ -140,6 +151,11 @@ async function openrouterGenerate(
   // than risk sending it — the caller falls back to the in-house provider.
   const redacted = redactMessages(messages);
   assertNoResidualPII(redacted);
+  // Resolved before the request is built, not inline in the body, so a policy refusal is
+  // visibly a pre-flight check rather than something that happens to throw during
+  // argument evaluation. Either way no request is issued, but only one of those reads as
+  // deliberate to the next person who edits this call.
+  const provider = providerBlock(serverEnv);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -161,7 +177,7 @@ async function openrouterGenerate(
       max_tokens: opts?.maxTokens ?? 600,
       // Provider-level hardened ZDR restriction per OpenRouter's API (header + body,
       // belt & braces). See ZDR_PROVIDER_RESTRICTION for the rationale of each flag.
-      provider: ZDR_PROVIDER_RESTRICTION,
+      provider,
     }),
     signal: AbortSignal.timeout(30_000),
   });
@@ -207,6 +223,14 @@ export async function routedCompletion(
   try {
     return await openrouterGenerate(messages, opts, task);
   } catch (e) {
+    // provider_ineligible is a policy outcome, not a fault: no reviewed model was
+    // eligible, so the external route is refused and the in-house provider answers.
+    // Logged distinctly because an operator debugging "why is routing off?" needs to
+    // tell a misconfigured allowlist apart from an OpenRouter outage.
+    if (e instanceof ProviderIneligibleError) {
+      log.warn('openrouter_provider_ineligible', { task, code: e.code, reason: e.message });
+      return getAIProvider().generate(messages, opts);
+    }
     log.warn('openrouter_route_failed_fallback', { task, error: String(e) });
     return getAIProvider().generate(messages, opts);
   }

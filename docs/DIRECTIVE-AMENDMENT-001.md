@@ -337,6 +337,73 @@ later requires no migration.
 
 ---
 
+---
+
+## L. Amendment L — the two deferred §0.2 rows are now decided
+
+**Provider allowlist (D-0019):** §0.2 row 3 is no longer deferred. The reviewed model and
+provider sets are code-level; environment configuration may only narrow them. An allowlist
+that can be widened from a dashboard is not an allowlist, because the zero-retention claim is
+a statement about providers a human reviewed. `provider.only` is always present on the
+outbound request: an unset env pins the full reviewed set, and an env naming only unreviewed
+providers refuses before the request is built rather than omitting the pin.
+
+**updates@ role (D-0020):** §0.2 row 6 is no longer deferred. Send-only product-mail identity,
+weekly digest only, never an inbox, an authority, or a commit identity.
+
+---
+
+## M. Amendment M — golden evals grade resolution, not wording
+
+**Decision (D-0022):** §7.0's suite grades the deterministic fact-resolution layer across
+three archetypes (576 cases), not generated prose. A judge model in CI is neither reproducible
+nor free, and it fails for reasons unrelated to the change under test. The two regressions
+worth gating on — a fact that stopped resolving, and a refusal that started leaking content —
+are both deterministic.
+
+---
+
+## N. Amendment N — §8/§9 queue split, with a refusal instead of an inline fallback
+
+**Decision (D-0023):** Cloudflare Queues carries candidate mining; AWS workers execute
+approved brain writes. When the worker is unavailable, a guest-path write is refused, not run
+inline. Host-initiated and scheduled writes may run inline, where the latency is visible and
+owned. Jobs carry ids only, so no vault-routed value transits a third-party queue. The
+ids-only property is enforced by a closed message shape plus validation against the field
+registry, not by convention: the message is rebuilt field by field before serialization, so a
+caller cannot add content to it.
+
+---
+
+## O. Amendment O — autopilot gating is an AND that reports every blocker
+
+**Decision (D-0025):** §10's gate requires the operator switch, a 14-day suggest-mode launch
+floor, all hard blocks satisfied, the completeness threshold, the golden suite, and the
+provider wave gate — independently. Completeness substitutes for nothing. The evaluator
+returns the full blocker list rather than the first failure, because a chain of early returns
+is how stacked gating collapses into one cheap check.
+
+---
+
+## P. Amendment P — metering and the Coverage Map ship inert
+
+**Decision (D-0024):** Billing Meters ship behind a flag with no live price. Usage recorded
+before a price exists is unbilled usage nobody reconciles.
+
+**Decision (D-0026):** the Coverage Map ships read-only and collapsed, deriving its
+percentages from `computeCompleteness` rather than recomputing them. A missing hard block
+renders as `blocking`, distinct from `missing`.
+
+---
+
+## Q. Amendment Q — scheduled routes fail closed
+
+**Decision (D-0027):** every route under `/api/cron` requires `Bearer $CRON_SECRET` and
+refuses when the secret is unset, returning 404 rather than 401. These routes read with
+service-role credentials across properties, so the shared secret is the entire boundary.
+
+---
+
 ## H. Amendment status (revised)
 
 | Item | Status |
@@ -349,3 +416,9 @@ later requires no migration.
 | I — §0.4 import legal position | DECIDED, implemented (attestation + provenance RPC + purge RPC) |
 | J — completeness gating | DECIDED, single 65% gate; per-category display only |
 | K — applicability write policy | DECIDED, migration `gate3_property_applicability_write_requires_editor` applied |
+| L — §0.2 deferred rows (provider allowlist, updates@) | DECIDED, implemented (D-0019, D-0020) |
+| M — golden eval grading target | DECIDED, implemented in `lib/evals/golden.test.ts` (D-0022) |
+| N — §8/§9 queue split + guest-path refusal | DECIDED, implemented in `lib/queue/` (D-0023) |
+| O — autopilot gate composition | DECIDED, implemented in `lib/brain/autopilot.ts` (D-0025) |
+| P — metering + Coverage Map ship inert | DECIDED, implemented behind flag / read-only (D-0024, D-0026) |
+| Q — cron routes fail closed | DECIDED, implemented in `app/api/cron/` (D-0027) |

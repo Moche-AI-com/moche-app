@@ -316,3 +316,184 @@ elapsed time. "Gate N" never implies "week N".
   it. `APPLICABILITY_PREDICATES` now exposes only predicates that gate at least one scored
   field, so the panel cannot ask a question that changes nothing. The database CHECK deliberately
   still allows the wider set, so adding an elevator-dependent field later needs no migration.
+
+## D-0019 — OpenRouter provider allowlist is code-level, and env can only narrow it
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, on the owner's delegation ("You decide the best path")
+- **Supersedes:** §0.2 row 3 (DEFERRED — "OpenRouter provider allowlist")
+- **Decision:** the reviewed model set (`google/gemini-2.5-flash`, `openai/gpt-4o-mini`,
+  `anthropic/claude-haiku-4.5`) and provider set (`azure`, `google-vertex`, `openai`,
+  `anthropic`) live in code. `OPENROUTER_*` env vars may only intersect with those sets,
+  never extend them. An empty or unreviewed result raises `ProviderIneligibleError` and the
+  route falls back to the in-house path.
+- **Why env cannot extend:** an allowlist whose contents can be widened from a dashboard is
+  not an allowlist. The zero-retention property is a claim about specific providers we
+  reviewed; a new entry added by env has been reviewed by nobody.
+- **`provider.only` is never omitted (corrected pre-merge):** the first implementation
+  dropped `only` when the env named no reviewed provider, which handed provider selection
+  back to OpenRouter's own ZDR classification — the single condition this allowlist exists
+  to backstop — and still issued the request. Now an unset env pins the full reviewed set,
+  and an env naming only unreviewed providers raises `ProviderIneligibleError` before any
+  request is built. Independent §0.6 verification caught this; the test that codified the
+  old behavior was replaced with one asserting no request leaves at all.
+- **Request shape:** `provider: {require_parameters: true, zdr: true, data_collection: 'deny',
+  allow_fallbacks: true, sort: {by: 'latency', partition: 'model'}}`. `require_parameters`
+  matters most: without it OpenRouter silently drops unsupported constraints, which would
+  turn the retention guarantee into a suggestion.
+- **Default:** gated behind `openrouterConciergeEnabled`, default false.
+
+## D-0020 — `updates@Moche-Ai.com` is a send-only product-mail identity
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, on the owner's delegation
+- **Supersedes:** §0.2 row 6 (DEFERRED — "Role of updates@")
+- **Decision:** send-only outbound identity for non-transactional product mail, currently
+  only the §9 weekly freshness digest. Never an inbox we read, never an approval authority,
+  never a Git commit identity. Reply-to is the monitored `support@moche-ai.com`.
+- **Encoded as data, not a string:** `lib/mail/senders.ts` carries explicit negative
+  capabilities (`allowsTimeCritical`, `isAuthority`, `isGitIdentity`) so the constraint is
+  testable. The failure it prevents is a later contributor reaching for the friendly-looking
+  updates@ address for an escalation, routing a time-critical message to an unmonitored box.
+
+## D-0021 — Reranking is a dedicated sidecar, never a chat model
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** `lib/retrieval/reranker.ts` speaks only to a local llama.cpp `/rerank`
+  endpoint, disabled by default. LLM-as-reranker is not implemented.
+- **Why:** asking a chat model to order candidates puts full property context — including
+  secret-tier values — through a generation path for a task that is pure scoring, and it
+  makes ordering non-deterministic, which breaks the golden suite (D-0022). A degraded
+  reranker call falls back to fusion order and records the degradation rather than blocking.
+
+## D-0022 — Golden evals grade fact resolution, not prose
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, on the owner's delegation ("You decide the best path forward")
+- **Decision:** the 576-case golden suite grades the deterministic resolution layer
+  (existence, emptiness, TTL, audience, access window) across three archetypes. It does not
+  grade generated wording.
+- **Why:** a prose grader needs a judge model, which makes CI non-reproducible, costs money
+  per run, and fails for reasons unrelated to the change under test. The regressions worth
+  catching in CI are "this fact stopped resolving" and "a refusal started leaking content" —
+  both of which are deterministic. Drift is caught by `scripts/build-golden-evals.mjs --check`.
+
+## D-0023 — Cloudflare Queues mines candidates; AWS workers execute writes; guest paths refuse
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, on the owner's delegation ("You decide the best path for our project")
+- **Decision:** two sequential stages, not interchangeable transports. `lib/queue/cloudflare.ts`
+  pushes candidate-mining messages; `lib/queue/brain-write.ts` dispatches approved writes to an
+  AWS worker. Both sit behind env flags and are inert until provisioned.
+- **The load-bearing rule (§9.0a):** when the worker is unavailable, a guest-path write is
+  REFUSED, never run inline. Host-initiated and scheduled writes may run inline, because there
+  the latency is visible and owned. Running a guest-path write inline is exactly the silent
+  degradation §9.0a forbids.
+- **No fact content on a queue:** jobs carry ids only. The worker re-reads the candidate under
+  its own authorization, so no vault-routed value transits a third-party queue.
+- **Enforced, not documented (corrected pre-merge):** the first mining-message type carried a
+  `payload: Record<string, unknown>` and serialized the caller's object verbatim, so
+  "ids only" was a convention a single call could break. The message is now a closed shape —
+  `kind`, `property_id`, `source_id`, `dedupe_key`, `occurred_at`, optional registry
+  `field_id`, and a `signal` enum — validated against an identifier pattern and the field
+  registry, and rebuilt field by field before serialization so a caller that casts past the
+  type still cannot put content on the wire.
+- **Uuid shape, not id shape (second correction):** the first fix validated ids against a
+  length-capped `[A-Za-z0-9:_-]{1,120}` pattern, which re-verification correctly rejected:
+  `4821` and `hunter2` are both id-shaped, so a door code or password could still ride out
+  on an id field. Ids are now required to be uuids — fixed length, fixed hyphen positions,
+  hex-only — which no human-chosen secret satisfies by accident. `dedupe_key` is no longer
+  accepted from the caller at all but derived from the validated fields, removing the last
+  free-text member, and `occurred_at` is re-emitted from the parsed instant because
+  `Date.parse` accepts a bare number as a year.
+- **Validate and snapshot in one pass (third correction):** re-verification then defeated the
+  uuid check without violating the type. Validation read the caller's object and
+  serialization read it again, and a member is free to answer differently each time: a
+  getter can return a uuid to the validator and a password to `JSON.stringify`, and an
+  object with `toString`/`toJSON` can satisfy `RegExp.test` by coercion while serializing as
+  something else. `normalizeMiningMessage` now reads each member exactly once, accepts it
+  only if it is already a primitive string, and returns the object that will be serialized.
+  The two responsibilities are deliberately not separable — a validate-then-build split is
+  precisely what the attack exploited. The suite now contains that attack.
+- **No replaceable global on the wire path (fourth correction):** re-verification then
+  reached the wire without touching the message at all, by replacing global prototype
+  methods from inside a getter — a replaced `Set.prototype.has` approved a secret `kind`, a
+  replaced `Date.prototype.toISOString` supplied `occurred_at`, a replaced
+  `Array.prototype.join` supplied `dedupe_key`. **Scope judgment:** an attacker who can
+  replace a global already has `fetch` and does not need this queue, so this is not the
+  boundary the transport defends, and treating it as one would be security theater. It was
+  cheap to remove the dependency anyway: enum membership is now literal `===` comparison,
+  the dedupe key is template concatenation, and the timestamp is formatted by integer
+  arithmetic (cross-checked against the platform across eras, leap years, and the pre-1970
+  negative-epoch case). A final `typeof` sweep asserts every wire member is a primitive
+  string before the function returns. The residual risk that remains is in-process arbitrary
+  code execution, which is out of scope for a serialization boundary.
+- **Four-digit years only (fifth correction):** the hand-rolled formatter emitted malformed
+  output for instants outside 0001-9999, where the platform switches to expanded-year
+  notation (`+010000-…`, `-000001-…`). Replacing a platform call earns this scrutiny, and
+  independent review found it. The range is enforced at validation rather than handled at
+  formatting: a mining signal is always timestamped from a database row, so an out-of-range
+  instant is a caller bug, not an input to render. A four-digit year is also the only form
+  RFC 3339 accepts and the only form a `timestamptz` round-trips. Covered by a differential
+  test over 20,000 seeded instants plus both bounds and three rejected out-of-range cases.
+- **`too_large` is unreachable by construction:** with every member bounded, no input can
+  approach the 128 KiB ceiling. The test asserts the bound rather than the branch, and fails
+  first if a future field makes the branch reachable again. Why an enum for `signal`: the consumer branches
+  on it, and an enum cannot carry a fact value. Independent §0.6 verification caught this.
+
+## D-0024 — Stripe Billing Meters ship as a flagged scaffold with no live price
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, on the owner's note about the Vercel plan
+- **Decision:** `lib/billing/meters.ts` defines three meters and an idempotent event
+  producer behind `STRIPE_METERS_ENABLED` (default off). No live price is attached.
+- **Why:** the deployment cannot carry commercial traffic on its current plan, and a meter
+  event that lands before a price exists is unbilled usage nobody reconciles later. Event
+  identifiers derive from the usage (`event_name:subject:occurredAt`), not the attempt, so a
+  retry collapses inside Stripe's 24h uniqueness window instead of double-billing.
+- **Meters are a contract:** Stripe aggregates by `event_name`, so renaming one after usage
+  has landed orphans the history. `ensureMeters` lists before creating.
+
+## D-0025 — Autopilot is an AND over independent gates, reported in full
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** `evaluateAutopilot()` requires, independently: the operator switch on, the
+  14-day suggest-mode launch floor elapsed, every hard-block field satisfied, completeness at
+  or above the registry threshold, the golden suite passing, and the provider wave gate
+  cleared. It returns every failing blocker, not the first.
+- **Why every blocker:** a chain of early returns lets "we're only failing one thing" become
+  the operating state, and stacked gating quietly collapses into whichever check is cheapest.
+  Tests assert explicitly that 100% completeness clears neither the hard block nor the suite.
+- **Cross-property sharing:** allowed only after autopilot is live, and only for
+  `public_guest` / `guest_after_verification` content that is not property-specific. Secret
+  tiers never cross a property boundary regardless of portfolio settings.
+
+## D-0026 — Coverage Map is read-only, collapsed, and derives from the same numbers
+
+- **Date:** 2026-08-12
+- **Decided by:** agent, on the owner's delegation ("whichever one is best for the users")
+- **Decision:** `lib/brain/coverage.ts` builds a deterministic layout; the client component
+  renders it collapsed by default with no edit affordance. Domain percentages are read from
+  `computeCompleteness`, never recomputed.
+- **Why collapsed and read-only:** the cards and the three action queues are where work
+  happens (§7.5). A map that opens by default competes for the host's first glance, and a
+  clickable node would be a second editing entry point with none of the card editor's
+  guardrails. A missing hard block renders as `blocking`, not `missing`, because two
+  identical red dots hide which one is holding up publication.
+
+## D-0027 — Cron routes fail closed and the digest is explicitly non-urgent
+
+- **Date:** 2026-08-12
+- **Decided by:** agent
+- **Decision:** `/api/cron/freshness-digest` requires `Bearer $CRON_SECRET`, returns 404 when
+  the header does not match, and refuses when `CRON_SECRET` is unset. Scheduled Mondays 14:00
+  UTC via `vercel.json`.
+- **Why fail closed and 404:** the route reads with the admin client across every published
+  property, so the shared secret is the only thing between an anonymous caller and a
+  service-role read. An unset secret must refuse rather than default open, and a 404 tells an
+  unauthenticated prober nothing about whether a job lives at that path.
+- **Content:** field labels and staleness only, never a stored value — the digest is about
+  credentials expiring, so it must not itself be a way to read one. No "all clear" email is
+  ever sent; a weekly no-op trains hosts to ignore the sender.

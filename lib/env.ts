@@ -115,6 +115,27 @@ export const serverEnv = {
   // soon as a key is set.
   openrouterConciergeEnabled: bool(process.env.OPENROUTER_CONCIERGE_ENABLED, false),
 
+  // Directive §0.2 row 3. Ordered, comma-separated OpenRouter model slugs eligible to
+  // serve a routine-guest answer, and the upstream providers OpenRouter may dispatch
+  // to. Both are intersected against the reviewed sets in lib/router/providerAllowlist
+  // so an env value can only ever narrow, never widen, what routing may pick.
+  //
+  // The default is deliberately non-empty now that the owner supplied an allowlist
+  // (decision D-0019); it stays gated behind openrouterConciergeEnabled, so shipping a
+  // default here does not by itself send any guest text off our infrastructure.
+  openrouterGuestModelAllowlist:
+    process.env.OPENROUTER_GUEST_MODEL_ALLOWLIST ??
+    'google/gemini-2.5-flash,openai/gpt-4o-mini,anthropic/claude-haiku-4.5',
+  openrouterProviderAllowlist:
+    process.env.OPENROUTER_PROVIDER_ALLOWLIST ?? 'azure,google-vertex,openai,anthropic',
+
+  // Directive §7.1. Local llama.cpp-compatible cross-encoder reranker sidecar. Empty
+  // means reranking is off and retrieval uses pre-rerank RRF order; there is no cloud
+  // fallback, because a hosted reranker would send guest question text plus candidate
+  // property facts to a third party.
+  rerankerBaseUrl: process.env.RERANKER_BASE_URL ?? '',
+  rerankerModel: process.env.RERANKER_MODEL ?? 'bge-reranker-v2-m3',
+
   ingestionDevFallback: bool(process.env.INGESTION_DEV_FALLBACK, false),
   firecrawlApiKey: process.env.FIRECRAWL_API_KEY ?? '',
   firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev',
@@ -124,6 +145,11 @@ export const serverEnv = {
   acquisitionShadowProvider: process.env.ACQUISITION_SHADOW_PROVIDER ?? '',
 
   resendApiKey: process.env.RESEND_API_KEY ?? '', // Server-only. Email delivery via Resend.
+
+  // Shared secret for scheduled routes under /api/cron. Empty means every cron route
+  // refuses: an unconfigured deployment must not expose an unauthenticated endpoint that
+  // reads with service-role credentials.
+  cronSecret: process.env.CRON_SECRET ?? '',
 
   // Internal business inbox that receives product-feedback pings (host feedback
   // submissions) for follow-up. Server-only. Override via FEEDBACK_INBOX in Vercel.
@@ -169,6 +195,10 @@ export const serverEnv = {
   posthogServerHost: process.env.POSTHOG_HOST ?? process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com',
 
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? '',
+
+  // Stripe Billing Meters (§10). Off by default: usage recorded before a live price
+  // exists is unbilled usage nobody reconciles later. Flip only after autopilot.
+  stripeMetersEnabled: process.env.STRIPE_METERS_ENABLED === 'true',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
   // One entry per plan id + interval. Keys are `${planId}_${interval}` so
   // lib/billing/stripe.ts can resolve them without string surgery. The two
@@ -205,6 +235,20 @@ export const serverEnv = {
   s3Bucket: process.env.S3_BUCKET ?? '',
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
+
+  // Cloudflare Queues — candidate mining and event-driven ingestion (directive §8/§9).
+  // Empty queue id means the stage is not provisioned; producers then refuse rather than
+  // silently running mining work inline on a guest-facing request.
+  cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? '',
+  cloudflareQueuesToken: process.env.CLOUDFLARE_QUEUES_TOKEN ?? '',
+  cloudflareMiningQueueId: process.env.CLOUDFLARE_MINING_QUEUE_ID ?? '',
+
+  // AWS background worker that executes an approved brain write off the request path
+  // (§9). Separate stage from mining, not an alternative transport for it. Unprovisioned
+  // by default: the flag exists so the adapter is exercised in tests before it is real.
+  brainWriteWorkerEnabled: process.env.BRAIN_WRITE_WORKER_ENABLED === 'true',
+  brainWriteWorkerUrl: process.env.BRAIN_WRITE_WORKER_URL ?? '',
+  brainWriteWorkerSecret: process.env.BRAIN_WRITE_WORKER_SECRET ?? '',
 };
 
 export function hasServiceRole(): boolean {

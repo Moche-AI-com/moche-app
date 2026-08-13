@@ -3581,6 +3581,15 @@ export type Database = {
         }
         Returns: string
       }
+      brain_values_set_secret: {
+        Args: {
+          p_actor: string
+          p_field_id: string
+          p_plaintext: string
+          p_property_id: string
+        }
+        Returns: string
+      }
       bump_brain_version: { Args: { p_property_id: string }; Returns: number }
       can_access_property: { Args: { prop: string }; Returns: boolean }
       can_edit_property: { Args: { prop: string }; Returns: boolean }

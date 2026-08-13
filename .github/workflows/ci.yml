@@ -83,6 +83,14 @@ jobs:
         run: python3 scripts/build-field-registry.py --check
       - name: Seed migration matches the registry
         run: python3 scripts/registry-sql.py drift
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Golden eval suite regenerates byte-identically
+        # The §7.0 autonomy gate is only a gate if the committed suite is the suite the
+        # generator produces from the current registry. A hand-edited suite could be
+        # trimmed to whatever currently passes.
+        run: node scripts/build-golden-evals.mjs --check
 
   sql-contract:
     name: SQL contract tests

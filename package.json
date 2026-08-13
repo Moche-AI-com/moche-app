@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "evals:golden": "vitest run lib/evals/golden.test.ts",
+    "evals:build": "node scripts/build-golden-evals.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",
