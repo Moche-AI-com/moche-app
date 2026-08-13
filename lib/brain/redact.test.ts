@@ -116,3 +116,37 @@ describe('redactBlocks', () => {
     expect(out.redactions).toEqual([]);
   });
 });
+
+// --- Regression: repairing text mangled by the pre-fix lib/ai/redaction.ts ---
+//
+// `redactCredentials` also runs on ANSWER-CACHE READS, which is the only thing that
+// can retroactively clean rows written while lib/ai/redaction.ts was broken. Rules
+// 1-3 cannot: the token after the noun is now a `[redacted]` marker, and the prose
+// guard correctly refuses to re-redact a bracketed token, so the real credential
+// sitting after it survived every pass.
+describe('redactCredentials — post-marker leak repair', () => {
+  it('removes a credential left stranded after a [redacted] marker', () => {
+    const mangled = 'The WiFi: [redacted] network name is CapeHouse-Guest and the password: [redacted] is Dennis2026!';
+    const out = redactCredentials(mangled);
+    expect(out.text).not.toContain('Dennis2026');
+    // The non-secret network name is still answerable.
+    expect(out.text).toContain('CapeHouse-Guest');
+    expect(out.redactions).toContain('post_marker_leak');
+  });
+
+  it('removes a credential stranded after the module\'s own placeholder', () => {
+    const out = redactCredentials(`door code: ${REDACTION_PLACEHOLDER} 4821`);
+    expect(out.text).not.toContain('4821');
+  });
+
+  it('leaves clean text untouched and stays idempotent', () => {
+    const once = redactCredentials('The WiFi password is Dennis2026!').text;
+    expect(once).not.toContain('Dennis2026');
+    expect(redactCredentials(once).text).toBe(once);
+  });
+
+  it('does not fire on prose following a marker', () => {
+    const out = redactCredentials(`door code: ${REDACTION_PLACEHOLDER} and the key is inside`);
+    expect(out.redactions).not.toContain('post_marker_leak');
+  });
+});
