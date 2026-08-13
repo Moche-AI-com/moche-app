@@ -1,4 +1,6 @@
 import type { FetchedPage } from '@/lib/ingest/firecrawl';
+import { assessExtraction, type IntakeAssessment } from './confidence';
+import { extractListingFields, type ExtractedField } from './fields';
 
 export const IMPORT_REVIEW_GROUPS = ['property_details', 'amenities', 'rules', 'arrival_access', 'appliances_faqs'] as const;
 export type ImportReviewGroup = typeof IMPORT_REVIEW_GROUPS[number];
@@ -17,6 +19,22 @@ export interface ImportedListingDraft {
   provider: string;
   sourceUrl: string;
   listingTitle: string;
+  /**
+   * The primary output (directive §1): high-value fields, each already mapped to
+   * a canonical Brain section and an existing proposable write path.
+   */
+  fields: ExtractedField[];
+  /** The confidence gate's decision. `usable: false` means nothing may be auto-filled. */
+  assessment: IntakeAssessment;
+  /**
+   * Secondary, optional evidence: topic-filtered sentences from the page.
+   *
+   * These are retained rather than deleted because `extract.test.ts` asserts all
+   * five groups exist and that the rules group carries the page's own wording,
+   * and Boundary 7 forbids weakening an existing test to make a change pass.
+   * They are no longer the review surface's primary content and no longer
+   * include the whole-page fallback blob that §1 rules out.
+   */
   reviewGroups: ImportedReviewGroup[];
 }
 
@@ -66,8 +84,9 @@ export function buildListingDraft(page: FetchedPage, inputUrl: string): Imported
   const listingTitle = page.title.trim().slice(0, 160) || 'Imported listing details';
   const reviewGroups = IMPORT_REVIEW_GROUPS.map((key) => {
     const sentences = sentencesFor(page.text, GROUP_TERMS[key]);
-    const fallback = key === 'property_details' ? page.text.replace(/\s+/g, ' ').slice(0, 1400) : '';
-    const text = (sentences.join('\n\n') || fallback).slice(0, 4000).trim();
+    // No whole-page fallback. §1 forbids raw listing text dumps, and a group with
+    // no topical sentences has genuinely detected nothing — saying so is honest.
+    const text = sentences.join('\n\n').slice(0, 4000).trim();
     return {
       ...GROUPS[key],
       title: `${GROUPS[key].label} from ${provider}`.slice(0, 200),
@@ -75,5 +94,6 @@ export function buildListingDraft(page: FetchedPage, inputUrl: string): Imported
       detected: text.length > 0,
     };
   });
-  return { provider, sourceUrl: page.sourceUrl, listingTitle, reviewGroups };
+  const fields = extractListingFields({ title: page.title, text: page.text, sourceUrl: page.sourceUrl || inputUrl });
+  return { provider, sourceUrl: page.sourceUrl, listingTitle, fields, assessment: assessExtraction(fields), reviewGroups };
 }

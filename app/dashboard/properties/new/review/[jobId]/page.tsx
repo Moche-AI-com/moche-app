@@ -23,7 +23,7 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
       <p className="faint" style={{ marginBottom: '.25rem' }}>Step 2 of 2</p>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0' }}>Review imported details</h1>
       <p className="faint" style={{ marginBottom: '1.5rem' }}>From {draft.provider} · {draft.listingTitle}</p>
-      <ImportReviewClient jobId={job.id} propertyId={job.property_id} groups={draft.reviewGroups} />
+      <ImportReviewClient jobId={job.id} propertyId={job.property_id} fields={draft.fields} groups={draft.reviewGroups} />
     </div>
   );
 }
