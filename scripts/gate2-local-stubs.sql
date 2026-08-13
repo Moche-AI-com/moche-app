@@ -77,3 +77,34 @@ $$;
 -- load-bearing, not oversights.)
 GRANT EXECUTE ON FUNCTION public.can_access_property(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.can_edit_property(uuid) TO authenticated;
+
+-- brain_items, stubbed so supabase-migrations-BRAIN-SECTIONS.sql can be applied
+-- and its `section` column exercised under the REAL production policies. Only the
+-- columns the migration and its isolation tests touch are recreated; brain_category
+-- is stubbed as text because the section work deliberately does not migrate the
+-- enum, so its exact variant list is not part of this contract.
+CREATE TABLE IF NOT EXISTS public.brain_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  category text NOT NULL,
+  title text NOT NULL,
+  body text,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+ALTER TABLE public.brain_items ENABLE ROW LEVEL SECURITY;
+
+-- Verbatim from supabase/schema.sql:1020-1021, minus is_admin() which is not part
+-- of the tenant-isolation contract being asserted here. UPDATE needs both USING
+-- and WITH CHECK, and brain_write supplies both via FOR ALL -- the reassignment
+-- test below is what proves it.
+DROP POLICY IF EXISTS brain_select ON public.brain_items;
+CREATE POLICY brain_select ON public.brain_items AS PERMISSIVE FOR SELECT
+  TO authenticated USING (can_access_property(property_id));
+DROP POLICY IF EXISTS brain_write ON public.brain_items;
+CREATE POLICY brain_write ON public.brain_items AS PERMISSIVE FOR ALL
+  TO authenticated USING (can_edit_property(property_id))
+  WITH CHECK (can_edit_property(property_id));
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.brain_items TO authenticated;

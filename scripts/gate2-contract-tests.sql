@@ -324,4 +324,124 @@ SELECT pg_temp.expect_fail($$
   'C12 authenticated cannot mutate the registry');
 RESET ROLE;
 
+
+
+-- ===========================================================================
+-- E. brain_items.section (supabase-migrations-BRAIN-SECTIONS.sql)
+--
+-- AGENTS.md Boundary 8: a table structure change ships with an RLS policy test
+-- plus a cross-account and unassigned-property negative test. brain_items was
+-- previously absent from this harness, so its policies were being trusted rather
+-- than asserted. Every denial below is paired with a positive control, because a
+-- denial-only suite passes trivially against a table that returns nothing.
+-- ===========================================================================
+
+RESET ROLE;
+INSERT INTO public.brain_items (id, property_id, category, title, body, section) VALUES
+  ('e1111111-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
+   'core', 'Wi-Fi', 'network and password', 'connectivity'),
+  ('e1111111-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
+   'core', 'Layout', 'three floors', NULL),
+  ('e2222222-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222',
+   'core', 'Foreign Wi-Fi', 'do not leak this', 'connectivity')
+ON CONFLICT DO NOTHING;
+
+-- The column exists, is nullable, and legacy rows are legal without it. NULL is
+-- the deliberate representation of "predates sections" -- see the migration header
+-- for why no backfill guess is written in.
+SELECT pg_temp.expect_eq(
+  (SELECT is_nullable FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'brain_items' AND column_name = 'section'),
+  'YES', 'E1 brain_items.section is nullable so legacy rows need no backfill');
+
+-- The vocabulary is enforced in the database, not only in TypeScript. Without
+-- this CHECK an AI routing pass that hallucinates a section name would persist it
+-- and the row would become unreachable from every section view.
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.brain_items (property_id, category, title, section)
+  VALUES ('11111111-1111-1111-1111-111111111111','core','bad','not_a_real_domain')$$,
+  'E2 an invented section is rejected by the CHECK constraint');
+
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.brain_items (property_id, category, title, section)
+  VALUES ('11111111-1111-1111-1111-111111111111','core','bad','sys_provenance_audit')$$,
+  'E3 a system domain is not a valid host-facing section');
+
+SET ROLE authenticated;
+SET "test.user_id" = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+-- POSITIVE CONTROLS. If these fail the denials below prove nothing.
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_items), 2,
+  'E4 POSITIVE CONTROL: an editor sees exactly their own property''s Brain rows');
+
+SELECT pg_temp.expect_ok($$
+  INSERT INTO public.brain_items (property_id, category, title, section)
+  VALUES ('11111111-1111-1111-1111-111111111111','core','Parking','parking')$$,
+  'E5 POSITIVE CONTROL: an editor can file a row into a section');
+
+SELECT pg_temp.expect_affected($$
+  UPDATE public.brain_items SET section = 'access_security'
+  WHERE id = 'e1111111-0000-0000-0000-000000000002'$$, 1,
+  'E6 POSITIVE CONTROL: an editor can re-section their own row');
+
+-- Cross-account isolation. The foreign property's Wi-Fi row must be invisible and
+-- immutable, including via the new column.
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_items
+    WHERE property_id = '22222222-2222-2222-2222-222222222222'), 0,
+  'E7 a foreign property''s Brain rows are invisible');
+
+SELECT pg_temp.expect_affected($$
+  UPDATE public.brain_items SET section = 'house_rules'
+  WHERE property_id = '22222222-2222-2222-2222-222222222222'$$, 0,
+  'E8 cannot re-section a foreign property''s Brain row');
+
+SELECT pg_temp.expect_affected($$
+  DELETE FROM public.brain_items
+  WHERE property_id = '22222222-2222-2222-2222-222222222222'$$, 0,
+  'E9 cannot DELETE a foreign property''s Brain row');
+
+-- The reassignment attack: WITH CHECK on brain_write must make this raise rather
+-- than merely filter, otherwise a tenant can push content into another tenancy.
+SELECT pg_temp.expect_fail($$
+  UPDATE public.brain_items SET property_id = '22222222-2222-2222-2222-222222222222'
+  WHERE id = 'e1111111-0000-0000-0000-000000000001'$$,
+  'E10 cannot move an owned Brain row into a foreign property');
+
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.brain_items (property_id, category, title, section)
+  VALUES ('22222222-2222-2222-2222-222222222222','core','injected','connectivity')$$,
+  'E11 cannot insert a Brain row into a foreign property');
+
+-- Unassigned property: a user with no membership row anywhere must behave exactly
+-- like a foreign tenant, which is the AGENTS.md negative-test requirement.
+SET "test.user_id" = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_items), 0,
+  'E12 a user with no membership anywhere sees no Brain rows');
+
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.brain_items (property_id, category, title, section)
+  VALUES ('11111111-1111-1111-1111-111111111111','core','injected','connectivity')$$,
+  'E13 an unassigned user cannot file a Brain row');
+
+-- Member-but-not-editor: reads sections, cannot write them.
+SET "test.user_id" = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_items), 3,
+  'E14 POSITIVE CONTROL: a viewer reads their own property''s Brain rows');
+
+SELECT pg_temp.expect_affected($$
+  UPDATE public.brain_items SET section = 'amenities'
+  WHERE property_id = '11111111-1111-1111-1111-111111111111'$$, 0,
+  'E15 a viewer cannot re-section their own property''s rows');
+
+SET "test.user_id" = '';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_items), 0,
+  'E16 an unauthenticated session sees no Brain rows');
+
+RESET ROLE;
+
 \echo '== all contract tests passed =='
