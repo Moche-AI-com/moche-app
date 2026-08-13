@@ -119,6 +119,18 @@ export const PROPOSABLE_FIELDS: Record<string, ProposableField> = {
     kind: 'brain_item',
     target: 'brain_items',
   },
+  'brain.space_summary': {
+    path: 'brain.space_summary',
+    // Bedrooms / bathrooms / floors / square footage have no field_registry entry
+    // (the registry covers bed_configuration and max_occupancy, not raw counts).
+    // The directive requires them mapped to the right section anyway, so they land
+    // as one composed space_details entry rather than as an invented registry
+    // field — adding an allowlist row here is a reviewable diff; editing the
+    // generated registry is not.
+    label: 'Space details read from a listing page',
+    kind: 'brain_item',
+    target: 'brain_items',
+  },
   'brain.document_summary': {
     path: 'brain.document_summary',
     label: 'Property details read from a document',
