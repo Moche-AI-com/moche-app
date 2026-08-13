@@ -18,6 +18,7 @@ vi.mock('@/lib/env', () => ({ serverEnv: env, publicEnv: {} }));
 
 import { enqueueMining, miningQueueConfigured, miningDedupeKey, type MiningMessage } from './cloudflare';
 import { dispatchBrainWrite, brainWriteWorkerConfigured, type BrainWriteJob } from './brain-write';
+import { REGISTRY_FIELDS } from '@/lib/brain/completeness';
 
 const PROPERTY_ID = 'ba52ae45-2126-4d50-871d-03f9722b9633';
 const SOURCE_ID = '7c1f0e2a-9d3b-4a15-8f62-1b0c5d4e7a98';
@@ -131,14 +132,22 @@ describe('enqueueMining', () => {
     await expect(enqueueMining(MSG)).resolves.toMatchObject({ ok: false, reason: 'unreachable' });
   });
 
-  // Every wire field is now a uuid, an enum, a registry id, or a derived key, so no valid
-  // message can approach the ceiling. The guard stays as a transport invariant: the size
-  // check must precede the request regardless of what a future field addition allows.
-  it('checks the size ceiling before issuing the request', async () => {
+  // This replaces an earlier `too_large` test rather than weakening it: every wire member
+  // is now a uuid, an enum, a registry id, or a value derived from those, so no input can
+  // produce a body near the 128 KiB ceiling and the `too_large` branch is unreachable by
+  // construction. The bound is asserted instead of the branch, because that is the property
+  // that actually holds — and if a future field makes it reachable again, this fails first.
+  it('cannot produce a body anywhere near the size ceiling', async () => {
     configureQueue();
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(enqueueMining(MSG)).resolves.toEqual({ ok: true, queued: true });
+
+    const longestField = [...REGISTRY_FIELDS].sort((a, b) => b.field_id.length - a.field_id.length)[0];
+    await expect(enqueueMining({ ...MSG, field_id: longestField.field_id })).resolves.toEqual({
+      ok: true,
+      queued: true,
+    });
+
     expect(Buffer.byteLength(wireBody(fetchMock), 'utf8')).toBeLessThan(1024);
   });
 
@@ -211,6 +220,93 @@ describe('enqueueMining', () => {
     expect(raw).not.toContain('4821');
     // Equality, not a subset check: anything the rebuild failed to drop shows up here.
     expect(JSON.parse(raw).body).toEqual(WIRE);
+  });
+
+  // Round-three review defeated the previous fix without violating the type: validation
+  // read the caller's object, then serialization read it again, and a member is free to
+  // answer differently each time. These are that exact attack.
+  describe('cannot be defeated by a member that answers twice', () => {
+    it('refuses a getter that returns a uuid then a secret', async () => {
+      configureQueue();
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      let reads = 0;
+      const attack = {
+        ...MSG,
+        get property_id() {
+          reads += 1;
+          return reads === 1 ? PROPERTY_ID : 'wifi password hunter2';
+        },
+      } as MiningMessage;
+
+      const res = await enqueueMining(attack);
+
+      // Either it is refused, or it is sent with the first-read value. What must never
+      // happen is the secret reaching the wire.
+      if (res.ok) {
+        const raw = wireBody(fetchMock);
+        expect(raw).not.toContain('hunter2');
+        expect(JSON.parse(raw).body).toEqual(WIRE);
+      }
+      expect(reads).toBeLessThanOrEqual(1);
+    });
+
+    it('refuses an object that coerces to a uuid but serializes as a secret', async () => {
+      configureQueue();
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const coercing = {
+        toString: () => PROPERTY_ID,
+        toJSON: () => 'door code 4821',
+      };
+      const attack = { ...MSG, property_id: coercing } as unknown as MiningMessage;
+
+      await expect(enqueueMining(attack)).resolves.toEqual({
+        ok: false,
+        queued: false,
+        reason: 'invalid',
+        detail: 'property_id',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a non-string in every free-typed member', async () => {
+      configureQueue();
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const members: Array<[string, unknown]> = [
+        ['kind', { toString: () => 'conversation_correction' }],
+        ['signal', { toString: () => 'no_stored_value' }],
+        ['property_id', { toString: () => PROPERTY_ID }],
+        ['source_id', { toString: () => SOURCE_ID }],
+        ['field_id', { toString: () => 'checkout_time' }],
+        ['occurred_at', { toString: () => '2026-06-01T12:00:00.000Z' }],
+      ];
+
+      for (const [field, value] of members) {
+        await expect(
+          enqueueMining({ ...MSG, [field]: value } as unknown as MiningMessage),
+        ).resolves.toEqual({ ok: false, queued: false, reason: 'invalid', detail: field });
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a toJSON hook on the message itself', async () => {
+      configureQueue();
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const attack = { ...MSG, toJSON: () => ({ leak: 'hunter2 / 4821' }) } as unknown as MiningMessage;
+      await expect(enqueueMining(attack)).resolves.toEqual({ ok: true, queued: true });
+
+      const raw = wireBody(fetchMock);
+      expect(raw).not.toContain('hunter2');
+      expect(raw).not.toContain('4821');
+      expect(JSON.parse(raw).body).toEqual(WIRE);
+    });
   });
 
   it('rejects a field_id that is not in the registry', async () => {

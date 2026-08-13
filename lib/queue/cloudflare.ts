@@ -89,22 +89,79 @@ const REGISTRY_FIELD_IDS: ReadonlySet<string> = new Set(REGISTRY_FIELDS.map((f) 
 // first attempt and it was not enough: `4821` and `hunter2` are both id-shaped, so a
 // door code or a password could still ride out on an id field. A uuid has a fixed
 // length, fixed hyphen positions, and a hex-only alphabet, which no human-chosen secret
-// satisfies by accident. The dedupe key is not validated at all because it is no longer
-// accepted from the caller — see `enqueueMining`.
+// satisfies by accident.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Rejects anything that is not an identifier-only message. Returns the name of the
- * failing field so the caller can log which constraint failed without logging the value.
+ * Reads one member exactly once and returns it only if it is already a primitive string.
+ *
+ * This is the load-bearing step, not the pattern match. Validating the caller's object and
+ * then serializing that same object reads every member twice, and a member does not have
+ * to answer the same way both times: a getter can return a uuid to the validator and a
+ * password to `JSON.stringify`, and an object with `toString`/`toJSON` can satisfy
+ * `RegExp.test` by coercion while serializing as something else entirely. Snapshotting to
+ * primitives first means validation and serialization are guaranteed to see the same
+ * bytes, because after this returns there is no caller code left to run.
  */
-export function validateMiningMessage(message: MiningMessage): string | null {
-  if (!MINING_KINDS.has(message.kind)) return 'kind';
-  if (!MINING_SIGNALS.has(message.signal)) return 'signal';
-  if (!UUID_PATTERN.test(message.property_id)) return 'property_id';
-  if (!UUID_PATTERN.test(message.source_id)) return 'source_id';
-  if (message.field_id !== undefined && !REGISTRY_FIELD_IDS.has(message.field_id)) return 'field_id';
-  if (Number.isNaN(Date.parse(message.occurred_at))) return 'occurred_at';
-  return null;
+function snapshotString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/**
+ * Validates and snapshots in one pass. Returns the exact object that will be serialized,
+ * built only from primitives already checked, or the name of the field that failed so the
+ * caller can log which constraint broke without logging the value.
+ *
+ * The two responsibilities are deliberately not separable. A validate-then-build split is
+ * what allowed a caller to present different values to each step.
+ */
+export function normalizeMiningMessage(
+  message: MiningMessage,
+): { ok: true; wire: MiningWireMessage } | { ok: false; detail: string } {
+  const kind = snapshotString(message.kind);
+  if (kind === null || !MINING_KINDS.has(kind as MiningKind)) return { ok: false, detail: 'kind' };
+
+  const signal = snapshotString(message.signal);
+  if (signal === null || !MINING_SIGNALS.has(signal as MiningSignal)) {
+    return { ok: false, detail: 'signal' };
+  }
+
+  const propertyId = snapshotString(message.property_id);
+  if (propertyId === null || !UUID_PATTERN.test(propertyId)) return { ok: false, detail: 'property_id' };
+
+  const sourceId = snapshotString(message.source_id);
+  if (sourceId === null || !UUID_PATTERN.test(sourceId)) return { ok: false, detail: 'source_id' };
+
+  let fieldId: string | undefined;
+  if (message.field_id !== undefined) {
+    const snapshot = snapshotString(message.field_id);
+    if (snapshot === null || !REGISTRY_FIELD_IDS.has(snapshot)) return { ok: false, detail: 'field_id' };
+    fieldId = snapshot;
+  }
+
+  const occurredAt = snapshotString(message.occurred_at);
+  if (occurredAt === null) return { ok: false, detail: 'occurred_at' };
+  const parsed = Date.parse(occurredAt);
+  if (Number.isNaN(parsed)) return { ok: false, detail: 'occurred_at' };
+
+  return {
+    ok: true,
+    wire: {
+      kind: kind as MiningKind,
+      property_id: propertyId,
+      source_id: sourceId,
+      // Derived, never accepted. A caller-supplied dedupe key was the last free-text
+      // member of this message, and it is a pure function of the other fields anyway, so
+      // accepting one bought nothing while leaving a channel no format check can police.
+      dedupe_key: miningDedupeKey(kind as MiningKind, propertyId, sourceId, fieldId),
+      // Re-emitted from the parsed instant rather than copied: Date.parse accepts a bare
+      // number as a year, so `4821` validates as a timestamp and would otherwise reach the
+      // queue verbatim.
+      occurred_at: new Date(parsed).toISOString(),
+      signal: signal as MiningSignal,
+      ...(fieldId === undefined ? {} : { field_id: fieldId }),
+    },
+  };
 }
 
 export function miningQueueConfigured(): boolean {
@@ -124,29 +181,11 @@ export function miningQueueConfigured(): boolean {
 export async function enqueueMining(message: MiningMessage): Promise<EnqueueOutcome> {
   if (!miningQueueConfigured()) return { ok: false, queued: false, reason: 'not_configured' };
 
-  const invalid = validateMiningMessage(message);
-  if (invalid) return { ok: false, queued: false, reason: 'invalid', detail: invalid };
-
-  // Rebuilt field by field rather than passing `message` through. Spreading or
-  // serializing the caller's object would put any extra property on the wire, which is
-  // how an ids-only transport quietly becomes a content transport.
-  //
-  // `dedupe_key` is derived here from already-validated fields rather than accepted.
-  // Accepting it would reopen the hole the validator closes: a caller-supplied string is
-  // a free-text channel no format check can fully police, and the key is a pure function
-  // of the other fields anyway, so accepting one bought nothing.
-  const wire: MiningWireMessage = {
-    kind: message.kind,
-    property_id: message.property_id,
-    source_id: message.source_id,
-    dedupe_key: miningDedupeKey(message.kind, message.property_id, message.source_id, message.field_id),
-    // Normalized, not copied. Date.parse is lenient enough to accept a bare number as a
-    // year, so `4821` would survive validation as a timestamp; re-emitting the parsed
-    // instant guarantees the wire value is an ISO string regardless.
-    occurred_at: new Date(message.occurred_at).toISOString(),
-    signal: message.signal,
-    ...(message.field_id === undefined ? {} : { field_id: message.field_id }),
-  };
+  // One pass that validates and snapshots. `wire` holds only primitives, so nothing the
+  // caller controls runs again between here and serialization.
+  const normalized = normalizeMiningMessage(message);
+  if (!normalized.ok) return { ok: false, queued: false, reason: 'invalid', detail: normalized.detail };
+  const { wire } = normalized;
 
   const body = JSON.stringify({ body: wire, content_type: 'json' });
   if (Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES) {

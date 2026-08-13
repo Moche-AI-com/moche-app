@@ -406,7 +406,19 @@ elapsed time. "Gate N" never implies "week N".
   hex-only — which no human-chosen secret satisfies by accident. `dedupe_key` is no longer
   accepted from the caller at all but derived from the validated fields, removing the last
   free-text member, and `occurred_at` is re-emitted from the parsed instant because
-  `Date.parse` accepts a bare number as a year. Why an enum for `signal`: the consumer branches
+  `Date.parse` accepts a bare number as a year.
+- **Validate and snapshot in one pass (third correction):** re-verification then defeated the
+  uuid check without violating the type. Validation read the caller's object and
+  serialization read it again, and a member is free to answer differently each time: a
+  getter can return a uuid to the validator and a password to `JSON.stringify`, and an
+  object with `toString`/`toJSON` can satisfy `RegExp.test` by coercion while serializing as
+  something else. `normalizeMiningMessage` now reads each member exactly once, accepts it
+  only if it is already a primitive string, and returns the object that will be serialized.
+  The two responsibilities are deliberately not separable — a validate-then-build split is
+  precisely what the attack exploited. The suite now contains that attack.
+- **`too_large` is unreachable by construction:** with every member bounded, no input can
+  approach the 128 KiB ceiling. The test asserts the bound rather than the branch, and fails
+  first if a future field makes the branch reachable again. Why an enum for `signal`: the consumer branches
   on it, and an enum cannot carry a fact value. Independent §0.6 verification caught this.
 
 ## D-0024 — Stripe Billing Meters ship as a flagged scaffold with no live price
