@@ -45,16 +45,18 @@ export type MiningSignal =
  */
 export interface MiningMessage {
   kind: MiningKind;
+  /** Database uuid. */
   property_id: string;
-  /** Conversation/escalation/monitor row that produced this signal. */
+  /** Conversation/escalation/monitor row uuid that produced this signal. */
   source_id: string;
-  /** Idempotency key. The consumer dedupes on this; retries here are safe. */
-  dedupe_key: string;
   occurred_at: string;
   /** Registry field the signal concerns, when the signal is field-specific. */
   field_id?: string;
   signal: MiningSignal;
 }
+
+/** What actually goes on the wire: the message plus a dedupe key we derive, not accept. */
+export type MiningWireMessage = MiningMessage & { dedupe_key: string };
 
 export type EnqueueOutcome =
   | { ok: true; queued: true }
@@ -82,22 +84,24 @@ const MINING_KINDS: ReadonlySet<string> = new Set<MiningKind>([
 
 const REGISTRY_FIELD_IDS: ReadonlySet<string> = new Set(REGISTRY_FIELDS.map((f) => f.field_id));
 
-// Identifiers are uuids, short slugs, or colon-joined dedupe keys. The cap is what makes
-// this a real constraint: a bounded id-shaped string cannot hold a WiFi password or a
-// sentence of guest text, so smuggling content through an id field fails validation
-// rather than being caught by review later.
-const ID_PATTERN = /^[A-Za-z0-9:_-]{1,120}$/;
+// Every free-typed member of this message is a database uuid, so the validator demands a
+// uuid rather than a general "id-shaped string". A length-capped charset pattern was the
+// first attempt and it was not enough: `4821` and `hunter2` are both id-shaped, so a
+// door code or a password could still ride out on an id field. A uuid has a fixed
+// length, fixed hyphen positions, and a hex-only alphabet, which no human-chosen secret
+// satisfies by accident. The dedupe key is not validated at all because it is no longer
+// accepted from the caller — see `enqueueMining`.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Rejects anything that is not an identifier-shaped message. Returns a reason string on
- * failure so the caller can log which constraint failed without logging the value.
+ * Rejects anything that is not an identifier-only message. Returns the name of the
+ * failing field so the caller can log which constraint failed without logging the value.
  */
 export function validateMiningMessage(message: MiningMessage): string | null {
   if (!MINING_KINDS.has(message.kind)) return 'kind';
   if (!MINING_SIGNALS.has(message.signal)) return 'signal';
-  if (!ID_PATTERN.test(message.property_id)) return 'property_id';
-  if (!ID_PATTERN.test(message.source_id)) return 'source_id';
-  if (!ID_PATTERN.test(message.dedupe_key)) return 'dedupe_key';
+  if (!UUID_PATTERN.test(message.property_id)) return 'property_id';
+  if (!UUID_PATTERN.test(message.source_id)) return 'source_id';
   if (message.field_id !== undefined && !REGISTRY_FIELD_IDS.has(message.field_id)) return 'field_id';
   if (Number.isNaN(Date.parse(message.occurred_at))) return 'occurred_at';
   return null;
@@ -126,12 +130,20 @@ export async function enqueueMining(message: MiningMessage): Promise<EnqueueOutc
   // Rebuilt field by field rather than passing `message` through. Spreading or
   // serializing the caller's object would put any extra property on the wire, which is
   // how an ids-only transport quietly becomes a content transport.
-  const wire: MiningMessage = {
+  //
+  // `dedupe_key` is derived here from already-validated fields rather than accepted.
+  // Accepting it would reopen the hole the validator closes: a caller-supplied string is
+  // a free-text channel no format check can fully police, and the key is a pure function
+  // of the other fields anyway, so accepting one bought nothing.
+  const wire: MiningWireMessage = {
     kind: message.kind,
     property_id: message.property_id,
     source_id: message.source_id,
-    dedupe_key: message.dedupe_key,
-    occurred_at: message.occurred_at,
+    dedupe_key: miningDedupeKey(message.kind, message.property_id, message.source_id, message.field_id),
+    // Normalized, not copied. Date.parse is lenient enough to accept a bare number as a
+    // year, so `4821` would survive validation as a timestamp; re-emitting the parsed
+    // instant guarantees the wire value is an ISO string regardless.
+    occurred_at: new Date(message.occurred_at).toISOString(),
     signal: message.signal,
     ...(message.field_id === undefined ? {} : { field_id: message.field_id }),
   };

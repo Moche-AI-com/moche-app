@@ -398,7 +398,15 @@ elapsed time. "Gate N" never implies "week N".
   `kind`, `property_id`, `source_id`, `dedupe_key`, `occurred_at`, optional registry
   `field_id`, and a `signal` enum — validated against an identifier pattern and the field
   registry, and rebuilt field by field before serialization so a caller that casts past the
-  type still cannot put content on the wire. Why an enum for `signal`: the consumer branches
+  type still cannot put content on the wire.
+- **Uuid shape, not id shape (second correction):** the first fix validated ids against a
+  length-capped `[A-Za-z0-9:_-]{1,120}` pattern, which re-verification correctly rejected:
+  `4821` and `hunter2` are both id-shaped, so a door code or password could still ride out
+  on an id field. Ids are now required to be uuids — fixed length, fixed hyphen positions,
+  hex-only — which no human-chosen secret satisfies by accident. `dedupe_key` is no longer
+  accepted from the caller at all but derived from the validated fields, removing the last
+  free-text member, and `occurred_at` is re-emitted from the parsed instant because
+  `Date.parse` accepts a bare number as a year. Why an enum for `signal`: the consumer branches
   on it, and an enum cannot carry a fact value. Independent §0.6 verification caught this.
 
 ## D-0024 — Stripe Billing Meters ship as a flagged scaffold with no live price

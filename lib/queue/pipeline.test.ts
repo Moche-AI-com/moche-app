@@ -19,14 +19,27 @@ vi.mock('@/lib/env', () => ({ serverEnv: env, publicEnv: {} }));
 import { enqueueMining, miningQueueConfigured, miningDedupeKey, type MiningMessage } from './cloudflare';
 import { dispatchBrainWrite, brainWriteWorkerConfigured, type BrainWriteJob } from './brain-write';
 
+const PROPERTY_ID = 'ba52ae45-2126-4d50-871d-03f9722b9633';
+const SOURCE_ID = '7c1f0e2a-9d3b-4a15-8f62-1b0c5d4e7a98';
+
 const MSG: MiningMessage = {
   kind: 'conversation_correction',
-  property_id: 'ba52ae45-2126-4d50-871d-03f9722b9633',
-  source_id: 'conv-1',
-  dedupe_key: 'conversation_correction:ba52ae45:conv-1:checkout_time',
+  property_id: PROPERTY_ID,
+  source_id: SOURCE_ID,
   occurred_at: '2026-06-01T12:00:00.000Z',
   field_id: 'checkout_time',
   signal: 'guest_contradicted_stored_value',
+};
+
+/** The wire adds the dedupe key we derive; the caller never supplies one. */
+const WIRE = {
+  ...MSG,
+  dedupe_key: `conversation_correction:${PROPERTY_ID}:${SOURCE_ID}:checkout_time`,
+};
+
+const wireBody = (fetchMock: ReturnType<typeof vi.fn>) => {
+  const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  return init.body as string;
 };
 
 const JOB: BrainWriteJob = {
@@ -89,7 +102,7 @@ describe('enqueueMining', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok123');
     const sent = JSON.parse(init.body as string);
     expect(sent.content_type).toBe('json');
-    expect(sent.body).toEqual(MSG);
+    expect(sent.body).toEqual(WIRE);
   });
 
   it('treats HTTP 200 with success:false as a rejection', async () => {
@@ -118,38 +131,71 @@ describe('enqueueMining', () => {
     await expect(enqueueMining(MSG)).resolves.toMatchObject({ ok: false, reason: 'unreachable' });
   });
 
-  // The message is ids-only, so there is no legitimate way to exceed the ceiling. The
-  // guard stays because the size check must run before the request, not because a valid
-  // message could reach it.
-  it('drops an oversized message instead of truncating it', async () => {
+  // Every wire field is now a uuid, an enum, a registry id, or a derived key, so no valid
+  // message can approach the ceiling. The guard stays as a transport invariant: the size
+  // check must precede the request regardless of what a future field addition allows.
+  it('checks the size ceiling before issuing the request', async () => {
+    configureQueue();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(enqueueMining(MSG)).resolves.toEqual({ ok: true, queued: true });
+    expect(Buffer.byteLength(wireBody(fetchMock), 'utf8')).toBeLessThan(1024);
+  });
+
+  // The load-bearing property of this transport: a third-party queue may carry pointers to
+  // facts, never facts. The corpus being mined demonstrably contains door codes and WiFi
+  // passwords, so id fields are held to uuid shape rather than to a length-capped charset.
+  // A charset cap was the first attempt and it failed on exactly these values: `4821` and
+  // `hunter2` are both id-shaped.
+  it.each([
+    ['4821', 'a door code'],
+    ['hunter2', 'a password'],
+    ['Tr0ub4dor-3', 'a password with separators'],
+    ['aGVsbG93b3JsZDEyMw', 'a base64-ish blob'],
+    ['wifi password is hunter2', 'a sentence'],
+  ])('refuses %s in property_id (%s)', async (value) => {
     configureQueue();
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const huge = { ...MSG, dedupe_key: 'x'.repeat(200 * 1024) } as MiningMessage;
-    await expect(enqueueMining(huge)).resolves.toMatchObject({ ok: false, queued: false });
+    await expect(enqueueMining({ ...MSG, property_id: value })).resolves.toEqual({
+      ok: false,
+      queued: false,
+      reason: 'invalid',
+      detail: 'property_id',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // The load-bearing property of this transport: a third-party queue may carry pointers
-  // to facts, never facts. The corpus being mined demonstrably contains door codes and
-  // WiFi passwords, so a caller that casts past the type must still be rejected.
-  it('refuses free-form content smuggled past the type', async () => {
+  it.each(['4821', 'hunter2', 'conv-1', 'aGVsbG93b3JsZDEyMw'])(
+    'refuses %s in source_id',
+    async (value) => {
+      configureQueue();
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(enqueueMining({ ...MSG, source_id: value })).resolves.toEqual({
+        ok: false,
+        queued: false,
+        reason: 'invalid',
+        detail: 'source_id',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  // A caller-supplied dedupe key was the last free-text channel on this message. It is no
+  // longer accepted at all, so supplying one cannot influence the wire.
+  it('ignores a caller-supplied dedupe key and derives its own', async () => {
     configureQueue();
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const smuggled = {
-      ...MSG,
-      dedupe_key: 'wifi password is hunter2 and the door code is 4821',
-    } as MiningMessage;
+    const smuggled = { ...MSG, dedupe_key: 'wifi password is hunter2, door code 4821' } as MiningMessage;
+    await expect(enqueueMining(smuggled)).resolves.toEqual({ ok: true, queued: true });
 
-    await expect(enqueueMining(smuggled)).resolves.toEqual({
-      ok: false,
-      queued: false,
-      reason: 'invalid',
-      detail: 'dedupe_key',
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
+    const raw = wireBody(fetchMock);
+    expect(raw).not.toContain('hunter2');
+    expect(raw).not.toContain('4821');
+    expect(JSON.parse(raw).body).toEqual(WIRE);
   });
 
   it('strips any extra property rather than serializing it', async () => {
@@ -160,27 +206,58 @@ describe('enqueueMining', () => {
     const extra = { ...MSG, payload: { secret: 'hunter2' }, note: 'door code 4821' } as MiningMessage;
     await expect(enqueueMining(extra)).resolves.toEqual({ ok: true, queued: true });
 
-    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    const raw = init.body as string;
+    const raw = wireBody(fetchMock);
     expect(raw).not.toContain('hunter2');
     expect(raw).not.toContain('4821');
-    expect(JSON.parse(raw).body).toEqual(MSG);
+    // Equality, not a subset check: anything the rebuild failed to drop shows up here.
+    expect(JSON.parse(raw).body).toEqual(WIRE);
   });
 
   it('rejects a field_id that is not in the registry', async () => {
     configureQueue();
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const bogus = { ...MSG, field_id: 'not_a_registry_field' } as MiningMessage;
-    await expect(enqueueMining(bogus)).resolves.toMatchObject({ reason: 'invalid', detail: 'field_id' });
+    await expect(enqueueMining({ ...MSG, field_id: 'not_a_registry_field' })).resolves.toMatchObject({
+      reason: 'invalid',
+      detail: 'field_id',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('rejects an unparseable timestamp', async () => {
     configureQueue();
     vi.stubGlobal('fetch', vi.fn());
-    const bad = { ...MSG, occurred_at: 'whenever' } as MiningMessage;
-    await expect(enqueueMining(bad)).resolves.toMatchObject({ reason: 'invalid', detail: 'occurred_at' });
+    await expect(enqueueMining({ ...MSG, occurred_at: 'whenever' })).resolves.toMatchObject({
+      reason: 'invalid',
+      detail: 'occurred_at',
+    });
+  });
+
+  // Date.parse accepts a bare number as a year, so a door code passes validation as a
+  // timestamp. Normalizing on the way out means it cannot reach the queue as typed.
+  it('normalizes the timestamp so a numeric value cannot ride out verbatim', async () => {
+    configureQueue();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(enqueueMining({ ...MSG, occurred_at: '4821' })).resolves.toEqual({ ok: true, queued: true });
+    expect(JSON.parse(wireBody(fetchMock)).body.occurred_at).toBe('4821-01-01T00:00:00.000Z');
+  });
+
+  it.each(['not_a_kind', ''])('rejects an unknown kind (%s)', async (kind) => {
+    configureQueue();
+    vi.stubGlobal('fetch', vi.fn());
+    await expect(
+      enqueueMining({ ...MSG, kind } as unknown as MiningMessage),
+    ).resolves.toMatchObject({ reason: 'invalid', detail: 'kind' });
+  });
+
+  it('rejects a signal outside the enum', async () => {
+    configureQueue();
+    vi.stubGlobal('fetch', vi.fn());
+    await expect(
+      enqueueMining({ ...MSG, signal: 'door code is 4821' } as unknown as MiningMessage),
+    ).resolves.toMatchObject({ reason: 'invalid', detail: 'signal' });
   });
 
   it('derives a stable dedupe key', () => {
