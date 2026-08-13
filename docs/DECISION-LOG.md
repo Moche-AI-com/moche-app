@@ -497,3 +497,32 @@ elapsed time. "Gate N" never implies "week N".
 - **Content:** field labels and staleness only, never a stored value — the digest is about
   credentials expiring, so it must not itself be a way to read one. No "all clear" email is
   ever sent; a weekly no-op trains hosts to ignore the sender.
+
+## D-0028 — `anon` cannot reach the Vault write path
+
+**Date:** 2026-08-13 (post-merge, production)
+**Status:** Applied
+
+The Supabase security advisor flagged `public.brain_values_set_secret` as callable by `anon`
+via `/rest/v1/rpc/`. Cause: Postgres grants `EXECUTE` to `PUBLIC` on every new function, so
+a `SECURITY DEFINER` function in an exposed schema is an unauthenticated endpoint unless the
+grant is revoked. The Gate 3 vault-envelope migration did not revoke it.
+
+Checked before acting rather than after: the function authorizes before it does anything
+else, reading the PostgREST `role` GUC for `service_role` and otherwise calling
+`can_edit_property`, which returns `false` for an unauthenticated caller (confirmed against
+production). So no secret was writable by `anon` and this was not a live hole.
+
+Revoked from `anon` and `PUBLIC` anyway. An authorization check inside the function should
+not be the only thing between an unauthenticated request and a Vault write. Recorded in
+`supabase-migrations-REVOKE-ANON-VAULT-WRITE.sql`; advisor re-run confirms the `anon`
+finding is gone and `authenticated`/`service_role` still hold `EXECUTE`.
+
+**Left in place, deliberately:** the remaining advisor `WARN`s are `SECURITY DEFINER`
+helpers callable by `authenticated` (`can_access_property`, `can_edit_property`,
+`is_account_member`, `is_account_owner`, `is_admin`, `account_conversation_usage`). These are
+RLS predicate helpers; each authorizes on `auth.uid()` internally and returns only a boolean
+or the caller's own aggregate. `SECURITY DEFINER` is what lets them read the membership
+tables an RLS policy needs to consult. The two `rls_enabled_no_policy` INFO items
+(`app_settings`, `host_otp_challenges`) are correct as-is: RLS on with no policy denies all
+client access, which is the intent for a server-only table.
