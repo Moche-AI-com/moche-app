@@ -1,10 +1,15 @@
-// Coverage Map view model (§7.5). Read-only, and last in the sequence by design: the
-// cards and the three action queues are the working surfaces, and a graph that competes
-// with them for attention makes coverage feel explored rather than closed.
+// Coverage Map view model. Read-only and hover-only: it is the orientation surface at
+// the top of the Brain page, so it must answer "where are my gaps?" without becoming a
+// second editing entry point with none of the editor's guardrails.
 //
 // The layout is computed here, not in the client component, for one reason: it must be
 // deterministic and testable. A force simulation looks organic and makes "did this field
 // move domains?" unanswerable in a test.
+//
+// Not-applicable fields are deliberately absent from `fields` — a grey dot that means
+// "you told us there is no pool" reads as a gap no matter how it is coloured. They are
+// reported as counts instead (per domain and overall) so the host can see that declaring
+// a feature absent removed work rather than hid it.
 
 import {
   REGISTRY_FIELDS,
@@ -12,6 +17,7 @@ import {
   scoredSet,
   type CompletenessDomain,
   type FieldStatus,
+  type RegistryField,
 } from './completeness';
 
 export type CoverageState = 'satisfied' | 'partial' | 'missing' | 'blocking';
@@ -34,10 +40,26 @@ export interface CoverageDomainNode {
   weight: number;
   fieldCount: number;
   gapCount: number;
+  /**
+   * Fields in this domain the host has taken out of scope. Counted, never plotted, and
+   * never subtracted from `pct` — the score already omits them from its denominator.
+   */
+  notApplicableCount: number;
   /** Unit-circle position of the hub, -1..1. */
   x: number;
   y: number;
   fields: CoverageFieldNode[];
+}
+
+/**
+ * A domain whose every field is out of scope. It has no hub on the map (there is nothing
+ * to plot) but the host still needs to see it marked N/A rather than silently missing,
+ * or "where did Parking go?" becomes a support question.
+ */
+export interface CoverageNotApplicableDomain {
+  domain: string;
+  label: string;
+  count: number;
 }
 
 export interface CoverageMapView {
@@ -45,6 +67,8 @@ export interface CoverageMapView {
   totals: Record<CoverageState, number>;
   /** Fields excluded because the host declared the feature absent. Shown as a count only. */
   notApplicableCount: number;
+  /** Domains that are entirely out of scope, so the UI can render an explicit "N/A". */
+  notApplicableDomains: CoverageNotApplicableDomain[];
 }
 
 /**
@@ -56,6 +80,14 @@ function stateFor(status: FieldStatus, hardBlock: boolean): CoverageState {
   if (status === 'satisfied') return 'satisfied';
   if (status === 'partial') return 'partial';
   return hardBlock ? 'blocking' : 'missing';
+}
+
+/**
+ * The universe the score could ever draw from, before this property's applicability
+ * answers narrow it. `scoredSet` minus this is what the host declared absent.
+ */
+function scorableFields(): RegistryField[] {
+  return REGISTRY_FIELDS.filter((f) => f.gap_weight > 0 && !f.system_section);
 }
 
 export function buildCoverageMap(input: {
@@ -96,6 +128,18 @@ export function buildCoverageMap(input: {
 
   const domainMeta = new Map(input.domains.map((d) => [d.domain, d]));
 
+  // Per-domain N/A, counted from the registry rather than inferred by subtraction so a
+  // section can render "N/A" against the specific fields it lost. Two ways a field lands
+  // here: its predicate was never asserted (out of the scored set), or it is in the
+  // scored set but the host marked that one field not_applicable.
+  const scoredIds = new Set(fields.map((f) => f.field_id));
+  const naByDomain = new Map<string, number>();
+  for (const f of scorableFields()) {
+    const na = !scoredIds.has(f.field_id) || input.statuses[f.field_id] === 'not_applicable';
+    if (!na) continue;
+    naByDomain.set(f.domain, (naByDomain.get(f.domain) ?? 0) + 1);
+  }
+
   const domains: CoverageDomainNode[] = domainOrder.map((domain, i) => {
     const angle = (i / domainOrder.length) * Math.PI * 2 - Math.PI / 2;
     const hubX = Math.cos(angle);
@@ -112,15 +156,27 @@ export function buildCoverageMap(input: {
       weight: meta?.weight ?? 0,
       fieldCount: nodes.length,
       gapCount: nodes.filter((n) => n.state !== 'satisfied').length,
+      notApplicableCount: naByDomain.get(domain) ?? 0,
       x: hubX,
       y: hubY,
       fields: nodes,
     };
   });
 
-  const notApplicableCount =
-    REGISTRY_FIELDS.filter((f) => f.gap_weight > 0 && !f.system_section).length - fields.length +
-    Object.values(input.statuses).filter((s) => s === 'not_applicable').length;
+  const plotted = new Set(domainOrder);
+  const notApplicableDomains: CoverageNotApplicableDomain[] = [];
+  // Registry order again, for the same reason the hubs use it: a list that reshuffles
+  // between visits makes the host re-read it every time.
+  for (const f of scorableFields()) {
+    if (plotted.has(f.domain)) continue;
+    if (notApplicableDomains.some((d) => d.domain === f.domain)) continue;
+    const count = naByDomain.get(f.domain) ?? 0;
+    if (count === 0) continue;
+    notApplicableDomains.push({ domain: f.domain, label: domainLabel(f.domain), count });
+  }
 
-  return { domains, totals, notApplicableCount: Math.max(0, notApplicableCount) };
+  let notApplicableCount = 0;
+  for (const n of naByDomain.values()) notApplicableCount += n;
+
+  return { domains, totals, notApplicableCount, notApplicableDomains };
 }

@@ -11,11 +11,30 @@ import { getAIProvider } from '@/lib/ai';
 import { chunkText } from '@/lib/ingest/chunk';
 import { bumpBrainVersion } from '@/lib/brain/cache';
 import { upsertNormalizedNode } from '@/lib/normalizer';
+import { isBrainSection, storageCategoryFor } from '@/lib/brain/taxonomy';
 import type { Database } from '@/lib/database.types';
 
 export interface BrainActionState {
   error?: string;
   ok?: boolean;
+}
+
+/**
+ * The unified Brain manager files knowledge by section (the registry taxonomy the host
+ * reads), not by `brain_category` (the storage enum). Translate here so the section id
+ * never has to be understood by the client and the enum never has to be understood by
+ * the host.
+ *
+ * The `section` column added by supabase-migrations-BRAIN-SECTIONS.sql is deliberately
+ * NOT written yet: that migration is unapplied, so a write would fail against production.
+ * Until the pipeline applies it, the section round-trips through the category map, which
+ * is exactly what `resolveSection` reads back. Writing `section` is the first change in
+ * the follow-up once the migration lands.
+ */
+function categoryFromForm(formData: FormData): string {
+  const section = String(formData.get('section') ?? '');
+  if (isBrainSection(section)) return storageCategoryFor(section);
+  return String(formData.get('category') ?? '');
 }
 
 // Create or update a manual Brain item. After saving, (re)build its chunks + embeddings
@@ -32,7 +51,7 @@ export async function saveBrainItemAction(
   const parsed = brainItemSchema.safeParse({
     title: formData.get('title'),
     body: formData.get('body') ?? '',
-    category: formData.get('category'),
+    category: categoryFromForm(formData),
     visibility: formData.get('visibility') ?? 'guest',
   });
   if (!parsed.success) {
