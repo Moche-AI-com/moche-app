@@ -294,6 +294,20 @@ describe('enqueueMining', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['Symbol.toPrimitive', { [Symbol.toPrimitive]: () => PROPERTY_ID }],
+      ['a boxed String', new String(PROPERTY_ID)],
+      ['a member-level toJSON', { toJSON: () => PROPERTY_ID }],
+    ])('refuses %s in place of a primitive', async (_label, value) => {
+      configureQueue();
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(
+        enqueueMining({ ...MSG, property_id: value } as unknown as MiningMessage),
+      ).resolves.toEqual({ ok: false, queued: false, reason: 'invalid', detail: 'property_id' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('refuses a toJSON hook on the message itself', async () => {
       configureQueue();
       const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
@@ -306,6 +320,93 @@ describe('enqueueMining', () => {
       expect(raw).not.toContain('hunter2');
       expect(raw).not.toContain('4821');
       expect(JSON.parse(raw).body).toEqual(WIRE);
+    });
+  });
+
+  // Round-four review reached the wire by replacing global prototype methods from inside a
+  // getter: a replaced `Set.prototype.has` approved a secret `kind`, a replaced
+  // `Date.prototype.toISOString` supplied `occurred_at`, and a replaced
+  // `Array.prototype.join` supplied `dedupe_key`. An attacker who can replace a global
+  // already has `fetch` and does not need this queue, so this is not the boundary the
+  // transport defends. It is still cheap to remove the dependency — literal `===`
+  // comparisons, template concatenation, and integer date arithmetic call nothing — so the
+  // wire path now uses none of these methods and these tests hold the line.
+  describe('does not depend on replaceable global methods', () => {
+    const poison = (owner: { prototype: Record<string, unknown> }, method: string, replacement: unknown) => {
+      const original = owner.prototype[method];
+      owner.prototype[method] = replacement;
+      return () => {
+        owner.prototype[method] = original;
+      };
+    };
+
+    it('does not consult Set.prototype.has when validating kind', async () => {
+      configureQueue();
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const restore = poison(Set as unknown as { prototype: Record<string, unknown> }, 'has', () => true);
+
+      try {
+        await expect(
+          enqueueMining({ ...MSG, kind: 'wifi password hunter2' } as unknown as MiningMessage),
+        ).resolves.toMatchObject({ ok: false, reason: 'invalid', detail: 'kind' });
+      } finally {
+        restore();
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('does not consult Date.prototype.toISOString when formatting occurred_at', async () => {
+      configureQueue();
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const restore = poison(Date as unknown as { prototype: Record<string, unknown> }, 'toISOString', () => 'door code 4821');
+
+      try {
+        await expect(enqueueMining(MSG)).resolves.toEqual({ ok: true, queued: true });
+      } finally {
+        restore();
+      }
+      expect(wireBody(fetchMock)).not.toContain('4821');
+      expect(JSON.parse(wireBody(fetchMock)).body).toEqual(WIRE);
+    });
+
+    it('does not consult Array.prototype.join when deriving the dedupe key', async () => {
+      configureQueue();
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const restore = poison(Array as unknown as { prototype: Record<string, unknown> }, 'join', () => 'hunter2');
+
+      try {
+        await expect(enqueueMining(MSG)).resolves.toEqual({ ok: true, queued: true });
+      } finally {
+        restore();
+      }
+      expect(wireBody(fetchMock)).not.toContain('hunter2');
+      expect(JSON.parse(wireBody(fetchMock)).body).toEqual(WIRE);
+    });
+  });
+
+  // The ISO formatter is hand-rolled arithmetic, which is only worth doing if it is exactly
+  // right. Cross-checked against the platform implementation across eras, leap years, and
+  // the pre-1970 negative-epoch case that naive floor division gets wrong.
+  describe('timestamp formatting matches the platform', () => {
+    it.each([
+      '1970-01-01T00:00:00.000Z',
+      '1969-07-20T20:17:40.000Z',
+      '1900-03-01T23:59:59.999Z',
+      '2000-02-29T12:00:00.500Z',
+      '2024-02-29T00:00:00.000Z',
+      '2026-06-01T12:00:00.000Z',
+      '2100-12-31T23:59:59.001Z',
+      '2400-01-01T00:00:00.000Z',
+    ])('formats %s identically to Date.prototype.toISOString', async (iso) => {
+      configureQueue();
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(enqueueMining({ ...MSG, occurred_at: iso })).resolves.toEqual({ ok: true, queued: true });
+      expect(JSON.parse(wireBody(fetchMock)).body.occurred_at).toBe(new Date(iso).toISOString());
     });
   });
 

@@ -416,6 +416,19 @@ elapsed time. "Gate N" never implies "week N".
   only if it is already a primitive string, and returns the object that will be serialized.
   The two responsibilities are deliberately not separable — a validate-then-build split is
   precisely what the attack exploited. The suite now contains that attack.
+- **No replaceable global on the wire path (fourth correction):** re-verification then
+  reached the wire without touching the message at all, by replacing global prototype
+  methods from inside a getter — a replaced `Set.prototype.has` approved a secret `kind`, a
+  replaced `Date.prototype.toISOString` supplied `occurred_at`, a replaced
+  `Array.prototype.join` supplied `dedupe_key`. **Scope judgment:** an attacker who can
+  replace a global already has `fetch` and does not need this queue, so this is not the
+  boundary the transport defends, and treating it as one would be security theater. It was
+  cheap to remove the dependency anyway: enum membership is now literal `===` comparison,
+  the dedupe key is template concatenation, and the timestamp is formatted by integer
+  arithmetic (cross-checked against the platform across eras, leap years, and the pre-1970
+  negative-epoch case). A final `typeof` sweep asserts every wire member is a primitive
+  string before the function returns. The residual risk that remains is in-process arbitrary
+  code execution, which is out of scope for a serialization boundary.
 - **`too_large` is unreachable by construction:** with every member bounded, no input can
   approach the 128 KiB ceiling. The test asserts the bound rather than the branch, and fails
   first if a future field makes the branch reachable again. Why an enum for `signal`: the consumer branches
