@@ -109,6 +109,28 @@ const RULES: readonly Rule[] = [
     re: new RegExp(`(?<!\\b${NOT_SECRET_QUALIFIER}\\s)(?<!\\b${NOT_SECRET_QUALIFIER}-)\\b${SECRET_NOUN}${LINK}(${BARE_VALUE})`, 'gi'),
     group: 1,
   },
+  // REPAIR RULE — a credential that survived a PREVIOUS, buggy redaction pass.
+  //
+  // lib/ai/redaction.ts used to rewrite `<label> <next-token>` as `<label>:
+  // [redacted]`, which consumed the *filler* word rather than the value. Real host
+  // copy came out as `the password: [redacted] is Dennis2026!` — a redaction marker
+  // sitting next to an intact secret. Those strings are durable: they were written
+  // into `answer_cache` and `messages`, and both outlive the deploy that fixes the
+  // regex.
+  //
+  // Rules 1-3 above cannot clean them, because the token immediately after the noun
+  // is now the marker itself and `isNotACredential` correctly refuses to re-redact a
+  // bracketed token. So this rule matches a noun followed by ANY known marker and
+  // then a real value, and drops the trailing value. It is the reason a poisoned
+  // cache row is repaired on read instead of requiring a purge to stop leaking.
+  {
+    label: 'post_marker_leak',
+    re: new RegExp(
+      `${SECRET_NOUN}\\s*[:=-]?\\s*(?:\\[redacted\\]|\\[stored securely[^\\]]*\\])${LINK}(${VALUE})`,
+      'gi',
+    ),
+    group: 1,
+  },
   // A labelled SSID is not a secret by registry typing (wifi_network_name is
   // guest_after_verification, not stay_scoped_secret), so it is NOT redacted.
   // Listed here only to document the deliberate omission.
@@ -141,7 +163,9 @@ export function redactCredentials(input: string): RedactionResult {
       // Idempotence: a second pass must not chew into a placeholder it already
       // wrote. The placeholder's own leading token ('[stored') is VALUE-shaped,
       // so this check is load-bearing, not defensive decoration.
-      if (match.includes(REDACTION_PLACEHOLDER)) return match;
+      // The repair rule below deliberately matches text that ALREADY contains a
+      // marker, so it must be exempt from the idempotence guard.
+      if (rule.label !== 'post_marker_leak' && match.includes(REDACTION_PLACEHOLDER)) return match;
       if (isNotACredential(value)) return match;
       fired.add(rule.label);
       // Rebuild the match with the value swapped out, so the surrounding prose
@@ -178,6 +202,19 @@ function isNotACredential(value: string): boolean {
   // A sentence fragment, not a token.
   if (/\s/.test(bare) && bare.split(/\s+/).length > 3) return true;
   return false;
+}
+
+/**
+ * True when `value` looks like an actual credential rather than ordinary prose.
+ *
+ * Exported so `lib/ai/redaction.ts` decides "secret or sentence?" with exactly the
+ * same rules as this module instead of forking the judgement. That fork is what
+ * produced the leak this guard exists to prevent: two redactors disagreeing about
+ * what a value is meant that one of them mangled the sentence and left the secret in
+ * place.
+ */
+export function looksLikeCredentialValue(value: string): boolean {
+  return !isNotACredential(value);
 }
 
 /**

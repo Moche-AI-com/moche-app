@@ -107,3 +107,52 @@ describe('containsLikelyPII', () => {
     expect(containsLikelyPII('the wifi works great')).toBe(false);
   });
 });
+
+// --- Regression: the production Wi-Fi leak (see BUG HISTORY in redaction.ts) ---
+//
+// The old SECRET_LABEL_RE consumed the filler word instead of the value, so a real
+// host sentence came out as a [redacted] marker printed next to an intact password,
+// and the SSID sentence was destroyed. These tests pin both halves of the fix.
+describe('redactPII — Wi-Fi leak regression', () => {
+  const LEAKY = 'The WiFi network name is CapeHouse-Guest and the password is Dennis2026!';
+
+  it('removes the password value, not the filler word', () => {
+    const out = redactPII(LEAKY);
+    expect(out).not.toContain('Dennis2026');
+    expect(out).toMatch(/password: \[redacted\]/i);
+  });
+
+  it('leaves the network name (SSID) intact — it is not a secret by registry typing', () => {
+    const out = redactPII(LEAKY);
+    expect(out).toContain('CapeHouse-Guest');
+    expect(out).toContain('network name');
+  });
+
+  it('does not mangle the sentence around the SSID', () => {
+    // The old pattern produced "The WiFi: [redacted] name is CapeHouse-Guest".
+    expect(redactPII(LEAKY)).not.toMatch(/wi-?fi:\s*\[redacted\]/i);
+  });
+
+  it('repairs text already mangled by the previous buggy pattern', () => {
+    // Exactly what production wrote into answer_cache and messages.
+    const mangled = 'The WiFi: [redacted] network name is CapeHouse-Guest and the password: [redacted] is Dennis2026!';
+    const out = redactPII(mangled);
+    expect(out).not.toContain('Dennis2026');
+  });
+
+  it('repairs the no-filler mangled variant too', () => {
+    const out = redactPII('the password: [redacted] Dennis2026!');
+    expect(out).not.toContain('Dennis2026');
+  });
+
+  it('keeps prose answers usable instead of masking them', () => {
+    const out = redactPII('The door code is on the arrival card.');
+    expect(out).toContain('arrival card');
+    expect(out).not.toContain('[redacted]');
+  });
+
+  it('is idempotent', () => {
+    const once = redactPII(LEAKY);
+    expect(redactPII(once)).toBe(once);
+  });
+});

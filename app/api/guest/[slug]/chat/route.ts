@@ -86,11 +86,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     conversationId = (conv as { id: string }).id;
   }
 
-  // Load recent history for context.
+  // Load RECENT history for context.
+  //
+  // This must be ordered DESCENDING and reversed. Ordering ascending with a LIMIT
+  // returns the OLDEST 12 rows, which means the "recent history" window freezes on
+  // the opening turns of the stay and never advances. The concierge then re-reads
+  // the same early exchange as its most recent context on every single turn, so
+  // whatever was asked first (in production: the Wi-Fi question) got restated on top
+  // of every later answer — including unrelated ones like "is early check-in
+  // possible" and "como estas" — and those polluted answers were then cached.
   const { data: prior } = await admin
-    .from('messages').select('role, content').eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true }).limit(12);
+    .from('messages').select('role, content, created_at').eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false }).limit(12);
   const history: ChatMessage[] = (prior ?? [])
+    .slice()
+    .reverse()
     .filter((m) => m.role === 'guest' || m.role === 'assistant')
     .map((m) => ({ role: m.role === 'guest' ? 'user' : 'assistant', content: m.content }));
 
