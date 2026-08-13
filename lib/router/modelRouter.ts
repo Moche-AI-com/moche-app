@@ -151,6 +151,11 @@ async function openrouterGenerate(
   // than risk sending it — the caller falls back to the in-house provider.
   const redacted = redactMessages(messages);
   assertNoResidualPII(redacted);
+  // Resolved before the request is built, not inline in the body, so a policy refusal is
+  // visibly a pre-flight check rather than something that happens to throw during
+  // argument evaluation. Either way no request is issued, but only one of those reads as
+  // deliberate to the next person who edits this call.
+  const provider = providerBlock(serverEnv);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -172,7 +177,7 @@ async function openrouterGenerate(
       max_tokens: opts?.maxTokens ?? 600,
       // Provider-level hardened ZDR restriction per OpenRouter's API (header + body,
       // belt & braces). See ZDR_PROVIDER_RESTRICTION for the rationale of each flag.
-      provider: providerBlock(serverEnv),
+      provider,
     }),
     signal: AbortSignal.timeout(30_000),
   });

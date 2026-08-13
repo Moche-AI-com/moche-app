@@ -330,6 +330,13 @@ elapsed time. "Gate N" never implies "week N".
 - **Why env cannot extend:** an allowlist whose contents can be widened from a dashboard is
   not an allowlist. The zero-retention property is a claim about specific providers we
   reviewed; a new entry added by env has been reviewed by nobody.
+- **`provider.only` is never omitted (corrected pre-merge):** the first implementation
+  dropped `only` when the env named no reviewed provider, which handed provider selection
+  back to OpenRouter's own ZDR classification — the single condition this allowlist exists
+  to backstop — and still issued the request. Now an unset env pins the full reviewed set,
+  and an env naming only unreviewed providers raises `ProviderIneligibleError` before any
+  request is built. Independent §0.6 verification caught this; the test that codified the
+  old behavior was replaced with one asserting no request leaves at all.
 - **Request shape:** `provider: {require_parameters: true, zdr: true, data_collection: 'deny',
   allow_fallbacks: true, sort: {by: 'latency', partition: 'model'}}`. `require_parameters`
   matters most: without it OpenRouter silently drops unsupported constraints, which would
@@ -385,6 +392,14 @@ elapsed time. "Gate N" never implies "week N".
   degradation §9.0a forbids.
 - **No fact content on a queue:** jobs carry ids only. The worker re-reads the candidate under
   its own authorization, so no vault-routed value transits a third-party queue.
+- **Enforced, not documented (corrected pre-merge):** the first mining-message type carried a
+  `payload: Record<string, unknown>` and serialized the caller's object verbatim, so
+  "ids only" was a convention a single call could break. The message is now a closed shape —
+  `kind`, `property_id`, `source_id`, `dedupe_key`, `occurred_at`, optional registry
+  `field_id`, and a `signal` enum — validated against an identifier pattern and the field
+  registry, and rebuilt field by field before serialization so a caller that casts past the
+  type still cannot put content on the wire. Why an enum for `signal`: the consumer branches
+  on it, and an enum cannot carry a fact value. Independent §0.6 verification caught this.
 
 ## D-0024 — Stripe Billing Meters ship as a flagged scaffold with no live price
 

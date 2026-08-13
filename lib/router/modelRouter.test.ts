@@ -293,7 +293,10 @@ describe('routedCompletion', () => {
     expect(res.text).not.toBe('external-answer');
   });
 
-  it('drops `only` when no provider is reviewed, keeping the zdr filters', async () => {
+  // The failure this replaces: an all-unreviewed provider env used to drop `only` and
+  // still send the request, letting OpenRouter pick any endpoint its own ZDR
+  // classification accepted. No request may leave at all in that state.
+  it('issues no request when no configured provider is reviewed', async () => {
     const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
@@ -301,8 +304,40 @@ describe('routedCompletion', () => {
       OPENROUTER_PROVIDER_ALLOWLIST: 'some-random-host',
     });
 
+    const res = await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.text).not.toBe('external-answer');
+  });
+
+  it('always pins `only` on the outbound request', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
+
     await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
-    expect(lastBody(fetchMock).provider).not.toHaveProperty('only');
+    const provider = lastBody(fetchMock).provider as { only?: string[] };
+    expect(provider.only).toEqual(['azure', 'google-vertex', 'openai', 'anthropic']);
+  });
+
+  // Restored coverage: the pre-allowlist suite asserted this on the concierge tier,
+  // which is now allowlist-governed and de-duplicated by parseAllowlist. The
+  // primary-plus-fallbacks path still exists for every other tier, and a duplicate slug
+  // there wastes a retry on a model that already failed.
+  it('never sends a duplicate slug when a per-tier override equals a fallback', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({
+      OPENROUTER_API_KEY: 'test-key',
+      // Deliberately set the primary to one of the extraction fallbacks.
+      OPENROUTER_MODEL_EXTRACTION: 'google/gemini-2.5-flash',
+    });
+
+    await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+
+    const models = lastBody(fetchMock).models as string[];
+    expect(models[0]).toBe('google/gemini-2.5-flash');
+    expect(new Set(models).size).toBe(models.length);
   });
 
   it('honors a per-tier env override', async () => {

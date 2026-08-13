@@ -344,7 +344,9 @@ later requires no migration.
 **Provider allowlist (D-0019):** §0.2 row 3 is no longer deferred. The reviewed model and
 provider sets are code-level; environment configuration may only narrow them. An allowlist
 that can be widened from a dashboard is not an allowlist, because the zero-retention claim is
-a statement about providers a human reviewed.
+a statement about providers a human reviewed. `provider.only` is always present on the
+outbound request: an unset env pins the full reviewed set, and an env naming only unreviewed
+providers refuses before the request is built rather than omitting the pin.
 
 **updates@ role (D-0020):** §0.2 row 6 is no longer deferred. Send-only product-mail identity,
 weekly digest only, never an inbox, an authority, or a commit identity.
@@ -366,7 +368,10 @@ are both deterministic.
 **Decision (D-0023):** Cloudflare Queues carries candidate mining; AWS workers execute
 approved brain writes. When the worker is unavailable, a guest-path write is refused, not run
 inline. Host-initiated and scheduled writes may run inline, where the latency is visible and
-owned. Jobs carry ids only, so no vault-routed value transits a third-party queue.
+owned. Jobs carry ids only, so no vault-routed value transits a third-party queue. The
+ids-only property is enforced by a closed message shape plus validation against the field
+registry, not by convention: the message is rebuilt field by field before serialization, so a
+caller cannot add content to it.
 
 ---
 

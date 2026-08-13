@@ -66,8 +66,13 @@ describe('routineGuestModelChain', () => {
 });
 
 describe('allowedProviderSlugs', () => {
-  it('is undefined when unset, leaving zdr/data_collection as the only filter', () => {
-    expect(allowedProviderSlugs(env('openai/gpt-4o-mini', ''))).toBeUndefined();
+  // Unset means "no operator preference", which pins the full reviewed set rather than
+  // omitting `only`. Omitting it would delegate provider choice to OpenRouter's own ZDR
+  // classification — the exact condition this allowlist exists to backstop.
+  it('pins the full reviewed set when unset', () => {
+    expect(allowedProviderSlugs(env('openai/gpt-4o-mini', ''))).toEqual([
+      ...REVIEWED_ZERO_RETENTION_PROVIDERS,
+    ]);
   });
 
   it('narrows to reviewed zero-retention providers', () => {
@@ -76,10 +81,13 @@ describe('allowedProviderSlugs', () => {
     ]);
   });
 
-  // Pinning nothing is safer than pinning an unreviewed provider, so an all-unreviewed
-  // list degrades to the zdr/data_collection filters rather than to that list.
-  it('returns undefined when no requested provider is reviewed', () => {
-    expect(allowedProviderSlugs(env('openai/gpt-4o-mini', 'some-random-host'))).toBeUndefined();
+  // An env naming only unreviewed providers is an operator error, not a preference.
+  // Failing closed is the only option that neither ignores the narrowing nor widens
+  // routing past review.
+  it('throws when no requested provider is reviewed', () => {
+    expect(() => allowedProviderSlugs(env('openai/gpt-4o-mini', 'some-random-host'))).toThrow(
+      ProviderIneligibleError,
+    );
   });
 
   it('accepts every slug in the reviewed provider set', () => {
@@ -114,8 +122,16 @@ describe('PROVIDER_ROUTING_POLICY', () => {
 });
 
 describe('providerBlock', () => {
-  it('omits `only` when no provider allowlist is configured', () => {
-    expect(providerBlock(env('openai/gpt-4o-mini'))).not.toHaveProperty('only');
+  it('always pins `only`, even with no env allowlist', () => {
+    expect(providerBlock(env('openai/gpt-4o-mini')).only).toEqual([
+      ...REVIEWED_ZERO_RETENTION_PROVIDERS,
+    ]);
+  });
+
+  it('refuses rather than emitting an unpinned block', () => {
+    expect(() => providerBlock(env('openai/gpt-4o-mini', 'some-random-host'))).toThrow(
+      ProviderIneligibleError,
+    );
   });
 
   it('pins `only` to the reviewed providers when configured', () => {

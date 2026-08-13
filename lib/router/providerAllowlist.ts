@@ -20,7 +20,10 @@ import 'server-only';
 //
 // Both fail CLOSED. An empty or unparseable model allowlist yields
 // `provider_ineligible` rather than a permissive default, which is the safe-default
-// behavior §0.2 row 3 declared binding until an allowlist was supplied.
+// behavior §0.2 row 3 declared binding until an allowlist was supplied. The provider
+// set is never omitted from the request: an unset env pins the full reviewed set, and
+// an env naming only unreviewed providers raises rather than falling back to "let
+// OpenRouter decide".
 
 // Model slugs reviewed for the routine-guest route. A slug may appear in the live
 // allowlist only if it also appears here, so an env typo or a copy-pasted slug from
@@ -97,15 +100,26 @@ export function routineGuestModelChain(env: AllowlistEnv): string[] {
   return chain;
 }
 
-// Provider slugs to pin on the request, or undefined to leave provider selection to
-// the zdr/data_collection filters alone. Unreviewed slugs are dropped rather than
-// erroring: a narrower-than-requested provider set is safe, a wider one is not.
-export function allowedProviderSlugs(env: AllowlistEnv): string[] | undefined {
+// Provider slugs to pin on the request. Always a non-empty set: `only` is never
+// omitted, because omitting it hands provider selection to OpenRouter's own ZDR
+// classification, which is the single condition this allowlist exists to backstop.
+//
+// Unset env means "no operator preference" and pins the full reviewed set. Env set but
+// nothing surviving the intersection is an operator error, not a preference, and it
+// throws: silently pinning the full set would ignore a deliberate narrowing, while
+// silently omitting `only` would widen routing past review. Both are worse than
+// refusing and falling back in-house.
+export function allowedProviderSlugs(env: AllowlistEnv): string[] {
   const requested = parseAllowlist(env.openrouterProviderAllowlist);
-  if (requested.length === 0) return undefined;
+  if (requested.length === 0) return [...REVIEWED_ZERO_RETENTION_PROVIDERS];
   const reviewed = new Set(REVIEWED_ZERO_RETENTION_PROVIDERS);
   const allowed = requested.filter((slug) => reviewed.has(slug));
-  return allowed.length > 0 ? allowed : undefined;
+  if (allowed.length === 0) {
+    throw new ProviderIneligibleError(
+      `no requested inference provider is reviewed as zero-retention: ${requested.join(', ')}`,
+    );
+  }
+  return allowed;
 }
 
 // The provider block from directive §1, verbatim in field names and values.
@@ -115,9 +129,10 @@ export function allowedProviderSlugs(env: AllowlistEnv): string[] | undefined {
 // always tried first and routing cannot drift onto a cheaper unreviewed alternative.
 // `partition: 'none'` would sort globally across the `models` array and defeat that.
 //
-// `allow_fallbacks: true` is safe here only because `zdr` + `data_collection` (and,
-// when configured, `only`) constrain what a fallback can be: a fallback is another
-// zero-retention endpoint for a reviewed model, never a different model.
+// `allow_fallbacks: true` is safe here only because `zdr`, `data_collection` and the
+// always-present `only` constrain what a fallback can be: a fallback is another
+// zero-retention endpoint of a reviewed provider for a reviewed model, never a
+// different model and never an unreviewed provider.
 export const PROVIDER_ROUTING_POLICY = {
   require_parameters: true,
   zdr: true,
@@ -126,9 +141,8 @@ export const PROVIDER_ROUTING_POLICY = {
   sort: { by: 'latency', partition: 'model' },
 } as const;
 
-export type ProviderBlock = typeof PROVIDER_ROUTING_POLICY & { only?: string[] };
+export type ProviderBlock = typeof PROVIDER_ROUTING_POLICY & { only: string[] };
 
 export function providerBlock(env: AllowlistEnv): ProviderBlock {
-  const only = allowedProviderSlugs(env);
-  return only ? { ...PROVIDER_ROUTING_POLICY, only } : { ...PROVIDER_ROUTING_POLICY };
+  return { ...PROVIDER_ROUTING_POLICY, only: allowedProviderSlugs(env) };
 }

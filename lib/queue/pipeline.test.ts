@@ -23,9 +23,10 @@ const MSG: MiningMessage = {
   kind: 'conversation_correction',
   property_id: 'ba52ae45-2126-4d50-871d-03f9722b9633',
   source_id: 'conv-1',
-  dedupe_key: 'conversation_correction:ba52ae45:conv-1:wifi_password',
+  dedupe_key: 'conversation_correction:ba52ae45:conv-1:checkout_time',
   occurred_at: '2026-06-01T12:00:00.000Z',
-  payload: { observed: 'guest says checkout is 11, brain says 10' },
+  field_id: 'checkout_time',
+  signal: 'guest_contradicted_stored_value',
 };
 
 const JOB: BrainWriteJob = {
@@ -117,13 +118,69 @@ describe('enqueueMining', () => {
     await expect(enqueueMining(MSG)).resolves.toMatchObject({ ok: false, reason: 'unreachable' });
   });
 
+  // The message is ids-only, so there is no legitimate way to exceed the ceiling. The
+  // guard stays because the size check must run before the request, not because a valid
+  // message could reach it.
   it('drops an oversized message instead of truncating it', async () => {
     configureQueue();
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const huge: MiningMessage = { ...MSG, payload: { blob: 'x'.repeat(200 * 1024) } };
-    await expect(enqueueMining(huge)).resolves.toEqual({ ok: false, queued: false, reason: 'too_large' });
+    const huge = { ...MSG, dedupe_key: 'x'.repeat(200 * 1024) } as MiningMessage;
+    await expect(enqueueMining(huge)).resolves.toMatchObject({ ok: false, queued: false });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The load-bearing property of this transport: a third-party queue may carry pointers
+  // to facts, never facts. The corpus being mined demonstrably contains door codes and
+  // WiFi passwords, so a caller that casts past the type must still be rejected.
+  it('refuses free-form content smuggled past the type', async () => {
+    configureQueue();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const smuggled = {
+      ...MSG,
+      dedupe_key: 'wifi password is hunter2 and the door code is 4821',
+    } as MiningMessage;
+
+    await expect(enqueueMining(smuggled)).resolves.toEqual({
+      ok: false,
+      queued: false,
+      reason: 'invalid',
+      detail: 'dedupe_key',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('strips any extra property rather than serializing it', async () => {
+    configureQueue();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const extra = { ...MSG, payload: { secret: 'hunter2' }, note: 'door code 4821' } as MiningMessage;
+    await expect(enqueueMining(extra)).resolves.toEqual({ ok: true, queued: true });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const raw = init.body as string;
+    expect(raw).not.toContain('hunter2');
+    expect(raw).not.toContain('4821');
+    expect(JSON.parse(raw).body).toEqual(MSG);
+  });
+
+  it('rejects a field_id that is not in the registry', async () => {
+    configureQueue();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const bogus = { ...MSG, field_id: 'not_a_registry_field' } as MiningMessage;
+    await expect(enqueueMining(bogus)).resolves.toMatchObject({ reason: 'invalid', detail: 'field_id' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unparseable timestamp', async () => {
+    configureQueue();
+    vi.stubGlobal('fetch', vi.fn());
+    const bad = { ...MSG, occurred_at: 'whenever' } as MiningMessage;
+    await expect(enqueueMining(bad)).resolves.toMatchObject({ reason: 'invalid', detail: 'occurred_at' });
   });
 
   it('derives a stable dedupe key', () => {
