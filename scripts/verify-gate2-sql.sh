@@ -34,9 +34,13 @@ psql -f "$REPO/supabase-migrations-GATE2-REGISTRY.sql"
 echo "== applying supabase-migrations-GATE2-REGISTRY-SEED.sql =="
 psql -f "$REPO/supabase-migrations-GATE2-REGISTRY-SEED.sql"
 
-echo "== idempotency: re-applying both =="
+echo "== applying supabase-migrations-BRAIN-SECTIONS.sql =="
+psql -f "$REPO/supabase-migrations-BRAIN-SECTIONS.sql"
+
+echo "== idempotency: re-applying all three =="
 psql -f "$REPO/supabase-migrations-GATE2-REGISTRY.sql"
 psql -f "$REPO/supabase-migrations-GATE2-REGISTRY-SEED.sql"
+psql -f "$REPO/supabase-migrations-BRAIN-SECTIONS.sql"
 
 echo "== contract tests =="
 "$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \

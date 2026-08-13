@@ -1,7 +1,22 @@
-import Link from 'next/link';
+// The Property Brain page, rebuilt as a single unified surface (§4).
+//
+// What was removed and why:
+//   - BrainGraph and BrainCards. Three editing entry points (graph node -> ?edit=,
+//     card -> ?card= filter, manager form) meant the same knowledge could be reached
+//     three ways, each with different defaults, and the card filter silently hid items
+//     from the list. One manager, one taxonomy.
+//   - The second "Coverage" card in the sidebar, which rendered brain-health categories
+//     under the same heading as the real Coverage Map with a different denominator. Two
+//     numbers called "coverage" on one page is worse than either alone.
+//   - "Manage local recommendations ->". Local Recs is its own tab (§4, §5).
+//   - "Next questions", replaced by Enhance Brain, which asks and files (§7).
+//
+// Layout order is deliberate: Coverage Map first (orientation), then the score and the
+// question queue (what to do), then the manager (doing it), then intake panels.
+
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { computeBrainHealth, computeCardHealth, BRAIN_CARDS, type CardKey } from '@/lib/brain/health';
+import { computeBrainHealth } from '@/lib/brain/health';
 import { computeReadiness } from '@/lib/brain/readiness';
 import {
   APPLICABILITY_LABELS,
@@ -13,13 +28,14 @@ import {
 import { loadCompleteness } from '@/lib/brain/values';
 import { serverEnv } from '@/lib/env';
 import { buildCoverageMap } from '@/lib/brain/coverage';
+import { BRAIN_SECTIONS, resolveSection, sectionLabel, storageCategoryFor } from '@/lib/brain/taxonomy';
+import type { Database } from '@/lib/database.types';
+import { brainSectionColumnExists } from '@/lib/brain/section-column';
 import { CompletenessPanel } from './CompletenessPanel';
 import { CoverageMap } from './CoverageMap';
 import { ImportProvenancePanel } from './ImportProvenancePanel';
-import { BRAIN_CATEGORY_LABELS } from '@/lib/constants';
-import type { BrainCategory } from '@/lib/constants';
 import { BrainManager } from './BrainManager';
-import { BrainCards } from './BrainCards';
+import { EnhanceBrainPanel, type EnhanceQuestion } from './EnhanceBrainPanel';
 import { IngestPanel } from './IngestPanel';
 import { AppliancePanel } from './AppliancePanel';
 
@@ -30,56 +46,73 @@ export default async function BrainPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: { card?: string; edit?: string };
+  searchParams: { edit?: string };
 }) {
-  const access = await requirePropertyAccess((await params).id);
+  const propertyId = (await params).id;
+  const access = await requirePropertyAccess(propertyId);
   const supabase = createClient();
 
-  const [{ data: items }, { data: settings }, { count: recCount }, { count: emergencyContacts }, { count: primaryContacts }, { count: pendingReviews }, { data: requirementStatuses }] =
-    await Promise.all([
-      supabase
-        .from('brain_items')
-        .select('id, title, body, category, visibility, status, source_type, updated_at, deleted_at')
-        .eq('property_id', (await params).id)
-        .is('deleted_at', null)
-        .order('category', { ascending: true })
-        .order('updated_at', { ascending: false }),
-      supabase.from('property_settings').select('confidence_threshold').eq('property_id', (await params).id).maybeSingle(),
-      supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).is('deleted_at', null),
-      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).eq('is_emergency', true),
-      supabase.from('property_contacts').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).eq('is_primary', true),
-      // Pending AI drafts count toward readiness: a property whose Brain is
-      // full but whose queue is untouched is not actually reviewed.
-      supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', (await params).id).eq('status', 'pending'),
-      supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', (await params).id),
-    ]);
+  // Whether brain_items.section exists yet. Until the BRAIN-SECTIONS migration is applied
+  // by the pipeline, grouping falls back to the storage-category map, which is lossy for
+  // the four sections that share the `core` bucket — see lib/brain/section-column.ts.
+  const hasSectionColumn = await brainSectionColumnExists(supabase);
 
-  const brainItems = (items ?? []).map((i) => ({ category: i.category, status: i.status, deleted_at: i.deleted_at, visibility: i.visibility }));
-  const health = computeBrainHealth(brainItems);
+  const [
+    { data: items },
+    { data: settings },
+    { count: pendingReviews },
+    { data: requirementStatuses },
+  ] = await Promise.all([
+    supabase
+      .from('brain_items')
+      .select(
+        hasSectionColumn
+          ? 'id, title, body, category, section, visibility, status, source_type, updated_at, deleted_at'
+          : 'id, title, body, category, visibility, status, source_type, updated_at, deleted_at',
+      )
+      .eq('property_id', propertyId)
+      .is('deleted_at', null)
+      .order('category', { ascending: true })
+      .order('updated_at', { ascending: false }),
+    supabase.from('property_settings').select('confidence_threshold').eq('property_id', propertyId).maybeSingle(),
+    // Pending AI drafts count toward readiness: a property whose Brain is full but whose
+    // queue is untouched is not actually reviewed.
+    supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('status', 'pending'),
+    supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', propertyId),
+  ]);
 
-  const cardHealth = computeCardHealth(brainItems, {
-    hasAddress: !!(access.property.address_line1 && access.property.address_line1.trim()),
-    recommendationCount: recCount ?? 0,
-    emergencyContactCount: emergencyContacts ?? 0,
-    primaryContactCount: primaryContacts ?? 0,
-    hasSettings: !!settings,
-    confidenceThresholdSet: !!settings && typeof settings.confidence_threshold === 'number',
-  });
+  // The select list is chosen at runtime by the section-column probe, so the generated
+  // row type does not apply. Narrow it here once rather than casting at each use.
+  type BrainRowsTable = Database['public']['Tables']['brain_items']['Row'];
+  type BrainRow = Pick<
+    BrainRowsTable,
+    'id' | 'title' | 'body' | 'category' | 'visibility' | 'status' | 'source_type' | 'deleted_at'
+  > & { section?: string | null };
+  const rows = (items ?? []) as unknown as BrainRow[];
+
+  const health = computeBrainHealth(
+    rows.map((i) => ({
+      category: i.category,
+      status: i.status,
+      deleted_at: i.deleted_at,
+      visibility: i.visibility,
+    })),
+  );
 
   // Registry completeness, the number the publish gate reads. Loaded with the
-  // request-scoped client so RLS applies: a co-host who cannot see the property
-  // cannot see its score either.
-  const completeness = await loadCompleteness(supabase, (await params).id);
+  // request-scoped client so RLS applies: a co-host who cannot see the property cannot
+  // see its score either.
+  const completeness = await loadCompleteness(supabase, propertyId);
   const { data: predicateRows } = await supabase
     .from('property_applicability')
     .select('predicate, applies')
-    .eq('property_id', (await params).id);
+    .eq('property_id', propertyId);
   const predicateAnswers = new Map((predicateRows ?? []).map((r) => [r.predicate, r.applies]));
 
   // Import provenance: source URL, fetch time, and the attestation the host gave.
   // security invoker RPC, so a caller who cannot see the jobs gets no rows.
   const { data: importRows } = await supabase.rpc('property_import_provenance', {
-    p_property_id: (await params).id,
+    p_property_id: propertyId,
   });
 
   const readiness = computeReadiness({
@@ -87,67 +120,78 @@ export default async function BrainPage({
     pendingReviews: pendingReviews ?? 0,
   });
 
-  // Optional card filter: when a card is opened, scope the editor list + add form to that card's categories.
-  const activeCard = BRAIN_CARDS.find((c) => c.key === (searchParams.card as CardKey | undefined));
-  const filterCategories = activeCard?.categories ?? [];
-  const filteredItems = activeCard && filterCategories.length > 0
-    ? (items ?? []).filter((i) => filterCategories.includes(i.category))
-    : (items ?? []);
-  const defaultCategory: BrainCategory = activeCard?.primaryCategory ?? 'core';
+  // Which sections a host may file under.
+  //
+  // The full 10-section taxonomy needs brain_items.section to persist the choice. Until
+  // that migration is applied, the only durable field is brain_category, and four
+  // sections (Connectivity, Access & security, Space details, Parking) share the `core`
+  // bucket — so "file this under Connectivity" would silently reappear under Space
+  // details on the next load. Rather than lie about where an item went, offer only the
+  // sections that round-trip through the storage enum unchanged, and say why.
+  const allSections = BRAIN_SECTIONS.map((s) => ({ value: s.id, label: s.label, blurb: s.blurb }));
+  const sections = hasSectionColumn
+    ? allSections
+    : allSections.filter((s) => resolveSection({ section: null, category: storageCategoryFor(s.value) }) === s.value);
+  const sectionNotice = hasSectionColumn
+    ? undefined
+    : 'Some sections are unavailable until a pending database update is applied. Knowledge you add now stays where you put it.';
+
+  // Enhance Brain queue: heaviest gaps first, blocking ones promoted client-side. Each
+  // gap already names its registry domain, which is also its section id, so placement is
+  // derived rather than guessed.
+  const enhanceQuestions: EnhanceQuestion[] = [...completeness.gaps]
+    .sort((a, b) => b.gapWeight - a.gapWeight)
+    .slice(0, 12)
+    .map((g) => ({
+      fieldId: g.fieldId,
+      label: g.label,
+      prompt: g.interviewPrompt || `What should guests know about ${g.label.toLowerCase()}?`,
+      section: sections.some((s) => s.value === g.domain) ? g.domain : 'space_details',
+      sectionLabel: sectionLabel(g.domain),
+      hardBlock: g.hardBlock,
+    }));
+
+  const coverage = buildCoverageMap({
+    statuses: completeness.statuses,
+    applicable: completeness.applicable,
+    domains: completeness.domains,
+  });
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '.5rem 0 1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="brain-page-head">
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Property Brain</h1>
-          <p className="faint" style={{ fontSize: '.85rem' }}>Health {cardHealth.score}/100 · {health.totalItems} items</p>
+          <p className="faint" style={{ fontSize: '.85rem' }}>
+            {readiness.label} · {completeness.pct}% guest-ready · {health.totalItems} items
+          </p>
         </div>
       </div>
 
       {!access.can.editBrain && (
-        <div className="alert alert-info" style={{ marginBottom: '1rem' }}>You have read-only access to this Brain.</div>
+        <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
+          You have read-only access to this Brain.
+        </div>
       )}
 
-      <BrainCards
-        propertyId={(await params).id}
-        propertyName={access.property.display_name}
-        propertySlug={access.property.slug}
-        health={cardHealth}
-        readiness={readiness}
-        canEdit={access.can.editBrain}
-        graphItems={(items ?? []).map((i) => ({
-          id: i.id,
-          title: i.title,
-          category: i.category,
-          visibility: i.visibility,
-          status: i.status,
-          sourceType: i.source_type,
-          bodyPreview: (i.body ?? '').slice(0, 160),
-        }))}
-        categoryLabels={BRAIN_CATEGORY_LABELS as Record<string, string>}
-      />
+      {/* Orientation first, full width. Hover-only: no node is clickable (§4, §9). */}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <CoverageMap view={coverage} />
+      </div>
 
       <div className="brain-shell">
         <div id="brain-editor" style={{ scrollMarginTop: '1rem' }}>
-          {activeCard && (
-            <div className="alert alert-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }} data-testid="card-filter-banner">
-              <span style={{ fontSize: '.85rem' }}>
-                <span aria-hidden>{activeCard.icon}</span> Editing <strong>{activeCard.title}</strong>
-              </span>
-              <Link href={`/dashboard/properties/${(await params).id}/brain`} className="btn btn-sm btn-ghost" data-testid="button-clear-card-filter">Show all</Link>
-            </div>
-          )}
           <BrainManager
-            propertyId={(await params).id}
+            propertyId={propertyId}
             canEdit={access.can.editBrain}
-            categories={Object.entries(BRAIN_CATEGORY_LABELS) as [BrainCategory, string][]}
-            defaultCategory={defaultCategory}
+            sections={sections}
+            notice={sectionNotice}
             editItemId={searchParams.edit}
-            items={filteredItems.map((i) => ({
+            items={rows.map((i) => ({
               id: i.id,
               title: i.title,
               body: i.body ?? '',
-              category: i.category,
+              section: resolveSection({ section: i.section ?? null, category: i.category }),
               visibility: i.visibility,
               status: i.status,
               sourceType: i.source_type,
@@ -155,14 +199,9 @@ export default async function BrainPage({
           />
         </div>
         <div className="brain-sidebar">
-          {access.can.editBrain && (
-            <Link href={`/dashboard/properties/${(await params).id}/recommendations`} className="btn btn-sm btn-ghost btn-block" style={{ marginBottom: '1rem' }}>
-              Manage local recommendations →
-            </Link>
-          )}
           <div style={{ marginBottom: '1rem' }}>
             <CompletenessPanel
-              propertyId={(await params).id}
+              propertyId={propertyId}
               canEdit={access.can.editBrain}
               pct={completeness.pct}
               threshold={COMPLETENESS_SHIP_THRESHOLD}
@@ -186,19 +225,6 @@ export default async function BrainPage({
                 hardBlock: g.hardBlock,
                 interviewPrompt: g.interviewPrompt,
               }))}
-              // Heaviest gaps first: the list is a work queue, not an inventory,
-              // so five entries that move the number most beats forty that do not.
-              topGaps={[...completeness.gaps]
-                .sort((a, b) => b.gapWeight - a.gapWeight)
-                .slice(0, 5)
-                .map((g) => ({
-                  fieldId: g.fieldId,
-                  label: g.label,
-                  domain: g.domain,
-                  status: g.status,
-                  hardBlock: g.hardBlock,
-                  interviewPrompt: g.interviewPrompt,
-                }))}
               predicates={APPLICABILITY_PREDICATES.map((p) => ({
                 predicate: p,
                 label: APPLICABILITY_LABELS[p] ?? p.replace(/_/g, ' '),
@@ -207,10 +233,19 @@ export default async function BrainPage({
               }))}
             />
           </div>
+          {access.can.editBrain && (
+            <div style={{ marginBottom: '1rem' }}>
+              <EnhanceBrainPanel
+                propertyId={propertyId}
+                questions={enhanceQuestions}
+                sections={sections}
+              />
+            </div>
+          )}
           {(importRows ?? []).length > 0 && (
             <div style={{ marginBottom: '1rem' }}>
               <ImportProvenancePanel
-                propertyId={(await params).id}
+                propertyId={propertyId}
                 canEdit={access.can.editBrain}
                 imports={(importRows ?? []).map((row) => ({
                   jobId: row.job_id,
@@ -225,31 +260,12 @@ export default async function BrainPage({
               />
             </div>
           )}
-          {access.can.editBrain && <IngestPanel propertyId={(await params).id} />}
+          {access.can.editBrain && <IngestPanel propertyId={propertyId} />}
           {access.can.editBrain && (
             <div style={{ marginTop: '1rem' }}>
-              <AppliancePanel propertyId={(await params).id} />
+              <AppliancePanel propertyId={propertyId} />
             </div>
           )}
-          <CoverageMap
-            view={buildCoverageMap({
-              statuses: completeness.statuses,
-              applicable: completeness.applicable,
-              domains: completeness.domains,
-            })}
-          />
-          <div className="card" style={{ padding: '1.25rem', marginTop: '1rem' }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: '.75rem' }}>Coverage</h3>
-            {health.categories.map((c) => (
-              <div key={c.category} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.82rem', padding: '.3rem 0', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ color: c.present ? 'var(--text)' : 'var(--text-faint)' }}>
-                  {c.required && <span style={{ color: 'var(--coral)' }}>* </span>}{c.label.split('(')[0].trim()}
-                </span>
-                <span className={c.present ? 'badge badge-teal' : 'faint'}>{c.count || '—'}</span>
-              </div>
-            ))}
-            <p className="faint" style={{ fontSize: '.72rem', marginTop: '.6rem' }}>* required to go live</p>
-          </div>
         </div>
       </div>
     </div>

@@ -631,6 +631,102 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 .brain-item-preview { color: var(--text-muted); font-size: .82rem; margin: .3rem 0 0; line-height: 1.45; }
 .brain-item-actions { display: flex; gap: .35rem; flex-shrink: 0; }
 
+/* Inline knowledge editor — the row expands in place rather than throwing the host
+   to a form at the top of the page and losing their scroll position. */
+.brain-item.is-editing { display: block; border-color: var(--teal-deep); background: var(--surface); }
+.brain-item-inline-form { display: block; }
+.brain-item-inline-head {
+  display: flex; justify-content: space-between; align-items: center; gap: .75rem;
+  margin-bottom: .6rem;
+}
+.brain-item-inline-head h4 { font-size: .9rem; margin: 0; font-family: var(--font-display); }
+.brain-group-actions { display: flex; align-items: center; gap: .35rem; flex-shrink: 0; }
+.brain-group-blurb { font-size: .75rem; margin: .55rem 0 0; max-width: 68ch; }
+
+/* Empty sections collapse into one chip row rather than ten placeholder cards. */
+.brain-empty-sections { border-style: dashed; }
+.brain-empty-heading { font-size: .95rem; margin: 0; font-family: var(--font-display); }
+.brain-empty-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.brain-empty-chip {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font: inherit; font-size: .78rem; color: var(--text-muted);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 999px; padding: .3rem .65rem;
+  transition: border-color var(--tr), color var(--tr), background var(--tr);
+}
+button.brain-empty-chip { cursor: pointer; }
+button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); background: var(--surface); }
+
+/* Enhance Brain — replaces the read-only “Next questions” list with a guided queue. */
+.enhance-panel { padding: 1.15rem 1.25rem; }
+.enhance-head { display: flex; align-items: center; gap: .5rem; }
+.enhance-head h3 { font-size: 1rem; margin: 0; font-family: var(--font-display); }
+.enhance-copy { font-size: .78rem; margin: .5rem 0 .85rem; max-width: 60ch; }
+.enhance-done { font-size: .82rem; margin: 0; }
+.enhance-form { margin-top: .25rem; }
+.enhance-question { font-size: .9rem; margin: 0 0 .75rem; line-height: 1.5; }
+.enhance-block-badge { margin-left: .45rem; vertical-align: middle; }
+.enhance-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .35rem; }
+
+/* ============================================================
+   Coverage Map — the orientation surface at the top of the Brain page.
+   Hover-only by contract (§4/§9): nodes get visual feedback and a live
+   read-out, and deliberately no click, href, or focus affordance.
+   ============================================================ */
+.coverage-map { padding: 1.25rem; }
+.coverage-map-toggle {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  gap: .75rem; flex-wrap: wrap;
+}
+.coverage-map-title { font-size: 1.05rem; font-weight: 600; font-family: var(--font-display); }
+.coverage-map-summary { font-size: .78rem; font-variant-numeric: tabular-nums; }
+.coverage-map-body { margin-top: 1rem; }
+.coverage-map-help { font-size: .75rem; margin: 0 0 .75rem; max-width: 58ch; }
+.coverage-map-canvas { position: relative; }
+.coverage-map-svg { width: 100%; height: auto; display: block; max-width: 560px; margin: 0 auto; }
+.coverage-hub-pct { font-size: 9px; fill: var(--text); }
+.coverage-hub-label { font-size: 9px; fill: var(--text-faint); }
+
+/* Opacity and radius only. Neither triggers layout, so a 53-node map stays at
+   frame budget while the pointer sweeps across it. */
+.coverage-cluster { transition: opacity .18s ease-out; }
+.coverage-cluster.is-dimmed { opacity: .3; }
+/* transform-box: fill-box so the scale pivots on the dot's own centre rather than the
+   SVG origin. Transform and opacity only — the CSS `r` property is not supported in
+   Firefox or Safari, so animating the radius would silently do nothing there. */
+.coverage-node {
+  cursor: default;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform .16s ease-out, opacity .16s ease-out;
+}
+.coverage-node.is-active { transform: scale(1.6); }
+.coverage-hub { cursor: default; transition: stroke .16s ease-out; }
+
+/* Reserved height: the read-out appears and disappears on hover, and a box that
+   collapses when empty would make the legend below it jump. */
+.coverage-readout { min-height: 2rem; display: flex; align-items: center; justify-content: center; }
+.coverage-readout-inner {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: .35rem .65rem; font-size: .78rem; pointer-events: none;
+}
+.coverage-legend { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .5rem; }
+.coverage-legend-item { display: inline-flex; align-items: center; gap: .35rem; font-size: .72rem; }
+.coverage-swatch { width: 9px; height: 9px; border-radius: 999px; display: inline-block; }
+.coverage-swatch-na {
+  background: transparent; border: 1px dashed var(--text-faint); border-radius: 2px;
+}
+.coverage-na-list { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--border); }
+.coverage-na-heading {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; margin: 0 0 .45rem;
+}
+.coverage-na-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.coverage-na-chip {
+  font-size: .72rem; padding: .2rem .5rem; border-radius: 999px;
+  border: 1px dashed var(--border); color: var(--text-muted);
+}
+.coverage-na-note { font-size: .7rem; margin: .5rem 0 0; max-width: 62ch; }
+
 @media (max-width: 900px) {
   /* Collapse the editor/sidebar shell — sidebar drops below the editor
      and stops being sticky so it doesn't float awkwardly on phones. */
@@ -651,7 +747,11 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   .dash-tab::after { transition: none; }
   .dash-tab:hover, .dash-tab:active { transform: none; }
   .rise-in { animation: none; opacity: 1; }
-  .brain-graph-node, .brain-graph-edge { transition: none !important; }
+  /* Coverage Map keeps its meaning (colour, dimming, the live read-out) but drops
+     every animated transition. Node growth is the only movement here and it is
+     purely decorative reinforcement of the read-out. */
+  .coverage-cluster, .coverage-node, .coverage-hub { transition: none !important; }
+  .coverage-node.is-active { transform: none; }
 }
 
 /* ============================================================

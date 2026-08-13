@@ -79,4 +79,58 @@ describe('buildCoverageMap', () => {
       expect(d.gapCount).toBe(d.fields.filter((f) => f.state !== 'satisfied').length);
     }
   });
+
+  it('attributes each not-applicable field to its own domain', () => {
+    // Nothing asserted, so every predicate-gated field is out of scope. The per-domain
+    // counts must add up to the headline count, or the UI shows a total it cannot explain.
+    const view = build(statusesWhere(() => 'missing'));
+    const perDomain =
+      view.domains.reduce((a, d) => a + d.notApplicableCount, 0) +
+      view.notApplicableDomains.reduce((a, d) => a + d.count, 0);
+    expect(perDomain).toBe(view.notApplicableCount);
+    expect(view.notApplicableCount).toBeGreaterThan(0);
+  });
+
+  it('lands a single not_applicable declaration in the domain that owns the field', () => {
+    const target = scoredSet([])[0];
+    const view = build(statusesWhere((id) => (id === target.field_id ? 'not_applicable' : 'satisfied')));
+    const owner = view.domains.find((d) => d.domain === target.domain);
+    expect(owner, target.domain).toBeDefined();
+    // Baseline for the same domain with the field answered instead of excluded.
+    const baseline = build(statusesWhere(() => 'satisfied')).domains.find((d) => d.domain === target.domain);
+    expect(owner!.notApplicableCount).toBe((baseline?.notApplicableCount ?? 0) + 1);
+  });
+
+  it('never lets a not-applicable field lower the domain percentage', () => {
+    // The whole point of N/A: excluding a field must leave the score alone, not dent it.
+    const target = scoredSet([])[0];
+    const answered = build(statusesWhere(() => 'satisfied'));
+    const excluded = build(statusesWhere((id) => (id === target.field_id ? 'not_applicable' : 'satisfied')));
+    for (const d of excluded.domains) {
+      const before = answered.domains.find((x) => x.domain === d.domain);
+      expect(d.pct, d.domain).toBeGreaterThanOrEqual(before?.pct ?? 0);
+    }
+  });
+
+  it('asserting a predicate moves its fields out of N/A and onto the map', () => {
+    const withoutPool = build(statusesWhere(() => 'missing'), []);
+    const withPool = build(statusesWhere(() => 'missing'), ['has_pool']);
+    const gated = REGISTRY_FIELDS.filter(
+      (f) => f.applicability === 'has_pool' && f.gap_weight > 0 && !f.system_section,
+    );
+    expect(gated.length).toBeGreaterThan(0);
+    const plotted = (v: ReturnType<typeof build>) => v.domains.flatMap((d) => d.fields.map((f) => f.fieldId));
+    for (const f of gated) {
+      expect(plotted(withoutPool)).not.toContain(f.field_id);
+      expect(plotted(withPool)).toContain(f.field_id);
+    }
+    expect(withPool.notApplicableCount).toBe(withoutPool.notApplicableCount - gated.length);
+  });
+
+  it('leaves notApplicableDomains empty while every domain still has a scored field', () => {
+    // No registry domain is fully predicate-gated today. This asserts that invariant so
+    // the list only ever appears when a domain genuinely drops out entirely.
+    const view = build(statusesWhere(() => 'missing'));
+    expect(view.notApplicableDomains).toEqual([]);
+  });
 });

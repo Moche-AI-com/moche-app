@@ -56,7 +56,6 @@ interface Props {
   blockedReason: string | null;
   domains: CompletenessDomainView[];
   hardBlocks: CompletenessGapView[];
-  topGaps: CompletenessGapView[];
   predicates: PredicateView[];
   /** Gating is only advisory unless the deployment enforces it. */
   enforced: boolean;
@@ -196,7 +195,6 @@ export function CompletenessPanel({
   blockedReason,
   domains,
   hardBlocks,
-  topGaps,
   predicates,
   enforced,
 }: Props) {
@@ -284,22 +282,6 @@ export function CompletenessPanel({
           </div>
         ))}
       </div>
-
-      {topGaps.length > 0 && (
-        <div style={{ marginTop: '1rem' }}>
-          <h4 style={{ fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.04em' }} className="faint">
-            Next questions
-          </h4>
-          <ol style={{ margin: '.4rem 0 0', paddingLeft: '1.1rem' }}>
-            {topGaps.map((g) => (
-              <li key={g.fieldId} style={{ fontSize: '.78rem', padding: '.2rem 0' }}>
-                {/* Registry copy, never model-authored. */}
-                {g.interviewPrompt}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
 
       <div style={{ marginTop: '1rem' }}>
         <h4 style={{ fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.04em' }} className="faint">
