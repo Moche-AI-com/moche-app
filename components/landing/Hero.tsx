@@ -76,15 +76,14 @@ export function Hero() {
           Elevate your stay, get more reviews, and handle fewer questions.
         </Reveal>
         <Reveal as="h1" eager delay={60} className={styles.heroTitle}>
-          Run every property from one workspace
+          Give every property its own concierge agent 
         </Reveal>
         <Reveal as="p" eager delay={130} className={styles.heroSubtitle}>
-          One place to answer guests, keep every property&apos;s details straight, and turn more
-          stays into five-star reviews.
+          One place for instant, trustworthy answers for every guest request &apos;s so you get fewer interruptions and more five-star reviews.
         </Reveal>
         <Reveal eager delay={200} className={styles.heroActions}>
           <Link href="/signup" className="btn btn-primary btn-lg">
-            Start free trial
+            Start free today
           </Link>
           <a
             href="mailto:hostspark.org@gmail.com?subject=Request%20a%20demo&body=Hi%20Moche-AI%20team%2C%0A%0AI%27d%20like%20to%20see%20a%20demo.%20Here%27s%20a%20bit%20about%20my%20properties%3A%0A%0A"
