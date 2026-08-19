@@ -24,7 +24,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 REGISTRY = ROOT / "field_registry.json"
-SEED = ROOT / "supabase-migrations-GATE2-REGISTRY-SEED.sql"
+SEED = ROOT / "supabase" / "migrations" / "supabase-migrations-GATE2-REGISTRY-SEED.sql"
 
 HEADER = """-- GENERATED FILE. Do not edit by hand.
 -- Source: field_registry.json (registry_version {version})
