@@ -29,18 +29,18 @@ echo "== stubbing the pieces the hosted schema already provides =="
 psql -f "$REPO/scripts/gate2-local-stubs.sql"
 
 echo "== applying supabase-migrations-GATE2-REGISTRY.sql =="
-psql -f "$REPO/supabase-migrations-GATE2-REGISTRY.sql"
+psql -f "$REPO/supabase/migrations/supabase-migrations-GATE2-REGISTRY.sql"
 
 echo "== applying supabase-migrations-GATE2-REGISTRY-SEED.sql =="
-psql -f "$REPO/supabase-migrations-GATE2-REGISTRY-SEED.sql"
+psql -f "$REPO/supabase/migrations/supabase-migrations-GATE2-REGISTRY-SEED.sql"
 
 echo "== applying supabase-migrations-BRAIN-SECTIONS.sql =="
-psql -f "$REPO/supabase-migrations-BRAIN-SECTIONS.sql"
+psql -f "$REPO/supabase/migrations/supabase-migrations-BRAIN-SECTIONS.sql"
 
 echo "== idempotency: re-applying all three =="
-psql -f "$REPO/supabase-migrations-GATE2-REGISTRY.sql"
-psql -f "$REPO/supabase-migrations-GATE2-REGISTRY-SEED.sql"
-psql -f "$REPO/supabase-migrations-BRAIN-SECTIONS.sql"
+psql -f "$REPO/supabase/migrations/supabase-migrations-GATE2-REGISTRY.sql"
+psql -f "$REPO/supabase/migrations/supabase-migrations-GATE2-REGISTRY-SEED.sql"
+psql -f "$REPO/supabase/migrations/supabase-migrations-BRAIN-SECTIONS.sql"
 
 echo "== contract tests =="
 "$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
