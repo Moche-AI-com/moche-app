@@ -79,7 +79,7 @@ export function Hero() {
           Give every property its own concierge agent 
         </Reveal>
         <Reveal as="p" eager delay={130} className={styles.heroSubtitle}>
-          One place for instant, trustworthy answers for every guest request &apos; so you get fewer interruptions and more five-star reviews.
+          One place for instant, trustworthy answers for every guest ; so you get fewer interruptions and more five-star reviews.
         </Reveal>
         <Reveal eager delay={200} className={styles.heroActions}>
           <Link href="/signup" className="btn btn-primary btn-lg">
