@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const migration = readFileSync(resolve(process.cwd(), 'supabase-migrations-EXTRAS-LIFECYCLE.sql'), 'utf8');
+const migration = readFileSync(resolve(process.cwd(), 'supabase', 'migrations', 'supabase-migrations-EXTRAS-LIFECYCLE.sql'), 'utf8');
 const guestOrdersRoute = readFileSync(
   resolve(process.cwd(), 'app/api/guest/[slug]/extras-orders/route.ts'),
   'utf8',
