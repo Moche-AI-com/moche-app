@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const root = resolve(__dirname, '../..');
+const root = resolve(__dirname, '../..', 'supabase', 'migrations');
 const importMigration = readFileSync(resolve(root, 'supabase-migrations-PROPERTY-IMPORT.sql'), 'utf8');
 const applianceMigration = readFileSync(resolve(root, 'supabase-migrations-APPLIANCES.sql'), 'utf8');
 
