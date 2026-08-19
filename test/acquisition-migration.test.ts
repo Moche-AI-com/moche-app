@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const migration = readFileSync(new URL('../supabase-migrations-ACQUISITION.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../supabase/migrations/supabase-migrations-ACQUISITION.sql', import.meta.url), 'utf8');
 
 describe('acquisition migration isolation', () => {
   it('defines all acquisition tables with property-scoped RLS', () => {
