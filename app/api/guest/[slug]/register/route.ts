@@ -126,7 +126,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       registered_at: now,
       guest_identity_id: identityId,
     } as never)
-    .eq('id', session.id);
+    .eq('id', session.sessionId);
   if (sessErr) {
     log.error('guest_register_session_update_failed', { propertyId: session.propertyId, err: String(sessErr) });
     return NextResponse.json({ error: 'Could not save your details. Please try again.' }, { status: 500 });
