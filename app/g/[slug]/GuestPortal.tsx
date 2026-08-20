@@ -1365,32 +1365,63 @@ const openPlaceDetail = useCallback((id: string) => {
     return () => { cancelled = true; };
   }, [hostPreview, slug]);
 
-  // Live polling: once the conversation has reached the host, poll for host replies (and
-  // any messages we haven't rendered) so the two-way chat updates without a refresh.
-  useEffect(() => {
-    if (hostPreview || !hasEscalation) return;
-    let cancelled = false;
-    async function poll() {
-      try {
-        const qs = lastSeenRef.current ? `?after=${encodeURIComponent(lastSeenRef.current)}` : '';
-        const res = await fetch(`/api/guest/${slug}/messages${qs}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        const incoming: { role: string; content: string; created_at: string }[] = json.messages ?? [];
-        if (cancelled || incoming.length === 0) return;
-        // Only surface HOST replies via polling — guest + assistant turns are already
-        // rendered optimistically by send()/sendToHost(). This avoids duplicates.
-        const hostReplies = incoming.filter((m) => m.role === 'host');
-        lastSeenRef.current = incoming[incoming.length - 1]?.created_at ?? lastSeenRef.current;
-        if (hostReplies.length > 0) {
-          setEntries((e) => [...e, ...hostReplies.map((m) => ({ role: 'host' as const, content: m.content }))]);
+// Live polling: once the conversation has reached the host, poll for host replies (and
+      // any messages we haven't rendered) so the two-way chat updates without a refresh, with
+      // pause-on-hidden and exponential backoff on failure.
+        useEffect(() => {
+      if (hostPreview || !hasEscalation) return;
+      let cancelled = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let backoffMs = 8000;
+      const pollInFlight = { current: false };
+      async function poll() {
+        if (cancelled || pollInFlight.current || document.hidden) {
+          schedule(backoffMs);
+          return;
         }
-      } catch { /* best-effort polling */ }
-    }
-    poll();
-    const id = setInterval(poll, 8000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [hostPreview, hasEscalation, slug]);
+        pollInFlight.current = true;
+        try {
+          const qs = lastSeenRef.current ? `?after=${encodeURIComponent(lastSeenRef.current)}` : '';
+          const res = await fetch(`/api/guest/${slug}/messages${qs}`);
+          if (!res.ok) throw new Error('poll_failed');
+          const json = await res.json();
+          const incoming: { role: string; content: string; created_at: string }[] = json.messages ?? [];
+          if (!cancelled && incoming.length > 0) {
+            // Only surface HOST replies via polling — guest + assistant turns are already
+            // rendered optimistically by send()/sendToHost(). This avoids duplicates.
+            const hostReplies = incoming.filter((m) => m.role === 'host');
+            lastSeenRef.current = incoming[incoming.length - 1]?.created_at ?? lastSeenRef.current;
+            if (hostReplies.length > 0) {
+              setEntries((e) => [...e, ...hostReplies.map((m) => ({ id: makeChatId('host'), role: 'host' as const, content: m.content }))]);
+            }
+          }
+          backoffMs = 8000;
+        } catch {
+          backoffMs = Math.min(backoffMs * 2, 60000);
+        } finally {
+          pollInFlight.current = false;
+          schedule(backoffMs);
+        }
+      }
+      function schedule(delay: number) {
+        if (cancelled) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(poll, delay);
+      }
+      function onVisibilityChange() {
+        if (!document.hidden) {
+          if (timer) clearTimeout(timer);
+          poll();
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      poll();
+      return () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      };
+    }, [hostPreview, hasEscalation, slug]);
 
   // Handle a sub-choice tap: fire a pre-formed query, focus the free-text input, or open
   // the "Message the host" composer.
