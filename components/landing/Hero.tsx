@@ -76,10 +76,10 @@ export function Hero() {
           Elevate your stay, get more reviews, and handle fewer questions.
         </Reveal>
         <Reveal as="h1" eager delay={60} className={styles.heroTitle}>
-          Run every property from one workspace
+          Give every guest a trusted property expert
         </Reveal>
         <Reveal as="p" eager delay={130} className={styles.heroSubtitle}>
-          One place to answer guests, keep every property&apos;s details straight, and turn more stays into five-star reviews.
+          Instant, trustworthy guest answers from the property details you approve.
         </Reveal>
         <Reveal eager delay={200} className={styles.heroActions}>
           <Link href="/signup" className="btn btn-primary btn-lg">
