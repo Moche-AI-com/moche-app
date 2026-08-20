@@ -2718,6 +2718,7 @@ function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => 
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     if (!consent) { setErr('Please tick the box to consent.'); return; }
     setBusy(true); setErr(null);
     try {
