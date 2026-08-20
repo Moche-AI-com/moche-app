@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
@@ -245,6 +245,7 @@ interface PlaceDetail {
 }
 
 interface ChatEntry {
+  id: string;
   role: 'guest' | 'assistant' | 'host';
   content: string;
   escalated?: boolean;
@@ -281,7 +282,8 @@ export interface ExtraOffer {
 
 /** Moche-AI dome/bell mark — inlined so the brand-scoped portal needs no external CSS. */
 function DomeMark({ size = 40 }: { size?: number }) {
-  const gid = 'gpBrandGrad';
+      const rawId = useId();
+    const gid = `gp-brand-${rawId.replace(/:/g, '')}`;
   return (
     <span aria-hidden style={{ width: size, height: size, display: 'grid', placeItems: 'center' }}>
       <svg viewBox="0 0 48 48" fill="none" width={size} height={size} role="img">
