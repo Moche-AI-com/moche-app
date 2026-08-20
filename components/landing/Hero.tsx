@@ -8,10 +8,7 @@ import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
 import pool from '@/public/premium/str-gallery-pool-deck.webp';
 import handoff from '@/public/premium/str-gallery-key-handoff.webp';
 import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
-import portal from '@/public/premium/portal-hero.webp';
-
-import { Reveal } from './Reveal';
-import styles from './landing.module.css';
+import portal from '@/public/premium/portal-hero.jpg';
 
 type FanFrameId =
   | 'beachhouse'
@@ -45,7 +42,6 @@ export function Hero() {
         {FAN.map((frame) => {
           const isLcp = frame.loading === 'lcp';
           const isExplicitlyLazy = frame.loading === 'lazy';
-
           return (
             <div
               key={frame.id}
@@ -56,7 +52,7 @@ export function Hero() {
                 src={frame.src}
                 alt=""
                 fill
-                sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 30vw"
+                sizes="(max-width: 430px) 31vw, (max-width: 700px) 22vw, 13vw"
                 className={styles.heroFanImage}
                 placeholder="blur"
                 priority={isLcp}
@@ -67,12 +63,10 @@ export function Hero() {
           );
         })}
       </div>
-
       <div className={`wrap ${styles.heroCopy}`}>
         <Reveal as="p" eager className={styles.heroKicker}>
           Elevate your stay, get more reviews, and handle fewer questions.
         </Reveal>
-
         <Reveal
           as="h1"
           id="hero-title"
@@ -82,7 +76,6 @@ export function Hero() {
         >
           Give every property its own concierge agent
         </Reveal>
-
         <Reveal
           as="p"
           eager
@@ -92,17 +85,15 @@ export function Hero() {
           One place for instant, trustworthy answers to every guest request—so
           you get fewer interruptions and more five-star reviews.
         </Reveal>
-
         <Reveal eager delay={200} className={styles.heroActions}>
           <Link href="/signup" className="btn btn-primary btn-lg">
             Start free today
           </Link>
-
-          <Link href="/demo" className="btn btn-ghost btn-lg">
+          {/* TODO(demo): restore href="/demo" once that route is built and functional. */}
+          <Link href="/signup" className="btn btn-ghost btn-lg">
             Request a demo
           </Link>
         </Reveal>
-
         <Reveal
           as="ul"
           eager
@@ -113,7 +104,6 @@ export function Hero() {
           <li>Answers from your property details</li>
           <li>Escalates when it is not sure</li>
         </Reveal>
-
         <Reveal
           as="p"
           eager
