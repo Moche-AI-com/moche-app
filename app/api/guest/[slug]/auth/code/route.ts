@@ -125,7 +125,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       const nextAttempts = link.code_attempt_count + 1;
       const update: Record<string, unknown> = { code_attempt_count: nextAttempts };
       if (nextAttempts >= VISIT_CODE_MAX_ATTEMPTS) update.code_revoked_at = new Date().toISOString();
-      await admin.from('guest_access_links').update(update).eq('id', link.id);
+      await admin.from('guest_access_links').update(update as never).eq('id', link.id);
     }
     return NextResponse.json(GENERIC_FAIL, { status: 400 });
   }
