@@ -245,7 +245,7 @@ interface PlaceDetail {
 }
 
 interface ChatEntry {
-  id: string;
+    id?: string;
   role: 'guest' | 'assistant' | 'host';
   content: string;
   escalated?: boolean;
