@@ -627,6 +627,8 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
     };
   }, [turnstileSiteKey]);
 
+  const verifyStartInFlight = useRef(false);
+  const verifyConfirmInFlight = useRef(false);
   async function start(e: React.FormEvent) {
     e.preventDefault();
     // If Turnstile is configured but hasn't produced a token yet, guide the guest
@@ -635,6 +637,8 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       setErr('Please complete the verification checkbox above, then tap Send code.');
       return;
     }
+    if (verifyStartInFlight.current) return;
+    verifyStartInFlight.current = true;
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await fetch(`/api/guest/${slug}/verify/start`, {
@@ -647,11 +651,13 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       setStep('code');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Something went wrong.');
-    } finally { setBusy(false); }
+        } finally { verifyStartInFlight.current = false; setBusy(false); }
   }
 
   async function confirm(e: React.FormEvent) {
     e.preventDefault();
+        if (verifyConfirmInFlight.current) return;
+    verifyConfirmInFlight.current = true;
     setBusy(true); setErr(null);
     try {
       const res = await fetch(`/api/guest/${slug}/verify/confirm`, {
@@ -663,7 +669,7 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       onVerified(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'That code is invalid or has expired.');
-    } finally { setBusy(false); }
+        } finally { verifyConfirmInFlight.current = false; setBusy(false); }
   }
 
   return (
