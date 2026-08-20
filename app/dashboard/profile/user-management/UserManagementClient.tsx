@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useFormState } from 'react-dom';
+import { memo, useActionState, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CAPABILITIES,
   DEFAULT_CAPABILITIES_FOR_ROLE,
   MEMBER_ROLES,
-  type CapabilityKey,
   type CapabilitySet,
   type InvitableRole,
 } from '@/lib/auth/member-capabilities';
@@ -46,36 +44,63 @@ export interface PendingInvite {
 
 const EMPTY_STATE: MemberActionState = {};
 
+const EMPTY_CAPABILITY_SET: CapabilitySet = {
+  can_edit_brain: false,
+  can_reply_guests: false,
+  can_receive_escalations: false,
+  can_resolve_maintenance: false,
+  can_view_analytics: false,
+};
+
+// Built once instead of per-render per-row.
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+function formatDate(date: string): string {
+  return dateFormatter.format(new Date(date));
+}
+
 function labelForRole(role: string): string {
   return MEMBER_ROLES.find((candidate) => candidate.id === role)?.label ?? role.replace(/_/g, ' ');
 }
 
-function capabilityLabels(capabilities: CapabilitySet): string[] {
-  return CAPABILITIES.filter((capability) => capabilities[capability.key]).map((capability) => capability.label);
-}
-
-function formatDate(date: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(date));
-}
-
-function CapabilityChips({ capabilities }: { capabilities: CapabilitySet }) {
-  const labels = capabilityLabels(capabilities);
-  return (
-    <div className="um-capability-chips" aria-label="Allowed actions">
-      {labels.length > 0 ? (
-        labels.map((label) => <span key={label} className="badge badge-teal">{label}</span>)
-      ) : (
-        <span className="faint" style={{ fontSize: '.82rem' }}>No actions enabled</span>
-      )}
-    </div>
+function buildCapabilitySet(enabled: boolean): CapabilitySet {
+  return CAPABILITIES.reduce<CapabilitySet>(
+    (set, capability) => ({ ...set, [capability.key]: enabled }),
+    { ...EMPTY_CAPABILITY_SET },
   );
 }
 
-function CapabilityControls({
+/* -------------------------------------------------------------------------- */
+/*  Presentational pieces                                                      */
+/* -------------------------------------------------------------------------- */
+
+const CapabilityChips = memo(function CapabilityChips({ capabilities }: { capabilities: CapabilitySet }) {
+  const labels = useMemo(
+    () => CAPABILITIES.filter((c) => capabilities[c.key]).map((c) => c.label),
+    [capabilities],
+  );
+  return (
+    <div className="um-capability-chips" aria-label="Allowed actions">
+      {labels.length > 0 ? (
+        labels.map((label) => (
+          <span key={label} className="badge badge-teal">
+            {label}
+          </span>
+        ))
+      ) : (
+        <span className="faint" style={{ fontSize: '.82rem' }}>
+          No actions enabled
+        </span>
+      )}
+    </div>
+  );
+});
+
+const CapabilityControls = memo(function CapabilityControls({
   capabilities,
   onChange,
 }: {
@@ -83,7 +108,10 @@ function CapabilityControls({
   onChange: (next: CapabilitySet) => void;
 }) {
   const masterRef = useRef<HTMLInputElement>(null);
-  const enabled = CAPABILITIES.filter((capability) => capabilities[capability.key]).length;
+  const enabled = useMemo(
+    () => CAPABILITIES.reduce((count, c) => count + (capabilities[c.key] ? 1 : 0), 0),
+    [capabilities],
+  );
   const allActions = enabled === CAPABILITIES.length;
 
   useEffect(() => {
@@ -98,21 +126,7 @@ function CapabilityControls({
           ref={masterRef}
           type="checkbox"
           checked={allActions}
-          onChange={(event) => {
-            const next = event.target.checked;
-            onChange(
-              CAPABILITIES.reduce<CapabilitySet>(
-                (set, capability) => ({ ...set, [capability.key]: next }),
-                {
-                  can_edit_brain: false,
-                  can_reply_guests: false,
-                  can_receive_escalations: false,
-                  can_resolve_maintenance: false,
-                  can_view_analytics: false,
-                },
-              ),
-            );
-          }}
+          onChange={(event) => onChange(buildCapabilitySet(event.target.checked))}
           aria-label="All actions"
         />
         <span>
@@ -125,8 +139,6 @@ function CapabilityControls({
           <label key={capability.key} className="um-toggle">
             <input
               type="checkbox"
-              name={capability.key}
-              value="true"
               checked={capabilities[capability.key]}
               onChange={(event) => onChange({ ...capabilities, [capability.key]: event.target.checked })}
             />
@@ -136,20 +148,67 @@ function CapabilityControls({
       </div>
     </fieldset>
   );
+});
+
+/** Shared inline-confirm pattern for destructive actions (revoke / remove). */
+function ConfirmButton({
+  label,
+  confirmLabel,
+  ariaLabel,
+  pending,
+}: {
+  label: string;
+  confirmLabel: string;
+  ariaLabel: string;
+  pending?: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  return confirming ? (
+    <div className="um-inline-confirm" role="group" aria-label={ariaLabel}>
+      <span>{label}</span>
+      <SubmitButton className="btn btn-danger btn-sm">{confirmLabel}</SubmitButton>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)} disabled={pending}>
+        Cancel
+      </button>
+    </div>
+  ) : (
+    <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirming(true)}>
+      {label.replace(' this invite?', '').replace(' access?', '')}
+    </button>
+  );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Invite form                                                                */
+/* -------------------------------------------------------------------------- */
+
 function InviteForm({ properties }: { properties: PropertyOption[] }) {
-  const [state, formAction] = useFormState<MemberActionState, FormData>(inviteMemberAction, EMPTY_STATE);
+  const [state, formAction, isPending] = useActionState<MemberActionState, FormData>(inviteMemberAction, EMPTY_STATE);
+  const formRef = useRef<HTMLFormElement>(null);
   const [role, setRole] = useState<InvitableRole>('co_host');
-  const [capabilities, setCapabilities] = useState<CapabilitySet>({
+  const [capabilities, setCapabilities] = useState<CapabilitySet>(() => ({
     ...DEFAULT_CAPABILITIES_FOR_ROLE.co_host,
-  });
+  }));
   const [allProperties, setAllProperties] = useState(true);
 
-  function chooseRole(nextRole: InvitableRole) {
+  const chooseRole = useCallback((nextRole: InvitableRole) => {
     setRole(nextRole);
     setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE[nextRole] });
-  }
+  }, []);
+
+  // Reset the form after a successful invite so stale state can't be resent.
+  useEffect(() => {
+    if (state.success) {
+      formRef.current?.reset();
+      setRole('co_host');
+      setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE.co_host });
+      setAllProperties(true);
+    }
+  }, [state.success]);
+
+  // Capabilities are controlled state, so serialize them explicitly — without
+  // this hidden input the server action receives no capability flags at all.
+  const serializedCapabilities = useMemo(() => JSON.stringify(capabilities), [capabilities]);
 
   return (
     <section className="um-invite card" aria-labelledby="invite-heading">
@@ -160,10 +219,13 @@ function InviteForm({ properties }: { properties: PropertyOption[] }) {
           <p>Choose their role, exact actions, and the properties they can help with.</p>
         </div>
       </div>
-      <form action={formAction}>
+      <form action={formAction} ref={formRef}>
         <FormMessage error={state.error} success={state.success} />
+        <input type="hidden" name="capabilities" value={serializedCapabilities} />
         <div className="field">
-          <label className="label" htmlFor="memberInviteEmail">Email address</label>
+          <label className="label" htmlFor="memberInviteEmail">
+            Email address
+          </label>
           <input
             className="input"
             id="memberInviteEmail"
@@ -173,21 +235,23 @@ function InviteForm({ properties }: { properties: PropertyOption[] }) {
             autoComplete="email"
             placeholder="name@example.com"
             required
+            disabled={isPending}
           />
         </div>
 
         <fieldset className="um-role-fieldset">
           <legend>Role</legend>
           <input type="hidden" name="role" value={role} />
-          <div className="um-role-grid">
+          <div className="um-role-grid" role="radiogroup" aria-label="Role">
             {MEMBER_ROLES.map((candidate) => {
               const selected = candidate.id === role;
               return (
                 <button
                   key={candidate.id}
                   type="button"
+                  role="radio"
+                  aria-checked={selected}
                   className={`um-role-card${selected ? ' is-selected' : ''}`}
-                  aria-pressed={selected}
                   onClick={() => chooseRole(candidate.id)}
                 >
                   <strong>{candidate.label}</strong>
@@ -216,13 +280,17 @@ function InviteForm({ properties }: { properties: PropertyOption[] }) {
           </label>
           {!allProperties && (
             <div className="um-property-options">
-              {properties.length > 0 ? properties.map((property) => (
-                <label key={property.id} className="um-toggle">
-                  <input type="checkbox" name="propertyIds" value={property.id} />
-                  <span>{property.name}</span>
-                </label>
-              )) : (
-                <p className="faint" style={{ margin: 0, fontSize: '.82rem' }}>Add a property before scoping access.</p>
+              {properties.length > 0 ? (
+                properties.map((property) => (
+                  <label key={property.id} className="um-toggle">
+                    <input type="checkbox" name="propertyIds" value={property.id} />
+                    <span>{property.name}</span>
+                  </label>
+                ))
+              ) : (
+                <p className="faint" style={{ margin: 0, fontSize: '.82rem' }}>
+                  Add a property before scoping access.
+                </p>
               )}
             </div>
           )}
@@ -233,10 +301,14 @@ function InviteForm({ properties }: { properties: PropertyOption[] }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Pending invites                                                            */
+/* -------------------------------------------------------------------------- */
+
 function PendingInviteItem({ invite }: { invite: PendingInvite }) {
-  const [resendState, resendAction] = useFormState<MemberActionState, FormData>(resendInviteAction, EMPTY_STATE);
-  const [revokeState, revokeAction] = useFormState<MemberActionState, FormData>(revokeInviteAction, EMPTY_STATE);
-  const [confirming, setConfirming] = useState(false);
+  const [resendState, resendAction, resending] = useActionState<MemberActionState, FormData>(resendInviteAction, EMPTY_STATE);
+  const [revokeState, revokeAction, revoking] = useActionState<MemberActionState, FormData>(revokeInviteAction, EMPTY_STATE);
+
   return (
     <li className="um-row">
       <div className="um-row-main">
@@ -244,7 +316,9 @@ function PendingInviteItem({ invite }: { invite: PendingInvite }) {
           <strong>{invite.email}</strong>
           <span className="badge">{labelForRole(invite.role)}</span>
         </div>
-        <p className="um-row-meta">Sent {formatDate(invite.createdAt)} · expires {formatDate(invite.expiresAt)}</p>
+        <p className="um-row-meta">
+          Sent {formatDate(invite.createdAt)} · expires {formatDate(invite.expiresAt)}
+        </p>
         <CapabilityChips capabilities={invite.capabilities} />
       </div>
       <div className="um-row-actions">
@@ -254,31 +328,53 @@ function PendingInviteItem({ invite }: { invite: PendingInvite }) {
         </form>
         <form action={revokeAction}>
           <input type="hidden" name="inviteId" value={invite.id} />
-          {confirming ? (
-            <div className="um-inline-confirm" role="group" aria-label={`Confirm revocation for ${invite.email}`}>
-              <span>Revoke this invite?</span>
-              <SubmitButton className="btn btn-danger btn-sm">Confirm revoke</SubmitButton>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)}>Cancel</button>
-            </div>
-          ) : (
-            <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirming(true)}>
-              Revoke
-            </button>
-          )}
+          <ConfirmButton
+            label="Revoke this invite?"
+            confirmLabel="Confirm revoke"
+            ariaLabel={`Confirm revocation for ${invite.email}`}
+            pending={revoking}
+          />
         </form>
-        <FormMessage error={resendState.error ?? revokeState.error} success={resendState.success ?? revokeState.success} />
+        <FormMessage
+          error={resendState.error ?? revokeState.error}
+          success={resendState.success ?? revokeState.success}
+        />
       </div>
     </li>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Members                                                                    */
+/* -------------------------------------------------------------------------- */
+
 function MemberItem({ member }: { member: ManagedMember }) {
   const [editing, setEditing] = useState(false);
   const [role, setRole] = useState(member.role as InvitableRole);
-  const [capabilities, setCapabilities] = useState<CapabilitySet>({ ...member.capabilities });
-  const [updateState, updateAction] = useFormState<MemberActionState, FormData>(updateMemberCapabilitiesAction, EMPTY_STATE);
-  const [removeState, removeAction] = useFormState<MemberActionState, FormData>(removeMemberAction, EMPTY_STATE);
-  const [confirming, setConfirming] = useState(false);
+  const [capabilities, setCapabilities] = useState<CapabilitySet>(() => ({ ...member.capabilities }));
+  const [updateState, updateAction] = useActionState<MemberActionState, FormData>(updateMemberCapabilitiesAction, EMPTY_STATE);
+  const [removeState, removeAction, removing] = useActionState<MemberActionState, FormData>(removeMemberAction, EMPTY_STATE);
+
+  // Collapse the editor once the save succeeds.
+  useEffect(() => {
+    if (updateState.success) setEditing(false);
+  }, [updateState.success]);
+
+  const handleRoleChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = event.target.value as InvitableRole;
+    setRole(next);
+    setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE[next] });
+  }, []);
+
+  const editorId = `member-editor-${member.profileId}`;
+  const serializedCapabilities = useMemo(() => JSON.stringify(capabilities), [capabilities]);
+  const propertySummary = useMemo(
+    () =>
+      member.properties.length > 0
+        ? member.properties.map((property) => property.name).join(' · ')
+        : 'No active property assignments',
+    [member.properties],
+  );
 
   return (
     <li className="um-row">
@@ -289,51 +385,49 @@ function MemberItem({ member }: { member: ManagedMember }) {
         </div>
         {member.name && <p className="um-row-meta">{member.email}</p>}
         <CapabilityChips capabilities={member.capabilities} />
-        <p className="um-row-meta">
-          {member.properties.length > 0
-            ? member.properties.map((property) => property.name).join(' · ')
-            : 'No active property assignments'}
-        </p>
+        <p className="um-row-meta">{propertySummary}</p>
       </div>
       <div className="um-row-actions">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing((open) => !open)}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          aria-expanded={editing}
+          aria-controls={editorId}
+          onClick={() => setEditing((open) => !open)}
+        >
           {editing ? 'Close editor' : 'Edit access'}
         </button>
         <form action={removeAction}>
           <input type="hidden" name="profileId" value={member.profileId} />
-          {confirming ? (
-            <div className="um-inline-confirm" role="group" aria-label={`Confirm removal for ${member.email}`}>
-              <span>Remove access?</span>
-              <SubmitButton className="btn btn-danger btn-sm">Confirm remove</SubmitButton>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)}>Cancel</button>
-            </div>
-          ) : (
-            <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirming(true)}>
-              Remove
-            </button>
-          )}
+          <ConfirmButton
+            label="Remove access?"
+            confirmLabel="Confirm remove"
+            ariaLabel={`Confirm removal for ${member.email}`}
+            pending={removing}
+          />
         </form>
         <FormMessage error={removeState.error} success={removeState.success} />
       </div>
 
       {editing && (
-        <form className="um-editor" action={updateAction}>
+        <form className="um-editor" id={editorId} action={updateAction}>
           <input type="hidden" name="profileId" value={member.profileId} />
+          <input type="hidden" name="capabilities" value={serializedCapabilities} />
           <div className="field">
-            <label className="label" htmlFor={`member-role-${member.profileId}`}>Role</label>
+            <label className="label" htmlFor={`member-role-${member.profileId}`}>
+              Role
+            </label>
             <select
               className="select"
               id={`member-role-${member.profileId}`}
               name="role"
               value={role}
-              onChange={(event) => {
-                const next = event.target.value as InvitableRole;
-                setRole(next);
-                setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE[next] });
-              }}
+              onChange={handleRoleChange}
             >
               {MEMBER_ROLES.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.label}
+                </option>
               ))}
             </select>
           </div>
@@ -345,6 +439,10 @@ function MemberItem({ member }: { member: ManagedMember }) {
     </li>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Shell                                                                      */
+/* -------------------------------------------------------------------------- */
 
 export function UserManagementClient({
   accountName,
@@ -366,9 +464,15 @@ export function UserManagementClient({
           Invite trusted people to <strong>{accountName}</strong>, then decide exactly how they can help.
         </p>
         <div className="um-summary" aria-label="Access summary">
-          <span><strong>{members.length}</strong> people with access</span>
-          <span><strong>{invites.length}</strong> pending invitation{invites.length === 1 ? '' : 's'}</span>
-          <span><strong>{properties.length}</strong> active propert{properties.length === 1 ? 'y' : 'ies'}</span>
+          <span>
+            <strong>{members.length}</strong> people with access
+          </span>
+          <span>
+            <strong>{invites.length}</strong> pending invitation{invites.length === 1 ? '' : 's'}
+          </span>
+          <span>
+            <strong>{properties.length}</strong> active propert{properties.length === 1 ? 'y' : 'ies'}
+          </span>
         </div>
       </header>
 
@@ -385,7 +489,9 @@ export function UserManagementClient({
             </div>
             {members.length > 0 ? (
               <ul className="um-list">
-                {members.map((member) => <MemberItem key={member.profileId} member={member} />)}
+                {members.map((member) => (
+                  <MemberItem key={member.profileId} member={member} />
+                ))}
               </ul>
             ) : (
               <div className="um-empty">
@@ -406,7 +512,9 @@ export function UserManagementClient({
             </div>
             {invites.length > 0 ? (
               <ul className="um-list">
-                {invites.map((invite) => <PendingInviteItem key={invite.id} invite={invite} />)}
+                {invites.map((invite) => (
+                  <PendingInviteItem key={invite.id} invite={invite} />
+                ))}
               </ul>
             ) : (
               <div className="um-empty">
@@ -419,6 +527,11 @@ export function UserManagementClient({
         <InviteForm properties={properties} />
       </div>
 
+      {/*
+        NOTE: <style jsx> requires styled-jsx (built into Next.js Pages Router,
+        opt-in for App Router). If these styles aren't applying in your App
+        Router setup, move this block to a CSS Module or global stylesheet.
+      */}
       <style jsx>{`
         .um-shell { max-width: 1160px; }
         .um-header { margin-bottom: 1.5rem; max-width: 760px; }
