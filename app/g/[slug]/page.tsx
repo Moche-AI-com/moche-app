@@ -66,7 +66,7 @@ export default async function GuestPortalPage({
     const { data: sess } = await admin
       .from('guest_access_sessions')
       .select('*')
-      .eq('id', session.id)
+      .eq('id', session.sessionId)
       .maybeSingle();
     initialRegistered = !!(sess as Record<string, unknown> | null)?.registered_at;
     guestName = session.guestDisplayName ?? null;
