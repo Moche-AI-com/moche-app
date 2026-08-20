@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Cormorant_Garamond, Inter } from 'next/font/google';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -5,6 +6,7 @@ import { getGuestSession } from '@/lib/guest/session';
 import { getPropertyAccess } from '@/lib/auth/guards';
 import { publicEnv } from '@/lib/env';
 import { GuestPortal } from './GuestPortal';
+import type { GuestExtraOffer } from './ExtrasWorkflow';
 
 // Luxury concierge typography: serif display for headings, clean sans for body.
 // Exposed as CSS variables so the brand-scoped portal styles can reference them.
@@ -12,76 +14,75 @@ const displaySerif = Cormorant_Garamond({
   subsets: ['latin'],
   weight: ['500', '600', '700'],
   variable: '--font-portal-serif',
-  display: 'swap',
 });
 const bodySans = Inter({
   subsets: ['latin'],
   variable: '--font-portal-sans',
-  display: 'swap',
 });
 
 export const dynamic = 'force-dynamic';
 
-// Never cache guest portal responses (per-guest, per-stay data).
-export const fetchCache = 'force-no-store';
+export const metadata: Metadata = {
+  title: 'Guest Portal',
+  // Guest portals are private per-stay surfaces; never index them.
+  robots: { index: false, follow: false },
+};
 
-export default async function GuestPortalPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function GuestPortalPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ token?: string }>;
+}) {
+  const { slug } = await params;
+  const { token } = await searchParams;
   const admin = createAdminClient();
 
-  // Only live properties expose a portal. Fetch public-safe branding only.
   const { data: property } = await admin
     .from('properties')
-    .select('id, display_name, slug, status, brand_primary, brand_accent, logo_url, cover_image_url, city, region, country')
-    .eq('slug', (await params).slug)
+    .select('id, slug, display_name, city, region, country, brand_primary, brand_accent, logo_url, cover_image_url, status')
+    .eq('slug', slug)
     .is('deleted_at', null)
     .maybeSingle();
-
   if (!property || property.status !== 'live') notFound();
 
-  // Add-on data (public-safe, per-property): the review-nudge config and the
-  // active guest extras. Both are host-curated and safe to expose to a guest of
-  // a live property. Fetched via the same admin client (RLS-bypassing) already used
-  // for the public portal render.
-  const [{ data: addonSettings }, { data: offers }] = await Promise.all([
-    admin
-      .from('property_settings')
-      .select('review_nudge_enabled, review_nudge_auto, review_url')
-      .eq('property_id', property.id)
-      .maybeSingle(),
-    admin
-      .from('guest_extras')
-      .select('id, title, description, price_text, cta_label, category, is_favorite, max_quantity, kind, option_label, options, unit_label, details')
-      .eq('property_id', property.id)
-      .eq('active', true)
-      // Matches the guest-facing order in lib/guest/extras.ts (P5-06). The app
-      // re-sorts anyway, so this is an index-friendly head start, not the source
-      // of truth. sort_order stays as the host's tiebreaker within a category.
-      .order('is_favorite', { ascending: false })
-      .order('category', { ascending: true, nullsFirst: false })
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true }),
-  ]);
-
-  const reviewNudge = {
-    enabled: !!addonSettings?.review_nudge_enabled && !!addonSettings?.review_url,
-    auto: !!addonSettings?.review_nudge_auto,
-    url: addonSettings?.review_url ?? null,
-  };
-  // Active offers are surfaced whenever the host has configured any — guest
-  // visibility is intentionally NOT gated (creating an offer is the host's opt-in).
-  const extraOffers = offers ?? [];
-
-  // If already verified for THIS property, start in the concierge view.
+  // If already verified for THIS property, skip code entry entirely.
   const session = await getGuestSession();
   const verified = !!session && session.propertyId === property.id;
 
   // Host bypass: a logged-in host (owner or co-host) of THIS property can open the
-  // portal on any device without the guest email/phone + Turnstile gate. They get a
-  // read-only preview of the guest concierge (no guest session, conversation, or
-  // escalation is created) via the host preview-chat endpoint. Only checked when the
-  // visitor isn't already a verified guest, so guest behavior is unchanged.
+  // portal on any device without the guest gate. Only checked when the visitor
+  // isn't already a verified guest, so guest behavior is unchanged.
   const hostAccess = verified ? null : await getPropertyAccess(property.id);
   const isHostPreview = !!hostAccess;
+
+  // Registration state decides between the registration form and the main menu.
+  // registered_at is a GUEST-PORTAL-V2 column; read via a loose cast until
+  // database.types.ts is regenerated after the migration lands.
+  let initialRegistered = false;
+  let guestName: string | null = null;
+  if (verified && session) {
+    const { data: sess } = await admin
+      .from('guest_access_sessions')
+      .select('*')
+      .eq('id', session.id)
+      .maybeSingle();
+    initialRegistered = !!(sess as Record<string, unknown> | null)?.registered_at;
+    guestName = session.guestDisplayName ?? null;
+  }
+
+  // Extras are loaded server-side only once a session exists (they are stay-scoped).
+  let offers: GuestExtraOffer[] = [];
+  if (verified) {
+    const { data } = await admin
+      .from('guest_extras')
+      .select('id, title, description, details, price_text, cta_label, category, max_quantity, kind, unit_label, option_label, options')
+      .eq('property_id', property.id)
+      .eq('active', true)
+      .order('sort_order', { ascending: true });
+    offers = (data ?? []) as GuestExtraOffer[];
+  }
 
   return (
     <GuestPortal
@@ -97,9 +98,10 @@ export default async function GuestPortalPage({ params }: { params: Promise<{ sl
       turnstileSiteKey={publicEnv.turnstileSiteKey}
       initialVerified={verified || isHostPreview}
       hostPreview={isHostPreview}
-      guestName={verified ? session!.guestDisplayName : null}
-      reviewNudge={reviewNudge}
-      extraOffers={extraOffers}
+      guestName={guestName}
+      initialRegistered={initialRegistered || isHostPreview}
+      extrasOffers={offers}
+      accessToken={typeof token === 'string' && token.length > 0 ? token : null}
     />
   );
 }
