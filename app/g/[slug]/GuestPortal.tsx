@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import {
   UtensilsCrossed, Compass, KeyRound, Sparkles, Wifi, Star, MessageCircle,
@@ -245,11 +245,18 @@ interface PlaceDetail {
 }
 
 interface ChatEntry {
+    id?: string;
   role: 'guest' | 'assistant' | 'host';
   content: string;
   escalated?: boolean;
   isEmergency?: boolean;
   places?: ChatPlaceRef[];
+}
+
+let chatIdCounter = 0;
+function makeChatId(prefix: string): string {
+  chatIdCounter += 1;
+  return `${prefix}-${Date.now()}-${chatIdCounter}`;
 }
 
 export interface ReviewNudgeConfig { enabled: boolean; auto: boolean; url: string | null }
@@ -281,7 +288,8 @@ export interface ExtraOffer {
 
 /** Moche-AI dome/bell mark — inlined so the brand-scoped portal needs no external CSS. */
 function DomeMark({ size = 40 }: { size?: number }) {
-  const gid = 'gpBrandGrad';
+      const rawId = useId();
+    const gid = `gp-brand-${rawId.replace(/:/g, '')}`;
   return (
     <span aria-hidden style={{ width: size, height: size, display: 'grid', placeItems: 'center' }}>
       <svg viewBox="0 0 48 48" fill="none" width={size} height={size} role="img">
@@ -625,6 +633,8 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
     };
   }, [turnstileSiteKey]);
 
+  const verifyStartInFlight = useRef(false);
+  const verifyConfirmInFlight = useRef(false);
   async function start(e: React.FormEvent) {
     e.preventDefault();
     // If Turnstile is configured but hasn't produced a token yet, guide the guest
@@ -633,6 +643,8 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       setErr('Please complete the verification checkbox above, then tap Send code.');
       return;
     }
+    if (verifyStartInFlight.current) return;
+    verifyStartInFlight.current = true;
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await fetch(`/api/guest/${slug}/verify/start`, {
@@ -645,11 +657,13 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       setStep('code');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Something went wrong.');
-    } finally { setBusy(false); }
+        } finally { verifyStartInFlight.current = false; setBusy(false); }
   }
 
   async function confirm(e: React.FormEvent) {
     e.preventDefault();
+        if (verifyConfirmInFlight.current) return;
+    verifyConfirmInFlight.current = true;
     setBusy(true); setErr(null);
     try {
       const res = await fetch(`/api/guest/${slug}/verify/confirm`, {
@@ -661,7 +675,7 @@ function VerifyGate({ slug, propertyName, turnstileSiteKey, onVerified }: { slug
       onVerified(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'That code is invalid or has expired.');
-    } finally { setBusy(false); }
+        } finally { verifyConfirmInFlight.current = false; setBusy(false); }
   }
 
   return (
@@ -972,6 +986,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [asked, setAsked] = useState(false);
+  const sendInFlight = useRef(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   // Guest UX pass — the guest's reading language, chosen from the Globe picker that
@@ -1070,17 +1085,18 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   }
 
   const send = useCallback(async (text: string) => {
-    if (!text.trim() || busy) return;
-    setAsked(true);
-    setSuggestions([]);
+    if (!text.trim() || busy || sendInFlight.current) return;     
+      sendInFlight.current = true;
+      setAsked(true);
+      setSuggestions([]);
     // Bring the conversation into view after a card-driven query.
     setTimeout(() => chatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
-    const nextEntries: ChatEntry[] = [...entries, { role: 'guest', content: text }];
+    const nextEntries: ChatEntry[] = [...entries, { id: makeChatId('guest'), role: 'guest', content: text }];
     setEntries(nextEntries);
     setInput('');
     setBusy(true);
     try {
-      // Hosts previewing their own portal hit the read-only host endpoint (keyed by
+             //Hosts previewing their own portal hit the read-only host endpoint (keyed by
       // property id) so no guest session/conversation/escalation is created. Real
       // guests use the verified guest chat endpoint (keyed by slug + session cookie).
       const res = hostPreview
@@ -1114,11 +1130,11 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             .filter((p: unknown): p is ChatPlaceRef => !!p && typeof p === 'object' && typeof (p as ChatPlaceRef).id === 'string')
             .slice(0, 4)
         : [];
-      setEntries((e) => [...e, { role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency, places }]);
+            setEntries((e) => [...e, { id: makeChatId('assistant'), role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency, places }]);
       setSuggestions(Array.isArray(json.suggestions) ? json.suggestions.slice(0, 3) : []);
     } catch (e) {
-      setEntries((prev) => [...prev, { role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
-    } finally { setBusy(false); }
+            setEntries((prev) => [...prev, { id: makeChatId('assistant'), role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
+                        } finally { sendInFlight.current = false; setBusy(false); }
   }, [busy, entries, hostPreview, propertyId, slug, language]);
 
   // Add-on: one-tap feedback. Records a private product_feedback row (guest path).
@@ -1163,7 +1179,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     setHostComposerError(null);
     if (hostPreview) {
       // Preview mode has no guest session; just simulate locally so hosts can see the UX.
-      setEntries((e) => [...e, { role: 'guest', content: trimmed, escalated: true }]);
+      setEntries((e) => [...e, { id: makeChatId('guest'), role: 'guest', content: trimmed, escalated: true }]);
       setHostComposerOpen(false);
       setHostMsg('');
       setHostSending(false);
@@ -1180,7 +1196,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not reach your host just now.');
-      setEntries((e) => [...e, { role: 'guest', content: trimmed, escalated: true }]);
+      setEntries((e) => [...e, { id: makeChatId('guest'), role: 'guest', content: trimmed, escalated: true }]);
       setHostComposerOpen(false);
       setHostMsg('');
     } catch (e) {
@@ -1286,7 +1302,8 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   // WS-5 — open the place-detail sheet and fetch the server-verified record for the
   // tapped chip. Host preview has no guest session, so it degrades to a friendly
   // "not verified" message rather than hitting the session-gated guest endpoint.
-  const openPlaceDetail = useCallback((id: string) => {
+  const placeDetailAbortRef = useRef<AbortController | null>(null);
+const openPlaceDetail = useCallback((id: string) => {
     setPlaceDetailId(id);
     setPlaceDetail(null);
     setPlaceDetailError(null);
@@ -1294,19 +1311,23 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       setPlaceDetailError('Place details are not available in host preview.');
       return;
     }
-    setPlaceDetailLoading(true);
-    fetch(`/api/guest/${slug}/places/${id}`)
+            setPlaceDetailLoading(true);
+    placeDetailAbortRef.current?.abort();
+    const controller = new AbortController();
+    placeDetailAbortRef.current = controller;
+    fetch(`/api/guest/${slug}/places/${id}`, { signal: controller.signal })
       .then(async (res) => {
         const json = await res.json();
         if (!res.ok || !json.verified) throw new Error('not_verified');
-        setPlaceDetail(json.place as PlaceDetail);
+        if (placeDetailAbortRef.current === controller) setPlaceDetail(json.place as PlaceDetail);
       })
-      .catch(() => setPlaceDetailError("We couldn't verify this place right now."))
-      .finally(() => setPlaceDetailLoading(false));
+              .catch((err) => { if (err?.name !== 'AbortError' && placeDetailAbortRef.current === controller) setPlaceDetailError("We couldn't verify this place right now."); })
+            .finally(() => { if (placeDetailAbortRef.current === controller) setPlaceDetailLoading(false); });
   }, [hostPreview, slug]);
 
   function closePlaceDetail() {
     setPlaceDetailId(null);
+    placeDetailAbortRef.current?.abort();
     setPlaceDetail(null);
     setPlaceDetailError(null);
   }
@@ -1344,32 +1365,63 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     return () => { cancelled = true; };
   }, [hostPreview, slug]);
 
-  // Live polling: once the conversation has reached the host, poll for host replies (and
-  // any messages we haven't rendered) so the two-way chat updates without a refresh.
-  useEffect(() => {
-    if (hostPreview || !hasEscalation) return;
-    let cancelled = false;
-    async function poll() {
-      try {
-        const qs = lastSeenRef.current ? `?after=${encodeURIComponent(lastSeenRef.current)}` : '';
-        const res = await fetch(`/api/guest/${slug}/messages${qs}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        const incoming: { role: string; content: string; created_at: string }[] = json.messages ?? [];
-        if (cancelled || incoming.length === 0) return;
-        // Only surface HOST replies via polling — guest + assistant turns are already
-        // rendered optimistically by send()/sendToHost(). This avoids duplicates.
-        const hostReplies = incoming.filter((m) => m.role === 'host');
-        lastSeenRef.current = incoming[incoming.length - 1]?.created_at ?? lastSeenRef.current;
-        if (hostReplies.length > 0) {
-          setEntries((e) => [...e, ...hostReplies.map((m) => ({ role: 'host' as const, content: m.content }))]);
+// Live polling: once the conversation has reached the host, poll for host replies (and
+      // any messages we haven't rendered) so the two-way chat updates without a refresh, with
+      // pause-on-hidden and exponential backoff on failure.
+        useEffect(() => {
+      if (hostPreview || !hasEscalation) return;
+      let cancelled = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let backoffMs = 8000;
+      const pollInFlight = { current: false };
+      async function poll() {
+        if (cancelled || pollInFlight.current || document.hidden) {
+          schedule(backoffMs);
+          return;
         }
-      } catch { /* best-effort polling */ }
-    }
-    poll();
-    const id = setInterval(poll, 8000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [hostPreview, hasEscalation, slug]);
+        pollInFlight.current = true;
+        try {
+          const qs = lastSeenRef.current ? `?after=${encodeURIComponent(lastSeenRef.current)}` : '';
+          const res = await fetch(`/api/guest/${slug}/messages${qs}`);
+          if (!res.ok) throw new Error('poll_failed');
+          const json = await res.json();
+          const incoming: { role: string; content: string; created_at: string }[] = json.messages ?? [];
+          if (!cancelled && incoming.length > 0) {
+            // Only surface HOST replies via polling — guest + assistant turns are already
+            // rendered optimistically by send()/sendToHost(). This avoids duplicates.
+            const hostReplies = incoming.filter((m) => m.role === 'host');
+            lastSeenRef.current = incoming[incoming.length - 1]?.created_at ?? lastSeenRef.current;
+            if (hostReplies.length > 0) {
+              setEntries((e) => [...e, ...hostReplies.map((m) => ({ id: makeChatId('host'), role: 'host' as const, content: m.content }))]);
+            }
+          }
+          backoffMs = 8000;
+        } catch {
+          backoffMs = Math.min(backoffMs * 2, 60000);
+        } finally {
+          pollInFlight.current = false;
+          schedule(backoffMs);
+        }
+      }
+      function schedule(delay: number) {
+        if (cancelled) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(poll, delay);
+      }
+      function onVisibilityChange() {
+        if (!document.hidden) {
+          if (timer) clearTimeout(timer);
+          poll();
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      poll();
+      return () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      };
+    }, [hostPreview, hasEscalation, slug]);
 
   // Handle a sub-choice tap: fire a pre-formed query, focus the free-text input, or open
   // the "Message the host" composer.
@@ -1461,7 +1513,10 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
         {extraOffers.length > 0 && (
           <button
             type="button"
-            onClick={() => { window.location.assign(`/g/${slug}/extras`); }}
+            onClick={() => {
+            setExtrasOpen((v) => !v);
+            requestAnimationFrame(() => extrasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+          }}
             className="gp-cat gp-card gp-cat-accent"
             data-testid="card-extras"
             aria-expanded={extrasOpen}
@@ -2708,6 +2763,7 @@ function NotifyMeCard({ slug, onSaved, onSkip }: { slug: string; onSaved: () => 
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     if (!consent) { setErr('Please tick the box to consent.'); return; }
     setBusy(true); setErr(null);
     try {
