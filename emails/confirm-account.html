@@ -1,0 +1,175 @@
+<!doctype html>
+<!--
+  Moche-AI — signup confirmation email (Resend template)
+  ======================================================
+  Variable required: {{confirmation_url}}
+
+  ASSET SETUP (one time):
+  1. Drop moche-cloche-loop.gif (and optionally moche-cloche-static.png) into
+     public/email/ — either run scripts/email/generate-cloche-assets.py or
+     upload the GIF via the GitHub web UI. Merge to main -> Vercel serves it at
+     https://www.moche-ai.com/email/moche-cloche-loop.gif
+  2. Until then, swap the header <img> src to the already-live static icon:
+     https://www.moche-ai.com/apple-icon.png
+
+  MOTION MODEL (nothing here can break the email):
+  - The header logo is an animated GIF: it animates in every client except
+    Outlook 2007-2019 desktop, which shows frame 1. Frame 1 IS the complete
+    logo, so those users see a clean static mark.
+  - CSS keyframes (fade-up, logo glow) run only in Apple Mail / iOS Mail /
+    Outlook for Mac and are ignored everywhere else. No content is ever
+    hidden by default, and motion is disabled for reduced-motion users.
+  - No JavaScript, no AMP, no video: nothing that gets stripped or blocked.
+-->
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>Confirm your Moche-AI account</title>
+  <!--[if mso]>
+  <xml>
+    <o:OfficeDocumentSettings>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+  </xml>
+  <![endif]-->
+  <style>
+    html, body { margin:0 !important; padding:0 !important; height:100% !important; width:100% !important; }
+    * { -ms-text-size-adjust:100%; -webkit-text-size-adjust:100%; }
+    table, td { mso-table-lspace:0pt !important; mso-table-rspace:0pt !important; border-collapse:collapse !important; }
+    img { -ms-interpolation-mode:bicubic; border:0; outline:none; text-decoration:none; line-height:100%; }
+    a { text-decoration:none; }
+    a[x-apple-data-detectors] { color:inherit !important; text-decoration:none !important; font-size:inherit !important; font-family:inherit !important; font-weight:inherit !important; line-height:inherit !important; }
+    u + #moche-body a { color:inherit; text-decoration:none; font-size:inherit; font-family:inherit; font-weight:inherit; line-height:inherit; }
+
+    /* Progressive-enhancement motion only. Clients that ignore CSS animation
+       (Gmail, Outlook on Windows, Yahoo, Outlook.com) simply render the final,
+       fully-visible state. Keyframes animate FROM an offset state; the default
+       state of every element is complete and visible. */
+    @media (prefers-reduced-motion: no-preference) {
+      @keyframes moche-fade-up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes moche-glow { 0%,100% { box-shadow:0 0 0 0 rgba(82,203,222,0); } 50% { box-shadow:0 0 26px 4px rgba(82,203,222,.45); } }
+      .moche-fade-1 { animation:moche-fade-up .6s ease-out both; }
+      .moche-fade-2 { animation:moche-fade-up .6s ease-out .12s both; }
+      .moche-fade-3 { animation:moche-fade-up .6s ease-out .24s both; }
+      .moche-logo { animation:moche-glow 3s ease-in-out .8s infinite; border-radius:22px; }
+    }
+    @media screen and (max-width:480px) {
+      .moche-px { padding-left:24px !important; padding-right:24px !important; }
+      .moche-h1 { font-size:26px !important; }
+    }
+  </style>
+</head>
+<body id="moche-body" style="margin:0; padding:0; word-spacing:normal; background-color:#eef1f6;">
+
+  <!-- Preheader: hidden inbox preview text -->
+  <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
+    One click to activate your AI concierge — confirm your Moche-AI account.&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#eef1f6;">
+    <tr>
+      <td align="center" style="padding:32px 12px 40px;">
+
+        <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" align="center"><tr><td><![endif]-->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px; background-color:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 4px 24px rgba(7,11,20,.08);">
+
+          <!-- Header -->
+          <tr>
+            <td align="center" style="background-color:#070B14; padding:38px 40px 30px; border-radius:18px 18px 0 0;">
+              <img class="moche-logo" src="https://www.moche-ai.com/email/moche-cloche-loop.gif" width="92" height="92" alt="Moche-AI logo" style="display:block; margin:0 auto 16px; width:92px; height:92px; border-radius:22px;">
+              <h1 class="moche-h1 moche-fade-1" style="margin:0; color:#ffffff; font-family:Arial,Helvetica,sans-serif; font-size:30px; line-height:1.25; font-weight:800;">Welcome aboard! 🎉</h1>
+              <p class="moche-fade-2" style="margin:10px 0 0; color:#52CBDE; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.5;">Your AI concierge is almost ready to serve.</p>
+            </td>
+          </tr>
+
+          <!-- Brand gradient divider (solid cyan fallback for Outlook) -->
+          <tr>
+            <td style="height:4px; line-height:4px; font-size:0; background-color:#52CBDE; background-image:linear-gradient(90deg,#52CBDE 0%,#7698F9 100%);">&nbsp;</td>
+          </tr>
+
+          <!-- Body copy -->
+          <tr>
+            <td class="moche-px" style="padding:36px 44px 6px;">
+              <h2 style="margin:0 0 12px; color:#0f172a; font-family:Arial,Helvetica,sans-serif; font-size:21px; font-weight:700;">You're almost in ✅</h2>
+              <p style="margin:0 0 24px; color:#475569; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.7;">
+                Thanks for signing up! One quick click below activates your account and puts your AI employee to work — answering guest questions around the clock, in your property's own voice.
+              </p>
+            </td>
+          </tr>
+
+          <!-- CTA: bulletproof button (VML for Outlook desktop, anchor elsewhere) -->
+          <tr>
+            <td align="center" style="padding:6px 44px 10px;">
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{confirmation_url}}" style="height:54px;v-text-anchor:middle;width:300px;" arcsize="50%" fillcolor="#FF8B5C" stroke="f" alt="Confirm my account">
+                <center style="color:#070B14;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;">Confirm my account</center>
+              </v:roundrect>
+              <![endif]-->
+              <!--[if !mso]><!-->
+              <a href="{{confirmation_url}}" class="moche-fade-3" style="display:inline-block; background-color:#FF8B5C; color:#070B14; font-family:Arial,Helvetica,sans-serif; font-size:16px; font-weight:700; line-height:54px; padding:0 44px; border-radius:999px;">Confirm my account&nbsp;&nbsp;→</a>
+              <!--<![endif]-->
+              <p style="margin:16px 0 0; color:#94a3b8; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.6;">For your security, this link can only be used once.</p>
+            </td>
+          </tr>
+
+          <!-- Feature row -->
+          <tr>
+            <td class="moche-px" style="padding:26px 44px 8px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="33%" align="center" valign="top" style="padding:8px 6px;">
+                    <div style="font-size:26px; line-height:1;">💬</div>
+                    <p style="margin:8px 0 2px; color:#0f172a; font-family:Arial,Helvetica,sans-serif; font-size:13px; font-weight:700;">24/7 guest answers</p>
+                    <p style="margin:0; color:#64748b; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5;">Every question, instantly</p>
+                  </td>
+                  <td width="33%" align="center" valign="top" style="padding:8px 6px;">
+                    <div style="font-size:26px; line-height:1;">🧠</div>
+                    <p style="margin:8px 0 2px; color:#0f172a; font-family:Arial,Helvetica,sans-serif; font-size:13px; font-weight:700;">Trained on your property</p>
+                    <p style="margin:0; color:#64748b; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5;">Your knowledge, your voice</p>
+                  </td>
+                  <td width="33%" align="center" valign="top" style="padding:8px 6px;">
+                    <div style="font-size:26px; line-height:1;">🔒</div>
+                    <p style="margin:8px 0 2px; color:#0f172a; font-family:Arial,Helvetica,sans-serif; font-size:13px; font-weight:700;">Private by design</p>
+                    <p style="margin:0; color:#64748b; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5;">Your data stays yours</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Plain-link fallback (also helps with images-off / strict clients) -->
+          <tr>
+            <td class="moche-px" style="padding:18px 44px 34px;">
+              <p style="margin:0; padding:14px 16px; background-color:#f1f5f9; border-radius:10px; color:#64748b; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.6; word-break:break-all;">
+                Button not working? Copy and paste this link into your browser:<br>
+                <a href="{{confirmation_url}}" style="color:#3b82f6; text-decoration:underline;">{{confirmation_url}}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="background-color:#070B14; padding:26px 40px; border-radius:0 0 18px 18px;">
+              <p style="margin:0 0 6px; color:#94a3b8; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.6;">
+                You're receiving this because you signed up for <a href="https://www.moche-ai.com" style="color:#52CBDE; text-decoration:none; font-weight:700;">Moche-AI</a>.
+              </p>
+              <p style="margin:0; color:#64748b; font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:1.6;">
+                If you didn't create this account, you can safely ignore this email.<br>
+                © 2026 Moche-AI · Hospitality's AI concierge
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!--[if mso]></td></tr></table><![endif]-->
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
