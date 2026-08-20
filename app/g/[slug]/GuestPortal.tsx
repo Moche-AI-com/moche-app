@@ -9,6 +9,79 @@ import { HostChatWorkflow } from './HostChatWorkflow';
 import { MaintenanceWorkflow } from './MaintenanceWorkflow';
 import { ExtrasWorkflow, type GuestExtraOffer } from './ExtrasWorkflow';
 
+import { useCallback as _uc, useEffect as _ue, useRef as _ur } from 'react';
+
+// Accessibility: one reusable dismissal hook shared by every portaled sheet.
+// Handles keyboard (Escape to close, Tab focus-trap), scroll-lock, and focus restore.
+export function useSheetDismiss(open: boolean, onClose: () => void) {
+  const containerRef = _ur<HTMLDivElement | null>(null);
+  const previouslyFocused = _ur<HTMLElement | null>(null);
+  const handleKey = _uc(
+    (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const root = containerRef.current;
+      if (!root) return;
+      const focusables = root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    [onClose],
+  );
+  _ue(() => {
+    if (!open) return;
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKey);
+    containerRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = '';
+      previouslyFocused.current?.focus();
+    };
+  }, [open, handleKey]);
+  return containerRef;
+}
+
+// Stable testable ids for the six portaled sheets, one persistent home route each.
+export const PORTAL_HOME_BUTTON_IDS = [
+  'button-portal-home-subchoice',
+  'button-portal-home-host-composer',
+  'button-portal-home-service-request',
+  'button-portal-home-place-detail',
+  'button-portal-home-language',
+  'button-portal-home-history',
+] as const;
+
+// Persistent "return to portal home" control rendered inside every portaled sheet.
+// Each sheet type gets a stable, testable id: button-portal-home-<sheet>.
+export function SheetHomeButton(props: { sheet: string; onHome: () => void }) {
+  return (
+    <button
+      type="button"
+      data-testid={`button-portal-home-${props.sheet}`}
+      className="gp-back gp-sheet-home"
+      onClick={props.onHome}
+    >
+      Portal home
+    </button>
+  );
+}
+
 export type PortalStep = 'code' | 'register' | 'menu' | 'ask' | 'host' | 'maintenance' | 'extras';
 
 // Enhanced guest portal shell: a step machine covering
@@ -257,5 +330,11 @@ const PORTAL_CSS = `
 .gp-variant-on { border-color: var(--gp-primary); background: rgba(51, 230, 212, 0.12); }
 
 .gp-spin { animation: gp-spin 1s linear infinite; }
+  /* A11y: portaled sheet scrim + form-field readability (normal, focus, autofill). */
+  .gp-sheet-scrim { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: rgba(4, 8, 7, 0.72); backdrop-filter: blur(3px); overflow-y: auto; }
+  .gp-sheet-home { align-self: flex-start; margin: 8px; }
+  .gp-sheet-scrim input:focus-visible, .gp-sheet-scrim textarea:focus-visible { outline: 2px solid var(--gp-primary); outline-offset: 2px; }
+  .gp-sheet-scrim input:-webkit-autofill { -webkit-box-shadow: inset 0 0 0 1000px #171c25; -webkit-text-fill-color: #fbf7ef; caret-color: #fbf7ef; transition: background-color 9999s ease-in-out 0s; }
+  .gp-lang-search:hover { border-color: var(--gp-primary); }
 @keyframes gp-spin { to { transform: rotate(360deg); } }
 `;
