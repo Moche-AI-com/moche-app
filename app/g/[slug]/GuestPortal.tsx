@@ -1095,6 +1095,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     setEntries(nextEntries);
     setInput('');
     setBusy(true);
+    try {
              //Hosts previewing their own portal hit the read-only host endpoint (keyed by
       // property id) so no guest session/conversation/escalation is created. Real
       // guests use the verified guest chat endpoint (keyed by slug + session cookie).
