@@ -15,7 +15,6 @@ import { useCallback as _uc, useEffect as _ue, useRef as _ur } from 'react';
 // Handles keyboard (Escape to close, Tab focus-trap), scroll-lock, and focus restore.
 export function useSheetDismiss(open: boolean, onClose: () => void) {
   const containerRef = _ur<HTMLDivElement | null>(null);
-  const previouslyFocused = _ur<HTMLElement | null>(null);
   const handleKey = _uc(
     (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -44,14 +43,14 @@ export function useSheetDismiss(open: boolean, onClose: () => void) {
   );
   _ue(() => {
     if (!open) return;
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKey);
     containerRef.current?.focus();
     return () => {
       document.removeEventListener('keydown', handleKey);
       document.body.style.overflow = '';
-      previouslyFocused.current?.focus();
+      if (previouslyFocused) previouslyFocused.focus();
     };
   }, [open, handleKey]);
   return containerRef;
