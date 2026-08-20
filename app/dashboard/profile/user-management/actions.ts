@@ -29,15 +29,25 @@ const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_LIVE_INVITES_PER_ACCOUNT = 25;
 const MAX_INVITES_PER_HOUR = 10;
 
-function capabilityFormValues(formData: FormData): Record<string, FormDataEntryValue> {
-  return Object.fromEntries(
-    Array.from(formData.entries()).filter(([key]) => key.startsWith('can_')),
-  );
+// Capabilities now arrive as a single JSON-serialized `capabilities` field from
+// the client instead of individual can_* checkboxes. Parse it defensively and
+// let normalizeCapabilities() validate the payload against the known keys —
+// never trust the shape of the client-supplied object.
+function capabilityFormValues(formData: FormData): unknown {
+  const raw = formData.get('capabilities');
+  if (raw === null) return {};
+  try {
+    return JSON.parse(String(raw));
+  } catch {
+    return null;
+  }
 }
 
 function parseCapabilities(role: FormDataEntryValue | null, formData: FormData): CapabilitySet | null {
+  const values = capabilityFormValues(formData);
+  if (values === null) return null;
   try {
-    return normalizeCapabilities(role, capabilityFormValues(formData));
+    return normalizeCapabilities(role, values);
   } catch {
     return null;
   }
@@ -62,7 +72,6 @@ async function verifiedPropertyIds(
 ): Promise<{ ids: string[] } | { error: string }> {
   const ids = [...new Set(submittedIds)];
   if (ids.length === 0) return { ids };
-
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('properties')
@@ -70,7 +79,6 @@ async function verifiedPropertyIds(
     .eq('host_account_id', accountId)
     .is('deleted_at', null)
     .in('id', ids);
-
   if (error || (data?.length ?? 0) !== ids.length) {
     return { error: 'Choose properties that belong to this account.' };
   }
@@ -133,6 +141,7 @@ export async function inviteMemberAction(
   if ('error' in scope) return { error: scope.error };
 
   const admin = createAdminClient();
+
   const rate = await checkRateLimit(admin, {
     key: owner.ctx.account.id,
     limit: MAX_INVITES_PER_HOUR,
@@ -144,6 +153,7 @@ export async function inviteMemberAction(
   }
 
   const now = new Date().toISOString();
+
   // Keep the table's one-live-invite invariant usable when a previous invite
   // naturally expires; it also makes the migration's immutable partial index
   // enforce the intended time-aware rule.
@@ -163,10 +173,12 @@ export async function inviteMemberAction(
     .is('accepted_at', null)
     .is('revoked_at', null)
     .gt('expires_at', now);
+
   if (liveCountError) {
     log.warn('member_invite_count_failed', { accountId: owner.ctx.account.id, error: liveCountError.message });
     return { error: 'Could not prepare the invitation. Please try again.' };
   }
+
   if ((count ?? 0) >= MAX_LIVE_INVITES_PER_ACCOUNT) {
     return { error: 'This account already has 25 pending invitations. Revoke or wait for one to expire first.' };
   }
@@ -211,6 +223,7 @@ export async function inviteMemberAction(
   });
 
   revalidatePath('/dashboard/profile/user-management');
+
   // Identical success wording protects whether this email already has an account.
   return {
     success: sent
@@ -225,6 +238,7 @@ export async function revokeInviteAction(
 ): Promise<MemberActionState> {
   const owner = await ownerContext();
   if ('error' in owner) return owner.error;
+
   const inviteId = inviteIdSchema.safeParse(formData.get('inviteId'));
   if (!inviteId.success) return { error: 'This invitation is no longer valid.' };
 
@@ -238,6 +252,7 @@ export async function revokeInviteAction(
     .is('revoked_at', null)
     .select('id')
     .maybeSingle();
+
   if (error || !data) return { error: 'This invitation could not be revoked.' };
 
   await audit(admin, {
@@ -247,6 +262,7 @@ export async function revokeInviteAction(
     targetType: 'member_invite',
     targetId: data.id,
   });
+
   revalidatePath('/dashboard/profile/user-management');
   return { success: 'Invitation revoked.' };
 }
@@ -257,6 +273,7 @@ export async function resendInviteAction(
 ): Promise<MemberActionState> {
   const owner = await ownerContext();
   if ('error' in owner) return owner.error;
+
   const inviteId = inviteIdSchema.safeParse(formData.get('inviteId'));
   if (!inviteId.success) return { error: 'This invitation is no longer valid.' };
 
@@ -269,11 +286,14 @@ export async function resendInviteAction(
     .is('accepted_at', null)
     .is('revoked_at', null)
     .maybeSingle();
+
   if (inviteError || !invite) return { error: 'This invitation is no longer available to resend.' };
+
   if (!isInvitableRole(invite.role)) {
     log.error('member_invite_invalid_role', { inviteId: invite.id, role: invite.role });
     return { error: 'This invitation has an invalid role and cannot be resent.' };
   }
+
   if (new Date(invite.expires_at).getTime() <= Date.now()) {
     return { error: 'This invitation has expired. Create a fresh invitation instead.' };
   }
@@ -300,6 +320,7 @@ export async function resendInviteAction(
     .gt('expires_at', new Date().toISOString())
     .select('id')
     .maybeSingle();
+
   if (updateError || !updatedInvite) return { error: 'Could not refresh this invitation. Please try again.' };
 
   const capabilities: CapabilitySet = {
@@ -309,6 +330,7 @@ export async function resendInviteAction(
     can_resolve_maintenance: invite.can_resolve_maintenance,
     can_view_analytics: invite.can_view_analytics,
   };
+
   const sent = await deliverInvite({
     email: invite.email,
     inviterName: owner.ctx.profile.full_name?.trim() || owner.ctx.profile.email,
@@ -326,6 +348,7 @@ export async function resendInviteAction(
     targetId: invite.id,
     metadata: { role: invite.role, capabilities: { ...capabilities } },
   });
+
   revalidatePath('/dashboard/profile/user-management');
   return sent
     ? { success: 'A fresh invitation link was sent.' }
@@ -342,6 +365,7 @@ export async function updateMemberCapabilitiesAction(
   const rawRole = formData.get('role');
   const capabilities = parseCapabilities(rawRole, formData);
   if (!capabilities) return { error: 'Choose a valid role and actions.' };
+
   const parsed = memberCapabilityUpdateSchema.safeParse({
     profileId: formData.get('profileId'),
     role: rawRole,
@@ -351,12 +375,14 @@ export async function updateMemberCapabilitiesAction(
 
   const propertyIds = await accountPropertyIds(owner.ctx.account.id);
   if (propertyIds.length === 0) return { error: 'This account has no properties to update.' };
+
   const admin = createAdminClient();
   const { data: memberships, error: membershipError } = await admin
     .from('property_members')
     .select('id')
     .eq('profile_id', parsed.data.profileId)
     .in('property_id', propertyIds);
+
   if (membershipError || !memberships?.length) {
     return { error: 'This person does not have access on this account.' };
   }
@@ -366,6 +392,7 @@ export async function updateMemberCapabilitiesAction(
     .update({ role: parsed.data.role, ...capabilities })
     .eq('profile_id', parsed.data.profileId)
     .in('property_id', propertyIds);
+
   if (error) return { error: 'Could not update this member. Please try again.' };
 
   await audit(admin, {
@@ -376,6 +403,7 @@ export async function updateMemberCapabilitiesAction(
     targetId: parsed.data.profileId,
     metadata: { role: parsed.data.role, capabilities: { ...capabilities } },
   });
+
   revalidatePath('/dashboard/profile/user-management');
   return { success: 'Member access updated.' };
 }
@@ -386,11 +414,13 @@ export async function removeMemberAction(
 ): Promise<MemberActionState> {
   const owner = await ownerContext();
   if ('error' in owner) return owner.error;
+
   const profileId = z.string().uuid().safeParse(formData.get('profileId'));
   if (!profileId.success) return { error: 'This member is no longer valid.' };
 
   const propertyIds = await accountPropertyIds(owner.ctx.account.id);
   if (propertyIds.length === 0) return { error: 'This account has no properties to update.' };
+
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('property_members')
@@ -398,6 +428,7 @@ export async function removeMemberAction(
     .eq('profile_id', profileId.data)
     .in('property_id', propertyIds)
     .select('id');
+
   if (error || !data?.length) return { error: 'This person could not be removed.' };
 
   await audit(admin, {
@@ -408,6 +439,7 @@ export async function removeMemberAction(
     targetId: profileId.data,
     metadata: { removedPropertyMemberships: data.length },
   });
+
   revalidatePath('/dashboard/profile/user-management');
   return { success: 'Member access removed.' };
 }
