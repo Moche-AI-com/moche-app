@@ -4,6 +4,11 @@ import { Reveal } from './Reveal';
 import styles from './landing.module.css';
 import { useState } from 'react';
 
+// Per-property self-serve tiers, per the August 2026 pitch deck. The billed grid
+// lives in lib/constants.ts (PLANS); this marketing copy mirrors it by design —
+// the deck's Portfolio ($25-39/property/mo, 10+) and Enterprise (custom) tiers are
+// contract-priced and therefore appear here as the contact-sales note below, not
+// as cards with invented numbers.
 const PLANS = [
   {
     name: 'Essentials',
@@ -13,7 +18,7 @@ const PLANS = [
       'Property Brain & guest portal',
       'Grounded AI Q&A (verified facts)',
       'Structured requests & escalation',
-      'Host‑approved memory updates',
+      'Host-approved memory updates',
     ],
     popular: false,
   },
@@ -25,7 +30,7 @@ const PLANS = [
       'Everything in Essentials',
       'Learning analytics & insights',
       'Workflow automation & branding',
-      'Multi‑property dashboards',
+      'Multi-property dashboards',
     ],
     popular: true,
   },
@@ -55,17 +60,30 @@ export function Pricing() {
           Pricing that scales with your portfolio
         </Reveal>
         <Reveal as="p" delay={60} className={`muted ${styles.pricingIntro}`}>
-          Simple per‑property pricing. Pay annually for {ANNUAL_MULTIPLIER}x the monthly rate
-          (that’s two months free). No per‑conversation fees — unlimited guests and stays.
+          Every plan starts with a free month on the top tier, up to 5 properties. Simple
+          per-property pricing after that: pay annually for {ANNUAL_MULTIPLIER}x the monthly
+          rate (that&rsquo;s two months free). No per-conversation fees &mdash; unlimited guests
+          and stays.
           <br />
-          <strong>One‑time setup:</strong> $149/property for guided onboarding, or use
-          self‑service at no cost.
+          <strong>One-time setup:</strong> $149/property for guided onboarding, or use
+          self-service at no cost.
         </Reveal>
 
-        {/* Property count slider + billing toggle */}
-        <div className={styles.pricingControls}>
-          <div className={styles.pricingSliderGroup}>
-            <label htmlFor="propertyCount" className={styles.pricingSliderLabel}>
+        {/* Property count slider + billing toggle. Styled inline: the CSS-module classes
+            an earlier iteration referenced were never added to landing.module.css, so the
+            controls rendered unstyled. These styles are self-contained on purpose. */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            margin: '1.5rem 0 2rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.9rem', flexWrap: 'wrap' }}>
+            <label htmlFor="propertyCount" style={{ fontSize: '.9rem', fontWeight: 600 }}>
               Properties: <span>{propertyCount}</span>
             </label>
             <input
@@ -76,25 +94,61 @@ export function Pricing() {
               step={1}
               value={propertyCount}
               onChange={(e) => setPropertyCount(Number(e.target.value))}
-              className={styles.pricingSlider}
+              aria-label="Number of properties"
+              style={{ width: 180, accentColor: 'var(--teal, #0FA79A)' }}
             />
-            <span className={styles.pricingSliderHint}>
-              {propertyCount >= 10 ? 'Contact us for Portfolio discounts' : ''}
+            <span className="faint" style={{ fontSize: '.78rem' }}>
+              {propertyCount >= MAX_PROPERTIES ? 'Managing 10 or more? See Portfolio below.' : 'Per property, per month'}
             </span>
           </div>
 
-          <div className={styles.pricingBillingToggle}>
+          <div
+            role="group"
+            aria-label="Billing period"
+            style={{
+              display: 'inline-flex',
+              gap: '.25rem',
+              padding: '.25rem',
+              borderRadius: 999,
+              border: '1px solid var(--border, rgba(20,50,90,.12))',
+              background: 'var(--surface, #fff)',
+            }}
+          >
             <button
-              className={`${styles.billingBtn} ${billing === 'monthly' ? styles.active : ''}`}
+              type="button"
               onClick={() => setBilling('monthly')}
+              aria-pressed={billing === 'monthly'}
+              style={{
+                minHeight: 44,
+                padding: '0 1.1rem',
+                borderRadius: 999,
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '.88rem',
+                background: billing === 'monthly' ? 'var(--teal, #0FA79A)' : 'transparent',
+                color: billing === 'monthly' ? '#04121a' : 'inherit',
+              }}
             >
               Monthly
             </button>
             <button
-              className={`${styles.billingBtn} ${billing === 'annual' ? styles.active : ''}`}
+              type="button"
               onClick={() => setBilling('annual')}
+              aria-pressed={billing === 'annual'}
+              style={{
+                minHeight: 44,
+                padding: '0 1.1rem',
+                borderRadius: 999,
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '.88rem',
+                background: billing === 'annual' ? 'var(--teal, #0FA79A)' : 'transparent',
+                color: billing === 'annual' ? '#04121a' : 'inherit',
+              }}
             >
-              Annual <span className={styles.billingSavings}>(save 2 mo)</span>
+              Annual <span style={{ fontWeight: 500, opacity: .8 }}>(save 2 mo)</span>
             </button>
           </div>
         </div>
@@ -134,7 +188,7 @@ export function Pricing() {
                         <li key={feature}>{feature}</li>
                       ))}
                       <li>Unlimited guests and stays</li>
-                      <li>No per‑conversation charges</li>
+                      <li>No per-conversation charges</li>
                     </ul>
                     <Link
                       href="/signup"
@@ -151,9 +205,9 @@ export function Pricing() {
 
         <Reveal delay={PLANS.length * 55} className={styles.pricingVolume}>
           <p className={styles.pricingVolumeCopy}>
-            <strong>10+ properties?</strong> Get our Portfolio plan with roles, bulk tools,
-            and deeper integrations at discounted per‑property rates ($25–39/property/mo).
-            For 41+ properties, we offer custom Enterprise pricing.
+            <strong>10+ properties?</strong> Portfolio adds roles, bulk tools, and PMS
+            integrations at volume rates ($25&ndash;39/property/mo, set by contract). Need SSO,
+            an SLA, API access, or white label? Enterprise is custom.
           </p>
           <a href={CONTACT_SALES_MAILTO} className={styles.pricingVolumeLink}>
             Contact sales

@@ -1,14 +1,7 @@
 import type { Database } from '@/lib/database.types';
 
 export type BrainCategory = Database['public']['Enums']['brain_category'];
-export type PlanId =
-  | 'starter'
-  | 'pro'
-  | 'growth_lower'
-  | 'growth_upper'
-  | 'portfolio'
-  | 'enterprise'
-  | 'custom';
+export type PlanId = 'starter' | 'pro' | 'portfolio' | 'enterprise';
 export type BillingInterval = 'monthly' | 'annual';
 
 // Annual billing is 10x the monthly rate, which is two months free. This multiplier
@@ -16,22 +9,21 @@ export type BillingInterval = 'monthly' | 'annual';
 // numbers below are the single source of truth for anything the product enforces.
 export const ANNUAL_MULTIPLIER = 10;
 
-// Overage price per guest conversation once the pooled monthly allowance is used up.
-// We throttle rather than cut off (see lib/billing/throttle.ts).
-export const CONVERSATION_OVERAGE_USD = 0.02;
-
 export interface Plan {
   id: PlanId;
   name: string;
-  monthly: number; // USD/mo, 0 for sales-assisted tiers
-  annual: number; // USD/yr, 0 for sales-assisted tiers
+  // Per-property USD/mo for self-serve tiers; 0 for sales-assisted tiers.
+  monthly: number;
+  // Per-property USD/yr (ANNUAL_MULTIPLIER x monthly); 0 for sales-assisted tiers.
+  annual: number;
   // Inclusive [min, max] property count for the tier. `Infinity` upper bound means
-  // "no ceiling" (the custom tier). propertyLimit mirrors the upper bound and stays
+  // "no ceiling" (the enterprise tier). propertyLimit mirrors the upper bound and stays
   // the field enforcement code reads, so existing call sites keep working.
   propertyRange: [number, number];
   propertyLimit: number;
-  // Pooled guest conversations per billing period, counted per host account (never
-  // per property). 0 means "agreed at contract" for sales-assisted tiers.
+  // Pooled guest conversations per billing period, counted per host account. 0 means
+  // unmetered — the current state for every tier: no per-conversation fees, per the
+  // pitch deck. The metering machinery from PR #17 stays in place but inert.
   conversationAllowance: number;
   // False for tiers that cannot be bought without talking to a human. These render
   // a contact-sales action instead of a checkout button and are rejected by the
@@ -43,105 +35,76 @@ export interface Plan {
   features: string[];
 }
 
-// Ordered cheapest to most expensive. Object key order is the render order on the
-// billing page, so do not reorder without checking that page.
+// Ordered entry to enterprise. Object key order is the render order on the billing
+// page, so do not reorder without checking that page.
+//
+// Pricing follows the investor pitch deck (August 2026): per-property pricing with
+// two self-serve tiers and two contract tiers. Essentials $29/property/mo and Pro
+// $49/property/mo, self-serve up to 9 properties; Portfolio (10-40, $25-39/property/mo)
+// and Enterprise (41+, custom) are priced by contract. Plan ids predate the rename and
+// are kept stable on purpose: subscriptions rows and the Stripe webhook price-to-plan
+// mapping store these ids, so `starter` stays the id while "Essentials" is the name
+// everywhere a human reads it. The retired flat tiers (growth_lower, growth_upper,
+// custom) are gone; an old subscription row carrying one resolves to the free minimum
+// via the stale-plan fallback in lib/billing/entitlements.ts.
 export const PLANS: Record<PlanId, Plan> = {
   starter: {
     id: 'starter',
-    name: 'Starter',
+    name: 'Essentials',
     monthly: 29,
     annual: 290,
-    propertyRange: [1, 1],
-    propertyLimit: 1,
-    conversationAllowance: 50,
+    propertyRange: [1, 9],
+    propertyLimit: 9,
+    conversationAllowance: 0,
     selfServe: true,
     reviewNudge: false,
     smsEscalation: false,
     conciergeCustomization: false,
     features: [
-      'Full AI guest concierge portal',
+      'Property Brain & guest concierge portal',
+      'AI answers grounded in verified property facts',
+      'Structured guest requests & escalation',
       'QR code + shareable link',
-      'Document & URL ingestion',
-      'Multi-language guest support',
-      'Email escalation',
+      'Unlimited guests, stays & conversations',
     ],
   },
   pro: {
     id: 'pro',
     name: 'Pro',
-    monthly: 69,
-    annual: 690,
-    propertyRange: [2, 5],
-    propertyLimit: 5,
-    conversationAllowance: 200,
-    selfServe: true,
-    reviewNudge: false,
-    smsEscalation: true,
-    conciergeCustomization: true,
-    features: [
-      'Everything in Starter',
-      'Concierge personality & tone control',
-      'Creativity & escalation tuning',
-      'Portal module controls',
-      'Property cloning',
-      'Co-host mode',
-      'SMS escalation',
-      'Brain Health analytics',
-      'Maintenance flag routing',
-    ],
-  },
-  growth_lower: {
-    id: 'growth_lower',
-    name: 'Growth',
-    monthly: 119,
-    annual: 1190,
-    propertyRange: [6, 10],
-    propertyLimit: 10,
-    conversationAllowance: 500,
+    monthly: 49,
+    annual: 490,
+    propertyRange: [1, 9],
+    propertyLimit: 9,
+    conversationAllowance: 0,
     selfServe: true,
     reviewNudge: true,
     smsEscalation: true,
     conciergeCustomization: true,
     features: [
-      'Everything in Pro',
+      'Everything in Essentials',
+      'Learning analytics & insights',
+      'Workflow, branding & concierge controls',
       'Guest review nudge',
-      'Up to 10 properties',
-    ],
-  },
-  growth_upper: {
-    id: 'growth_upper',
-    name: 'Scale',
-    monthly: 169,
-    annual: 1690,
-    propertyRange: [11, 15],
-    propertyLimit: 15,
-    conversationAllowance: 800,
-    selfServe: true,
-    reviewNudge: true,
-    smsEscalation: true,
-    conciergeCustomization: true,
-    features: [
-      'Everything in Growth',
-      'Up to 15 properties',
-      'Priority support',
+      'Co-hosts, cloning & SMS escalation',
     ],
   },
   portfolio: {
     id: 'portfolio',
     name: 'Portfolio',
-    monthly: 249,
-    annual: 2490,
-    propertyRange: [16, 40],
+    monthly: 0,
+    annual: 0,
+    propertyRange: [10, 40],
     propertyLimit: 40,
-    conversationAllowance: 1500,
-    selfServe: true,
+    conversationAllowance: 0,
+    selfServe: false,
     reviewNudge: true,
     smsEscalation: true,
     conciergeCustomization: true,
     features: [
-      'Everything in Scale',
-      'Up to 40 properties',
-      'Dedicated success contact',
+      'Everything in Pro',
+      '10 to 40 properties',
+      'Roles, bulk tools & PMS integrations',
+      'Volume pricing, $25-39/property/mo by contract',
     ],
   },
   enterprise: {
@@ -149,26 +112,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Enterprise',
     monthly: 0,
     annual: 0,
-    propertyRange: [41, 100],
-    propertyLimit: 100,
-    conversationAllowance: 0,
-    selfServe: false,
-    reviewNudge: true,
-    smsEscalation: true,
-    conciergeCustomization: true,
-    features: [
-      'Everything in Portfolio',
-      '41 to 100 properties',
-      'Pooled allowance agreed at contract',
-      'Onboarding assistance',
-    ],
-  },
-  custom: {
-    id: 'custom',
-    name: 'Custom',
-    monthly: 0,
-    annual: 0,
-    propertyRange: [101, Number.POSITIVE_INFINITY],
+    propertyRange: [41, Number.POSITIVE_INFINITY],
     propertyLimit: Number.MAX_SAFE_INTEGER,
     conversationAllowance: 0,
     selfServe: false,
@@ -176,9 +120,10 @@ export const PLANS: Record<PlanId, Plan> = {
     smsEscalation: true,
     conciergeCustomization: true,
     features: [
-      'Everything in Enterprise',
-      '101+ properties',
-      'Custom terms, allowance and support SLA',
+      'Everything in Portfolio',
+      '41+ properties',
+      'SSO, SLA & API access',
+      'White label & custom terms',
     ],
   },
 };
@@ -201,13 +146,13 @@ export const FOUNDING_TRIAL_PROPERTY_LIMIT = 5;
 // Where a host is sent to buy a sales-assisted tier.
 export const SALES_EMAIL = 'hostspark.org@gmail.com';
 
-// The one-time ACTIVATION_FEE_USD / ACTIVATION_FEE_ENABLED pair was removed for
-// launch. It had been permanently disabled (ACTIVATION_FEE_ENABLED = false) while
-// still carrying a live code path through checkout and the billing page, which is
-// exactly the kind of dead conditional that gets accidentally re-enabled. The
-// commercial decision is that there is no setup fee, so the concept no longer
-// exists in code. Reintroducing it would mean a new Stripe one-time price plus a
-// deliberate add_invoice_items branch, not flipping a flag.
+// One-time guided onboarding, per the pitch deck's Activation line: $149 per property,
+// arranged with the team. Self-service onboarding is included on every plan. This is
+// NOT charged in self-serve checkout — wiring a checkout add-on is a deliberate
+// follow-up. (History: an earlier auto-charged activation fee was removed in
+// 3519beb7 because a dead conditional guarding a real charge gets flipped on by
+// accident. Guided setup returns as an arranged service, not a checkout flag.)
+export const GUIDED_SETUP_USD = 149;
 
 // Categories required for the "core" completeness gate — the portal can only go
 // live once these are present. Mirrors the Brain Health "Core layer".

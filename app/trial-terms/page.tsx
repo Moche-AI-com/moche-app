@@ -7,10 +7,11 @@ export const metadata: Metadata = {
     'How the Moche-AI free trial works: what happens after the trial, price, billing, automatic renewal, and how to cancel.',
 };
 
-// DRAFT — pending legal/billing review before go-live.
-// Figures below (trial length, property cap, price) must be confirmed against
-// the billing source of truth (lib/billing) and approved by legal. The full
-// authoritative billing policy lives at /legal/refund and /legal/terms.
+// Figures below (trial length, property cap) are confirmed against the billing source
+// of truth: FOUNDING_TRIAL_DAYS and FOUNDING_TRIAL_PROPERTY_LIMIT in lib/constants.ts.
+// Post-trial pricing is per property and follows the pitch-deck grid (Essentials
+// $29/property/mo, Pro $49/property/mo; Portfolio and Enterprise by contract). The
+// full authoritative billing policy lives at /legal/refund and /legal/terms.
 export default function TrialTermsPage() {
   return (
     <main className="wrap">
@@ -43,9 +44,15 @@ export default function TrialTermsPage() {
         <h2>3. Price</h2>
         <p>
           The price charged after the trial is the plan price shown at signup
-          and on our pricing page at the time you started the trial. Applicable
-          taxes may be added at checkout. Prices may change with notice as
-          described in the Terms of Service.
+          and on our pricing page at the time you started the trial, billed per
+          property per month. Applicable taxes may be added at checkout. Prices
+          may change with notice as described in the Terms of Service.
+        </p>
+        <p>
+          Optional guided setup — a white-glove onboarding where our team builds
+          your Property Brain with you — is $149 per property, one time, and is
+          arranged separately with our team. Self-service onboarding is always
+          included at no cost.
         </p>
 
         <h2>4. Billing &amp; automatic renewal</h2>

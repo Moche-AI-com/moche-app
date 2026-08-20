@@ -49,10 +49,12 @@ export function priceIdFor(planId: PlanId, interval: BillingInterval): string | 
 // Reverse lookup: map a Stripe price ID back to our plan id (for the webhook).
 //
 // This deliberately iterates plan ids rather than splitting the env key on '_'.
-// Plan ids now contain underscores (growth_lower, growth_upper), so key.split('_')[0]
-// would have resolved 'growth_lower_monthly' to the plan id 'growth', which does not
-// exist, and the webhook would have written a plan value the entitlement lookup
-// could never match.
+// Plan ids have contained underscores before (the retired growth_lower /
+// growth_upper flat tiers), so key.split('_')[0] would have resolved
+// 'growth_lower_monthly' to the plan id 'growth', which does not exist, and the
+// webhook would have written a plan value the entitlement lookup could never match.
+// Retired tiers are absent from PLANS, so their old price ids resolve to null —
+// intentional: no current subscription should still be on them.
 export function planFromPriceId(priceId: string | null | undefined): PlanId | null {
   if (!priceId) return null;
   const intervals: BillingInterval[] = ['monthly', 'annual'];

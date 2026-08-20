@@ -8,6 +8,7 @@ import {
   SALES_EMAIL,
   FOUNDING_TRIAL_DAYS,
   FOUNDING_TRIAL_PROPERTY_LIMIT,
+  GUIDED_SETUP_USD,
   type PlanId,
 } from '@/lib/constants';
 import { serverEnv } from '@/lib/env';
@@ -134,13 +135,10 @@ export default async function ProfileBillingPage() {
                 <>
                   <p style={{ margin: '0 0 .1rem' }}>
                     <strong style={{ fontSize: '1.9rem' }}>${plan.monthly}</strong>
-                    <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
-                  </p>
-                  <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 .35rem' }}>
-                    or ${plan.annual.toLocaleString()}/yr &middot; {propertyRangeLabel(plan)}
+                    <span className="muted" style={{ fontSize: '.85rem' }}>/property/mo</span>
                   </p>
                   <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
-                    {plan.conversationAllowance.toLocaleString()} pooled conversations/mo
+                    or ${plan.annual.toLocaleString()}/property/yr &middot; {propertyRangeLabel(plan)}
                   </p>
                 </>
               ) : (
@@ -149,7 +147,7 @@ export default async function ProfileBillingPage() {
                     <strong style={{ fontSize: '1.35rem' }}>Talk to us</strong>
                   </p>
                   <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
-                    {propertyRangeLabel(plan)} &middot; allowance agreed at contract
+                    {propertyRangeLabel(plan)} &middot; pricing agreed at contract
                   </p>
                 </>
               )}
@@ -166,7 +164,7 @@ export default async function ProfileBillingPage() {
                 <a
                   className="btn btn-secondary"
                   style={{ display: 'block', textAlign: 'center', minHeight: 44, lineHeight: '44px' }}
-                  href={`mailto:${SALES_EMAIL}?subject=${encodeURIComponent(`Moche.AI ${plan.name} enquiry`)}`}
+                  href={`mailto:${SALES_EMAIL}?subject=${encodeURIComponent(`Moche-AI ${plan.name} enquiry`)}`}
                 >
                   Contact sales
                 </a>
@@ -177,12 +175,16 @@ export default async function ProfileBillingPage() {
       </div>
 
       <p className="faint" style={{ fontSize: '.78rem', marginTop: '1.25rem' }}>
-        Watching your allowance? See <Link href="/dashboard/profile/usage">Usage</Link>.
+        Watching your usage? See <Link href="/dashboard/profile/usage">Usage</Link>.
       </p>
 
       <p className="faint" style={{ fontSize: '.78rem', marginTop: '.5rem' }}>
-        No setup fees. Cancel anytime. Annual plans include two months free. Prices in USD.
-        Conversation allowances are pooled across your whole account, not per property.
+        Self-serve plans are priced per property: checkout bills the number of active
+        properties on your account at the plan rate. Every plan includes unlimited guests,
+        stays, and conversations — there are no per-conversation charges. Optional guided
+        setup is ${GUIDED_SETUP_USD} per property, one time, arranged with our team;
+        self-service onboarding is always free. Cancel anytime. Annual plans include two
+        months free. Prices in USD.
       </p>
     </div>
   );

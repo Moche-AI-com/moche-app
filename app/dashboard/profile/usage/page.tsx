@@ -3,8 +3,7 @@ import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
-import { getConversationUsage } from '@/lib/billing/usage';
-import { CONVERSATION_OVERAGE_USD, PLANS, type PlanId } from '@/lib/constants';
+import { PLANS, type PlanId } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,10 +18,9 @@ export default async function ProfileUsagePage() {
   if (ctx.account.owner_id !== ctx.user.id) redirect('/dashboard/profile');
 
   const supabase = createClient();
-  const [ent, gate, usage] = await Promise.all([
+  const [ent, gate] = await Promise.all([
     getEntitlements(supabase, ctx.account.id),
     canCreateProperty(supabase, ctx.account.id),
-    getConversationUsage(supabase, ctx.account.id),
   ]);
 
   const planName = ent.planId ? PLANS[ent.planId as PlanId].name : null;
@@ -36,8 +34,7 @@ export default async function ProfileUsagePage() {
       <p className="muted" style={{ fontSize: '.88rem', maxWidth: 560 }}>
         {planName
           ? `Where you stand on the ${planName} plan this period.`
-          : 'Where you stand this period.'}{' '}
-        Allowances are pooled across your whole account, never per property.
+          : 'Where you stand this period.'}
       </p>
 
       <div className="card" style={{ padding: '1.25rem', maxWidth: 620, marginBottom: '1rem' }}>
@@ -54,39 +51,16 @@ export default async function ProfileUsagePage() {
         )}
       </div>
 
-      {/* usage.used is -1 when the count could not be read. That must never render
-          as "0 conversations used", which would look like a working meter honestly
-          reporting no activity. */}
-      {ent.active && usage.allowance > 0 ? (
-        <div className="card" style={{ padding: '1.25rem', maxWidth: 620 }}>
-          <strong style={{ fontSize: '.95rem' }}>Guest conversations this period</strong>
-          {usage.used < 0 ? (
-            <p className="muted" style={{ fontSize: '.85rem', margin: '.35rem 0 0' }}>
-              Usage is temporarily unavailable. Your concierge is unaffected.
-            </p>
-          ) : (
-            <>
-              <p style={{ margin: '.35rem 0 .5rem', fontSize: '.9rem' }}>
-                {usage.used.toLocaleString()} of {usage.allowance.toLocaleString()} included
-                {usage.percentUsed !== null ? ` (${usage.percentUsed}%)` : ''}
-              </p>
-              <Meter percent={usage.percentUsed ?? 0} />
-              <p className="faint" style={{ fontSize: '.78rem', margin: '.5rem 0 0' }}>
-                Beyond your allowance, conversations are ${CONVERSATION_OVERAGE_USD.toFixed(2)}
-                {' '}each. We slow the concierge down rather than cutting your guests off.
-              </p>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="card" style={{ padding: '1.25rem', maxWidth: 620 }}>
-          <strong style={{ fontSize: '.95rem' }}>Guest conversations</strong>
-          <p className="muted" style={{ fontSize: '.85rem', margin: '.35rem 0 0' }}>
-            A conversation allowance starts with your plan.{' '}
-            <Link href="/dashboard/profile/billing">See plans</Link>.
-          </p>
-        </div>
-      )}
+      {/* Conversations are unmetered on every plan (pitch-deck pricing, Aug 2026):
+          no allowance to watch and no per-conversation fees. The pooled-allowance
+          meter from PR #17 only renders when a plan carries a nonzero allowance,
+          which none currently do. */}
+      <div className="card" style={{ padding: '1.25rem', maxWidth: 620 }}>
+        <strong style={{ fontSize: '.95rem' }}>Guest conversations</strong>
+        <p className="muted" style={{ fontSize: '.85rem', margin: '.35rem 0 0' }}>
+          Unlimited on every plan — there are no per-conversation charges.
+        </p>
+      </div>
     </section>
   );
 }

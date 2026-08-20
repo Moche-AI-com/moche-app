@@ -21,7 +21,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Derived from PLANS so a new tier cannot be added to the grid and silently stay
-// unbuyable, and so the sales-assisted tiers (enterprise, custom) are rejected here
+// unbuyable, and so the sales-assisted tiers (portfolio, enterprise) are rejected here
 // rather than failing later on a missing price id.
 const SELF_SERVE = SELF_SERVE_PLAN_IDS as [PlanId, ...PlanId[]];
 
@@ -132,10 +132,24 @@ export async function POST(req: Request) {
       }
     }
 
+    // Per-property pricing (pitch-deck model, Aug 2026): self-serve tiers are priced
+    // per property per month, so the line-item quantity is the number of active
+    // (non-archived, non-deleted) properties on the account. The floor of 1 lets a
+    // brand-new host start a plan before creating their first property. The webhook
+    // persists this quantity on the subscriptions row; known follow-up: adding a
+    // property mid-plan does not yet update the quantity automatically.
+    const { count: propertyCount } = await supabase
+      .from('properties')
+      .select('id', { count: 'exact', head: true })
+      .eq('host_account_id', hostAccountId)
+      .is('deleted_at', null)
+      .neq('status', 'archived');
+    const quantity = Math.max(1, propertyCount ?? 0);
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
-      line_items: [{ price, quantity: 1 }],
+      line_items: [{ price, quantity }],
       client_reference_id: hostAccountId,
       subscription_data: {
         metadata: {
@@ -178,7 +192,7 @@ export async function POST(req: Request) {
       actorProfileId: ctx.user.id,
       hostAccountId,
       targetType: 'subscription',
-      metadata: { plan: planId, interval, foundingTrial: isFoundingTrialEligible },
+      metadata: { plan: planId, interval, quantity, foundingTrial: isFoundingTrialEligible },
     });
 
     return NextResponse.json({ url: session.url });

@@ -38,10 +38,10 @@ export interface Entitlements {
 
 const ACTIVE_STATUSES: Subscription['status'][] = ['trialing', 'active', 'past_due'];
 
-// Statuses for which a property's guest AI concierge stays ENABLED. Mirrors
-// ACTIVE_STATUSES: trialing/active are fully paid-up, past_due is a grace period
-// during dunning (we keep guests served while the host resolves payment). Blocked
-// statuses: unpaid (dunning exhausted), canceled, incomplete, incomplete_expired,
+// Statuses where the guest concierge keeps running. Deliberately the same list as
+// ACTIVE_STATUSES today: trialing, active, and past_due (dunning grace). It exists
+// as a separate constant so a future change (e.g. pausing guest AI during dunning)
+// is a one-line edit with its own review, not an accidental side effect of editing
 // paused. Uses the EXISTING subscription_status enum — no new states invented.
 const GUEST_AI_ENABLED_STATUSES: Subscription['status'][] = ['trialing', 'active', 'past_due'];
 
@@ -111,9 +111,16 @@ export function entitlementsFromSubscription(sub: Subscription | null): Entitlem
     };
   }
 
+  // Per-property pricing: the paid quantity on the Stripe line item IS the property
+  // cap (the webhook persists it on the subscriptions row). plan.propertyLimit is the
+  // tier's ceiling, so the cap can never exceed the tier's band even if a Stripe
+  // quantity is edited by hand. Known follow-up: adding a property mid-plan does not
+  // yet raise the quantity automatically; today that is a support-assisted change.
+  const paidQuantity =
+    sub!.quantity && Number.isFinite(sub!.quantity) && sub!.quantity > 0 ? sub!.quantity : 1;
   const propertyLimit = trialing
     ? (sub!.trial_property_limit ?? FOUNDING_TRIAL_PROPERTY_LIMIT)
-    : plan.propertyLimit;
+    : Math.min(paidQuantity, plan.propertyLimit);
 
   return {
     planId: plan.id,

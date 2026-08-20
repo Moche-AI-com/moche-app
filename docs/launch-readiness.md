@@ -80,7 +80,7 @@ warnings to 0. What remains is deliberate:
 
 | Advisor finding | Count | Why it is accepted |
 |---|---|---|
-| `authenticated_security_definer_function_executable` | 6 | Five of these are self-scoped boolean helpers (`can_access_property`, `can_edit_property`, `is_account_member`, `is_account_owner`, `is_admin`). Each answers only "may *the calling user* do X", so a signed-in caller learns nothing they could not learn from their own row access. They are referenced by many tracked migration files; relocating them to the `private` schema is a follow-up with real blast radius, not a launch blocker. The sixth is `account_conversation_usage`, which must be callable by signed-in users because that is how a host reads their own usage meter. It takes an account id and immediately checks `is_account_member(p_host_account_id)`, raising unless the caller belongs to that account; only `service_role` skips the check. So a signed-in caller can read their own usage and nobody else's. |
+| `authenticated_security_definer_function_executable` | 6 | Five self-scoped boolean helpers (`can_access_property`, `can_edit_property`, `is_account_member`, `is_account_owner`, `is_admin`). Each answers only "may *the calling user* do X", so a signed-in caller learns nothing they could not learn from their own row access. They are referenced by many tracked migration files; relocating them to the `private` schema is a follow-up with real blast radius, not a launch blocker. The sixth is `account_conversation_usage`, which must be callable by signed-in users because that is how a host reads their own usage meter. It takes an account id and immediately checks `is_account_member(p_host_account_id)`, raising unless the caller belongs to that account; only `service_role` skips the check. So a signed-in caller can read their own usage and nobody else's. |
 | `rls_enabled_no_policy` | 2 (INFO) | `app_settings` and `host_otp_challenges` are service-role-only tables. RLS on with no policy is the correct fail-closed configuration: it denies every non-service-role caller. Documented via table `COMMENT`s. |
 | `auth_leaked_password_protection` | 1 | Dashboard toggle, see above. |
 
@@ -119,31 +119,54 @@ created, so there is nothing to archive.
 
 ## Pricing, trial, and entitlements
 
-The live Stripe catalog and the production env vars both match the pricing grid
-in `components/landing/Pricing.tsx`. Verified by reading back all 10
-`STRIPE_PRICE_*` values from the `moche-app` production environment and
-comparing every `unit_amount` against the grid.
+The pricing grid in `lib/constants.ts` follows the investor pitch deck
+(August 2026): per-property pricing with two self-serve tiers and two
+contract tiers. The landing-page pricing (`components/landing/Pricing.tsx`)
+renders the same numbers.
 
-| Tier | Properties | Conversations/mo | Monthly | Annual |
-|---|---|---|---|---|
-| Starter | 1 | 50 | $29 | $290 |
-| Pro | 2-5 | 200 | $69 | $690 |
-| Growth | 6-10 | 500 | $119 | $1,190 |
-| Scale | 11-15 | 800 | $169 | $1,690 |
-| Portfolio | 16-40 | 1,500 | $249 | $2,490 |
-| Enterprise | 41-100 | contract | sales | - |
-| Custom | 101+ | contract | sales | - |
+| Tier | Properties | Price | Channel |
+|---|---|---|---|
+| Essentials | 1-9 | $29/property/mo · $290/property/yr | self-serve |
+| Pro | 1-9 | $49/property/mo · $490/property/yr | self-serve |
+| Portfolio | 10-40 | $25-39/property/mo by contract | sales-assisted |
+| Enterprise | 41+ | custom | sales-assisted |
 
-Enterprise and Custom are sales-assisted. They render a contact-sales link and
-the checkout API rejects them with a 400, so neither can be self-served into a
-broken subscription.
+Per-property billing is real at checkout: the checkout route sets the Stripe
+line-item quantity to the account's active property count (floor 1, so a new
+host can start a plan before their first property), and the webhook persists
+that quantity on the subscriptions row. `lib/billing/entitlements.ts` then caps
+a paid account at the paid quantity (never above the tier's ceiling), so the
+plan grid, the checkout, and the enforcement path all read the same model.
+
+Known follow-up: adding a property mid-plan does not yet update the Stripe
+quantity automatically. Until that sync ships, a host who outgrows their paid
+quantity hits the property cap and contacts support (or upgrades) — the same
+interaction they had under flat tiers.
+
+The Founding Member trial is unchanged: 30 days at $0 with top-tier features,
+up to 5 properties, card on file up front, once per account.
+
+Guest conversations are unmetered on every plan: there are no allowances and
+no per-conversation fees (the pitch deck has none). The pooled-allowance and
+overage machinery from PR #17 remains in the codebase but is inert — every
+plan's `conversationAllowance` is 0, which the usage surfaces read as "do not
+meter". Reintroducing usage pricing would be a deliberate re-pricing decision,
+not a default.
+
+### Guided setup
+
+The deck's Activation line is back as an arranged service: $149 per property,
+one-time, white-glove onboarding. `GUIDED_SETUP_USD` in `lib/constants.ts` is
+the code-side record of the amount; it is NOT charged in self-serve checkout
+(the previous auto-charged activation fee was removed in 3519beb7 for exactly
+that reason). Selling it means a deliberate checkout add-on, not a flag.
 
 ### Deferred, and why neither blocks launch
 
 | Backlog item | State | Why it can wait |
 |---|---|---|
 | P3-05 trial-warning emails | Not built. `trigger/` still contains only `ping.test.ts`. | The trial is card-on-file with `end_behavior.missing_payment_method: 'cancel'`, so it converts on its own without any email being sent. Stripe also sends its own trial-ending notice when that setting is enabled on the account. A warning email improves the experience; its absence does not lose the customer or break billing. |
-| P3-08 overage throttle ladder | Not built. No `lib/billing/throttle.ts`. | Overage is $0.02 per conversation and the product promise is to slow the concierge, not cut guests off. Until a customer actually exceeds an allowance there is nothing to throttle, and the allowances are pooled and generous relative to the property caps. Billing correctness does not depend on it. |
+| P3-08 overage throttle ladder | Not built. No `lib/billing/throttle.ts`. | Conversations are unmetered on every plan — there is no overage to throttle. The per-conversation overage concept itself is retired; if usage pricing ever returns, throttling is part of that design, not this one's. |
 
 **Owner: human (decision).** Whether to ship either before or after first
 revenue. Both are additive and neither requires a migration.

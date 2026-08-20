@@ -6,6 +6,7 @@ import {
   FOUNDING_TRIAL_PROPERTY_LIMIT,
   SELF_SERVE_PLAN_IDS,
   ANNUAL_MULTIPLIER,
+  GUIDED_SETUP_USD,
   type PlanId,
 } from '@/lib/constants';
 import type { Database } from '@/lib/database.types';
@@ -40,12 +41,22 @@ describe('plan grid', () => {
     expect(Object.keys(PLANS)).toEqual([
       'starter',
       'pro',
-      'growth_lower',
-      'growth_upper',
       'portfolio',
       'enterprise',
-      'custom',
     ]);
+  });
+
+  it('matches the pitch-deck price points', () => {
+    // Deck (Aug 2026): Essentials $29/property/mo and Pro $49/property/mo, both
+    // self-serve and per-property. Portfolio and Enterprise are contract-priced,
+    // represented as 0 in the grid (never a self-serve checkout amount).
+    expect(PLANS.starter.monthly).toBe(29);
+    expect(PLANS.starter.annual).toBe(290);
+    expect(PLANS.pro.monthly).toBe(49);
+    expect(PLANS.pro.annual).toBe(490);
+    expect(PLANS.portfolio.monthly).toBe(0);
+    expect(PLANS.enterprise.monthly).toBe(0);
+    expect(GUIDED_SETUP_USD).toBe(149);
   });
 
   it('prices annual at exactly the monthly rate times the multiplier', () => {
@@ -58,24 +69,26 @@ describe('plan grid', () => {
     for (const id of Object.keys(PLANS) as PlanId[]) {
       const plan = PLANS[id];
       const max = plan.propertyRange[1];
-      // The custom tier has an infinite range, which propertyLimit represents as
+      // The enterprise tier has an infinite range, which propertyLimit represents as
       // MAX_SAFE_INTEGER so arithmetic on it stays finite.
       if (Number.isFinite(max)) expect(plan.propertyLimit).toBe(max);
       else expect(plan.propertyLimit).toBe(Number.MAX_SAFE_INTEGER);
     }
   });
 
-  it('leaves no gap or overlap between consecutive property ranges', () => {
-    const ids = Object.keys(PLANS) as PlanId[];
-    for (let i = 1; i < ids.length; i++) {
-      expect(PLANS[ids[i]].propertyRange[0]).toBe(PLANS[ids[i - 1]].propertyRange[1] + 1);
-    }
+  it('starts the contract tiers exactly where self-serve ends, with no gap', () => {
+    // Self-serve tiers are per-property and deliberately cover the same 1-9
+    // band; the contract ladder must continue from there without a gap.
+    expect(PLANS.starter.propertyRange).toEqual([1, 9]);
+    expect(PLANS.pro.propertyRange).toEqual([1, 9]);
+    expect(PLANS.portfolio.propertyRange[0]).toBe(PLANS.starter.propertyRange[1] + 1);
+    expect(PLANS.enterprise.propertyRange[0]).toBe(PLANS.portfolio.propertyRange[1] + 1);
   });
 
-  it('marks exactly the two sales-assisted tiers as not self-serve', () => {
-    expect(SELF_SERVE_PLAN_IDS).toEqual(['starter', 'pro', 'growth_lower', 'growth_upper', 'portfolio']);
+  it('marks exactly the two contract tiers as not self-serve', () => {
+    expect(SELF_SERVE_PLAN_IDS).toEqual(['starter', 'pro']);
+    expect(PLANS.portfolio.selfServe).toBe(false);
     expect(PLANS.enterprise.selfServe).toBe(false);
-    expect(PLANS.custom.selfServe).toBe(false);
   });
 });
 
@@ -132,25 +145,29 @@ describe('entitlementsFromSubscription', () => {
     expect(ent.trialing).toBe(false);
   });
 
-  it('reads limits and allowance off the stored plan when active', () => {
-    const ent = entitlementsFromSubscription(sub({ plan: 'growth_upper', status: 'active' }));
-    expect(ent.planId).toBe('growth_upper');
-    expect(ent.propertyLimit).toBe(PLANS.growth_upper.propertyLimit);
-    expect(ent.conversationAllowance).toBe(PLANS.growth_upper.conversationAllowance);
+  it('caps properties at the paid quantity for per-property tiers', () => {
+    // Per-property pricing: the Stripe line-item quantity is the cap. 4 paid
+    // properties on Pro (ceiling 9) entitle exactly 4.
+    const ent = entitlementsFromSubscription(sub({ plan: 'pro', status: 'active', quantity: 4 }));
+    expect(ent.planId).toBe('pro');
+    expect(ent.propertyLimit).toBe(4);
+    expect(ent.conversationAllowance).toBe(PLANS.pro.conversationAllowance);
     expect(ent.reviewNudge).toBe(true);
   });
 
-  it('resolves growth_lower rather than a nonexistent "growth" plan', () => {
-    // Guards the underscore bug class: a plan id containing an underscore must
-    // resolve as a whole key, never as its first segment.
-    const ent = entitlementsFromSubscription(sub({ plan: 'growth_lower', status: 'active' }));
-    expect(ent.planId).toBe('growth_lower');
-    expect(ent.propertyLimit).toBe(10);
-    expect(ent.conversationAllowance).toBe(500);
+  it('never lets a hand-edited Stripe quantity exceed the tier ceiling', () => {
+    const ent = entitlementsFromSubscription(sub({ plan: 'pro', status: 'active', quantity: 25 }));
+    expect(ent.propertyLimit).toBe(PLANS.pro.propertyLimit);
+  });
+
+  it('treats a missing or zero quantity as one property, never as none', () => {
+    const ent = entitlementsFromSubscription(sub({ plan: 'pro', status: 'active', quantity: 0 }));
+    expect(ent.propertyLimit).toBe(1);
   });
 
   it('falls back to the minimum when the stored plan is not in the grid', () => {
-    // A stale plan string from an older deploy must not throw or grant top tier.
+    // A stale plan string from an older deploy (e.g. a retired flat tier) must not
+    // throw or grant top tier.
     const ent = entitlementsFromSubscription(sub({ plan: 'growth', status: 'active' }));
     expect(ent.active).toBe(false);
     expect(ent.propertyLimit).toBe(1);
@@ -162,7 +179,7 @@ describe('entitlementsFromSubscription', () => {
     );
     expect(ent.trialing).toBe(true);
     expect(ent.planId).toBe(TOP_TIER_PLAN_ID);
-    // The whole point of the offer: a Starter checkout gets top-tier features...
+    // The whole point of the offer: an Essentials checkout gets top-tier features...
     expect(ent.conversationAllowance).toBe(PLANS[TOP_TIER_PLAN_ID].conversationAllowance);
     expect(ent.conciergeCustomization).toBe(true);
     // ...but NOT the top tier's property ceiling.
@@ -189,13 +206,13 @@ describe('entitlementsFromSubscription', () => {
   });
 
   it('keeps a past_due account fully entitled through the dunning window', () => {
-    const ent = entitlementsFromSubscription(sub({ plan: 'pro', status: 'past_due' }));
+    const ent = entitlementsFromSubscription(sub({ plan: 'pro', status: 'past_due', quantity: 3 }));
     expect(ent.active).toBe(true);
     expect(ent.isReadOnly).toBe(false);
-    expect(ent.propertyLimit).toBe(PLANS.pro.propertyLimit);
+    expect(ent.propertyLimit).toBe(3);
   });
 
-  it('withholds co-hosts and cloning from Starter only', () => {
+  it('withholds co-hosts and cloning from Essentials only', () => {
     expect(entitlementsFromSubscription(sub({ plan: 'starter' })).coHosts).toBe(false);
     expect(entitlementsFromSubscription(sub({ plan: 'starter' })).cloning).toBe(false);
     expect(entitlementsFromSubscription(sub({ plan: 'pro' })).coHosts).toBe(true);
