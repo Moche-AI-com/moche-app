@@ -1179,7 +1179,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
     setHostComposerError(null);
     if (hostPreview) {
       // Preview mode has no guest session; just simulate locally so hosts can see the UX.
-      setEntries((e) => [...e, { role: 'guest', content: trimmed, escalated: true }]);
+      setEntries((e) => [...e, { id: makeChatId('guest'), role: 'guest', content: trimmed, escalated: true }]);
       setHostComposerOpen(false);
       setHostMsg('');
       setHostSending(false);
@@ -1196,7 +1196,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not reach your host just now.');
-      setEntries((e) => [...e, { role: 'guest', content: trimmed, escalated: true }]);
+      setEntries((e) => [...e, { id: makeChatId('guest'), role: 'guest', content: trimmed, escalated: true }]);
       setHostComposerOpen(false);
       setHostMsg('');
     } catch (e) {
