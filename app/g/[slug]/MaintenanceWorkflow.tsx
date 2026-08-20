@@ -121,7 +121,7 @@ export function MaintenanceWorkflow(props: {
     if (!resumable) return;
     setTicketId(resumable.id);
     const transcript = Array.isArray(resumable.interview_transcript) ? resumable.interview_transcript : [];
-    const restored: Turn[] = transcript.map((t) => {
+      const restored: Turn[] = transcript.map((t): Turn => {
       const row = t as { role?: string; text?: string; content?: string };
       return { role: row.role === 'guest' ? 'guest' : 'assistant', text: String(row.text ?? row.content ?? '') };
     }).filter((t) => t.text.length > 0);
