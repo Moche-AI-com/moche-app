@@ -1,34 +1,53 @@
+'use client';
 import Link from 'next/link';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
+import { useState } from 'react';
 
-const TIERS = [
-  { name: 'Starter', properties: '1 property', monthly: 29, conversations: 50, popular: false },
-  { name: 'Pro', properties: '2-5 properties', monthly: 69, conversations: 200, popular: true },
-  { name: 'Growth', properties: '6-10 properties', monthly: 119, conversations: 500, popular: false },
-  { name: 'Scale', properties: '11-15 properties', monthly: 169, conversations: 800, popular: false },
-  { name: 'Portfolio', properties: '16-40 properties', monthly: 249, conversations: 1500, popular: false },
+const PLANS = [
+  {
+    name: 'Essentials',
+    slug: 'essentials',
+    pricePerProperty: 29,
+    features: [
+      'Property Brain & guest portal',
+      'Grounded AI Q&A (verified facts)',
+      'Structured requests & escalation',
+      'Host‑approved memory updates',
+    ],
+    popular: false,
+  },
+  {
+    name: 'Pro',
+    slug: 'pro',
+    pricePerProperty: 49,
+    features: [
+      'Everything in Essentials',
+      'Learning analytics & insights',
+      'Workflow automation & branding',
+      'Multi‑property dashboards',
+    ],
+    popular: true,
+  },
 ] as const;
 
-const ANNUAL_MULTIPLIER = 10;
-const CONTACT_SALES_MAILTO = `mailto:hostspark.org@gmail.com?subject=${encodeURIComponent(
-  'Contact sales -- 41+ properties',
-)}&body=${encodeURIComponent('Hi Moche-AI team,\n\nWe manage 41+ properties and would like to talk pricing.\n\n')}`;
+const ANNUAL_MULTIPLIER = 10; // 10 months = 2 free
+const MIN_PROPERTIES = 1;
+const MAX_PROPERTIES = 9; // beyond this, Portfolio/Enterprise
 
-// Exact tiers and multiplier per the approved pricing spec -- do not invent
-// other numbers. Every panel ends in an action: a tier the visitor can start on
-// their own, or a way to reach a human for the volume tier.
-//
-// Six equal cards made the row read as a wall of numbers with no route through
-// it. On a fine-pointer desktop the tiers are now one expanding rail: the
-// recommended tier is open by default, and pointing at any other tier opens
-// that one and lets the rest recede. The rail (name, price, property count) is
-// always legible in every panel, so nothing a visitor needs to compare is
-// hidden behind an interaction -- only the supporting detail and the CTA move.
-//
-// Everything narrower than 1000px, and any coarse-pointer device at any width,
-// gets the plain stacked grid instead. See landing.module.css.
+const CONTACT_SALES_MAILTO = `mailto:hostspark.org@gmail.com?subject=${encodeURIComponent(
+  'Portfolio or Enterprise pricing',
+)}&body=${encodeURIComponent(
+  'Hi Moche-AI team,\n\nWe manage 10+ properties and would like to discuss Portfolio/Enterprise pricing.\n\n'
+)}`;
+
 export function Pricing() {
+  const [propertyCount, setPropertyCount] = useState(5);
+  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+
+  const totalMonthly = (planPrice: number) => propertyCount * planPrice;
+  const totalAnnual = (planPrice: number) => totalMonthly(planPrice) * ANNUAL_MULTIPLIER;
+
   return (
     <section className={styles.pricing} id="pricing" aria-labelledby="pricing-heading">
       <div className="wrap">
@@ -36,55 +55,105 @@ export function Pricing() {
           Pricing that scales with your portfolio
         </Reveal>
         <Reveal as="p" delay={60} className={`muted ${styles.pricingIntro}`}>
-          Every plan starts with a free month on the top tier, up to 5 properties. Pay annually for{' '}
-          {ANNUAL_MULTIPLIER}x the monthly rate, which works out to two months free. Conversations
-          beyond your allotment are billed at $0.02 each, and we throttle rather than cut you off.
+          Simple per‑property pricing. Pay annually for {ANNUAL_MULTIPLIER}x the monthly rate
+          (that’s two months free). No per‑conversation fees — unlimited guests and stays.
+          <br />
+          <strong>One‑time setup:</strong> $149/property for guided onboarding, or use
+          self‑service at no cost.
         </Reveal>
 
-        <div className={styles.pricingTrack}>
-          {TIERS.map((tier, i) => (
-            <Reveal
-              key={tier.name}
-              delay={i * 55}
-              className={styles.pricingPanel}
-              dataAttrs={{ 'data-featured': tier.popular ? '' : undefined }}
+        {/* Property count slider + billing toggle */}
+        <div className={styles.pricingControls}>
+          <div className={styles.pricingSliderGroup}>
+            <label htmlFor="propertyCount" className={styles.pricingSliderLabel}>
+              Properties: <span>{propertyCount}</span>
+            </label>
+            <input
+              id="propertyCount"
+              type="range"
+              min={MIN_PROPERTIES}
+              max={MAX_PROPERTIES}
+              step={1}
+              value={propertyCount}
+              onChange={(e) => setPropertyCount(Number(e.target.value))}
+              className={styles.pricingSlider}
+            />
+            <span className={styles.pricingSliderHint}>
+              {propertyCount >= 10 ? 'Contact us for Portfolio discounts' : ''}
+            </span>
+          </div>
+
+          <div className={styles.pricingBillingToggle}>
+            <button
+              className={`${styles.billingBtn} ${billing === 'monthly' ? styles.active : ''}`}
+              onClick={() => setBilling('monthly')}
             >
-              <div className={styles.pricingRail}>
-                <span className={styles.pricingFlag} data-visible={tier.popular ? '' : undefined}>
-                  Most chosen
-                </span>
-                <h3 className={styles.pricingTier}>{tier.name}</h3>
-                <p className={styles.pricingPrice}>
-                  <span className={styles.pricingAmount}>${tier.monthly}</span>
-                  <span className={styles.pricingPer}>/mo</span>
-                </p>
-                <p className={styles.pricingProperties}>{tier.properties}</p>
-              </div>
-
-              <div className={styles.pricingDetail}>
-                <div className={styles.pricingDetailInner}>
-                  <ul className={styles.pricingFacts}>
-                    <li>{tier.conversations.toLocaleString()} conversations a month</li>
-                    <li>${tier.monthly * ANNUAL_MULTIPLIER} a year, billed annually</li>
-                    <li>Unlimited guests and stays</li>
-                  </ul>
-                  <Link
-                    href="/signup"
-                    className={`btn ${tier.popular ? 'btn-primary' : 'btn-ghost'} btn-block ${styles.pricingCta}`}
-                  >
-                    Start free trial
-                  </Link>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-
+              Monthly
+            </button>
+            <button
+              className={`${styles.billingBtn} ${billing === 'annual' ? styles.active : ''}`}
+              onClick={() => setBilling('annual')}
+            >
+              Annual <span className={styles.billingSavings}>(save 2 mo)</span>
+            </button>
+          </div>
         </div>
 
-        <Reveal delay={TIERS.length * 55} className={styles.pricingVolume}>
+        <div className={styles.pricingTrack}>
+          {PLANS.map((plan, i) => {
+            const monthlyTotal = totalMonthly(plan.pricePerProperty);
+            const annualTotal = totalAnnual(plan.pricePerProperty);
+            const displayPrice = billing === 'monthly' ? monthlyTotal : annualTotal;
+            const priceLabel = billing === 'monthly' ? '/mo' : '/yr';
+
+            return (
+              <Reveal
+                key={plan.slug}
+                delay={i * 55}
+                className={styles.pricingPanel}
+                dataAttrs={{ 'data-featured': plan.popular ? '' : undefined }}
+              >
+                <div className={styles.pricingRail}>
+                  <span className={styles.pricingFlag} data-visible={plan.popular ? '' : undefined}>
+                    Most chosen
+                  </span>
+                  <h3 className={styles.pricingTier}>{plan.name}</h3>
+                  <p className={styles.pricingPrice}>
+                    <span className={styles.pricingAmount}>${displayPrice}</span>
+                    <span className={styles.pricingPer}>{priceLabel}</span>
+                  </p>
+                  <p className={styles.pricingProperties}>
+                    ${plan.pricePerProperty}/property/mo
+                  </p>
+                </div>
+
+                <div className={styles.pricingDetail}>
+                  <div className={styles.pricingDetailInner}>
+                    <ul className={styles.pricingFacts}>
+                      {plan.features.map((feature) => (
+                        <li key={feature}>{feature}</li>
+                      ))}
+                      <li>Unlimited guests and stays</li>
+                      <li>No per‑conversation charges</li>
+                    </ul>
+                    <Link
+                      href="/signup"
+                      className={`btn ${plan.popular ? 'btn-primary' : 'btn-ghost'} btn-block ${styles.pricingCta}`}
+                    >
+                      Start free trial
+                    </Link>
+                  </div>
+                </div>
+              </Reveal>
+            );
+          })}
+        </div>
+
+        <Reveal delay={PLANS.length * 55} className={styles.pricingVolume}>
           <p className={styles.pricingVolumeCopy}>
-            <strong>41 properties or more?</strong> Volume pricing is built around how your
-            portfolio is structured.
+            <strong>10+ properties?</strong> Get our Portfolio plan with roles, bulk tools,
+            and deeper integrations at discounted per‑property rates ($25–39/property/mo).
+            For 41+ properties, we offer custom Enterprise pricing.
           </p>
           <a href={CONTACT_SALES_MAILTO} className={styles.pricingVolumeLink}>
             Contact sales
