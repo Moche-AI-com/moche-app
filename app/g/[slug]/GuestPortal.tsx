@@ -1513,7 +1513,10 @@ const openPlaceDetail = useCallback((id: string) => {
         {extraOffers.length > 0 && (
           <button
             type="button"
-            onClick={() => { window.location.assign(`/g/${slug}/extras`); }}
+            onClick={() => {
+            setExtrasOpen((v) => !v);
+            requestAnimationFrame(() => extrasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+          }}
             className="gp-cat gp-card gp-cat-accent"
             data-testid="card-extras"
             aria-expanded={extrasOpen}
