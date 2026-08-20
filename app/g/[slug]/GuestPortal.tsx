@@ -980,6 +980,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [asked, setAsked] = useState(false);
+  const sendInFlight = useRef(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   // Guest UX pass — the guest's reading language, chosen from the Globe picker that
@@ -1078,9 +1079,10 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   }
 
   const send = useCallback(async (text: string) => {
-    if (!text.trim() || busy) return;
-    setAsked(true);
-    setSuggestions([]);
+    if (!text.trim() || busy || sendInFlight.current) return;     
+      sendInFlight.current = true;
+      setAsked(true);
+      setSuggestions([]);
     // Bring the conversation into view after a card-driven query.
     setTimeout(() => chatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
     const nextEntries: ChatEntry[] = [...entries, { role: 'guest', content: text }];
@@ -1126,7 +1128,7 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       setSuggestions(Array.isArray(json.suggestions) ? json.suggestions.slice(0, 3) : []);
     } catch (e) {
       setEntries((prev) => [...prev, { role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
-    } finally { setBusy(false); }
+          } finally { sendInFlight.current = false; setBusy(false); }
   }, [busy, entries, hostPreview, propertyId, slug, language]);
 
   // Add-on: one-tap feedback. Records a private product_feedback row (guest path).
