@@ -253,6 +253,12 @@ interface ChatEntry {
   places?: ChatPlaceRef[];
 }
 
+let chatIdCounter = 0;
+function makeChatId(prefix: string): string {
+  chatIdCounter += 1;
+  return `${prefix}-${Date.now()}-${chatIdCounter}`;
+}
+
 export interface ReviewNudgeConfig { enabled: boolean; auto: boolean; url: string | null }
 export interface ExtraOffer {
   id: string;
@@ -1085,12 +1091,11 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       setSuggestions([]);
     // Bring the conversation into view after a card-driven query.
     setTimeout(() => chatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
-    const nextEntries: ChatEntry[] = [...entries, { role: 'guest', content: text }];
+    const nextEntries: ChatEntry[] = [...entries, { id: makeChatId('guest'), role: 'guest', content: text }];
     setEntries(nextEntries);
     setInput('');
     setBusy(true);
-    try {
-      // Hosts previewing their own portal hit the read-only host endpoint (keyed by
+             //Hosts previewing their own portal hit the read-only host endpoint (keyed by
       // property id) so no guest session/conversation/escalation is created. Real
       // guests use the verified guest chat endpoint (keyed by slug + session cookie).
       const res = hostPreview
@@ -1124,11 +1129,11 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
             .filter((p: unknown): p is ChatPlaceRef => !!p && typeof p === 'object' && typeof (p as ChatPlaceRef).id === 'string')
             .slice(0, 4)
         : [];
-      setEntries((e) => [...e, { role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency, places }]);
+            setEntries((e) => [...e, { id: makeChatId('assistant'), role: 'assistant', content: json.answer, escalated: json.escalated, isEmergency: json.isEmergency, places }]);
       setSuggestions(Array.isArray(json.suggestions) ? json.suggestions.slice(0, 3) : []);
     } catch (e) {
-      setEntries((prev) => [...prev, { role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
-          } finally { sendInFlight.current = false; setBusy(false); }
+            setEntries((prev) => [...prev, { id: makeChatId('assistant'), role: 'assistant', content: e instanceof Error ? e.message : 'Something went wrong.' }]);
+                        } finally { sendInFlight.current = false; setBusy(false); }
   }, [busy, entries, hostPreview, propertyId, slug, language]);
 
   // Add-on: one-tap feedback. Records a private product_feedback row (guest path).
