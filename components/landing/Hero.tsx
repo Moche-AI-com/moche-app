@@ -9,6 +9,8 @@ import pool from '@/public/premium/str-gallery-pool-deck.webp';
 import handoff from '@/public/premium/str-gallery-key-handoff.webp';
 import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
 import portal from '@/public/premium/portal-hero.jpg';
+import { Reveal } from './Reveal';
+import styles from './landing.module.css';
 
 type FanFrameId =
   | 'beachhouse'
