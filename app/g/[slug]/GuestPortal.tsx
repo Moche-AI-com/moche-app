@@ -1296,7 +1296,8 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
   // WS-5 — open the place-detail sheet and fetch the server-verified record for the
   // tapped chip. Host preview has no guest session, so it degrades to a friendly
   // "not verified" message rather than hitting the session-gated guest endpoint.
-  const openPlaceDetail = useCallback((id: string) => {
+  const placeDetailAbortRef = useRef<AbortController | null>(null);
+const openPlaceDetail = useCallback((id: string) => {
     setPlaceDetailId(id);
     setPlaceDetail(null);
     setPlaceDetailError(null);
@@ -1304,19 +1305,23 @@ function Concierge({ slug, propertyId, hostPreview, propertyName, guestName, rev
       setPlaceDetailError('Place details are not available in host preview.');
       return;
     }
-    setPlaceDetailLoading(true);
-    fetch(`/api/guest/${slug}/places/${id}`)
+            setPlaceDetailLoading(true);
+    placeDetailAbortRef.current?.abort();
+    const controller = new AbortController();
+    placeDetailAbortRef.current = controller;
+    fetch(`/api/guest/${slug}/places/${id}`, { signal: controller.signal })
       .then(async (res) => {
         const json = await res.json();
         if (!res.ok || !json.verified) throw new Error('not_verified');
-        setPlaceDetail(json.place as PlaceDetail);
+        if (placeDetailAbortRef.current === controller) setPlaceDetail(json.place as PlaceDetail);
       })
-      .catch(() => setPlaceDetailError("We couldn't verify this place right now."))
-      .finally(() => setPlaceDetailLoading(false));
+              .catch((err) => { if (err?.name !== 'AbortError' && placeDetailAbortRef.current === controller) setPlaceDetailError("We couldn't verify this place right now."); })
+            .finally(() => { if (placeDetailAbortRef.current === controller) setPlaceDetailLoading(false); });
   }, [hostPreview, slug]);
 
   function closePlaceDetail() {
     setPlaceDetailId(null);
+    placeDetailAbortRef.current?.abort();
     setPlaceDetail(null);
     setPlaceDetailError(null);
   }
