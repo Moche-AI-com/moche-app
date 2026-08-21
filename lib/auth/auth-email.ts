@@ -193,14 +193,7 @@ export async function createUserAndSendConfirmation(
     `?token_hash=${encodeURIComponent(data.properties.hashed_token)}` +
     `&type=signup`;
 
-  const { html, text } = renderAuthEmail({
-    preheader: 'Confirm your email to activate your Moche-AI host account.',
-    heading: 'Confirm your email',
-    intro: 'Welcome to Moche-AI. Confirm your email address to activate your host account and start building your Property Brain.',
-    buttonLabel: 'Confirm my email',
-    url: confirmUrl,
-    outro: 'This link expires in 24 hours. If you did not create a Moche-AI account, you can safely ignore this email.',
-  });
+  const { html, text } = renderConfirmationEmail(confirmUrl);
 
   const sent = await send(params.email, 'Confirm your Moche-AI email', html, text);
   if (!sent) return { ok: false, reason: 'email_send_failed' };
@@ -317,4 +310,106 @@ export async function sendEarlyAccessThanks(params: {
       'No payment is due until launch, and early hosts lock in founding rates. If you did not sign up for Moche-AI, you can safely ignore this email.',
   });
   return send(params.email, 'You are on the Moche-AI early-access list', html, text);
+}
+
+
+// Signup confirmation email. Branded concierge design (see emails/confirm-account.html).
+// Uses the inline brandMarkSvg() for the logo so no cid: attachment is required for
+// images to render — Resend sends only from/to/subject/html/text here.
+function renderConfirmationEmail(url: string): { html: string; text: string } {
+  const preheader =
+    'Your Moche-AI concierge is ready. Confirm your account and give every guest instant, property-approved answers.';
+  const html = `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Activate your Moche-AI concierge</title>
+<style>
+html,body{width:100%!important;height:100%!important;margin:0!important;padding:0!important;}
+*{-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;}
+table,td{border-collapse:collapse!important;mso-table-lspace:0pt!important;mso-table-rspace:0pt!important;}
+img{border:0;outline:none;text-decoration:none;line-height:100%;-ms-interpolation-mode:bicubic;}
+a{text-decoration:none;}
+@media screen and (max-width:480px){
+.moche-mobile-padding{padding-left:24px!important;padding-right:24px!important;}
+.moche-heading{font-size:27px!important;}
+.moche-hero-image{height:190px!important;}
+.moche-hero-panel{padding-left:20px!important;padding-right:20px!important;}
+.moche-button{padding-left:21px!important;padding-right:23px!important;font-size:15px!important;}
+.moche-feature-cell{padding-left:3px!important;padding-right:3px!important;}
+.moche-feature-badge{width:46px!important;height:46px!important;line-height:46px!important;font-size:12px!important;}
+.moche-feature-title{font-size:11px!important;}
+.moche-feature-copy{font-size:10px!important;}
+}
+</style>
+</head>
+<body id="moche-body" style="margin:0;padding:0;word-spacing:normal;background-color:#FFF7E6;">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${preheader}&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#FFF7E6;">
+<tr><td align="center" style="padding:34px 12px 44px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;max-width:600px;background-color:#FFFDF8;border-radius:24px;overflow:hidden;box-shadow:0 14px 38px rgba(7,11,20,0.14);">
+<tr><td align="center" style="background-color:#070B14;padding:35px 40px 31px;border-radius:24px 24px 0 0;">
+<div style="display:inline-block;margin:0 auto 18px;padding:10px;background-color:#FFFFFF;border-radius:23px;">${brandMarkSvg()}</div>
+<h1 class="moche-heading" style="margin:0;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:31px;line-height:1.22;font-weight:800;letter-spacing:-0.4px;">Your digital front desk is ready.</h1>
+<p style="margin:11px 0 0;color:#9AE8E5;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;">Confirm your account and put trusted property knowledge at every guest’s fingertips.</p>
+</td></tr>
+<tr><td style="height:5px;line-height:5px;font-size:0;background-color:#52CBDE;background-image:linear-gradient(90deg,#33E6D3 0%,#52CBDE 45%,#7698F9 100%);">&nbsp;</td></tr>
+<tr><td style="background-color:#10283B;"><img class="moche-hero-image" src="https://www.moche-ai.com/_next/image?url=%2F_next%2Fstatic%2Fimmutable%2Fmedia%2Fportal-hero.21_412qeapbd1.jpg&w=1200&q=85" width="600" height="230" alt="The Moche-AI digital concierge guest experience" style="display:block;width:100%;max-width:600px;height:230px;object-fit:cover;background-color:#10283B;color:#C6D7E1;font-family:Arial,Helvetica,sans-serif;font-size:14px;"></td></tr>
+<tr><td class="moche-hero-panel" style="padding:0 32px;background-color:#10283B;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#17384D;border-left:1px solid #2A5065;border-right:1px solid #2A5065;">
+<tr><td width="40" align="center" valign="middle" style="padding:14px 0 14px 14px;"><span style="display:inline-block;width:10px;height:10px;line-height:10px;background-color:#33E6D3;border-radius:10px;">&nbsp;</span></td>
+<td valign="middle" style="padding:12px 10px;"><p style="margin:0 0 2px;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;font-weight:700;">Concierge status: ready to check in</p><p style="margin:0;color:#A9C4CF;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.45;">Available around the clock with answers you approve.</p></td>
+<td align="right" valign="middle" style="padding:12px 16px 12px 5px;"><span style="display:inline-block;padding:5px 9px;color:#9AE8E5;background-color:#21485A;border-radius:999px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:1;font-weight:800;letter-spacing:0.7px;">ONLINE</span></td></tr>
+</table></td></tr>
+<tr><td class="moche-mobile-padding" style="padding:36px 44px 8px;background-color:#FFFDF8;">
+<p style="margin:0 0 10px;color:#356FC3;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;">One final step</p>
+<h2 style="margin:0 0 15px;color:#173747;font-family:Arial,Helvetica,sans-serif;font-size:23px;line-height:1.3;font-weight:800;letter-spacing:-0.2px;">Open the door to better guest stays.</h2>
+<p style="margin:0 0 22px;color:#53636B;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.72;">Confirm your email to activate Moche-AI. Then add the property details guests ask about most—check-in, Wi-Fi, parking, house rules, appliances, and local recommendations.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#EDF9F6;border:1px solid #D3F0E8;border-radius:14px;">
+<tr><td width="43" align="center" valign="middle" style="padding:15px 0 15px 14px;"><span style="display:inline-block;width:26px;height:26px;color:#FFFFFF;background-color:#279F9E;border-radius:26px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:26px;font-weight:800;text-align:center;">✓</span></td>
+<td style="padding:15px 16px 15px 10px;"><p style="margin:0;color:#315C62;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.62;">Moche-AI answers from your property information and keeps you in control of what guests see.</p></td></tr>
+</table></td></tr>
+<tr><td align="center" style="padding:29px 30px 11px;background-color:#FFFDF8;">
+<a href="${url}" class="moche-button" style="display:inline-block;padding:0 29px;color:#FFFFFF;background-color:#4F80DD;background-image:linear-gradient(90deg,#3A9FC9 0%,#4F80DD 100%);border-radius:999px;box-shadow:0 8px 20px rgba(55,113,220,0.24);font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:60px;font-weight:800;white-space:nowrap;">Activate my concierge</a>
+<p style="margin:16px 0 0;color:#849095;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;">This secure confirmation link can be used once.</p>
+</td></tr>
+<tr><td class="moche-mobile-padding" style="padding:25px 44px 22px;background-color:#FFFDF8;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-top:1px solid #E9E2D4;">
+<tr>
+<td class="moche-feature-cell" width="33.33%" align="center" valign="top" style="padding:24px 6px 4px;"><div class="moche-feature-badge" style="display:inline-block;width:52px;height:52px;color:#287F92;background-color:#E7F8F8;border:1px solid #BFE9E8;border-radius:16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:52px;font-weight:800;text-align:center;">24/7</div><p class="moche-feature-title" style="margin:10px 0 3px;color:#173747;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;font-weight:800;">Always available</p><p class="moche-feature-copy" style="margin:0;color:#738087;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;">Answers day or night</p></td>
+<td class="moche-feature-cell" width="33.33%" align="center" valign="top" style="padding:24px 6px 4px;"><div class="moche-feature-badge" style="display:inline-block;width:52px;height:52px;color:#FFFFFF;background-color:#3486C9;border:1px solid #3486C9;border-radius:16px;font-family:Arial,Helvetica,sans-serif;font-size:21px;line-height:52px;font-weight:800;text-align:center;">✓</div><p class="moche-feature-title" style="margin:10px 0 3px;color:#173747;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;font-weight:800;">Host approved</p><p class="moche-feature-copy" style="margin:0;color:#738087;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;">Your facts, your voice</p></td>
+<td class="moche-feature-cell" width="33.33%" align="center" valign="top" style="padding:24px 6px 4px;"><div class="moche-feature-badge" style="display:inline-block;width:52px;height:52px;color:#506FD1;background-color:#EEF0FF;border:1px solid #D3D9FA;border-radius:16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:52px;font-weight:800;text-align:center;">5★</div><p class="moche-feature-title" style="margin:10px 0 3px;color:#173747;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;font-weight:800;">Guest focused</p><p class="moche-feature-copy" style="margin:0;color:#738087;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;">Less friction, better stays</p></td>
+</tr></table></td></tr>
+<tr><td class="moche-mobile-padding" style="padding:0 44px 36px;background-color:#FFFDF8;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#F5F2EA;border-radius:12px;">
+<tr><td style="padding:14px 16px;"><p style="margin:0;color:#707675;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.66;word-break:break-all;"><strong style="color:#455158;">Having trouble with the button?</strong><br>Copy and paste this secure link into your browser:<br><a href="${url}" style="color:#356FC3;text-decoration:underline;">${url}</a></p></td></tr>
+</table></td></tr>
+<tr><td align="center" style="background-color:#070B14;padding:27px 40px 29px;border-radius:0 0 24px 24px;">
+<span style="display:inline-block;margin:0 auto 12px;padding:6px;background-color:#FFFFFF;border-radius:10px;">${brandMarkSvg()}</span>
+<p style="margin:0 0 7px;color:#C6D9D8;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;">You’re receiving this because you signed up for <a href="https://www.moche-ai.com" style="color:#9AE8E5;text-decoration:none;font-weight:700;">Moche-AI</a>.</p>
+<p style="margin:0;color:#839AA5;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.65;">If you did not create this account, you can safely ignore this email.<br>© 2026 Moche-AI · Better stays, fewer questions.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+  const text = [
+    'Your digital front desk is ready.',
+    '',
+    'Confirm your email to activate Moche-AI, then add the property details guests ask about most (check-in, Wi-Fi, parking, house rules, appliances, and local recommendations).',
+    '',
+    `Activate my concierge: ${url}`,
+    '',
+    'This secure confirmation link can be used once.',
+    '',
+    'If you did not create this account, you can safely ignore this email.',
+    '© 2026 Moche-AI · Better stays, fewer questions.',
+  ].join('\n');
+  return { html, text };
 }
