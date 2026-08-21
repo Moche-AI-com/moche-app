@@ -1485,3 +1485,308 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   .profile-nav { display: none !important; }
   .profile-shell { display: block !important; }
 }
+
+/* ============================================================================
+   Add Property wizard (directive §2)
+   Scoped under .wizard so nothing here can leak into the rest of the dashboard.
+   ========================================================================= */
+
+.wizard { max-width: 760px; }
+
+.wizard-progress { margin-bottom: 1rem; }
+
+.wizard-progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  font-size: .8rem;
+  margin-bottom: .45rem;
+}
+
+.wizard-cov {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.wizard-cov-good { color: var(--teal); font-weight: 600; }
+
+.wizard-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--chart-track);
+  overflow: hidden;
+}
+
+.wizard-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--grad);
+  transition: width var(--tr);
+}
+
+.wizard-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem .55rem;
+  list-style: none;
+  margin: .6rem 0 0;
+  padding: 0;
+  font-size: .72rem;
+  color: var(--text-faint);
+}
+
+.wizard-dots li.done { color: var(--teal); }
+.wizard-dots li.here { color: var(--text); font-weight: 600; }
+.wizard-dots li + li::before { content: '·'; margin-right: .5rem; opacity: .5; }
+
+.wizard-card { padding: 1.5rem; }
+
+.wizard-head { margin-bottom: 1.25rem; }
+.wizard-head h2 { font-size: 1.35rem; margin: 0 0 .3rem; }
+.wizard-head p { margin: 0; font-size: .875rem; line-height: 1.5; }
+
+.wizard-grid-2,
+.wizard-grid-3,
+.wizard-grid-4 { display: grid; gap: .75rem; }
+.wizard-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wizard-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wizard-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.wizard-fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin: 0 0 1rem;
+}
+
+.wizard-fieldset > legend { padding: 0 .4rem; }
+
+/* --- stepper ------------------------------------------------------------- */
+
+.wizard-stepper {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.wizard-stepper .input {
+  /* Wide enough for five digits (square footage) and no wider: a full-width
+     number box invites free-text answers in a field that takes a count. */
+  width: 5.5rem;
+  text-align: center;
+  /* The spinners are redundant next to the buttons and they shrink the tap
+     target on the input itself. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.wizard-stepper .input::-webkit-outer-spin-button,
+.wizard-stepper .input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
+.wizard-stepper .btn {
+  /* 44px minimum touch target: these are the most-tapped controls in the flow. */
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.wizard-unit { font-size: .78rem; white-space: nowrap; }
+
+/* --- chips / checks ----------------------------------------------------- */
+
+.wizard-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+.wizard-chip input,
+.wizard-check input {
+  /* Visually hidden but focusable, so the chip itself carries the focus ring. */
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.wizard-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 .9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: .85rem;
+  cursor: pointer;
+  transition: background var(--tr), border-color var(--tr), color var(--tr);
+}
+
+.wizard-chip:hover { border-color: var(--border-strong); }
+
+.wizard-chip:has(input:checked) {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.wizard-chip:has(input:focus-visible),
+.wizard-check:has(input:focus-visible) {
+  outline: 2px solid var(--teal-vivid);
+  outline-offset: 2px;
+}
+
+.wizard-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: .45rem;
+}
+
+.wizard-check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  min-height: 44px;
+  padding: 0 .85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: .875rem;
+  cursor: pointer;
+  transition: background var(--tr), border-color var(--tr);
+}
+
+.wizard-check::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  transition: background var(--tr), border-color var(--tr);
+}
+
+.wizard-check:has(input:checked) { border-color: var(--teal); background: var(--surface-2); }
+
+.wizard-check:has(input:checked)::before {
+  background: var(--teal);
+  border-color: var(--teal);
+  /* Drawn rather than a glyph so the tick inherits no font metrics. */
+  background-image: linear-gradient(45deg, transparent 42%, #fff 42%, #fff 55%, transparent 55%),
+                    linear-gradient(-45deg, transparent 55%, #fff 55%, #fff 68%, transparent 68%);
+}
+
+/* --- questions ---------------------------------------------------------- */
+
+.wizard-question + .wizard-question {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.wizard-question .label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  line-height: 1.45;
+}
+
+.wizard-required {
+  background: var(--surface-2);
+  color: var(--coral-soft);
+  font-size: .68rem;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.wizard-subgroup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .65rem;
+  margin-top: .7rem;
+  padding-left: .85rem;
+  border-left: 2px solid var(--border);
+}
+
+.wizard-sub { margin: 0; }
+.wizard-sub .label { font-size: .78rem; color: var(--text-muted); }
+
+.wizard-secret { display: flex; align-items: center; gap: .35rem; }
+.wizard-secret .input { flex: 1 1 auto; }
+.wizard-secret .btn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+
+.wizard-range { display: flex; align-items: center; gap: .5rem; }
+.wizard-range .input { width: auto; flex: 0 1 9rem; }
+
+.wizard-field-error {
+  margin: .4rem 0 0;
+  font-size: .8rem;
+  color: var(--coral-soft);
+}
+
+/* --- hint --------------------------------------------------------------- */
+
+.wizard-hint { margin-top: .45rem; font-size: .78rem; }
+
+.wizard-hint > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  list-style: none;
+  /* 32px is below the 44px touch floor, but this is a supplementary disclosure
+     next to a full-width control, not a primary action. */
+  padding: .3rem 0;
+}
+
+.wizard-hint > summary::-webkit-details-marker { display: none; }
+.wizard-hint > summary:hover { color: var(--teal); }
+
+.wizard-hint > p {
+  margin: .3rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  max-width: 58ch;
+}
+
+/* --- actions ------------------------------------------------------------ */
+
+.wizard-actions {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+}
+
+.wizard-actions .btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
+
+.wizard-note { font-size: .78rem; margin: .7rem 0 0; line-height: 1.5; max-width: 62ch; }
+
+@media (max-width: 720px) {
+  .wizard-grid-3,
+  .wizard-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wizard-card { padding: 1.15rem; }
+}
+
+@media (max-width: 460px) {
+  .wizard-grid-2,
+  .wizard-grid-3,
+  .wizard-grid-4 { grid-template-columns: minmax(0, 1fr); }
+  .wizard-range { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-bar > span,
+  .wizard-chip,
+  .wizard-check { transition: none; }
+}
