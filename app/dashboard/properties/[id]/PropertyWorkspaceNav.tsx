@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-export type PropertySectionKey = 'overview' | 'stays' | 'escalations' | 'local' | 'extras' | 'settings';
+export type PropertySectionKey = 'overview' | 'stays' | 'guest-chat' | 'escalations' | 'local' | 'extras' | 'settings';
 
 export interface PropertySection {
   key: PropertySectionKey;
@@ -11,50 +11,68 @@ export interface PropertySection {
   href: string;
 }
 
-const SECTION_LABELS: Record<string, string> = {
+const SECTION_LABELS: Record<PropertySectionKey, string> = {
   overview: 'Overview',
   stays: 'Stays',
+  'guest-chat': 'Guest Chat',
   escalations: 'Escalations',
   local: 'Local Recs',
-  nearby: 'Local Recs',
-  recommendations: 'Local Recs',
   extras: 'Extras',
   settings: 'Configuration',
-  brain: 'Brain',
-  'welcome-card': 'Welcome card',
 };
 
 /** Pure nav model shared by the property workspace and its unit tests. */
 export function propertySections(propertyId: string, canEditProperty: boolean): PropertySection[] {
   const base = `/dashboard/properties/${propertyId}`;
   const sections: PropertySection[] = [
-    { key: 'overview', label: 'Overview', href: base },
-    { key: 'stays', label: 'Stays', href: `${base}/stays` },
-    { key: 'escalations', label: 'Escalations', href: `${base}/escalations` },
-    { key: 'local', label: 'Local Recs', href: `${base}/local` },
+    { key: 'overview', label: SECTION_LABELS.overview, href: base },
+    { key: 'stays', label: SECTION_LABELS.stays, href: `${base}/stays` },
+    { key: 'guest-chat', label: SECTION_LABELS['guest-chat'], href: `${base}/guest-chat` },
+    { key: 'escalations', label: SECTION_LABELS.escalations, href: `${base}/escalations` },
+    { key: 'local', label: SECTION_LABELS.local, href: `${base}/local` },
   ];
 
   if (canEditProperty) {
     sections.push(
-      { key: 'extras', label: 'Extras', href: `${base}/extras` },
-      { key: 'settings', label: 'Configuration', href: `${base}/settings` },
+      { key: 'extras', label: SECTION_LABELS.extras, href: `${base}/extras` },
+      { key: 'settings', label: SECTION_LABELS.settings, href: `${base}/settings` },
     );
   }
 
   return sections;
 }
 
-/** Returns the workspace label for a pathname, including legacy Local manager URLs. */
-export function propertySectionLabel(pathname: string | null | undefined, propertyId: string): string {
-  const base = `/dashboard/properties/${propertyId}`;
-  const normalized = (pathname ?? '').split(/[?#]/)[0].replace(/\/+$/, '');
-  if (!normalized || normalized === base) return SECTION_LABELS.overview;
-
-  const segment = normalized.slice(base.length).split('/').filter(Boolean)[0];
-  return SECTION_LABELS[segment] ?? 'Property';
+function cleanPath(pathname: string) {
+  return pathname.split('?')[0].replace(/\/+$/, '');
 }
 
-export function isPropertySectionActive(pathname: string | null | undefined, section: PropertySection, propertyId: string): boolean {
+export function propertySectionLabel(pathname: string, propertyId: string): string {
+  const path = cleanPath(pathname);
+  const base = `/dashboard/properties/${propertyId}`;
+  if (path === base) return SECTION_LABELS.overview;
+  if (path.startsWith(`${base}/stays`)) return SECTION_LABELS.stays;
+  if (path.startsWith(`${base}/guest-chat`)) return SECTION_LABELS['guest-chat'];
+  if (path.startsWith(`${base}/escalations`)) return SECTION_LABELS.escalations;
+  if (
+    path.startsWith(`${base}/local`) ||
+    path.startsWith(`${base}/nearby`) ||
+    path.startsWith(`${base}/recommendations`)
+  ) {
+    return SECTION_LABELS.local;
+  }
+  if (path.startsWith(`${base}/extras`)) return SECTION_LABELS.extras;
+  if (
+    path.startsWith(`${base}/settings`) ||
+    path.startsWith(`${base}/brain`) ||
+    path.startsWith(`${base}/appliances`) ||
+    path.startsWith(`${base}/welcome-card`)
+  ) {
+    return SECTION_LABELS.settings;
+  }
+  return SECTION_LABELS.overview;
+}
+
+export function isPropertySectionActive(pathname: string, section: PropertySection, propertyId: string): boolean {
   return propertySectionLabel(pathname, propertyId) === section.label;
 }
 
@@ -73,29 +91,12 @@ export function PropertyWorkspaceNav({
 
   return (
     <>
-      <style>{`
-        .property-workspace-breadcrumb { grid-column: 1 / -1; display: flex; align-items: center; min-height: 2.75rem; gap: .45rem; font-size: .82rem; color: var(--text-muted); }
-        .property-workspace-breadcrumb a { color: inherit; text-decoration: none; min-height: 2.75rem; display: inline-flex; align-items: center; }
-        .property-workspace-nav { min-width: 0; }
-        .property-workspace-nav-links { display: flex; flex-direction: column; gap: .35rem; position: sticky; top: 1rem; }
-        .property-workspace-nav-link { align-items: center; border-radius: var(--radius-md); color: var(--text-muted); display: flex; font-size: .9rem; font-weight: 600; min-height: 2.75rem; padding: .5rem .75rem; text-decoration: none; }
-        .property-workspace-nav-link:hover { background: var(--surface); color: var(--text); }
-        .property-workspace-nav-link.is-active { background: color-mix(in srgb, var(--teal) 13%, var(--surface)); color: var(--teal); }
-        @media (max-width: 899px) {
-          .property-workspace-main { grid-template-columns: minmax(0, 1fr) !important; }
-          .property-workspace-header { grid-template-columns: minmax(0, 1fr) !important; }
-          .property-workspace-nav { overflow-x: auto; padding-bottom: .2rem; scrollbar-width: thin; }
-          .property-workspace-nav-links { flex-direction: row; gap: .5rem; position: static; width: max-content; min-width: 100%; }
-          .property-workspace-nav-link { border: 1px solid var(--border); min-width: max-content; padding-inline: .9rem; }
-          .property-workspace-nav-link.is-active { border-color: color-mix(in srgb, var(--teal) 45%, var(--border)); }
-        }
-      `}</style>
       <nav className="property-workspace-breadcrumb" aria-label="Property breadcrumb">
         <Link href="/dashboard/properties">Properties</Link>
         <span aria-hidden>/</span>
         <span>{propertyName}</span>
         <span aria-hidden>/</span>
-        <span aria-current="page">{currentLabel}</span>
+        <strong>{currentLabel}</strong>
       </nav>
       <nav className="property-workspace-nav" aria-label="Property sections">
         <div className="property-workspace-nav-links">
@@ -105,8 +106,8 @@ export function PropertyWorkspaceNav({
               <Link
                 key={section.key}
                 href={section.href}
-                className={`property-workspace-nav-link${active ? ' is-active' : ''}`}
                 aria-current={active ? 'page' : undefined}
+                className={active ? 'active' : undefined}
               >
                 {section.label}
               </Link>
@@ -114,6 +115,21 @@ export function PropertyWorkspaceNav({
           })}
         </div>
       </nav>
+      <style jsx>{`
+        .property-workspace-breadcrumb { grid-column: 1 / -1; display: flex; align-items: center; min-height: 2.75rem; gap: .45rem; font-size: .82rem; color: var(--text-muted); }
+        .property-workspace-breadcrumb a { color: inherit; text-decoration: none; min-height: 2.75rem; display: inline-flex; align-items: center; }
+        .property-workspace-breadcrumb strong { color: var(--text); font-weight: 650; }
+        .property-workspace-nav { min-width: 0; }
+        .property-workspace-nav-links { display: flex; flex-direction: column; gap: .25rem; }
+        .property-workspace-nav-links a { display: flex; align-items: center; min-height: 2.35rem; padding: .45rem .65rem; border-radius: 10px; color: var(--text-muted); text-decoration: none; font-size: .9rem; }
+        .property-workspace-nav-links a:hover, .property-workspace-nav-links a.active { color: var(--text); background: rgba(255,255,255,.07); }
+        @media (max-width: 860px) {
+          .property-workspace-main { grid-template-columns: minmax(0, 1fr) !important; }
+          .property-workspace-header { grid-template-columns: minmax(0, 1fr) !important; }
+          .property-workspace-nav { overflow-x: auto; padding-bottom: .2rem; scrollbar-width: thin; }
+          .property-workspace-nav-links { flex-direction: row; min-width: max-content; }
+        }
+      `}</style>
     </>
   );
 }
