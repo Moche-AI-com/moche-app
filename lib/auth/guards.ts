@@ -67,13 +67,15 @@ export async function requireSession(): Promise<SessionContext> {
   return ctx;
 }
 
-// Pre-launch access gate. Until the public launch (January 1, 2027), accounts created
-// on or after the cutoff are held on /welcome instead of reaching the tool. This applies
-// to direct signups AND to members invited by existing testers (an invite creates a
-// brand-new profile, so invitees are "new users" for gate purposes). Founders and staff
-// (profiles.is_admin) always bypass. Existing tester accounts predate the cutoff and keep
-// full access. To open the doors, point the dashboard layout back at requireSession and
-// delete this guard — nothing else references the cutoff.
+// Pre-launch access gate. Until the public launch, accounts created after the
+// cutoff are held on /welcome instead of reaching the tool. This applies to
+// direct signups AND to members invited by existing testers (an invite creates a
+// brand-new profile, so invitees are "new users" for gate purposes). Founders and
+// staff (profiles.is_admin) always bypass. Existing tester accounts predate the
+// cutoff and keep full access.
+//
+// Deleting this guard (and pointing the dashboard layout back at requireSession)
+// opens the doors; nothing else references the cutoff.
 export const LAUNCH_GATE_CUTOFF_ISO = '2026-08-21T00:00:00.000Z';
 
 export async function requireLaunchAccess(): Promise<SessionContext> {

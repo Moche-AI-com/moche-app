@@ -21,6 +21,7 @@ create table if not exists public.early_access_signups (
   constraint early_access_signups_email_lower check (email = lower(email))
 );
 
+-- Normalize email for case-insensitive dedupe reads by the service role.
 create index if not exists early_access_signups_email_idx
   on public.early_access_signups (email);
 create index if not exists early_access_signups_created_at_idx
