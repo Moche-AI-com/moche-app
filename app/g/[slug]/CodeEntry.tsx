@@ -6,6 +6,8 @@ const CODE_LENGTH = 4;
 
 // Step 1 of the portal: each guest uses their own 4-digit stay guest ID. Returning
 // guests confirm the phone number on their profile when they use a new device.
+// Falls back to the original stay-level code endpoint for links minted before
+// per-guest IDs existed.
 export function CodeEntry(props: {
   slug: string;
   accessToken: string | null;
@@ -45,7 +47,7 @@ export function CodeEntry(props: {
       const res = await fetch(`/api/guest/${props.slug}/auth/guest-code`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code, phone: needsPhone ? phone.trim() : undefined, accessToken: props.accessToken }),
+        body: JSON.stringify({ code, phone: needsPhone ? phone.trim() : undefined }),
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.requiresPhoneConfirm === true) {
@@ -57,6 +59,22 @@ export function CodeEntry(props: {
         props.onVerified(json.registered === true, typeof json.guestName === 'string' ? json.guestName : null);
         return;
       }
+
+      // Backward compatibility: existing stay links minted before stay_guests still
+      // verify through the original endpoint. New per-guest codes win first.
+      if (!needsPhone && res.status === 400) {
+        const legacy = await fetch(`/api/guest/${props.slug}/auth/code`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ code, token: props.accessToken ?? undefined }),
+        });
+        const legacyJson = await legacy.json().catch(() => ({}));
+        if (legacy.ok && legacyJson.ok) {
+          props.onVerified(legacyJson.registered === true, typeof legacyJson.guestName === 'string' ? legacyJson.guestName : null);
+          return;
+        }
+      }
+
       setError(json.error || 'That code does not match an active guest for this stay.');
     } finally {
       setBusy(false);
