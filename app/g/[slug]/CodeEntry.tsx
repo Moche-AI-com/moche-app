@@ -4,111 +4,125 @@ import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react
 
 const CODE_LENGTH = 4;
 
-// Step 1 of the portal: 4-digit access code entry. Validates server-side against
-// the property/reservation access code (see app/api/guest/[slug]/auth/code).
+// Step 1 of the portal: each guest uses their own 4-digit stay guest ID. Returning
+// guests confirm the phone number on their profile when they use a new device.
+// Falls back to the original stay-level code endpoint for links minted before
+// per-guest IDs existed.
 export function CodeEntry(props: {
   slug: string;
   accessToken: string | null;
   onVerified: (registered: boolean, guestName: string | null) => void;
 }) {
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
+  const [phone, setPhone] = useState('');
+  const [needsPhone, setNeedsPhone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-
+  const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
   const code = digits.join('');
 
-  async function submit(value: string) {
-    if (busy || value.length !== CODE_LENGTH) return;
+  function setDigit(index: number, value: string) {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    setDigits((current) => current.map((item, i) => (i === index ? digit : item)));
+    if (digit && index < CODE_LENGTH - 1) inputsRef.current[index + 1]?.focus();
+  }
+
+  function onKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Backspace' && !digits[index] && index > 0) inputsRef.current[index - 1]?.focus();
+  }
+
+  function onPaste(event: ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, CODE_LENGTH);
+    if (!pasted) return;
+    setDigits(Array.from({ length: CODE_LENGTH }, (_, index) => pasted[index] ?? ''));
+    inputsRef.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
+  }
+
+  async function submit() {
+    if (code.length !== CODE_LENGTH || busy || (needsPhone && !phone.trim())) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/guest/${props.slug}/auth/code`, {
+      const res = await fetch(`/api/guest/${props.slug}/auth/guest-code`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code: value, token: props.accessToken ?? undefined }),
+        body: JSON.stringify({ code, phone: needsPhone ? phone.trim() : undefined }),
       });
       const json = await res.json().catch(() => ({}));
+      if (res.ok && json.requiresPhoneConfirm === true) {
+        setNeedsPhone(true);
+        setError(null);
+        return;
+      }
       if (res.ok && json.ok) {
         props.onVerified(json.registered === true, typeof json.guestName === 'string' ? json.guestName : null);
         return;
       }
-      setError(typeof json.error === 'string' ? json.error : 'The code entered is incorrect. Please try again.');
-      setDigits(Array(CODE_LENGTH).fill(''));
-      refs.current[0]?.focus();
-    } catch {
-      setError('Something went wrong. Please check your connection and try again.');
+
+      // Backward compatibility: existing stay links minted before stay_guests still
+      // verify through the original endpoint. New per-guest codes win first.
+      if (!needsPhone && res.status === 400) {
+        const legacy = await fetch(`/api/guest/${props.slug}/auth/code`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ code, token: props.accessToken ?? undefined }),
+        });
+        const legacyJson = await legacy.json().catch(() => ({}));
+        if (legacy.ok && legacyJson.ok) {
+          props.onVerified(legacyJson.registered === true, typeof legacyJson.guestName === 'string' ? legacyJson.guestName : null);
+          return;
+        }
+      }
+
+      setError(json.error || 'That code does not match an active guest for this stay.');
     } finally {
       setBusy(false);
     }
   }
 
-  function setDigit(i: number, v: string) {
-    const d = v.replace(/\D/g, '').slice(-1);
-    setDigits((prev) => {
-      const next = [...prev];
-      next[i] = d;
-      // Auto-submit once the fourth digit lands.
-      if (d && next.every((x) => x !== '')) void submit(next.join(''));
-      return next;
-    });
-    if (d && i < CODE_LENGTH - 1) refs.current[i + 1]?.focus();
-  }
-
-  function onKeyDown(i: number, e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus();
-  }
-
-  function onPaste(e: ClipboardEvent<HTMLInputElement>) {
-    const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, CODE_LENGTH);
-    if (text.length === 0) return;
-    e.preventDefault();
-    const next = Array(CODE_LENGTH).fill('').map((_, i) => text[i] ?? '');
-    setDigits(next);
-    if (text.length === CODE_LENGTH) void submit(text);
-    else refs.current[text.length]?.focus();
-  }
-
   return (
-    <section aria-label="Access code entry">
-      <h1 className="gp-step-title">Welcome</h1>
-      <p className="gp-step-sub">Enter your 4-digit access code. You&apos;ll find it on your welcome card or in the message from your host.</p>
-
-      <div className="gp-code-row" role="group" aria-label="4-digit access code">
-        {digits.map((d, i) => (
+    <section aria-label="Guest verification">
+      <h2>Enter your guest ID</h2>
+      <p className="muted">Use the 4-digit code your host shared for this stay.</p>
+      <div style={{ display: 'flex', gap: '.55rem', justifyContent: 'center', margin: '1.25rem 0' }}>
+        {digits.map((digit, index) => (
           <input
-            key={i}
-            ref={(el) => { refs.current[i] = el; }}
-            className="gp-code-box"
-            type="text"
+            key={index}
+            ref={(node) => { inputsRef.current[index] = node; }}
+            value={digit}
             inputMode="numeric"
-            autoComplete={i === 0 ? 'one-time-code' : 'off'}
-            maxLength={1}
-            aria-label={`Digit ${i + 1}`}
-            value={d}
-            disabled={busy}
-            autoFocus={i === 0}
-            onChange={(e) => setDigit(i, e.target.value)}
-            onKeyDown={(e) => onKeyDown(i, e)}
+            autoComplete={index === 0 ? 'one-time-code' : 'off'}
+            aria-label={`Digit ${index + 1}`}
+            onChange={(event) => setDigit(index, event.target.value)}
+            onKeyDown={(event) => onKeyDown(index, event)}
             onPaste={onPaste}
+            style={{ width: 52, height: 58, textAlign: 'center', fontSize: '1.5rem', borderRadius: 14 }}
           />
         ))}
       </div>
 
-      {error ? <div className="gp-error" role="alert">{error}</div> : null}
+      {needsPhone && (
+        <div style={{ marginBottom: '1rem' }}>
+          <label htmlFor="guest-phone-confirm" style={{ display: 'block', fontWeight: 650, marginBottom: '.35rem' }}>
+            Confirm your phone number
+          </label>
+          <input
+            id="guest-phone-confirm"
+            type="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="Mobile number"
+            style={{ width: '100%' }}
+          />
+          <p className="muted" style={{ fontSize: '.82rem' }}>This keeps your saved guest session attached to the right person on this device.</p>
+        </div>
+      )}
 
-      <button
-        type="button"
-        className="gp-btn gp-btn-primary"
-        disabled={busy || code.length !== CODE_LENGTH}
-        onClick={() => void submit(code)}
-      >
-        {busy ? 'Checking…' : 'Continue'}
+      {error && <p role="alert" style={{ color: '#ffb08f' }}>{error}</p>}
+      <button type="button" onClick={() => void submit()} disabled={busy || code.length !== CODE_LENGTH || (needsPhone && !phone.trim())} style={{ width: '100%' }}>
+        {busy ? 'Checking…' : needsPhone ? 'Confirm and continue' : 'Continue'}
       </button>
-
-      <p className="gp-step-sub" style={{ marginTop: 16, fontSize: '0.82rem' }}>
-        Trouble with your code? Contact your host directly.
-      </p>
     </section>
   );
 }

@@ -1,22 +1,42 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ConciergeBell, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, ConciergeBell, Loader2, Send, TriangleAlert } from 'lucide-react';
+import { linkify } from '@/lib/guest/linkify';
 
 type ThreadMsg = {
   id: string;
-  from: 'guest' | 'host';
-  text: string;
-  at: string;
-  status?: 'waiting' | 'answered';
+  role: 'guest' | 'host' | 'system' | 'assistant';
+  content: string;
+  createdAt: string;
+  messageKind: string;
+  replyToMessageId: string | null;
+  escalationId: string | null;
 };
 
-const POLL_MS = 8000;
+function LinkedText({ text }: { text: string }) {
+  return (
+    <>
+      {linkify(text).map((segment, index) =>
+        segment.kind === 'link' ? (
+          <a key={index} href={segment.href} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>
+            {segment.label}
+          </a>
+        ) : (
+          <span key={index}>{segment.value}</span>
+        ),
+      )}
+    </>
+  );
+}
 
-// Workflow 2 — Message Host Directly. A human-only channel, visually and
-// functionally distinct from the AI chat: different accent, explicit banner,
-// no AI suggestions, no shared conversation. Backed by escalations with
-// conversation_id NULL (see app/api/guest/[slug]/host-chat).
+function timeLabel(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+// SMS-style guest ↔ host channel. AI escalations are first-class messages so the
+// guest can tell the difference between an automated handoff and a human reply.
 export function HostChatWorkflow(props: {
   slug: string;
   guestName: string | null;
@@ -25,109 +45,167 @@ export function HostChatWorkflow(props: {
 }) {
   const [messages, setMessages] = useState<ThreadMsg[]>([]);
   const [input, setInput] = useState('');
+  const [replyTo, setReplyTo] = useState<ThreadMsg | null>(null);
   const [busy, setBusy] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/guest/${props.slug}/host-chat`);
-      if (res.status === 401) { props.onSessionExpired(); return; }
-      if (!res.ok) return;
-      const json = await res.json().catch(() => ({}));
-      setMessages(Array.isArray(json.messages) ? json.messages : []);
-      setLoaded(true);
-    } catch {
-      // Polling retries on the next tick.
+    const res = await fetch(`/api/guest/${props.slug}/host-chat`, { cache: 'no-store' });
+    if (res.status === 401) {
+      props.onSessionExpired();
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.slug]);
+    if (!res.ok) return;
+    const json = await res.json().catch(() => ({}));
+    setMessages(Array.isArray(json.messages) ? json.messages : []);
+    setLoading(false);
+  }, [props.slug, props.onSessionExpired]);
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(t);
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(timer);
   }, [load]);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages]);
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages.length]);
 
   async function send() {
-    const trimmed = input.trim();
-    if (!trimmed || busy) return;
+    const message = input.trim();
+    if (!message || busy) return;
     setBusy(true);
-    setInput('');
-    // Optimistic append; the next poll reconciles with the server thread.
-    setMessages((m) => [...m, { id: `local-${Date.now()}`, from: 'guest', text: trimmed, at: new Date().toISOString(), status: 'waiting' }]);
+    setError(null);
     try {
       const res = await fetch(`/api/guest/${props.slug}/host-chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message, replyToMessageId: replyTo?.id }),
       });
-      if (res.status === 401) { props.onSessionExpired(); return; }
-      if (!res.ok) throw new Error('send_failed');
-      await load();
-    } catch {
-      setMessages((m) => [...m, { id: `err-${Date.now()}`, from: 'host', text: 'Your message could not be sent. Please try again.', at: new Date().toISOString() }]);
+      if (res.status === 401) {
+        props.onSessionExpired();
+        return;
+      }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error || 'Could not send your message.');
+        return;
+      }
+      setInput('');
+      setReplyTo(null);
+      if (json.message) setMessages((current) => [...current, json.message]);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section aria-label="Message host directly" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <section aria-label="Host chat">
       <div className="gp-wf-header">
         <button type="button" className="gp-back" onClick={props.onBack}>
           <ArrowLeft size={16} aria-hidden /> Menu
         </button>
-        <span className="gp-wf-title">Message Host Directly</span>
       </div>
 
-      <div className="gp-banner gp-banner-host" role="note">
-        <ConciergeBell size={15} aria-hidden style={{ verticalAlign: '-2px', marginRight: 6 }} />
-        You&apos;re messaging your host or property staff — a real person, not the AI assistant. Replies appear here.
+      <div style={{ marginBottom: '1rem' }}>
+        <h2 style={{ margin: 0 }}>Host Chat</h2>
+        <p className="muted" style={{ margin: '.35rem 0 0' }}>
+          Text your host directly{props.guestName ? `, ${props.guestName}` : ''}. AI escalations also appear here when the concierge needs a human answer.
+        </p>
       </div>
 
-      <div className="gp-chat-list" ref={listRef} aria-live="polite">
-        {loaded && messages.length === 0 ? (
-          <div className="gp-empty">
-            No messages yet. Say hello{props.guestName ? `, ${props.guestName}` : ''} — your host typically replies as soon as they can.
-          </div>
-        ) : null}
-        {!loaded ? (
-          <div className="gp-empty"><Loader2 size={18} className="gp-spin" aria-label="Loading messages" /></div>
-        ) : null}
-        {messages.map((m) => (
-          <div key={m.id} className={`gp-bubble ${m.from === 'guest' ? 'gp-bubble-user' : 'gp-bubble-host'}`}>
-            <span className="gp-bubble-tag">{m.from === 'guest' ? 'You' : 'Host'}</span>
-            {m.text}
-            {m.from === 'guest' && m.status === 'waiting' ? (
-              <span className="gp-bubble-meta"><span className="gp-badge gp-badge-waiting">Waiting for host reply</span></span>
-            ) : null}
-          </div>
-        ))}
-      </div>
-
-      <form
-        className="gp-input-row"
-        onSubmit={(e) => { e.preventDefault(); void send(); }}
+      <div
+        aria-live="polite"
+        style={{
+          border: '1px solid rgba(255,255,255,.12)',
+          borderRadius: 18,
+          padding: '1rem',
+          minHeight: 320,
+          maxHeight: '52vh',
+          overflowY: 'auto',
+          background: 'rgba(255,255,255,.04)',
+        }}
       >
-        <input
-          className="gp-input"
-          type="text"
-          placeholder="Write to your host…"
+        {loading ? (
+          <p className="muted"><Loader2 size={16} className="spin" aria-hidden /> Loading messages…</p>
+        ) : messages.length === 0 ? (
+          <p className="muted">No messages yet. Send a note and your host will reply here.</p>
+        ) : (
+          messages.map((message) => {
+            const mine = message.role === 'guest';
+            const escalation = message.messageKind === 'ai_escalation' || Boolean(message.escalationId);
+            return (
+              <div key={message.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginBottom: '.7rem' }}>
+                <div
+                  style={{
+                    maxWidth: '82%',
+                    borderRadius: mine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                    padding: '.75rem .85rem',
+                    background: escalation
+                      ? 'rgba(255, 138, 92, .16)'
+                      : mine
+                        ? 'linear-gradient(135deg, rgba(51,230,212,.28), rgba(124,140,255,.22))'
+                        : 'rgba(255,255,255,.1)',
+                    border: escalation ? '1px solid rgba(255,138,92,.45)' : '1px solid rgba(255,255,255,.1)',
+                  }}
+                >
+                  {escalation && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem', fontSize: '.75rem', fontWeight: 700, marginBottom: '.35rem', color: '#ffb08f' }}>
+                      <TriangleAlert size={14} aria-hidden /> AI escalation
+                    </div>
+                  )}
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.45 }}><LinkedText text={message.content} /></div>
+                  <div style={{ display: 'flex', gap: '.6rem', alignItems: 'center', marginTop: '.4rem', fontSize: '.72rem', opacity: .75 }}>
+                    <span>{timeLabel(message.createdAt)}</span>
+                    <button type="button" onClick={() => setReplyTo(message)} style={{ border: 0, background: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                      Reply
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {replyTo && (
+        <div style={{ marginTop: '.75rem', padding: '.65rem .75rem', borderRadius: 12, background: 'rgba(255,255,255,.08)', fontSize: '.85rem' }}>
+          Replying to {replyTo.role === 'host' ? 'host' : 'message'}: “{replyTo.content.slice(0, 120)}{replyTo.content.length > 120 ? '…' : ''}”
+          <button type="button" onClick={() => setReplyTo(null)} style={{ marginLeft: '.6rem', border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {error && <p role="alert" style={{ color: '#ffb08f' }}>{error}</p>}
+
+      <div style={{ display: 'flex', gap: '.5rem', marginTop: '.85rem' }}>
+        <label htmlFor="host-chat-input" className="sr-only">Message your host</label>
+        <textarea
+          id="host-chat-input"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={busy}
-          maxLength={2000}
-          aria-label="Message your host"
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="Write a message…"
+          rows={2}
+          style={{ flex: 1, resize: 'vertical', borderRadius: 14, border: '1px solid rgba(255,255,255,.14)', background: 'rgba(255,255,255,.06)', color: 'inherit', padding: '.8rem' }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void send();
+            }
+          }}
         />
-        <button type="submit" className="gp-send gp-send-accent" disabled={busy || !input.trim()} aria-label="Send to host">
-          <Send size={18} aria-hidden />
+        <button type="button" onClick={() => void send()} disabled={busy || !input.trim()} aria-label="Send message" style={{ minWidth: 48, borderRadius: 14 }}>
+          {busy ? <Loader2 size={18} className="spin" aria-hidden /> : <Send size={18} aria-hidden />}
         </button>
-      </form>
+      </div>
+
+      <p className="muted" style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontSize: '.8rem', marginTop: '.7rem' }}>
+        <ConciergeBell size={14} aria-hidden /> Host replies arrive here; if you opted in, we’ll also send a neutral text prompt.
+      </p>
     </section>
   );
 }
