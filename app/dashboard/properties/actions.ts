@@ -24,26 +24,57 @@ export interface PropertyFormState {
   success?: string;
 }
 
-export async function createPropertyAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
+export type CreateDraftResult =
+  | { ok: true; propertyId: string; hostAccountId: string; actorProfileId: string }
+  | { ok: false; error: string };
+
+/**
+ * Creates the draft property row and everything that must exist alongside it.
+ *
+ * Extracted out of `createPropertyAction` because the multi-step onboarding wizard
+ * (directive §2) needs the same creation, plan gate, settings seed, audit entry and
+ * analytics event — but must NOT redirect. `createPropertyAction` ends in
+ * `redirect()`, which throws by design in Next, so it cannot be reused by a caller
+ * that has to keep rendering. Duplicating the body instead would mean the plan
+ * limit and the audit trail existed in two places and could drift apart.
+ *
+ * Returns identifiers rather than a redirect so the caller decides what happens
+ * next.
+ */
+export async function createDraftProperty(fields: {
+  displayName: unknown;
+  city?: unknown;
+  region?: unknown;
+  country?: unknown;
+  timezone?: unknown;
+  locale?: unknown;
+  lat?: unknown;
+  lng?: unknown;
+}): Promise<CreateDraftResult> {
   const ctx = await requireSession();
   const supabase = createClient();
 
   const gate = await canCreateProperty(supabase, ctx.account.id);
   if (!gate.ok) {
-    return { error: `You've reached your plan's limit of ${gate.limit} propert${gate.limit === 1 ? 'y' : 'ies'}. Upgrade to add more.` };
+    return {
+      ok: false,
+      error: `You've reached your plan's limit of ${gate.limit} propert${gate.limit === 1 ? 'y' : 'ies'}. Upgrade to add more.`,
+    };
   }
 
   const parsed = propertyCreateWithGeoSchema.safeParse({
-    displayName: formData.get('displayName'),
-    city: formData.get('city') || '',
-    region: formData.get('region') || '',
-    country: formData.get('country') || '',
-    timezone: formData.get('timezone') || 'UTC',
-    locale: formData.get('locale') || 'en',
-    lat: formData.get('lat') ?? '',
-    lng: formData.get('lng') ?? '',
+    displayName: fields.displayName,
+    city: fields.city || '',
+    region: fields.region || '',
+    country: fields.country || '',
+    timezone: fields.timezone || 'UTC',
+    locale: fields.locale || 'en',
+    lat: fields.lat ?? '',
+    lng: fields.lng ?? '',
   });
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the property details.' };
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Please check the property details.' };
+  }
 
   const d = parsed.data;
   const { data: property, error } = await supabase
@@ -66,7 +97,7 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
 
   if (error || !property) {
     log.warn('property_create_failed', { error: error?.message });
-    return { error: 'Could not create the property. Please try again.' };
+    return { ok: false, error: 'Could not create the property. Please try again.' };
   }
 
   // Seed default settings so the concierge + portal have a config row to read.
@@ -84,6 +115,27 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
   // Server-safe analytics: identified by host user id, no property PII beyond its id.
   await capture('property_created', ctx.user.id, { property_id: property.id });
 
+  return {
+    ok: true,
+    propertyId: property.id,
+    hostAccountId: ctx.account.id,
+    actorProfileId: ctx.user.id,
+  };
+}
+
+export async function createPropertyAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
+  const created = await createDraftProperty({
+    displayName: formData.get('displayName'),
+    city: formData.get('city'),
+    region: formData.get('region'),
+    country: formData.get('country'),
+    timezone: formData.get('timezone'),
+    locale: formData.get('locale'),
+    lat: formData.get('lat'),
+    lng: formData.get('lng'),
+  });
+  if (!created.ok) return { error: created.error };
+
   // Optional listing link (backlog P4-02). Deliberately NOT fetched here: a slow
   // or bot-walled listing page must never delay or fail property creation. The
   // property page picks it up and imports it straight into the Brain.
@@ -92,8 +144,8 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
 
   redirect(
     importable
-      ? `/dashboard/properties/${property.id}?import=${encodeURIComponent(listingUrl)}`
-      : `/dashboard/properties/${property.id}`,
+      ? `/dashboard/properties/${created.propertyId}?import=${encodeURIComponent(listingUrl)}`
+      : `/dashboard/properties/${created.propertyId}`,
   );
 }
 

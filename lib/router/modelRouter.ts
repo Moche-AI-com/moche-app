@@ -17,7 +17,14 @@ export { redactPII };
 // Coarse task taxonomy used to decide how a completion should be routed. Each task
 // maps to a cost/quality-appropriate model tier (see modelForTask) and to whether the
 // external route is eligible at all (see shouldRouteExternally).
-export type TaskType = 'extraction' | 'concierge' | 'classification' | 'general';
+// `extraction_deep` is the document / file / pasted-text pass introduced for
+// directive §2 and §6. It is a separate tier rather than a flag on `extraction`
+// because the two jobs differ in kind: `extraction` pulls one short value out of a
+// known field, while `extraction_deep` has to split a whole house manual across
+// the ten Brain sections and get every routing decision right. It routes
+// externally under the same rules as `extraction` (never the concierge rules) and
+// is subject to the same pre-flight redaction and residual-PII refusal.
+export type TaskType = 'extraction' | 'extraction_deep' | 'concierge' | 'classification' | 'general';
 
 // Classify a unit of work from a short caller-supplied hint. Purely heuristic and
 // side-effect free; it never calls a model. Callers that already know the task type
@@ -47,6 +54,7 @@ export type RouterEnv = Pick<
   | 'openrouterModel'
   | 'openrouterBaseUrl'
   | 'openrouterModelExtraction'
+  | 'openrouterModelExtractionDeep'
   | 'openrouterModelClassification'
   | 'openrouterModelConcierge'
   | 'openrouterModelGeneral'
@@ -61,6 +69,8 @@ export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string
   switch (task) {
     case 'extraction':
       return env.openrouterModelExtraction;
+    case 'extraction_deep':
+      return env.openrouterModelExtractionDeep;
     case 'classification':
       return env.openrouterModelClassification;
     case 'concierge':
@@ -79,6 +89,10 @@ export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string
 // backstop if the whole OpenRouter request fails (see routedCompletion).
 const TASK_FALLBACKS: Record<TaskType, readonly string[]> = {
   extraction: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'],
+  // Deep fallbacks stay in the capable band rather than dropping to a mini model:
+  // a cheap fallback that mis-routes half a house manual costs the host more
+  // review time than the request saved.
+  extraction_deep: ['openai/gpt-4.1', 'google/gemini-2.5-pro'],
   classification: ['openai/gpt-4o-mini'],
   concierge: ['openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
   general: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini'],

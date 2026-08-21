@@ -98,6 +98,17 @@ export const serverEnv = {
   // open-weight Llama; concierge (guest-facing) uses a stronger model but is gated OFF.
   openrouterModelExtraction:
     process.env.OPENROUTER_MODEL_EXTRACTION ?? process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
+  // Directive §2 / §6 both ask for a "more trusted / high-capability" model for
+  // the document, file, and pasted-text passes, because those inputs are long,
+  // unstructured, and have to be split across ten Brain sections correctly. That
+  // is a materially harder job than the short single-field extraction the cheap
+  // `extraction` tier handles, and a wrong split lands in front of the host as a
+  // pile of mis-filed review items. Separate tier so the cost of the hard job does
+  // not get charged to every small one.
+  openrouterModelExtractionDeep:
+    process.env.OPENROUTER_MODEL_EXTRACTION_DEEP ??
+    process.env.OPENROUTER_MODEL_EXTRACTION ??
+    'anthropic/claude-sonnet-4.5',
   openrouterModelClassification:
     process.env.OPENROUTER_MODEL_CLASSIFICATION ?? 'meta-llama/llama-3.1-8b-instruct',
   // Gemini 2.5 Flash: verified available under our Zero-Data-Retention provider

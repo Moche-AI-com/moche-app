@@ -21,6 +21,7 @@ function routerEnv(over: Partial<RouterEnv> = {}): RouterEnv {
     openrouterModel: 'openai/gpt-4o-mini',
     openrouterBaseUrl: 'https://openrouter.ai/api/v1',
     openrouterModelExtraction: 'openai/gpt-4o-mini',
+    openrouterModelExtractionDeep: 'anthropic/claude-sonnet-4.5',
     openrouterModelClassification: 'meta-llama/llama-3.1-8b-instruct',
     openrouterModelConcierge: 'anthropic/claude-haiku-4.5',
     openrouterModelGeneral: 'openai/gpt-4o-mini',
@@ -61,6 +62,20 @@ describe('modelForTask', () => {
   it('honors per-tier overrides', () => {
     const custom = routerEnv({ openrouterModelExtraction: 'custom/extract-model' });
     expect(modelForTask('extraction', custom)).toBe('custom/extract-model');
+  });
+
+  // extraction_deep is the tier the onboarding document step and Import Knowledge
+  // use. It has to resolve to a genuinely stronger model than `extraction`,
+  // otherwise the directive's "more trusted / high-capability model" promise is
+  // decorative.
+  it('gives extraction_deep its own model, distinct from cheap extraction', () => {
+    expect(modelForTask('extraction_deep', env)).toBe('anthropic/claude-sonnet-4.5');
+    expect(modelForTask('extraction_deep', env)).not.toBe(modelForTask('extraction', env));
+  });
+
+  it('honors an extraction_deep override', () => {
+    const custom = routerEnv({ openrouterModelExtractionDeep: 'custom/deep-model' });
+    expect(modelForTask('extraction_deep', custom)).toBe('custom/deep-model');
   });
 });
 
