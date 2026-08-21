@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 // Pre-launch holding page. New accounts land here after confirming their email
 // (the signup confirmation link carries next=/welcome), and requireLaunchAccess
 // redirects any gated account that tries to reach /dashboard. Existing testers and
-// founders are never sent here — the gate only fires for accounts created after
+// founders are never sent here — the gate only fires for accounts created on/after
 // LAUNCH_GATE_CUTOFF_ISO.
 export default async function WelcomePage() {
   const ctx = await getSessionContext();

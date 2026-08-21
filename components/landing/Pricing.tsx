@@ -9,6 +9,9 @@ import { useState } from 'react';
 // the deck's Portfolio ($25-39/property/mo, 10+) and Enterprise (custom) tiers are
 // contract-priced and therefore appear here as the contact-sales note below, not
 // as cards with invented numbers.
+//
+// Pre-launch note: the "Most chosen" flag is intentionally removed and the CTA is
+// "Start free" — the goal right now is early signups, not checkout conversion.
 const PLANS = [
   {
     name: 'Essentials',
@@ -60,13 +63,14 @@ export function Pricing() {
           Pricing that scales with your portfolio
         </Reveal>
         <Reveal as="p" delay={60} className={`muted ${styles.pricingIntro}`}>
-          Moche-AI launches January&nbsp;1,&nbsp;2027 — early accounts are free until then, and
-          founding hosts lock in their rate. No charge until launch. After that it is simple
-          per-property pricing: pay annually for {ANNUAL_MULTIPLIER}x the monthly rate (two months
-          free). No per-conversation fees — unlimited guests and stays.
+          Moche-AI launches January 1, 2027 — early accounts are free until then, and nothing is
+          charged before launch. Every plan starts with a free month on the top tier, up to 5
+          properties. Simple per-property pricing after that: pay annually for {ANNUAL_MULTIPLIER}x
+          the monthly rate (that&rsquo;s two months free). No per-conversation fees &mdash; unlimited
+          guests and stays.
           <br />
-          <strong>One-time setup:</strong> $149/property for guided onboarding, or use self-service
-          at no cost.
+          <strong>One-time setup:</strong> $149/property for guided onboarding, or use
+          self-service at no cost.
         </Reveal>
 
         {/* Property count slider + billing toggle. Styled inline: the CSS-module classes
@@ -148,7 +152,7 @@ export function Pricing() {
                 color: billing === 'annual' ? '#04121a' : 'inherit',
               }}
             >
-              Annual <span style={{ fontWeight: 500, opacity: 0.8 }}>(save 2 mo)</span>
+              Annual <span style={{ fontWeight: 500, opacity: .8 }}>(save 2 mo)</span>
             </button>
           </div>
         </div>
@@ -165,7 +169,6 @@ export function Pricing() {
                 key={plan.slug}
                 delay={i * 55}
                 className={styles.pricingPanel}
-                dataAttrs={{ 'data-featured': plan.popular ? '' : undefined }}
               >
                 <div className={styles.pricingRail}>
                   <h3 className={styles.pricingTier}>{plan.name}</h3>
@@ -203,7 +206,7 @@ export function Pricing() {
         <Reveal delay={PLANS.length * 55} className={styles.pricingVolume}>
           <p className={styles.pricingVolumeCopy}>
             <strong>10+ properties?</strong> Portfolio adds roles, bulk tools, and PMS
-            integrations at volume rates ($25–39/property/mo, set by contract). Need SSO,
+            integrations at volume rates ($25&ndash;39/property/mo, set by contract). Need SSO,
             an SLA, API access, or white label? Enterprise is custom.
           </p>
           <a href={CONTACT_SALES_MAILTO} className={styles.pricingVolumeLink}>

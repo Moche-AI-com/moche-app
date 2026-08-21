@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { sendEarlyAccessThanks } from '@/lib/auth/auth-email';
+import { sendEarlyAccessThanks } from '@/lib/mail/early-access';
 import { log } from '@/lib/log';
 
 export const runtime = 'nodejs';

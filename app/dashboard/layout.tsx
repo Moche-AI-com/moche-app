@@ -14,6 +14,9 @@ import { FeedbackControl } from './FeedbackControl';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Launch gate: requireLaunchAccess is requireSession plus the pre-launch hold.
+  // New accounts (post-cutoff, non-founder) are redirected to /welcome before any
+  // dashboard data is read. Existing testers and founders pass through unchanged.
   const ctx = await requireLaunchAccess();
 
   // 2FA gate: a host with 2FA enabled must clear the SMS challenge (trusted-device

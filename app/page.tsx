@@ -49,14 +49,10 @@ export const metadata: Metadata = {
 // visitors to public/landing.html (that file stays on disk as an archive).
 // Authenticated hosts still fall through here and get redirected to /dashboard.
 //
-// Section order: hero, why, how it works, offer, objections, price, close.
-// Pricing moved below the FAQ for the pre-launch period: the goal right now is
-// early signups, not plan comparison — the price stays fully public, just not
-// the spotlight. The "how it works" section was added because the page went
-// straight from four benefit lines to the price with nothing explaining the
-// mechanics -- a visitor who was not already sold had to reverse-engineer the
-// product from the FAQ.
-//
+// Section order: hero, why, how it works, offer, objections, price. Pricing moved
+// below the FAQ for the pre-launch period: the goal right now is early signups,
+// not conversion, so the page leads with the product and the offer and treats the
+// price as an answer for people who scroll looking for it, not the headline.
 // The standalone gallery section was folded into the hero and the "demo video
 // coming soon" placeholder was removed -- an empty state on a marketing page
 // costs more trust than the section earns.
