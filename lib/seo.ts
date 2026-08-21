@@ -28,7 +28,7 @@ export const SITE_NAME = 'Moche-AI';
  */
 export const IS_PRODUCTION_HOST = SITE_URL === 'https://www.moche-ai.com';
 
-export const DEFAULT_TITLE = 'Moche-AI — Run every property from one workspace';
+export const DEFAULT_TITLE = 'Moche-AI — Give every guest a trusted property expert';
 
 export const DEFAULT_DESCRIPTION =
   'Answer guest questions instantly, keep every property detail in one place, and turn more stays into five-star reviews. Guest operations for short-term rental hosts.';
