@@ -35,6 +35,7 @@ describe('property workspace navigation', () => {
     expect(propertySectionLabel(`${base}/guest-chat`, propertyId)).toBe('Guest Chat');
     expect(propertySectionLabel(`${base}/nearby`, propertyId)).toBe('Local Recs');
     expect(propertySectionLabel(`${base}/recommendations?view=all`, propertyId)).toBe('Local Recs');
+    expect(propertySectionLabel(`${base}/brain`, propertyId)).toBe('Brain');
   });
 
   it('marks only the matching section active for legacy Local routes', () => {

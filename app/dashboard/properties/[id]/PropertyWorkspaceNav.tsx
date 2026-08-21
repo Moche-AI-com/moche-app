@@ -61,12 +61,9 @@ export function propertySectionLabel(pathname: string, propertyId: string): stri
     return SECTION_LABELS.local;
   }
   if (path.startsWith(`${base}/extras`)) return SECTION_LABELS.extras;
-  if (
-    path.startsWith(`${base}/settings`) ||
-    path.startsWith(`${base}/brain`) ||
-    path.startsWith(`${base}/appliances`) ||
-    path.startsWith(`${base}/welcome-card`)
-  ) {
+  if (path.startsWith(`${base}/brain`)) return 'Brain';
+  if (path.startsWith(`${base}/welcome-card`)) return 'Welcome card';
+  if (path.startsWith(`${base}/settings`) || path.startsWith(`${base}/appliances`)) {
     return SECTION_LABELS.settings;
   }
   return SECTION_LABELS.overview;
