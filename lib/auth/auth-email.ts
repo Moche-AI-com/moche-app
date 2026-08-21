@@ -294,3 +294,27 @@ export async function sendMemberInvite(params: {
 
   return send(params.email, `You’re invited to ${subjectAccount} on Moche.AI`, html, text);
 }
+
+// Sends the pre-launch early-access thank-you after someone joins the list from
+// the /welcome holding page or the landing form. Confirms their spot, sets the
+// launch date, and makes clear no payment is due before launch. Uses the shared
+// transactional sender — the monitored, time-capable path.
+export async function sendEarlyAccessThanks(params: {
+  email: string;
+  name?: string | null;
+}): Promise<boolean> {
+  const firstName = (params.name ?? '').trim().split(/\s+/)[0] || '';
+  const safeName = firstName ? escapeHtml(firstName) : '';
+  const heading = safeName ? `Thanks, ${safeName} — you are on the list` : 'Thanks — you are on the list';
+  const { html, text } = renderAuthEmail({
+    preheader: 'You are on the Moche-AI early-access list. We launch January 1, 2027.',
+    heading,
+    intro:
+      'Your spot is confirmed. We are putting the finishing touches on Moche-AI and we go live on January 1, 2027 — we will email you the moment your workspace is ready.',
+    buttonLabel: 'See what is coming',
+    url: `${publicEnv.appUrl}/`,
+    outro:
+      'No payment is due until launch, and early hosts lock in founding rates. If you did not sign up for Moche-AI, you can safely ignore this email.',
+  });
+  return send(params.email, 'You are on the Moche-AI early-access list', html, text);
+}
