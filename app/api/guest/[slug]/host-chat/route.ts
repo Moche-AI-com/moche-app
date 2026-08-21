@@ -1,82 +1,122 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
-import { guestEscalateSchema } from '@/lib/validation';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { notify } from '@/lib/notify';
-import { log } from '@/lib/log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Message Host Directly (portal v2, workflow 2) — a human-only channel.
-//
-// Messages are stored on escalations rows with conversation_id NULL. That is
-// the load-bearing detail: the AI concierge conversation (and its maybeSingle
-// lookups in the chat/messages routes) is never touched, so AI chat and host
-// chat share no UI, routing, or context. Host replies land in
-// escalations.host_response via the existing dashboard reply action — its
-// `if (esc.conversation_id)` guard keeps them out of the AI thread too.
+const postSchema = z.object({
+  message: z.string().trim().min(1, 'Write a message first.').max(2000),
+  replyToMessageId: z.string().uuid().optional(),
+});
 
-type HostChatRow = {
-  id: string;
-  question: string;
-  host_response: string | null;
-  responded_at: string | null;
-  status: string;
-  created_at: string;
+type AuthSuccess = {
+  session: NonNullable<Awaited<ReturnType<typeof getGuestSession>>>;
+  admin: ReturnType<typeof createAdminClient>;
+  property: { id: string; slug: string; display_name: string; host_account_id: string };
 };
 
-async function authorize(slug: string) {
+async function authorize(slug: string): Promise<AuthSuccess | { error: NextResponse }> {
   const session = await getGuestSession();
-  if (!session) return { error: NextResponse.json({ error: 'Session expired.' }, { status: 401 }) } as const;
+  if (!session) return { error: NextResponse.json({ error: 'Session expired.' }, { status: 401 }) };
+
   const admin = createAdminClient();
   const { data: property } = await admin
     .from('properties')
-    .select('id, slug, host_account_id')
-    .eq('id', session.propertyId)
+    .select('id, slug, display_name, host_account_id')
+    .eq('slug', slug)
     .maybeSingle();
-  if (!property || property.slug !== slug) {
-    return { error: NextResponse.json({ error: 'Not found.' }, { status: 404 }) } as const;
+
+  if (!property || property.id !== session.propertyId) {
+    return { error: NextResponse.json({ error: 'Property not found.' }, { status: 404 }) };
   }
-  return { session, admin, property } as const;
+
+  return { session, admin, property: property as AuthSuccess['property'] };
+}
+
+async function sessionProfile(admin: ReturnType<typeof createAdminClient>, sessionId: string) {
+  const { data } = await (admin as any)
+    .from('guest_access_sessions')
+    .select('guest_identity_id, guest_contact, notification_consent')
+    .eq('id', sessionId)
+    .maybeSingle();
+  return data as { guest_identity_id: string | null; guest_contact: string | null; notification_consent: boolean } | null;
+}
+
+async function findHostConversation(admin: ReturnType<typeof createAdminClient>, session: AuthSuccess['session']) {
+  const { data } = await (admin as any)
+    .from('conversations')
+    .select('id, title, guest_session_id, guest_identity_id, host_read_at, guest_read_at')
+    .eq('property_id', session.propertyId)
+    .eq('stay_id', session.stayId)
+    .eq('channel', 'host_chat')
+    .eq('guest_session_id', session.sessionId)
+    .maybeSingle();
+  return data as { id: string; title: string | null; guest_session_id: string | null; guest_identity_id: string | null; host_read_at: string | null; guest_read_at: string | null } | null;
+}
+
+async function getOrCreateHostConversation(admin: ReturnType<typeof createAdminClient>, session: AuthSuccess['session']) {
+  const existing = await findHostConversation(admin, session);
+  if (existing) return existing;
+
+  const profile = await sessionProfile(admin, session.sessionId);
+  const now = new Date().toISOString();
+  const { data, error } = await (admin as any)
+    .from('conversations')
+    .insert({
+      property_id: session.propertyId,
+      stay_id: session.stayId,
+      title: `Host Chat — ${session.guestDisplayName}`,
+      channel: 'host_chat',
+      guest_session_id: session.sessionId,
+      guest_identity_id: profile?.guest_identity_id ?? null,
+      last_message_at: now,
+      guest_read_at: now,
+    })
+    .select('id, title, guest_session_id, guest_identity_id, host_read_at, guest_read_at')
+    .single();
+
+  if (error) throw error;
+  return data as NonNullable<Awaited<ReturnType<typeof findHostConversation>>>;
+}
+
+function mapMessage(row: any) {
+  return {
+    id: row.id as string,
+    role: row.role as 'guest' | 'host' | 'system' | 'assistant',
+    content: row.content as string,
+    createdAt: row.created_at as string,
+    messageKind: (row.message_kind ?? 'text') as string,
+    replyToMessageId: (row.reply_to_message_id ?? null) as string | null,
+    escalationId: (row.escalation_id ?? null) as string | null,
+  };
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const auth = await authorize((await params).slug);
   if ('error' in auth) return auth.error;
-  const { session, admin } = auth;
 
-  const { data } = await admin
-    .from('escalations')
-    .select('id, question, host_response, responded_at, status, created_at')
-    .eq('property_id', session.propertyId)
-    .eq('stay_id', session.stayId)
-    .is('conversation_id', null)
+  const conversation = await findHostConversation(auth.admin, auth.session);
+  if (!conversation) return NextResponse.json({ conversationId: null, messages: [] });
+
+  const { data: rows, error } = await (auth.admin as any)
+    .from('messages')
+    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
+    .eq('conversation_id', conversation.id)
     .order('created_at', { ascending: true })
-    .limit(100);
+    .limit(300);
 
-  // Each escalation is one guest message plus, once answered, one host reply.
-  const messages: { id: string; from: 'guest' | 'host'; text: string; at: string; status?: string }[] = [];
-  for (const row of (data ?? []) as HostChatRow[]) {
-    messages.push({
-      id: `${row.id}-g`,
-      from: 'guest',
-      text: row.question,
-      at: row.created_at,
-      status: row.host_response ? 'answered' : 'waiting',
-    });
-    if (row.host_response) {
-      messages.push({
-        id: `${row.id}-h`,
-        from: 'host',
-        text: row.host_response,
-        at: row.responded_at ?? row.created_at,
-      });
-    }
-  }
+  if (error) return NextResponse.json({ error: 'Could not load messages.' }, { status: 500 });
 
-  return NextResponse.json({ messages });
+  await (auth.admin as any)
+    .from('conversations')
+    .update({ guest_read_at: new Date().toISOString() })
+    .eq('id', conversation.id);
+
+  return NextResponse.json({ conversationId: conversation.id, messages: (rows ?? []).map(mapMessage) });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -84,62 +124,60 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if ('error' in auth) return auth.error;
   const { session, admin, property } = auth;
 
-  const rl = await checkRateLimit(admin, {
-    key: `guest_host_chat:${session.stayId}`,
-    limit: 30,
-    windowSeconds: 3600,
+  const parsed = postSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: 'Write a message first.' }, { status: 400 });
+
+  const rate = await checkRateLimit(admin, {
+    key: `guest_host_chat:${session.sessionId}`,
     action: 'guest.host_chat',
+    limit: 60,
+    windowSeconds: 3600,
   });
-  if (!rl.allowed) {
+  if (!rate.allowed) {
     return NextResponse.json({ error: 'Too many messages. Please wait a moment and try again.' }, { status: 429 });
   }
 
-  const parsed = guestEscalateSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Please type a message.' }, { status: 400 });
+  const conversation = await getOrCreateHostConversation(admin, session);
+  const replyToId = parsed.data.replyToMessageId ?? null;
+  if (replyToId) {
+    const { data: replyTo } = await (admin as any)
+      .from('messages')
+      .select('id')
+      .eq('id', replyToId)
+      .eq('conversation_id', conversation.id)
+      .maybeSingle();
+    if (!replyTo) return NextResponse.json({ error: 'The message you are replying to was not found.' }, { status: 404 });
   }
-  const message = parsed.data.message;
 
-  // Duplicate-submit guard: an identical open message from the last 10 minutes
-  // is returned instead of creating a second escalation.
-  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const { data: dupe } = await admin
-    .from('escalations')
-    .select('id')
-    .eq('property_id', session.propertyId)
-    .eq('stay_id', session.stayId)
-    .is('conversation_id', null)
-    .eq('status', 'open')
-    .eq('question', message)
-    .gte('created_at', since)
-    .maybeSingle();
-  if (dupe) return NextResponse.json({ ok: true, id: dupe.id, duplicate: true });
-
-  const { data: created, error } = await admin
-    .from('escalations')
+  const now = new Date().toISOString();
+  const { data: inserted, error } = await (admin as any)
+    .from('messages')
     .insert({
+      conversation_id: conversation.id,
       property_id: session.propertyId,
-      stay_id: session.stayId,
-      conversation_id: null,
-      question: message,
-      status: 'open',
-    } as never)
-    .select('id')
+      role: 'guest',
+      content: parsed.data.message,
+      message_kind: 'text',
+      reply_to_message_id: replyToId,
+    })
+    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
     .single();
-  if (error || !created) {
-    log.error('guest_host_chat_insert_failed', { propertyId: session.propertyId, err: String(error) });
-    return NextResponse.json({ error: 'Could not send your message. Please try again.' }, { status: 500 });
-  }
 
-  // Same host fan-out as a manual escalation (in-app row + email/SMS per prefs).
+  if (error) return NextResponse.json({ error: 'Could not send your message.' }, { status: 500 });
+
+  await (admin as any)
+    .from('conversations')
+    .update({ last_message_at: now, host_read_at: null, guest_read_at: now })
+    .eq('id', conversation.id);
+
   await notify(admin, {
     hostAccountId: property.host_account_id,
-    kind: 'escalation',
-    title: 'A guest is messaging you',
-    body: message.length > 300 ? `${message.slice(0, 300)}…` : message,
-    propertyId: session.propertyId,
-  });
+    kind: 'system',
+    title: `New guest message at ${property.display_name}`,
+    body: `${session.guestDisplayName} sent a message in Host Chat.`,
+    propertyId: property.id,
+    link: `/dashboard/properties/${property.id}/guest-chat?stay=${session.stayId}`,
+  }).catch(() => undefined);
 
-  log.info('guest_host_chat_message', { propertyId: session.propertyId, stayId: session.stayId });
-  return NextResponse.json({ ok: true, id: created.id });
+  return NextResponse.json({ ok: true, conversationId: conversation.id, message: mapMessage(inserted) });
 }
