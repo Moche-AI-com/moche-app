@@ -41,6 +41,7 @@ export function HostChatWorkflow(props: {
   slug: string;
   guestName: string | null;
   onBack: () => void;
+  onSessionExpired: () => void;
 }) {
   const [messages, setMessages] = useState<ThreadMsg[]>([]);
   const [input, setInput] = useState('');
@@ -53,14 +54,14 @@ export function HostChatWorkflow(props: {
   const load = useCallback(async () => {
     const res = await fetch(`/api/guest/${props.slug}/host-chat`, { cache: 'no-store' });
     if (res.status === 401) {
-      setError('Your session has expired. Please verify again.');
+      props.onSessionExpired();
       return;
     }
     if (!res.ok) return;
     const json = await res.json().catch(() => ({}));
     setMessages(Array.isArray(json.messages) ? json.messages : []);
     setLoading(false);
-  }, [props.slug]);
+  }, [props.slug, props.onSessionExpired]);
 
   useEffect(() => {
     void load();
@@ -83,6 +84,10 @@ export function HostChatWorkflow(props: {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ message, replyToMessageId: replyTo?.id }),
       });
+      if (res.status === 401) {
+        props.onSessionExpired();
+        return;
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(json.error || 'Could not send your message.');

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ConciergeBell, Loader2, MapPin, Send, Sparkles, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ConciergeBell, Loader2, MapPin, Sparkles, TriangleAlert } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { linkify } from '@/lib/guest/linkify';
 

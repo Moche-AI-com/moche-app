@@ -8,6 +8,7 @@ export function RegisterForm(props: {
   slug: string;
   propertyName: string;
   onRegistered: (guestName: string) => void;
+  onSessionExpired: () => void;
 }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -35,12 +36,20 @@ export function RegisterForm(props: {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (res.status === 401) {
+        props.onSessionExpired();
+        return;
+      }
       if (res.status === 400) {
         res = await fetch(`/api/guest/${props.slug}/register`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(payload),
         });
+      }
+      if (res.status === 401) {
+        props.onSessionExpired();
+        return;
       }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
