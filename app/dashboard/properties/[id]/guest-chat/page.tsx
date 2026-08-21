@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { GuestChatInbox } from './GuestChatInbox';
+import { StayGuestsManager } from './StayGuestsManager';
+import { ChatPermissionsPanel } from './ChatPermissionsPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +21,7 @@ export default async function GuestChatPage({
 
   const stayId = (await searchParams)?.stay ?? null;
   const canAnnounce = access.isOwner || (access.member as any)?.can_send_announcements === true;
+  const canManagePermissions = access.isOwner || access.can.editProperty;
 
   return (
     <main style={{ maxWidth: 1280, margin: '0 auto', padding: '1.25rem' }}>
@@ -26,9 +29,15 @@ export default async function GuestChatPage({
         <p className="muted" style={{ margin: 0, fontSize: '.85rem' }}>{access.property.display_name}</p>
         <h1 style={{ margin: '.25rem 0' }}>Guest Chat</h1>
         <p className="muted" style={{ margin: 0 }}>
-          Answer guest messages, resolve AI escalations, and send stay announcements.
+          Answer guest messages, resolve AI escalations, manage guest IDs, and send stay announcements.
         </p>
       </div>
+
+      <div style={{ display: 'grid', gap: '.75rem', marginBottom: '1rem' }}>
+        <StayGuestsManager propertyId={propertyId} />
+        {canManagePermissions ? <ChatPermissionsPanel propertyId={propertyId} /> : null}
+      </div>
+
       <GuestChatInbox propertyId={propertyId} stayId={stayId} canAnnounce={canAnnounce} />
     </main>
   );
