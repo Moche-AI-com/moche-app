@@ -2,59 +2,52 @@
 
 import { useState, type FormEvent } from 'react';
 
-// Step 2 of the portal: guest registration. First/last name and phone are
-// required; notification consent is optional and never blocks registration.
+// Step 2 of the portal: first-time guest profile. Terms are required; SMS host
+// notifications are a separate affirmative opt-in.
 export function RegisterForm(props: {
   slug: string;
   propertyName: string;
   onRegistered: (guestName: string) => void;
-  onSessionExpired: () => void;
 }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  const [consent, setConsent] = useState(false); // optional, default unchecked
+  const [notificationConsent, setNotificationConsent] = useState(true);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; phone?: string; form?: string }>({});
+  const [error, setError] = useState<string | null>(null);
 
-  function validate(): boolean {
-    const next: typeof errors = {};
-    if (!firstName.trim()) next.firstName = 'First name is required.';
-    if (!lastName.trim()) next.lastName = 'Last name is required.';
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 7 || digits.length > 15) next.phone = 'Enter a valid phone number.';
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  }
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (busy || !validate()) return;
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
     setBusy(true);
-    setErrors({});
+    setError(null);
     try {
-      const res = await fetch(`/api/guest/${props.slug}/register`, {
+      const payload = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim(),
+        notificationConsent,
+        termsAccepted,
+      };
+      let res = await fetch(`/api/guest/${props.slug}/stay-guest/register`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          phone: phone.trim(),
-          notificationConsent: consent,
-        }),
+        body: JSON.stringify(payload),
       });
+      if (res.status === 400) {
+        res = await fetch(`/api/guest/${props.slug}/register`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
       const json = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        props.onSessionExpired();
+      if (!res.ok) {
+        setError(json.error || 'Could not save your profile.');
         return;
       }
-      if (res.ok && json.ok) {
-        props.onRegistered(typeof json.guestName === 'string' ? json.guestName : firstName.trim());
-        return;
-      }
-      setErrors({ form: typeof json.error === 'string' ? json.error : 'Please check your details and try again.' });
-    } catch {
-      setErrors({ form: 'Something went wrong. Please check your connection and try again.' });
+      props.onRegistered(`${payload.firstName} ${payload.lastName}`.trim());
     } finally {
       setBusy(false);
     }
@@ -62,74 +55,33 @@ export function RegisterForm(props: {
 
   return (
     <section aria-label="Guest registration">
-      <h1 className="gp-step-title">Almost there</h1>
-      <p className="gp-step-sub">Tell us who&apos;s staying so your host knows who they&apos;re talking to.</p>
-
-      <form onSubmit={onSubmit} noValidate>
-        <div className="gp-field">
-          <label className="gp-label" htmlFor="gp-first">First name</label>
-          <input
-            id="gp-first"
-            className="gp-input"
-            type="text"
-            autoComplete="given-name"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            disabled={busy}
-            required
-          />
-          {errors.firstName ? <div className="gp-field-error">{errors.firstName}</div> : null}
+      <h2>Welcome to {props.propertyName}</h2>
+      <p className="muted">Tell us who is staying so your host can recognize your guest ID and reply securely.</p>
+      <form onSubmit={submit} style={{ display: 'grid', gap: '.8rem', marginTop: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.65rem' }}>
+          <label>
+            First name
+            <input value={firstName} onChange={(event) => setFirstName(event.target.value)} autoComplete="given-name" required />
+          </label>
+          <label>
+            Last name
+            <input value={lastName} onChange={(event) => setLastName(event.target.value)} autoComplete="family-name" required />
+          </label>
         </div>
-
-        <div className="gp-field">
-          <label className="gp-label" htmlFor="gp-last">Last name</label>
-          <input
-            id="gp-last"
-            className="gp-input"
-            type="text"
-            autoComplete="family-name"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            disabled={busy}
-            required
-          />
-          {errors.lastName ? <div className="gp-field-error">{errors.lastName}</div> : null}
-        </div>
-
-        <div className="gp-field">
-          <label className="gp-label" htmlFor="gp-phone">Phone number</label>
-          <input
-            id="gp-phone"
-            className="gp-input"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+1 555 123 4567"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            disabled={busy}
-            required
-          />
-          {errors.phone ? <div className="gp-field-error">{errors.phone}</div> : null}
-        </div>
-
-        <label className="gp-consent">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => setConsent(e.target.checked)}
-            disabled={busy}
-          />
-          <span className="gp-consent-text">
-            I agree to receive notifications from {props.propertyName}.
-            <span className="gp-consent-opt">Optional — everything works either way.</span>
-          </span>
+        <label>
+          Mobile phone number
+          <input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" required />
         </label>
-
-        {errors.form ? <div className="gp-error" role="alert">{errors.form}</div> : null}
-
-        <button type="submit" className="gp-btn gp-btn-primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Continue'}
-        </button>
+        <label style={{ display: 'flex', gap: '.55rem', alignItems: 'flex-start' }}>
+          <input type="checkbox" checked={notificationConsent} onChange={(event) => setNotificationConsent(event.target.checked)} />
+          <span>Text me a neutral alert when my host replies. Message and data rates may apply.</span>
+        </label>
+        <label style={{ display: 'flex', gap: '.55rem', alignItems: 'flex-start' }}>
+          <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required />
+          <span>I agree to the guest portal terms and host notification policy.</span>
+        </label>
+        {error && <p role="alert" style={{ color: '#ffb08f' }}>{error}</p>}
+        <button type="submit" disabled={busy || !termsAccepted}>{busy ? 'Saving…' : 'Continue'}</button>
       </form>
     </section>
   );
