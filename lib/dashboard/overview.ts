@@ -11,7 +11,9 @@ export interface ValueMetrics {
   // Headline value signals — "you made the right call" numbers.
   questionsAnswered: number; // assistant messages across the host's properties (all-time)
   questionsThisWeek: number; // assistant messages in the trailing 7 days
+  questionsPrevWeek: number; // assistant messages in the 7 days before that (week-over-week delta)
   guestsHelped: number; // distinct conversations that had at least one guest turn
+  guestsThisWeek: number; // conversations started in the trailing 7 days
   avgConfidencePct: number | null; // mean assistant confidence (0-100), null if unknown
   avgResponseSeconds: number | null; // mean assistant latency in seconds, null if unknown
   instantAnswerRate: number | null; // % of guest questions answered by AI without escalation
@@ -55,7 +57,9 @@ export async function loadValueMetrics(
   const base: ValueMetrics = {
     questionsAnswered: 0,
     questionsThisWeek: 0,
+    questionsPrevWeek: 0,
     guestsHelped: 0,
+    guestsThisWeek: 0,
     avgConfidencePct: null,
     avgResponseSeconds: null,
     instantAnswerRate: null,
@@ -70,17 +74,22 @@ export async function loadValueMetrics(
 
   const admin = hasServiceRole() ? createAdminClient() : supabase;
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     const [
       { count: answered },
       { count: answeredWeek },
+      { count: answeredPrevWeek },
       { count: conversations },
+      { count: conversationsWeek },
       { data: quality },
     ] = await Promise.all([
       admin.from('messages').select('id', { count: 'exact', head: true }).in('property_id', propertyIds).eq('role', 'assistant'),
       admin.from('messages').select('id', { count: 'exact', head: true }).in('property_id', propertyIds).eq('role', 'assistant').gte('created_at', weekAgo),
+      admin.from('messages').select('id', { count: 'exact', head: true }).in('property_id', propertyIds).eq('role', 'assistant').gte('created_at', twoWeeksAgo).lt('created_at', weekAgo),
       admin.from('conversations').select('id', { count: 'exact', head: true }).in('property_id', propertyIds),
+      admin.from('conversations').select('id', { count: 'exact', head: true }).in('property_id', propertyIds).gte('created_at', weekAgo),
       // Confidence + latency sample from recent assistant answers (bounded for cost).
       admin.from('messages').select('confidence, latency_ms').in('property_id', propertyIds).eq('role', 'assistant').order('created_at', { ascending: false }).limit(500),
     ]);
@@ -88,7 +97,9 @@ export async function loadValueMetrics(
     const questionsAnswered = answered ?? 0;
     base.questionsAnswered = questionsAnswered;
     base.questionsThisWeek = answeredWeek ?? 0;
+    base.questionsPrevWeek = answeredPrevWeek ?? 0;
     base.guestsHelped = conversations ?? 0;
+    base.guestsThisWeek = conversationsWeek ?? 0;
     base.hoursSaved = Math.round((questionsAnswered * MINUTES_SAVED_PER_ANSWER) / 60);
 
     const rows = quality ?? [];

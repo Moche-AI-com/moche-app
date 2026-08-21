@@ -1,11 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
   Activity,
-  AlertTriangle,
-  ArrowRight,
   ArrowUpRight,
   BedDouble,
   BrainCircuit,
@@ -27,6 +25,7 @@ import type { ActivityTrend, TopicRow, FeedEvent, FeedKind } from '@/lib/dashboa
 import { summarizeTrend } from '@/lib/dashboard/trend-summary';
 import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
 import { useCollapsedCards, useDismissedFeedItems } from '@/lib/dashboard/use-dashboard-ui-state';
+import styles from './overview.module.css';
 
 function fmt(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
@@ -44,21 +43,32 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-// --- Attention strip -------------------------------------------------------
-// Everything that needs the host to act, surfaced above the fold. When there is
-// nothing to do it flips to a calm "all clear" state rather than disappearing —
-// the absence of work is itself reassuring information.
+// --- Attention queue ---------------------------------------------------------
+// Everything that needs the host to act, as one severity-ordered list with
+// deep links into the surface that resolves each item. When there is nothing
+// to do it flips to a calm "all clear" state rather than disappearing — the
+// absence of work is itself reassuring information.
 
-export function AttentionStrip({
+export function AttentionQueue({
   openEscalations,
   openServiceRequests,
   lowRatings,
+  pendingApprovals,
+  openExtras,
 }: {
   openEscalations: number;
   openServiceRequests: number;
   lowRatings: number;
+  pendingApprovals: number;
+  openExtras: number;
 }) {
   const items = [
+    {
+      n: pendingApprovals,
+      label: pendingApprovals === 1 ? 'AI update to review' : 'AI updates to review',
+      href: '/dashboard/updates',
+      icon: Sparkles,
+    },
     {
       n: openEscalations,
       label: openEscalations === 1 ? 'guest question needs an answer' : 'guest questions need answers',
@@ -71,52 +81,57 @@ export function AttentionStrip({
       href: '/dashboard/service-requests',
       icon: Wrench,
     },
+    {
+      n: openExtras,
+      label: openExtras === 1 ? 'extras request to fulfill' : 'extras requests to fulfill',
+      href: '/dashboard/extras',
+      icon: ConciergeBell,
+    },
     { n: lowRatings, label: lowRatings === 1 ? 'low AI rating to review' : 'low AI ratings to review', href: null, icon: Star },
   ].filter((i) => i.n > 0);
 
   if (items.length === 0) {
     return (
-      <div className="dash-attn dash-attn-clear rise-in" data-testid="attention-strip-clear">
-        <span className="dash-attn-icon dash-attn-icon-clear" aria-hidden>
-          <CheckCircle2 size={16} aria-hidden />
-        </span>
-        <div className="dash-attn-body">
-          <strong className="dash-attn-title">You&rsquo;re all caught up</strong>
-          <span className="dash-attn-sub">No open escalations or service requests. Your concierge is handling things.</span>
+      <div className={styles.aqCard} data-testid="attention-strip-clear">
+        <div className={styles.aqClear}>
+          <span className={styles.aqClearDot} aria-hidden />
+          <span>
+            <strong>You&rsquo;re all caught up</strong> — no open escalations, requests, or reviews. Your concierge is handling
+            things.
+          </span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dash-attn rise-in" data-testid="attention-strip">
-      <span className="dash-attn-icon" aria-hidden>
-        <AlertTriangle size={16} aria-hidden />
-      </span>
-      <div className="dash-attn-body">
-        <strong className="dash-attn-title">Needs your attention</strong>
-        <div className="dash-attn-chips">
-          {items.map((i) => {
-            const Icon = i.icon;
-            const content = (
-              <>
-                <Icon size={13} aria-hidden />
-                <strong>{i.n}</strong> {i.label}
-              </>
-            );
-            return i.href ? (
-              <Link key={i.label} href={i.href} className="dash-attn-chip dash-attn-chip-link">
-                {content}
-                <ArrowRight size={13} aria-hidden />
-              </Link>
-            ) : (
-              <span key={i.label} className="dash-attn-chip">
-                {content}
-              </span>
-            );
-          })}
-        </div>
+    <div className={styles.aqCard} data-testid="attention-strip">
+      <div className={styles.aqHeader}>
+        <h2 className={styles.aqTitle}>Needs your attention</h2>
       </div>
+      {items.map((i) => {
+        const Icon = i.icon;
+        const inner = (
+          <>
+            <span className={styles.aqIcon} aria-hidden>
+              <Icon size={15} aria-hidden />
+            </span>
+            <span className={styles.aqBody}>
+              <p className={styles.aqLabel}>{i.label}</p>
+            </span>
+            <span className={styles.aqBadge}>{i.n}</span>
+          </>
+        );
+        return i.href ? (
+          <Link key={i.label} href={i.href} className={styles.aqRow}>
+            {inner}
+          </Link>
+        ) : (
+          <div key={i.label} className={styles.aqRow}>
+            {inner}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -126,6 +141,8 @@ export function AttentionStrip({
 // thrash, and it degrades honestly when a host has only a few data points.
 // Bars (not a smoothed area) because daily counts are discrete and mostly
 // small — interpolating between them would invent activity that never happened.
+// Bars grow in with a stagger on mount and today's bar carries a soft pulse;
+// both effects disable under prefers-reduced-motion.
 
 const RANGES = [7, 14] as const;
 type Range = (typeof RANGES)[number];
@@ -163,7 +180,7 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
       <div className="dash-panel-head">
         <div>
           <h2 className="dash-section-title">
-            <Activity size={16} aria-hidden /> Concierge activity
+            <span className={styles.caLiveDot} aria-hidden /> Concierge activity
           </h2>
           <p className="dash-section-sub">Guest questions handled over the last {days.length} days.</p>
         </div>
@@ -240,12 +257,23 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
               {days.map((d, i) => {
                 const x = i * (barW + gap);
                 const h = d.questions > 0 ? Math.max((d.questions / scale) * (H - 4), 1.5) : 0;
+                const isToday = i === days.length - 1;
                 return (
-                  <g key={d.date}>
+                  <g key={d.date} className={styles.trendBarGroup} style={{ '--i': i } as CSSProperties}>
                     {/* Full-height track so zero-activity days still read as days.
                         Uses --chart-track (not surface-2, which is invisible on a card). */}
                     <rect x={x} y={2} width={barW} height={H - 2} fill="var(--chart-track)" rx="0.6" />
-                    {h > 0 && <rect x={x} y={H - h} width={barW} height={h} fill="url(#barGrad)" rx="0.6" />}
+                    {h > 0 && (
+                      <rect
+                        x={x}
+                        y={H - h}
+                        width={barW}
+                        height={h}
+                        fill="url(#barGrad)"
+                        rx="0.6"
+                        className={`${styles.trendBar}${isToday ? ` ${styles.trendBarToday}` : ''}`}
+                      />
+                    )}
                     {d.escalations > 0 && <circle cx={x + barW / 2} cy={1.6} r="1.1" fill="var(--coral)" />}
                     <title>{`${d.label}: ${d.questions} question${d.questions === 1 ? '' : 's'}, ${d.answers} answer${
                       d.answers === 1 ? '' : 's'

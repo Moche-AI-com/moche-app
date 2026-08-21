@@ -138,6 +138,38 @@
 
 /* --- Value band (replaces ValueHero + ValueMetricsGrid) -------------------- */
 
+.vbSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.vbHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.vbGreeting {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text, #0f172a);
+}
+
+.vbGreeting svg {
+  color: var(--teal, #0a7a72);
+}
+
+.vbHeadSub {
+  font-size: 0.82rem;
+  color: var(--text-faint, #5e6975);
+  margin: 0;
+}
+
 .vbBand {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -151,6 +183,7 @@
   border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
   border-radius: 14px;
   padding: 0.9rem 1rem 1rem;
+  height: 100%;
 }
 
 .vbTile::before {
@@ -160,6 +193,18 @@
   height: 3px;
   background: linear-gradient(90deg, #52cbde, #7698f9);
   opacity: 0.85;
+}
+
+.vbTileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.vbIcon {
+  color: var(--text-faint, #5e6975);
+  display: inline-flex;
 }
 
 .vbLabel {
@@ -175,12 +220,13 @@
   letter-spacing: -0.01em;
   margin: 0;
   color: var(--text, #0f172a);
+  font-variant-numeric: tabular-nums;
 }
 
 .vbSub {
   font-size: 0.78rem;
   color: var(--text-faint, #5e6975);
-  margin: 0.15rem 0 0;
+  margin: 0.35rem 0 0;
 }
 
 .vbDelta {
@@ -204,8 +250,50 @@
   background: var(--border, rgba(15, 23, 42, 0.08));
 }
 
+.vbNow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.vbNowChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  color: var(--text-faint, #5e6975);
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.1));
+  background: var(--card, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+}
+
+.vbNowChip strong {
+  color: var(--text, #0f172a);
+  font-weight: 700;
+}
+
+.vbNowChip svg {
+  color: var(--teal, #0a7a72);
+}
+
+a.vbNowChip:hover {
+  border-color: var(--teal, #0a7a72);
+}
+
+.vbNowChipAttn {
+  border-color: color-mix(in srgb, #ff8b5c 45%, transparent);
+}
+
+.vbNowChipAttn svg,
+.vbNowChipAttn strong {
+  color: #e06a35;
+}
+
 .vbWin {
-  margin-top: 0.9rem;
+  margin: 0;
   display: flex;
   gap: 0.6rem;
   align-items: flex-start;
@@ -287,12 +375,6 @@
   margin: 0;
 }
 
-.aqDetail {
-  font-size: 0.76rem;
-  color: var(--text-faint, #5e6975);
-  margin: 0;
-}
-
 .aqBadge {
   flex: none;
   min-width: 26px;
@@ -315,7 +397,6 @@
   padding: 0.9rem 1rem;
   color: var(--teal-deep, #08605a);
   font-size: 0.86rem;
-  font-weight: 600;
 }
 
 .aqClearDot {
@@ -324,24 +405,10 @@
   border-radius: 50%;
   background: #33e6d3;
   box-shadow: 0 0 0 4px color-mix(in srgb, #33e6d3 22%, transparent);
+  flex: none;
 }
 
-/* --- Concierge activity (replaces ActivityFeedCard) ------------------------ */
-
-.caCard {
-  background: var(--card, #fff);
-  border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.caHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--border, rgba(15, 23, 42, 0.08));
-}
+/* --- Concierge activity effects ------------------------------------------- */
 
 .caLiveDot {
   position: relative;
@@ -350,6 +417,8 @@
   border-radius: 50%;
   background: #33e6d3;
   flex: none;
+  display: inline-block;
+  margin-right: 0.15rem;
 }
 
 .caLiveDot::after {
@@ -361,129 +430,29 @@
   animation: caPulse 2.2s ease-out infinite;
 }
 
-.caTitle {
-  font-size: 0.92rem;
-  font-weight: 700;
-  margin: 0;
-  flex: 1;
+.trendBar {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: barGrow 0.45s ease both;
+  animation-delay: calc(var(--i, 0) * 28ms);
+  transition: filter 0.12s ease;
 }
 
-.caSub {
-  font-size: 0.76rem;
-  color: var(--text-faint, #5e6975);
-  margin: 0;
+.trendBarGroup:hover .trendBar {
+  filter: brightness(1.12);
 }
 
-.caList {
-  display: flex;
-  flex-direction: column;
-  max-height: 420px;
-  overflow-y: auto;
+.trendBarToday {
+  animation: barGrow 0.45s ease both, caTodayGlow 2.6s ease-in-out infinite 0.6s;
 }
 
-.caItem {
-  display: flex;
-  gap: 0.7rem;
-  align-items: flex-start;
-  padding: 0.7rem 1rem;
-  border-top: 1px solid var(--border, rgba(15, 23, 42, 0.06));
-  animation: caSlideIn 0.4s ease both;
-  animation-delay: calc(var(--i, 0) * 55ms);
-  transition: background 0.12s ease, opacity 0.25s ease, transform 0.25s ease;
-}
-
-.caItem:first-child {
-  border-top: 0;
-}
-
-.caItem:hover {
-  background: color-mix(in srgb, var(--teal, #0a7a72) 4%, transparent);
-}
-
-.caItemExiting {
-  opacity: 0;
-  transform: translateX(10px);
-}
-
-.caIcon {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.caIconEscalation {
-  background: color-mix(in srgb, #ff8b5c 16%, transparent);
-  color: #e06a35;
-}
-
-.caIconService {
-  background: color-mix(in srgb, #7698f9 16%, transparent);
-  color: #4f74e0;
-}
-
-.caIconStay {
-  background: color-mix(in srgb, #52cbde 18%, transparent);
-  color: #2b9db3;
-}
-
-.caIconFeedback {
-  background: color-mix(in srgb, #33e6d3 18%, transparent);
-  color: #0fa79a;
-}
-
-.caIconBrain {
-  background: color-mix(in srgb, #65b2ea 18%, transparent);
-  color: #3d7fc4;
-}
-
-.caBody {
-  flex: 1;
-  min-width: 0;
-}
-
-.caItemTitle {
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.caItemMeta {
-  font-size: 0.74rem;
-  color: var(--text-faint, #5e6975);
-  margin: 0.1rem 0 0;
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.caDismiss {
-  flex: none;
-  border: 0;
-  background: none;
-  color: var(--text-faint, #5e6975);
-  cursor: pointer;
-  padding: 0.2rem;
-  border-radius: 6px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.caItem:hover .caDismiss,
-.caDismiss:focus-visible {
-  opacity: 1;
-}
-
-.caEmpty {
-  padding: 1rem;
-  font-size: 0.84rem;
-  color: var(--text-faint, #5e6975);
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
+@keyframes barGrow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 
 @keyframes caPulse {
@@ -497,20 +466,32 @@
   }
 }
 
-@keyframes caSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+@keyframes caTodayGlow {
+  0%,
+  100% {
+    filter: brightness(1);
   }
-  to {
-    opacity: 1;
-    transform: none;
+  50% {
+    filter: brightness(1.3);
   }
 }
 
+/* --- Operations grid (feed + update queue + extras) ------------------------ */
+
+.opsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--gap-section, 1.25rem);
+  align-items: start;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .zone,
-  .caItem {
+  .zone {
+    animation: none;
+  }
+
+  .trendBar,
+  .trendBarToday {
     animation: none;
     transition: none;
   }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   MessageCircle,
@@ -7,6 +8,7 @@ import {
   Clock3,
   ShieldCheck,
   TrendingUp,
+  TrendingDown,
   Star,
   Users,
   Gauge,
@@ -23,6 +25,7 @@ import {
 import type { ValueMetrics, GuestFeedbackSummary, GuestAiFeedbackItem } from '@/lib/dashboard/overview';
 import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
 import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
+import styles from './overview.module.css';
 
 function fmt(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
@@ -56,103 +59,98 @@ export interface NextArrival {
   checkIn: string;
 }
 
-// --- Hero value banner ----------------------------------------------------
-// The first thing a host sees: a warm, gradient-lit statement of the value the
-// concierge has delivered, with the headline number front and center.
-export function ValueHero({
-  hostName,
-  metrics,
-}: {
-  hostName: string;
-  metrics: ValueMetrics;
-}) {
-  const answered = metrics.questionsAnswered;
-  const hasActivity = answered > 0;
+// --- Count-up hook ----------------------------------------------------------
+// Numbers ease from 0 to their real value on mount — a small moment of polish
+// that makes the value band feel alive. Disabled under prefers-reduced-motion.
+function useCountUp(target: number, durationMs = 700): number {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setValue(target);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / durationMs, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(target * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs]);
+  return value;
+}
 
-  const headline = hasActivity
-    ? `Your concierge answered ${fmt(answered)} guest question${answered === 1 ? '' : 's'}`
-    : 'Your AI concierge is ready';
-  const sub = hasActivity
-    ? `That's roughly ${metrics.hoursSaved > 0 ? `${metrics.hoursSaved} hour${metrics.hoursSaved === 1 ? '' : 's'}` : 'time'} you didn't spend answering messages${
-        metrics.instantAnswerRate != null ? ` — ${metrics.instantAnswerRate}% resolved instantly, no back-and-forth.` : '.'
-      }`
-    : 'Once guests start asking questions, this is where you\u2019ll see the value it delivers for every property.';
+// --- Value band -------------------------------------------------------------
+// Replaces the old full-width hero + separate metrics grid with one compact,
+// scannable band: a short greeting, four grounded value tiles (every number
+// traces to a real query — nothing invented), a "right now" operations strip,
+// and a latest-win quote pulled from real guest feedback.
 
+function DeltaChip({ thisWeek, prevWeek }: { thisWeek: number; prevWeek: number }) {
+  if (prevWeek <= 0 && thisWeek <= 0) return null;
+  // No prior-week baseline means a percentage would be meaningless — say "new"
+  // rather than showing a fake +100%.
+  if (prevWeek <= 0) {
+    return (
+      <span className={`${styles.vbDelta} ${styles.vbDeltaUp}`}>
+        <TrendingUp size={12} aria-hidden /> New this week
+      </span>
+    );
+  }
+  const pct = Math.round(((thisWeek - prevWeek) / prevWeek) * 100);
+  if (pct === 0) return <span className={`${styles.vbDelta} ${styles.vbDeltaFlat}`}>Level vs last week</span>;
+  const up = pct > 0;
   return (
-    <div className="dash-hero rise-in" data-testid="dashboard-value-hero">
-      <div className="dash-hero-glow" aria-hidden />
-      <div className="dash-hero-inner">
-        <div className="dash-hero-eyebrow">
-          <Sparkles size={14} aria-hidden />
-          <span>Welcome back{hostName ? `, ${hostName}` : ''}</span>
-        </div>
-        <h1 className="dash-hero-title">{headline}</h1>
-        <p className="dash-hero-sub">{sub}</p>
-
-        {hasActivity && (
-          <div className="dash-hero-chips">
-            {metrics.questionsThisWeek > 0 && (
-              <span className="dash-chip">
-                <TrendingUp size={13} aria-hidden /> {fmt(metrics.questionsThisWeek)} this week
-              </span>
-            )}
-            {metrics.avgResponseSeconds != null && (
-              <span className="dash-chip">
-                <Timer size={13} aria-hidden /> {metrics.avgResponseSeconds}s avg reply
-              </span>
-            )}
-            {metrics.avgConfidencePct != null && (
-              <span className="dash-chip">
-                <Gauge size={13} aria-hidden /> {metrics.avgConfidencePct}% confidence
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+    <span className={`${styles.vbDelta} ${up ? styles.vbDeltaUp : styles.vbDeltaFlat}`}>
+      {up ? <TrendingUp size={12} aria-hidden /> : <TrendingDown size={12} aria-hidden />}
+      {up ? '+' : ''}
+      {pct}% vs last week
+    </span>
   );
 }
 
-// --- Metric tile ----------------------------------------------------------
-interface Metric {
+interface ValueTileSpec {
   label: string;
-  value: string;
+  value: number | null; // null renders an honest em dash, never a fake zero
+  suffix?: string;
   icon: LucideIcon;
-  hint?: string;
+  hint: string;
+  delta?: { thisWeek: number; prevWeek: number };
   href?: string;
-  tone?: 'default' | 'teal' | 'iris' | 'coral';
-  attn?: boolean;
 }
 
-function MetricTile({ m }: { m: Metric }) {
-  const Icon = m.icon;
-  const accent =
-    m.tone === 'coral' ? 'var(--coral)' : m.tone === 'iris' ? 'var(--iris)' : m.tone === 'teal' ? 'var(--teal)' : 'var(--text)';
-  const inner = (
-    <div className={`card card-interactive dash-metric${m.attn ? ' dash-metric-attn' : ''}`}>
-      <div className="dash-metric-top">
-        <span className="dash-metric-label">{m.label}</span>
-        <span className="dash-metric-icon" aria-hidden>
-          <Icon size={16} aria-hidden />
+function ValueTile({ spec }: { spec: ValueTileSpec }) {
+  const animated = useCountUp(spec.value ?? 0);
+  const Icon = spec.icon;
+  const body = (
+    <div className={styles.vbTile}>
+      <div className={styles.vbTileTop}>
+        <p className={styles.vbLabel}>{spec.label}</p>
+        <span className={styles.vbIcon} aria-hidden>
+          <Icon size={15} aria-hidden />
         </span>
       </div>
-      <div className="dash-metric-value" style={{ color: m.attn ? 'var(--coral)' : accent }}>
-        {m.value}
-      </div>
-      {m.hint && <div className="dash-metric-hint">{m.hint}</div>}
+      <p className={styles.vbValue}>{spec.value == null ? '—' : `${fmt(animated)}${spec.suffix ?? ''}`}</p>
+      {spec.delta ? <DeltaChip thisWeek={spec.delta.thisWeek} prevWeek={spec.delta.prevWeek} /> : null}
+      <p className={styles.vbSub}>{spec.hint}</p>
     </div>
   );
-  return m.href ? (
-    <Link href={m.href} style={{ display: 'block' }}>
-      {inner}
+  return spec.href ? (
+    <Link href={spec.href} style={{ display: 'block' }}>
+      {body}
     </Link>
   ) : (
-    inner
+    body
   );
 }
 
-export function ValueMetricsGrid({
+export function ValueBand({
+  hostName,
   metrics,
+  feedback,
   activeStaysHref,
   knowledgeItemsHref,
   upcomingCheckIns,
@@ -160,7 +158,9 @@ export function ValueMetricsGrid({
   avgBrainHealthPct,
   propertiesNeedingAttention,
 }: {
+  hostName: string;
   metrics: ValueMetrics;
+  feedback: GuestFeedbackSummary;
   activeStaysHref?: string;
   knowledgeItemsHref?: string;
   upcomingCheckIns?: number;
@@ -168,103 +168,117 @@ export function ValueMetricsGrid({
   avgBrainHealthPct?: number | null;
   propertiesNeedingAttention?: number;
 }) {
-  const tiles: Metric[] = [
+  const hasActivity = metrics.questionsAnswered > 0;
+  // Latest win: the newest real guest comment with a 4-5 star rating. If none
+  // exists the strip simply doesn't render — no placeholder praise.
+  const win = feedback.recent.find((r) => r.rating != null && r.rating >= 4 && r.comment);
+
+  const tiles: ValueTileSpec[] = [
     {
       label: 'Questions answered',
-      value: fmt(metrics.questionsAnswered),
+      value: metrics.questionsAnswered,
       icon: MessageCircle,
-      hint: metrics.questionsThisWeek > 0 ? `+${fmt(metrics.questionsThisWeek)} this week` : 'All-time by your AI',
-      tone: 'teal',
+      hint: 'All-time by your AI',
+      delta: { thisWeek: metrics.questionsThisWeek, prevWeek: metrics.questionsPrevWeek },
     },
     {
       label: 'Guests helped',
-      value: fmt(metrics.guestsHelped),
+      value: metrics.guestsHelped,
       icon: Users,
-      hint: 'Conversations handled',
-      tone: 'iris',
+      hint: metrics.guestsThisWeek > 0 ? `+${fmt(metrics.guestsThisWeek)} this week` : 'Conversations handled',
     },
     {
-      label: 'Instant-answer rate',
-      value: metrics.instantAnswerRate != null ? `${metrics.instantAnswerRate}%` : '—',
+      label: 'Resolved without you',
+      value: metrics.instantAnswerRate,
+      suffix: '%',
       icon: ShieldCheck,
-      hint: metrics.instantAnswerRate != null ? 'Resolved without you' : 'No questions yet',
-      tone: 'teal',
+      hint: metrics.instantAnswerRate != null ? 'No back-and-forth needed' : 'No questions yet',
     },
     {
       label: 'Est. hours saved',
-      value: metrics.hoursSaved > 0 ? fmt(metrics.hoursSaved) : '—',
+      value: metrics.hoursSaved > 0 ? metrics.hoursSaved : null,
       icon: Clock3,
-      hint: 'Time back for you',
-      tone: 'iris',
-    },
-    {
-      label: 'Active stays',
-      value: fmt(metrics.activeStays),
-      icon: BedDouble,
-      href: activeStaysHref,
-      hint: metrics.activeStays === 0 ? 'No guests in-house' : 'Guests in-house now',
-    },
-    {
-      label: 'Knowledge items',
-      value: fmt(metrics.knowledgeItems),
-      icon: BrainCircuit,
-      href: knowledgeItemsHref,
-      hint: 'Powering your concierge',
-    },
-    {
-      label: 'Open escalations',
-      value: fmt(metrics.openEscalations),
-      icon: MessageCircle,
-      href: '/dashboard/escalations',
-      hint: metrics.openEscalations > 0 ? 'Needs your attention' : 'All clear',
-      attn: metrics.openEscalations > 0,
-    },
-    {
-      label: 'Service requests',
-      value: fmt(metrics.openServiceRequests),
-      icon: Gauge,
-      href: '/dashboard/service-requests',
-      hint: metrics.openServiceRequests > 0 ? 'Awaiting action' : 'Nothing pending',
-      attn: metrics.openServiceRequests > 0,
+      hint: 'At ~4 min per answered question',
     },
   ];
 
+  const nowChips: { label: string; value: string; icon: LucideIcon; href?: string; attn?: boolean }[] = [
+    { label: 'active stays', value: fmt(metrics.activeStays), icon: BedDouble, href: activeStaysHref },
+  ];
   if (upcomingCheckIns != null) {
-    tiles.push({
-      label: 'Upcoming check-ins',
+    nowChips.push({
+      label: nextArrival ? `check-ins · next ${dayLabel(nextArrival.checkIn)}` : 'check-ins (3d)',
       value: fmt(upcomingCheckIns),
       icon: CalendarClock,
       href: activeStaysHref,
-      hint: nextArrival
-        ? `Next: ${nextArrival.guestName}${nextArrival.propertyName ? ` \u00b7 ${nextArrival.propertyName}` : ''} \u2014 ${dayLabel(nextArrival.checkIn)}`
-        : 'None in the next 3 days',
-      tone: 'iris',
     });
   }
-
   if (avgBrainHealthPct != null) {
-    const needsAttention = (propertiesNeedingAttention ?? 0) > 0;
-    tiles.push({
-      label: 'Brain health',
+    const lagging = propertiesNeedingAttention ?? 0;
+    nowChips.push({
+      label: lagging > 0 ? `brain health · ${lagging} need${lagging === 1 ? 's' : ''} attention` : 'brain health',
       value: `${avgBrainHealthPct}%`,
       icon: Activity,
       href: knowledgeItemsHref,
-      hint: needsAttention
-        ? `${propertiesNeedingAttention} propert${propertiesNeedingAttention === 1 ? 'y' : 'ies'} need${propertiesNeedingAttention === 1 ? 's' : ''} attention`
-        : 'All properties in good shape',
-      tone: avgBrainHealthPct >= 70 ? 'teal' : needsAttention ? 'coral' : 'iris',
-      attn: needsAttention,
+      attn: lagging > 0,
     });
   }
+  nowChips.push({ label: 'knowledge items', value: fmt(metrics.knowledgeItems), icon: BrainCircuit, href: knowledgeItemsHref });
+  if (metrics.avgResponseSeconds != null) nowChips.push({ label: 'avg reply', value: `${metrics.avgResponseSeconds}s`, icon: Timer });
+  if (metrics.avgConfidencePct != null) nowChips.push({ label: 'confidence', value: `${metrics.avgConfidencePct}%`, icon: Gauge });
 
   return (
-    <div className="dash-metrics-grid">
-      {tiles.map((m) => (
-        <div className="rise-in" key={m.label}>
-          <MetricTile m={m} />
-        </div>
-      ))}
-    </div>
+    <section className={styles.vbSection} data-testid="dashboard-value-band" aria-label="Value summary">
+      <div className={styles.vbHead}>
+        <p className={styles.vbGreeting}>
+          <Sparkles size={14} aria-hidden /> Welcome back{hostName ? `, ${hostName}` : ''}
+        </p>
+        <p className={styles.vbHeadSub}>
+          {hasActivity
+            ? 'The value your concierge has delivered across your properties.'
+            : 'Your AI concierge is ready — as guests start asking questions, the value it delivers lands here.'}
+        </p>
+      </div>
+
+      <div className={styles.vbBand}>
+        {tiles.map((t) => (
+          <ValueTile key={t.label} spec={t} />
+        ))}
+      </div>
+
+      <div className={styles.vbNow} aria-label="Right now">
+        {nowChips.map((c) => {
+          const Icon = c.icon;
+          const inner = (
+            <>
+              <Icon size={13} aria-hidden />
+              <strong>{c.value}</strong>
+              <span>{c.label}</span>
+            </>
+          );
+          const cls = `${styles.vbNowChip}${c.attn ? ` ${styles.vbNowChipAttn}` : ''}`;
+          return c.href ? (
+            <Link key={c.label} href={c.href} className={cls}>
+              {inner}
+            </Link>
+          ) : (
+            <span key={c.label} className={cls}>
+              {inner}
+            </span>
+          );
+        })}
+      </div>
+
+      {win ? (
+        <p className={styles.vbWin}>
+          <span className={styles.vbWinLabel}>Latest win</span>
+          <span>
+            &ldquo;{win.comment}&rdquo; — {win.propertyName ?? 'A guest'}
+            {win.rating != null ? ` · ${win.rating}/5` : ''} · {timeAgo(win.createdAt)}
+          </span>
+        </p>
+      ) : null}
+    </section>
   );
 }
 
