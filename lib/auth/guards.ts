@@ -67,6 +67,25 @@ export async function requireSession(): Promise<SessionContext> {
   return ctx;
 }
 
+// Pre-launch access gate. Until the public launch, accounts created after the
+// cutoff are held on /welcome instead of reaching the tool. This applies to
+// direct signups AND to members invited by existing testers (an invite creates a
+// brand-new profile, so invitees are "new users" for gate purposes). Founders and
+// staff (profiles.is_admin) always bypass. Existing tester accounts predate the
+// cutoff and keep full access.
+//
+// Deleting this guard (and pointing the dashboard layout back at requireSession)
+// opens the doors; nothing else references the cutoff.
+export const LAUNCH_GATE_CUTOFF_ISO = '2026-08-21T00:00:00.000Z';
+
+export async function requireLaunchAccess(): Promise<SessionContext> {
+  const ctx = await getSessionContext();
+  if (!ctx) redirect('/login');
+  const isNewUser = new Date(ctx.profile.created_at) >= new Date(LAUNCH_GATE_CUTOFF_ISO);
+  if (!ctx.isFounder && isNewUser) redirect('/welcome');
+  return ctx;
+}
+
 // Pure guard, deliberately not built on the cached getSessionContext so it
 // can be unit-tested against plain constructed objects. Reserved for WS-8
 // (HQ console) route/action gating -- no caller yet in this PR.
@@ -114,7 +133,6 @@ export async function getPropertyAccess(propertyId: string): Promise<PropertyAcc
     .eq('property_id', propertyId)
     .eq('profile_id', ctx.user.id)
     .maybeSingle();
-
   const can = isOwner
     ? {
         editBrain: true,

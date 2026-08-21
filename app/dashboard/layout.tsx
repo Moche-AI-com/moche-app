@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { requireSession } from '@/lib/auth/guards';
+import { requireLaunchAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { Breadcrumbs } from '@/components/dashboard/Breadcrumbs';
@@ -14,7 +14,7 @@ import { FeedbackControl } from './FeedbackControl';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const ctx = await requireSession();
+  const ctx = await requireLaunchAccess();
 
   // 2FA gate: a host with 2FA enabled must clear the SMS challenge (trusted-device
   // cookie) before reaching the dashboard, even if they navigate here directly after
