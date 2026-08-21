@@ -93,7 +93,8 @@ export function Hero() {
           </a>
         </Reveal>
         <Reveal as="p" eager delay={270} className={styles.heroTrialNote}>
-          One month free on the top tier, up to 5 properties. Card required, cancel anytime.
+          One month free on the top tier, up to 5 properties. Card required, cancel anytime.{' '}
+          Moche-AI launches January&nbsp;1,&nbsp;2027 — early accounts are free until launch.
         </Reveal>
       </div>
     </section>
