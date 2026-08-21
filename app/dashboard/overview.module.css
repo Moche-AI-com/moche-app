@@ -1,0 +1,521 @@
+/* Operations Overview — reorderable zone board, value band, attention queue,
+   and concierge activity styles. Built on the global theme tokens from
+   app/globals.css; every var() carries a fallback so this module stays
+   self-sufficient if a token is renamed. */
+
+/* --- Reorderable board ---------------------------------------------------- */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section, 1.25rem);
+}
+
+.boardBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.boardToggle,
+.boardReset {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.12));
+  background: var(--card, #fff);
+  color: var(--text-faint, #5e6975);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.boardToggle:hover,
+.boardReset:hover {
+  color: var(--teal-deep, #08605a);
+  border-color: var(--teal, #0a7a72);
+}
+
+.boardToggle[aria-pressed='true'] {
+  color: var(--teal-deep, #08605a);
+  border-color: var(--teal, #0a7a72);
+  background: color-mix(in srgb, var(--teal, #0a7a72) 8%, transparent);
+}
+
+.zoneList,
+.zoneListEditing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section, 1.25rem);
+}
+
+.zone {
+  position: relative;
+  animation: zoneFadeIn 0.35s ease both;
+}
+
+.zoneEditing {
+  border: 1.5px dashed var(--border, rgba(15, 23, 42, 0.18));
+  border-radius: 14px;
+  padding: 0.75rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.zoneDragging {
+  opacity: 0.5;
+}
+
+.zoneDropTarget {
+  border-color: var(--teal, #0a7a72);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal, #0a7a72) 18%, transparent);
+}
+
+.zoneHandle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: -0.25rem -0.25rem 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  color: var(--text-faint, #5e6975);
+  cursor: grab;
+  user-select: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.zoneHandle:active {
+  cursor: grabbing;
+}
+
+.zoneTitle {
+  flex: 1;
+}
+
+.zoneMoveGroup {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.zoneMoveBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.12));
+  background: var(--card, #fff);
+  color: var(--text-faint, #5e6975);
+  cursor: pointer;
+}
+
+.zoneMoveBtn:hover:not(:disabled) {
+  color: var(--teal-deep, #08605a);
+  border-color: var(--teal, #0a7a72);
+}
+
+.zoneMoveBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@keyframes zoneFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- Value band (replaces ValueHero + ValueMetricsGrid) -------------------- */
+
+.vbBand {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.9rem;
+}
+
+.vbTile {
+  position: relative;
+  overflow: hidden;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+  border-radius: 14px;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.vbTile::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #52cbde, #7698f9);
+  opacity: 0.85;
+}
+
+.vbLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-faint, #5e6975);
+  margin: 0 0 0.3rem;
+}
+
+.vbValue {
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text, #0f172a);
+}
+
+.vbSub {
+  font-size: 0.78rem;
+  color: var(--text-faint, #5e6975);
+  margin: 0.15rem 0 0;
+}
+
+.vbDelta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.vbDeltaUp {
+  color: var(--teal-deep, #08605a);
+  background: color-mix(in srgb, var(--teal, #0a7a72) 12%, transparent);
+}
+
+.vbDeltaFlat {
+  color: var(--text-faint, #5e6975);
+  background: var(--border, rgba(15, 23, 42, 0.08));
+}
+
+.vbWin {
+  margin-top: 0.9rem;
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--teal, #0a7a72) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--teal, #0a7a72) 18%, transparent);
+  font-size: 0.86rem;
+}
+
+.vbWinLabel {
+  font-weight: 700;
+  color: var(--teal-deep, #08605a);
+  white-space: nowrap;
+}
+
+/* --- Attention queue (replaces AttentionStrip) ----------------------------- */
+
+.aqCard {
+  background: var(--card, #fff);
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.aqHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+}
+
+.aqTitle {
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.aqRow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 1rem;
+  text-decoration: none;
+  color: inherit;
+  border-top: 1px solid var(--border, rgba(15, 23, 42, 0.06));
+  transition: background 0.12s ease;
+}
+
+.aqRow:first-of-type {
+  border-top: 0;
+}
+
+.aqRow:hover {
+  background: color-mix(in srgb, var(--teal, #0a7a72) 5%, transparent);
+}
+
+.aqIcon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #ff8b5c 14%, transparent);
+  color: #e06a35;
+  flex: none;
+}
+
+.aqBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.aqLabel {
+  font-size: 0.86rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.aqDetail {
+  font-size: 0.76rem;
+  color: var(--text-faint, #5e6975);
+  margin: 0;
+}
+
+.aqBadge {
+  flex: none;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: #ff8b5c;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aqClear {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+  color: var(--teal-deep, #08605a);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.aqClearDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #33e6d3;
+  box-shadow: 0 0 0 4px color-mix(in srgb, #33e6d3 22%, transparent);
+}
+
+/* --- Concierge activity (replaces ActivityFeedCard) ------------------------ */
+
+.caCard {
+  background: var(--card, #fff);
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.caHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+}
+
+.caLiveDot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #33e6d3;
+  flex: none;
+}
+
+.caLiveDot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #33e6d3 55%, transparent);
+  animation: caPulse 2.2s ease-out infinite;
+}
+
+.caTitle {
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+}
+
+.caSub {
+  font-size: 0.76rem;
+  color: var(--text-faint, #5e6975);
+  margin: 0;
+}
+
+.caList {
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.caItem {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--border, rgba(15, 23, 42, 0.06));
+  animation: caSlideIn 0.4s ease both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+  transition: background 0.12s ease, opacity 0.25s ease, transform 0.25s ease;
+}
+
+.caItem:first-child {
+  border-top: 0;
+}
+
+.caItem:hover {
+  background: color-mix(in srgb, var(--teal, #0a7a72) 4%, transparent);
+}
+
+.caItemExiting {
+  opacity: 0;
+  transform: translateX(10px);
+}
+
+.caIcon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.caIconEscalation {
+  background: color-mix(in srgb, #ff8b5c 16%, transparent);
+  color: #e06a35;
+}
+
+.caIconService {
+  background: color-mix(in srgb, #7698f9 16%, transparent);
+  color: #4f74e0;
+}
+
+.caIconStay {
+  background: color-mix(in srgb, #52cbde 18%, transparent);
+  color: #2b9db3;
+}
+
+.caIconFeedback {
+  background: color-mix(in srgb, #33e6d3 18%, transparent);
+  color: #0fa79a;
+}
+
+.caIconBrain {
+  background: color-mix(in srgb, #65b2ea 18%, transparent);
+  color: #3d7fc4;
+}
+
+.caBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.caItemTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.caItemMeta {
+  font-size: 0.74rem;
+  color: var(--text-faint, #5e6975);
+  margin: 0.1rem 0 0;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.caDismiss {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--text-faint, #5e6975);
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.caItem:hover .caDismiss,
+.caDismiss:focus-visible {
+  opacity: 1;
+}
+
+.caEmpty {
+  padding: 1rem;
+  font-size: 0.84rem;
+  color: var(--text-faint, #5e6975);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+@keyframes caPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes caSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zone,
+  .caItem {
+    animation: none;
+    transition: none;
+  }
+
+  .caLiveDot::after {
+    animation: none;
+  }
+}
