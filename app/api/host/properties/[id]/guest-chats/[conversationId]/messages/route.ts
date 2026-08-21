@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getUser, requirePropertyAccess } from '@/lib/auth/guards';
 import { notifyGuestReply } from '@/lib/notify';
 import { publicEnv } from '@/lib/env';
-import { reindexBrainItem } from '@/app/dashboard/properties/[id]/brain/actions';
+import { normalizeGuestAnswerForBrain } from '@/lib/brain/guest-answer-learning';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +13,7 @@ const postSchema = z.object({
   message: z.string().trim().min(1, 'Write a reply first.').max(2000),
   replyToMessageId: z.string().uuid().optional(),
   resolveEscalation: z.boolean().optional().default(false),
+  learnFromReply: z.boolean().optional().default(false),
 });
 
 function mapMessage(row: any) {
@@ -75,6 +76,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const parsed = postSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Write a reply first.' }, { status: 400 });
 
+  const member = access.member as any;
+  const canLearnFromReply = access.isOwner || member?.can_publish_guest_answers === true;
+  if (parsed.data.learnFromReply && !canLearnFromReply) {
+    return NextResponse.json({ error: 'You do not have permission to propose Brain updates from guest replies.' }, { status: 403 });
+  }
+
   const admin = createAdminClient();
   const db = admin as any;
   const conversation = await loadConversation(admin, id, conversationId);
@@ -118,6 +125,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq('id', conversationId);
 
   const escalationId = replyTo?.escalation_id as string | undefined;
+  let learningQueued = false;
+  let learningError: string | null = null;
+
   if (escalationId) {
     const { data: escalation } = await db
       .from('escalations')
@@ -127,44 +137,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .maybeSingle();
 
     if (escalation) {
-      const member = access.member as any;
-      const canPublish = access.isOwner || member?.can_publish_guest_answers === true;
-      let brainItemId: string | null = null;
-
-      if (canPublish) {
-        const title = String(escalation.question ?? 'Guest question').slice(0, 160);
-        const { data: brainItem, error: brainError } = await db
-          .from('brain_items')
-          .insert({
-            property_id: id,
-            category: 'host_qa',
-            title,
-            body: parsed.data.message,
-            visibility: 'guest',
-            source_type: 'host_qa',
-            status: 'ready',
-            created_by: user?.id ?? null,
-          })
-          .select('id')
-          .single();
-        if (!brainError && brainItem?.id) {
-          brainItemId = brainItem.id;
-          await reindexBrainItem(id, brainItem.id, title, parsed.data.message, 'guest', 'host_qa').catch(() => undefined);
-        }
-      } else {
-        await db.from('proposed_updates').insert({
-          property_id: id,
-          host_account_id: (access.property as any).host_account_id,
-          status: 'pending',
-          field_path: 'host_qa.escalation_answer',
-          label: String(escalation.question ?? 'Guest escalation answer').slice(0, 160),
-          proposed_value: { question: escalation.question, answer: parsed.data.message, category: 'host_qa' },
-          source_type: 'ai_suggestion',
-          source_ref: escalation.id,
-          confidence: 0.9,
-        }).catch(() => undefined);
-      }
-
       await db
         .from('escalations')
         .update({
@@ -177,9 +149,52 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           host_conversation_id: conversationId,
           guest_session_id: conversation.guest_session_id,
           guest_identity_id: conversation.guest_identity_id,
-          converted_brain_item_id: brainItemId,
         })
         .eq('id', escalationId);
+
+      if (parsed.data.learnFromReply) {
+        try {
+          const { data: threadRows } = await db
+            .from('messages')
+            .select('id, role, content, created_at')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true })
+            .limit(200);
+
+          const normalized = await normalizeGuestAnswerForBrain({
+            question: escalation.question,
+            hostAnswer: parsed.data.message,
+            threadMessages: (threadRows ?? []).map((row: any) => ({
+              role: row.role,
+              content: row.content,
+              createdAt: row.created_at,
+            })),
+          });
+
+          const { error: proposalError } = await db.from('proposed_updates').insert({
+            property_id: id,
+            host_account_id: (access.property as any).host_account_id,
+            status: 'pending',
+            field_path: 'host_qa.guest_reply',
+            label: normalized.question.slice(0, 160),
+            proposed_value: {
+              question: normalized.question,
+              answer: normalized.answer,
+              category: normalized.category,
+              rationale: normalized.rationale,
+              sourceMessageIds: (threadRows ?? []).map((row: any) => row.id),
+              model: normalized.model,
+            },
+            source_type: 'ai_suggestion',
+            source_ref: escalation.id,
+            confidence: normalized.confidence,
+          });
+          if (proposalError) throw proposalError;
+          learningQueued = true;
+        } catch (learningFailure) {
+          learningError = learningFailure instanceof Error ? learningFailure.message : 'Could not queue the Brain update.';
+        }
+      }
     }
   }
 
@@ -198,5 +213,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  return NextResponse.json({ ok: true, message: mapMessage(inserted) });
+  return NextResponse.json({ ok: true, message: mapMessage(inserted), learningQueued, learningError });
 }

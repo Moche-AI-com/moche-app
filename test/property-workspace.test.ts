@@ -14,7 +14,6 @@ describe('property workspace navigation', () => {
       { key: 'overview', label: 'Overview', href: base },
       { key: 'stays', label: 'Stays', href: `${base}/stays` },
       { key: 'guest-chat', label: 'Guest Chat', href: `${base}/guest-chat` },
-      { key: 'escalations', label: 'Escalations', href: `${base}/escalations` },
       { key: 'local', label: 'Local Recs', href: `${base}/local` },
     ]);
 
@@ -22,7 +21,6 @@ describe('property workspace navigation', () => {
       { key: 'overview', label: 'Overview', href: base },
       { key: 'stays', label: 'Stays', href: `${base}/stays` },
       { key: 'guest-chat', label: 'Guest Chat', href: `${base}/guest-chat` },
-      { key: 'escalations', label: 'Escalations', href: `${base}/escalations` },
       { key: 'local', label: 'Local Recs', href: `${base}/local` },
       { key: 'extras', label: 'Extras', href: `${base}/extras` },
       { key: 'settings', label: 'Configuration', href: `${base}/settings` },
@@ -33,6 +31,7 @@ describe('property workspace navigation', () => {
     expect(propertySectionLabel(base, propertyId)).toBe('Overview');
     expect(propertySectionLabel(`${base}/stays`, propertyId)).toBe('Stays');
     expect(propertySectionLabel(`${base}/guest-chat`, propertyId)).toBe('Guest Chat');
+    expect(propertySectionLabel(`${base}/escalations`, propertyId)).toBe('Guest Chat');
     expect(propertySectionLabel(`${base}/nearby`, propertyId)).toBe('Local Recs');
     expect(propertySectionLabel(`${base}/recommendations?view=all`, propertyId)).toBe('Local Recs');
     expect(propertySectionLabel(`${base}/brain`, propertyId)).toBe('Brain');

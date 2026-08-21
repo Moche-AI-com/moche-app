@@ -83,7 +83,7 @@ export function ChatPermissionsPanel({ propertyId }: { propertyId: string }) {
                   disabled={savingId === member.id}
                   onChange={(event) => void update(member, { canSendAnnouncements: member.canSendAnnouncements, canPublishGuestAnswers: event.target.checked })}
                 />
-                Can publish guest answers directly to the AI Brain
+                Can propose Brain updates from guest replies
               </label>
             </div>
           ))

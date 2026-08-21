@@ -9,21 +9,10 @@ describe('escalation inbox route capability gates', () => {
     const page = read('app/dashboard/escalations/page.tsx');
     expect(page).toContain('getPropertyAccess');
     expect(page).toContain('access.can.receiveEscalations');
-    expect(page).toContain('canReplyGuests: access.can.replyGuests');
-    expect(page).toContain('canEditBrain: access.can.editBrain');
   });
 
-  it('redirects unauthorized property members and passes exact capabilities to the shared inbox', () => {
+  it('redirects the legacy property escalations route into Guest Chat', () => {
     const page = read('app/dashboard/properties/[id]/escalations/page.tsx');
-    expect(page).toContain('if (!propertyAccess.can.receiveEscalations)');
-    expect(page).toContain('canReceiveEscalations: propertyAccess.can.receiveEscalations');
-    expect(page).toContain('canReplyGuests: propertyAccess.can.replyGuests');
-    expect(page).toContain('canEditBrain: propertyAccess.can.editBrain');
-  });
-
-  it('renders reply and Brain controls only through the shared capability gates', () => {
-    const inbox = read('components/dashboard/EscalationInbox.tsx');
-    expect(inbox).toContain('canAnswerEscalation(capabilities)');
-    expect(inbox).toContain('canTeachFromEscalation(capabilities)');
+    expect(page).toContain('redirect(`/dashboard/properties/${propertyId}/guest-chat`)');
   });
 });

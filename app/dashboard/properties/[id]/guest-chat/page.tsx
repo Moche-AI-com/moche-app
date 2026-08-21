@@ -21,10 +21,11 @@ export default async function GuestChatPage({
 
   const stayId = (await searchParams)?.stay ?? null;
   const canAnnounce = access.isOwner || (access.member as any)?.can_send_announcements === true;
+  const canLearn = access.isOwner || (access.member as any)?.can_publish_guest_answers === true;
   const canManagePermissions = access.isOwner || access.can.editProperty;
 
   return (
-    <main style={{ maxWidth: 1280, margin: '0 auto', padding: '1.25rem' }}>
+    <main style={{ maxWidth: 1320, margin: '0 auto', padding: '1.25rem' }}>
       <div style={{ marginBottom: '1rem' }}>
         <p className="muted" style={{ margin: 0, fontSize: '.85rem' }}>{access.property.display_name}</p>
         <h1 style={{ margin: '.25rem 0' }}>Guest Chat</h1>
@@ -38,7 +39,7 @@ export default async function GuestChatPage({
         {canManagePermissions ? <ChatPermissionsPanel propertyId={propertyId} /> : null}
       </div>
 
-      <GuestChatInbox propertyId={propertyId} stayId={stayId} canAnnounce={canAnnounce} />
+      <GuestChatInbox propertyId={propertyId} stayId={stayId} canAnnounce={canAnnounce} canLearn={canLearn} />
     </main>
   );
 }
