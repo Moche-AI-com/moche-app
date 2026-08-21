@@ -2,31 +2,47 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const portalSource = readFileSync(
-  resolve(process.cwd(), 'app/g/[slug]/GuestPortal.tsx'),
-  'utf8',
-);
+const read = (file: string) =>
+  readFileSync(resolve(process.cwd(), 'app/g/[slug]', file), 'utf8');
 
-describe('guest portal sheet accessibility guardrails', () => {
-  it('uses one reusable dismissal hook for keyboard, focus, and scroll handling', () => {
-    expect(portalSource).toContain('function useSheetDismiss');
-    expect(portalSource).toContain("event.key === 'Escape'");
-    expect(portalSource).toContain("event.key !== 'Tab'");
-    expect(portalSource).toContain("document.body.style.overflow = 'hidden'");
-    expect(portalSource).toContain('previouslyFocused.focus()');
-  });
+const shell = read('GuestPortal.tsx');
+const workflows = [
+  'AiChatWorkflow.tsx',
+  'HostChatWorkflow.tsx',
+  'MaintenanceWorkflow.tsx',
+  'ExtrasWorkflow.tsx',
+].map((file) => [file, read(file)] as const);
 
-  it('keeps portaled sheet form fields readable in normal, focused, and autofill states', () => {
-    expect(portalSource).toContain('.gp-sheet-scrim input:-webkit-autofill');
-    expect(portalSource).toContain('-webkit-box-shadow: inset 0 0 0 1000px #171c25');
-    expect(portalSource).toContain('-webkit-text-fill-color: #fbf7ef');
-    expect(portalSource).toContain('.gp-sheet-scrim input:focus-visible');
-    expect(portalSource).toContain('.gp-lang-search:hover');
-  });
-
-  it('gives every portaled sheet a persistent route to portal home', () => {
-    for (const sheet of ['subchoice', 'host-composer', 'service-request', 'place-detail', 'language', 'history']) {
-      expect(portalSource).toContain(`button-portal-home-${sheet}`);
+// The guest portal is a step machine (code → register → menu → one of four
+// workflows), not a stack of sheet modals. These guardrails assert the
+// accessibility properties of that architecture as it exists today.
+describe('guest portal accessibility guardrails', () => {
+  it('drives every screen through one step machine with a shared route back to the menu', () => {
+    for (const step of ['code', 'register', 'menu', 'ask', 'host', 'maintenance', 'extras']) {
+      expect(shell).toContain(`'${step}'`);
     }
+    // The shared back-to-menu handler exists and is handed to each workflow.
+    expect(shell).toContain("const goMenu = useCallback(() => setStep('menu')");
+    for (const [, source] of workflows) {
+      expect(source).toContain('onBack');
+    }
+  });
+
+  it('gives every workflow screen a persistent back-to-menu button', () => {
+    for (const [file, source] of workflows) {
+      expect(source, `${file} should render the gp-back button`).toContain('className="gp-back"');
+      expect(source).toContain('props.onBack');
+    }
+  });
+
+  it('keeps chat and form fields accessible (live regions, labels, focus styles)', () => {
+    // Chat streams announce new messages to screen readers.
+    for (const [, source] of workflows.filter(([f]) => f.includes('Chat'))) {
+      expect(source).toContain('aria-live="polite"');
+    }
+    // Scoped portal inputs keep a visible focus state.
+    expect(shell).toContain('.gp-input:focus');
+    // The AI concierge always discloses itself.
+    expect(read('AiChatWorkflow.tsx')).toContain('AiDisclosure');
   });
 });
