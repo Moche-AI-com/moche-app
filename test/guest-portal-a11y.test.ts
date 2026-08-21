@@ -2,50 +2,50 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// The guest portal was rebuilt (PR #53) as a step machine — code entry → register →
-// main menu → one of four workflows — replacing the old portaled-sheet modal stack.
-// These guardrails assert the accessibility contract of the NEW architecture, not the
-// old one: the previous assertions (useSheetDismiss, .gp-sheet-scrim, button-portal-home-*)
-// tested components that no longer exist.
+// The guest portal was rebuilt (PR #53) as a step machine — code entry →
+// registration → main menu → one of four workflows — replacing the old stacked
+// sheet modals. These guardrails assert the *new* shell's accessibility contract
+// rather than the retired sheet implementation (useSheetDismiss, .gp-sheet-scrim,
+// and per-sheet button-portal-home-* hooks no longer exist).
+
 const read = (file: string) =>
   readFileSync(resolve(process.cwd(), 'app/g/[slug]', file), 'utf8');
 
 const shell = read('GuestPortal.tsx');
-const workflows = [
-  'AiChatWorkflow.tsx',
-  'HostChatWorkflow.tsx',
-  'MaintenanceWorkflow.tsx',
-  'ExtrasWorkflow.tsx',
-].map((file) => [file, read(file)] as const);
+const workflows = (
+  ['AiChatWorkflow.tsx', 'HostChatWorkflow.tsx', 'MaintenanceWorkflow.tsx', 'ExtrasWorkflow.tsx'] as const
+).map((file) => [file, read(file)] as const);
 
 describe('guest portal accessibility guardrails', () => {
-  it('drives every screen through one step machine with a shared route back to the menu', () => {
-    // Every step the shell can render.
+  it('drives every screen through one step machine with a shared back-to-menu handler', () => {
+    // The full step set is declared and reachable.
     for (const step of ['code', 'register', 'menu', 'ask', 'host', 'maintenance', 'extras']) {
       expect(shell).toContain(`'${step}'`);
     }
-    // A single back-to-menu handler exists and is handed to each workflow as onBack.
+    // A single goMenu handler returns to the menu, and it is handed to every workflow
+    // as onBack so no screen is a dead end.
     expect(shell).toContain("const goMenu = useCallback(() => setStep('menu')");
-    expect(shell).toContain('onBack={goMenu}');
-    for (const [, source] of workflows) {
-      expect(source).toContain('onBack');
-    }
+    const backWires = shell.match(/onBack={goMenu}/g) ?? [];
+    expect(backWires.length).toBeGreaterThanOrEqual(4);
   });
 
   it('gives every workflow screen a persistent back-to-menu button', () => {
     for (const [file, source] of workflows) {
-      expect(source, `${file} should render the gp-back button`).toContain('className="gp-back"');
+      expect(source, `${file} renders the shared gp-back button`).toContain('className="gp-back"');
+      expect(source, `${file} wires the button to its onBack prop`).toContain('props.onBack');
     }
   });
 
-  it('keeps chat streams and form fields accessible', () => {
-    // Chat lists announce new messages to screen readers.
-    expect(read('AiChatWorkflow.tsx')).toContain('aria-live="polite"');
-    expect(read('HostChatWorkflow.tsx')).toContain('aria-live="polite"');
-    expect(read('MaintenanceWorkflow.tsx')).toContain('aria-live="polite"');
-    // Scoped portal inputs keep a visible focus state.
+  it('keeps chat streams and form fields readable and announced', () => {
+    // Live regions announce new chat/turn arrivals to screen readers.
+    for (const [file, source] of workflows) {
+      if (file === 'ExtrasWorkflow.tsx') continue; // extras is a catalog, not a chat stream
+      expect(source, `${file} chat list is a live region`).toContain('aria-live="polite"');
+    }
+    // Scoped portal inputs keep a visible focus state and labelled fields.
     expect(shell).toContain('.gp-input:focus');
-    // The AI concierge always discloses itself.
+    expect(shell).toContain('.gp-label');
+    // The AI concierge always discloses itself in the ask workflow.
     expect(read('AiChatWorkflow.tsx')).toContain('AiDisclosure');
   });
 });

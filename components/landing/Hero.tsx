@@ -93,8 +93,7 @@ export function Hero() {
           </a>
         </Reveal>
         <Reveal as="p" eager delay={270} className={styles.heroTrialNote}>
-          One month free on the top tier, up to 5 properties. Moche-AI launches January 1, 2027 — early
-          accounts are free until then, and no card is charged before launch.
+          Moche-AI launches January 1, 2027. Early accounts are free until then — no charge before launch.
         </Reveal>
       </div>
     </section>

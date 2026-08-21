@@ -10,8 +10,9 @@ import { useState } from 'react';
 // contract-priced and therefore appear here as the contact-sales note below, not
 // as cards with invented numbers.
 //
-// Pre-launch note: the "Most chosen" flag is intentionally removed and the CTA is
-// "Start free" — the goal right now is early signups, not checkout conversion.
+// Pre-launch (go-live January 1, 2027) these cards exist for transparency, not
+// conversion: no "Most chosen" badge, and the CTA is a soft "Start free". The
+// launch-date line in the intro makes the not-yet-billing state explicit.
 const PLANS = [
   {
     name: 'Essentials',
@@ -46,7 +47,7 @@ const MAX_PROPERTIES = 9; // beyond this, Portfolio/Enterprise
 const CONTACT_SALES_MAILTO = `mailto:hostspark.org@gmail.com?subject=${encodeURIComponent(
   'Portfolio or Enterprise pricing',
 )}&body=${encodeURIComponent(
-  'Hi Moche-AI team,\n\nWe manage 10+ properties and would like to discuss Portfolio/Enterprise pricing.\n\n'
+  'Hi Moche-AI team,\n\nWe manage 10+ properties and would like to discuss Portfolio/Enterprise pricing.\n\n',
 )}`;
 
 export function Pricing() {
@@ -63,14 +64,13 @@ export function Pricing() {
           Pricing that scales with your portfolio
         </Reveal>
         <Reveal as="p" delay={60} className={`muted ${styles.pricingIntro}`}>
-          Moche-AI launches January 1, 2027 — early accounts are free until then, and nothing is
-          charged before launch. Every plan starts with a free month on the top tier, up to 5
-          properties. Simple per-property pricing after that: pay annually for {ANNUAL_MULTIPLIER}x
-          the monthly rate (that&rsquo;s two months free). No per-conversation fees &mdash; unlimited
-          guests and stays.
+          Moche-AI launches January 1, 2027 — early accounts are free until then, and no card is
+          charged before launch. After that it is simple per-property pricing: pay annually for{' '}
+          {ANNUAL_MULTIPLIER}x the monthly rate (that&rsquo;s two months free). No per-conversation
+          fees — unlimited guests and stays.
           <br />
-          <strong>One-time setup:</strong> $149/property for guided onboarding, or use
-          self-service at no cost.
+          <strong>One-time setup:</strong> $149/property for guided onboarding, or use self-service
+          at no cost.
         </Reveal>
 
         {/* Property count slider + billing toggle. Styled inline: the CSS-module classes
@@ -152,7 +152,7 @@ export function Pricing() {
                 color: billing === 'annual' ? '#04121a' : 'inherit',
               }}
             >
-              Annual <span style={{ fontWeight: 500, opacity: .8 }}>(save 2 mo)</span>
+              Annual <span style={{ fontWeight: 500, opacity: 0.8 }}>(save 2 mo)</span>
             </button>
           </div>
         </div>

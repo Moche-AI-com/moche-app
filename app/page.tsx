@@ -49,13 +49,11 @@ export const metadata: Metadata = {
 // visitors to public/landing.html (that file stays on disk as an archive).
 // Authenticated hosts still fall through here and get redirected to /dashboard.
 //
-// Section order: hero, why, how it works, offer, objections, price. Pricing moved
-// below the FAQ for the pre-launch period: the goal right now is early signups,
-// not conversion, so the page leads with the product and the offer and treats the
-// price as an answer for people who scroll looking for it, not the headline.
-// The standalone gallery section was folded into the hero and the "demo video
-// coming soon" placeholder was removed -- an empty state on a marketing page
-// costs more trust than the section earns.
+// Section order: hero, why, how it works, offer, objections, price, close.
+// Pre-launch, pricing is deliberately moved below the FAQ: the page leads with
+// the product and the founding offer, answers objections, and only then shows
+// price — signups are the goal, not monetization, and the cards stay for
+// transparency rather than as the conversion push.
 export default async function Home() {
   const user = await getUser();
   if (user) redirect('/dashboard');
