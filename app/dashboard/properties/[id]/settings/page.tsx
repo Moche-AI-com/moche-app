@@ -5,6 +5,7 @@ import { getEntitlements } from '@/lib/billing/entitlements';
 import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOURS, DEFAULT_CONCIERGE_NAME, DEFAULT_RESPONSE_LENGTH, PLANS } from '@/lib/constants';
 import { DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { SettingsForms } from './SettingsForms';
+import { PropertyLinkMinter } from '../PropertyLinkMinter';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,12 @@ export default async function PropertySettingsPage({ params }: { params: Promise
         </p>
       </div>
       <SettingsForms property={property} settings={normalized} premiumUnlocked={premiumUnlocked} reviewUnlocked={ent.reviewNudge} planName={planName} />
+
+      {/* The reusable property-level QR link (OTP-gated, posted in the home) is
+          property-scoped tooling, so it lives in Configuration — not per-stay. */}
+      <div style={{ marginTop: '1.5rem' }}>
+        <PropertyLinkMinter propertyId={property.id} />
+      </div>
     </div>
   );
 }

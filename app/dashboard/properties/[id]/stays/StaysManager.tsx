@@ -6,6 +6,7 @@ import { createStayAction, revokeStayAction, type StayActionState } from './acti
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { GuestChatInbox } from '../guest-chat/GuestChatInbox';
 import { StayGuestsManager } from '../guest-chat/StayGuestsManager';
+import { portalCodeStatus } from '@/lib/guest/portal-status';
 
 interface Stay {
   id: string;
@@ -16,9 +17,13 @@ interface Stay {
   checkOut: string;
   status: string;
   bookingReference: string | null;
+  /** Masked portal-code state for the stay's latest coded link (Ticket 3). */
+  portal?: { linkId: string; codeExpiresAt: string | null; codeRevokedAt: string | null } | null;
 }
 
 const STATUS_BADGE: Record<string, string> = { active: 'badge-teal', upcoming: 'badge', revoked: 'badge-coral', completed: '' };
+
+const PORTAL_TONE: Record<string, string> = { active: 'var(--teal)', expired: 'var(--coral)', revoked: 'var(--coral)' };
 
 export function StaysManager({
   propertyId,
@@ -90,42 +95,51 @@ export function StaysManager({
               </p>
             </div>
 
-            {stays.map((s) => (
-              <div
-                key={s.id}
-                className="card"
-                role="button"
-                tabIndex={0}
-                onClick={() => toggle(s.id)}
-                onKeyDown={(event) => selectOnKey(event, s.id)}
-                style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', cursor: 'pointer', borderColor: selected === s.id ? 'var(--teal-deep)' : undefined }}
-                data-testid={`card-stay-${s.id}`}
-              >
-                <div>
-                  <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <strong>{s.guestDisplayName}</strong>
-                    <span className={`badge ${STATUS_BADGE[s.status] ?? ''}`}>{s.status}</span>
+            {stays.map((s) => {
+              const portalState = s.portal ? portalCodeStatus(s.portal) : null;
+              return (
+                <div
+                  key={s.id}
+                  className="card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggle(s.id)}
+                  onKeyDown={(event) => selectOnKey(event, s.id)}
+                  style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', cursor: 'pointer', borderColor: selected === s.id ? 'var(--teal-deep)' : undefined }}
+                  data-testid={`card-stay-${s.id}`}
+                >
+                  <div>
+                    <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong>{s.guestDisplayName}</strong>
+                      <span className={`badge ${STATUS_BADGE[s.status] ?? ''}`}>{s.status}</span>
+                    </div>
+                    <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
+                      {fmt(s.checkIn)} → {fmt(s.checkOut)} · {s.contactType} ····{s.contactLast4 ?? '????'}
+                      {s.bookingReference ? ` · ${s.bookingReference}` : ''}
+                    </p>
+                    {portalState && s.portal && (
+                      <p className="faint" style={{ fontSize: '.76rem', marginTop: '.2rem' }} data-testid={`portal-status-${s.id}`}>
+                        Portal code •••• · <span style={{ color: PORTAL_TONE[portalState], fontWeight: 600 }}>{portalState}</span>
+                        {s.portal.codeExpiresAt ? ` · expires ${fmt(s.portal.codeExpiresAt)}` : ''}
+                      </p>
+                    )}
                   </div>
-                  <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
-                    {fmt(s.checkIn)} → {fmt(s.checkOut)} · {s.contactType} ····{s.contactLast4 ?? '????'}
-                    {s.bookingReference ? ` · ${s.bookingReference}` : ''}
-                  </p>
+                  {canManage && s.status !== 'revoked' && (
+                    <div
+                      style={{ display: 'flex', gap: '.4rem', alignItems: 'flex-start', flexWrap: 'wrap' }}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <form action={revokeStayAction}>
+                        <input type="hidden" name="propertyId" value={propertyId} />
+                        <input type="hidden" name="stayId" value={s.id} />
+                        <button type="submit" className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} data-testid={`button-revoke-${s.id}`}>Revoke access</button>
+                      </form>
+                    </div>
+                  )}
                 </div>
-                {canManage && s.status !== 'revoked' && (
-                  <div
-                    style={{ display: 'flex', gap: '.4rem', alignItems: 'flex-start', flexWrap: 'wrap' }}
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <form action={revokeStayAction}>
-                      <input type="hidden" name="propertyId" value={propertyId} />
-                      <input type="hidden" name="stayId" value={s.id} />
-                      <button type="submit" className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} data-testid={`button-revoke-${s.id}`}>Revoke access</button>
-                    </form>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {selected && (
@@ -134,7 +148,21 @@ export function StaysManager({
                 <>
                   <div className="card" style={{ padding: '1rem' }}>
                     <h2 style={{ fontSize: '1rem', margin: '0 0 .6rem' }}>Guest access</h2>
-                    <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                    {selectedStay.portal ? (
+                      <div>
+                        <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .5rem' }}>
+                          Portal code •••• ·{' '}
+                          <span style={{ color: PORTAL_TONE[portalCodeStatus(selectedStay.portal)], fontWeight: 600 }}>
+                            {portalCodeStatus(selectedStay.portal)}
+                          </span>
+                          {selectedStay.portal.codeExpiresAt ? ` · expires ${fmt(selectedStay.portal.codeExpiresAt)}` : ''}
+                        </p>
+                        <PortalCodeRegenerator propertyId={propertyId} stayId={selectedStay.id} linkId={selectedStay.portal.linkId} />
+                      </div>
+                    ) : (
+                      // Stays created before auto-mint keep the manual minter as fallback.
+                      <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                    )}
                   </div>
                   <StayGuestsManager propertyId={propertyId} stayId={selectedStay.id} />
                 </>
@@ -155,7 +183,58 @@ export function StaysManager({
 
 function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => void }) {
   const [state, formAction] = useFormState<StayActionState, FormData>(createStayAction, {});
-  if (state.ok) queueMicrotask(onDone);
+  const [copied, setCopied] = useState(false);
+  // Auto-close only when there is nothing to hand off: a freshly minted visit
+  // code is shown exactly once, so the form stays open until the host confirms.
+  if (state.ok && !state.portalCode && !state.portalError) queueMicrotask(onDone);
+
+  if (state.ok && state.portalCode) {
+    return (
+      <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderColor: 'var(--teal-deep)' }} data-testid="stay-portal-confirmation">
+        <h3 style={{ fontSize: '1.05rem', marginBottom: '.4rem' }}>Stay created — guest portal ready</h3>
+        <p className="muted" style={{ fontSize: '.85rem', marginBottom: '.9rem' }}>
+          Share the link and code with your guest. Opening the link asks for this 4-digit code before the concierge unlocks.
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ padding: '.6rem .8rem', borderRadius: 8, border: '1px solid var(--teal-deep)', background: 'var(--bg-2, rgba(255,255,255,0.04))' }}>
+            <div className="faint" style={{ fontSize: '.65rem' }}>Visit code (shown once)</div>
+            <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '.3rem' }} data-testid="stay-portal-code">{state.portalCode}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div className="card-2" style={{ padding: '.55rem .75rem', fontFamily: 'monospace', fontSize: '.72rem', wordBreak: 'break-all' }} data-testid="stay-portal-url">{state.portalUrl}</div>
+            <div style={{ display: 'flex', gap: '.4rem', marginTop: '.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => { if (state.portalUrl) { void navigator.clipboard?.writeText(state.portalUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); } }}
+                data-testid="button-copy-portal-url"
+              >
+                {copied ? 'Copied!' : 'Copy link'}
+              </button>
+              <a className="btn btn-ghost btn-sm" href={`/dashboard/properties/${propertyId}/welcome-card`} target="_blank" rel="noreferrer">Welcome card</a>
+            </div>
+          </div>
+        </div>
+        <p className="faint" style={{ fontSize: '.72rem', marginTop: '.7rem' }}>
+          Shown once and never stored in readable form — copy both now.
+          {state.portalCodeExpiresAt ? ` The code works until ${fmt(state.portalCodeExpiresAt)} (check-out + grace).` : ''}
+        </p>
+        <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: '.8rem' }} onClick={onDone} data-testid="button-portal-confirmation-done">
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  if (state.ok && state.portalError) {
+    return (
+      <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }} data-testid="stay-portal-error">
+        <div className="alert alert-error" style={{ fontSize: '.85rem' }}>{state.portalError}</div>
+        <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: '.8rem' }} onClick={onDone}>Done</button>
+      </div>
+    );
+  }
+
   return (
     <form action={formAction} className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderColor: 'var(--teal-deep)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.75rem' }}>
@@ -202,8 +281,47 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
   );
 }
 
+// Regenerating the visit code is deliberately a small secondary action: the
+// primary flow is the automatic mint at stay creation (Ticket 3). The new code
+// is shown exactly once; the old one stops working immediately.
+function PortalCodeRegenerator({ propertyId, stayId, linkId }: { propertyId: string; stayId: string; linkId: string }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function regenerate() {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/host/properties/${propertyId}/links/${linkId}/regenerate-code`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not regenerate the code.');
+      setCode(json.code ?? null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not regenerate the code.');
+    } finally { setBusy(false); }
+  }
+
+  if (code) {
+    return (
+      <div style={{ padding: '.5rem .6rem', borderRadius: 8, border: '1px solid var(--teal-deep)', background: 'var(--bg-2, rgba(255,255,255,0.04))' }} data-testid={`stay-code-regenerated-${stayId}`}>
+        <div className="faint" style={{ fontSize: '.65rem' }}>New visit code (shown once)</div>
+        <div style={{ fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 700, letterSpacing: '.25rem' }}>{code}</div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} onClick={regenerate} disabled={busy} data-testid={`button-regen-code-${stayId}`}>
+        {busy ? '…' : 'Regenerate code'}
+      </button>
+      {err && <p style={{ color: 'var(--coral)', fontSize: '.72rem', marginTop: '.25rem' }}>{err}</p>}
+    </div>
+  );
+}
+
 // Per-stay magic link: skips OTP (the host vouches by generating it), redeems straight
 // into a verified session. Shows the URL + QR once; the raw token is never retrievable later.
+// Since Ticket 3 this renders only for stays created before auto-mint existed.
 function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: string }) {
   const [minted, setMinted] = useState<{ url: string; qrDataUrl: string; linkId: string; code: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
