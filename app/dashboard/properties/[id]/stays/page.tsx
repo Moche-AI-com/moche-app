@@ -1,6 +1,8 @@
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
+import { listPropertySessions } from '@/lib/guest/sessions';
+import { SessionsPanel } from '../SessionsPanel';
 import { StaysManager } from './StaysManager';
 import { ChatPermissionsPanel } from '../guest-chat/ChatPermissionsPanel';
 
@@ -75,6 +77,11 @@ export default async function StaysPage({
   // Deep links (notifications, legacy /guest-chat redirect) arrive as ?stay=<id>.
   const initialStayId = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
 
+  // Active guest sessions live in the Stays tab (moved off the property overview
+  // in this PR); the panel is host tooling, so it follows the same canManage
+  // gate as stay creation.
+  const sessions = canManage ? await listPropertySessions((await params).id, true) : [];
+
   return (
     <div>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0 .35rem' }}>Stays</h1>
@@ -110,6 +117,12 @@ export default async function StaysPage({
           portal: portalByStayId.get(s.id) ?? null,
         }))}
       />
+
+      {canManage && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <SessionsPanel propertyId={(await params).id} initialSessions={sessions} />
+        </div>
+      )}
 
       {canManagePermissions ? (
         <div style={{ marginTop: '1.25rem' }}>
