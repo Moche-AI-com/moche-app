@@ -3,10 +3,9 @@ import { requirePropertyAccess } from '@/lib/auth/guards';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { createClient } from '@/lib/supabase/server';
 import { serverEnv } from '@/lib/env';
+import { STATUS_BADGE } from '@/lib/constants';
 import { PropertyStatusControls } from './StatusControls';
 import { PropertyWorkspaceNav } from './PropertyWorkspaceNav';
-
-const STATUS_BADGE: Record<string, string> = { live: 'badge-teal', paused: 'badge-coral' };
 
 export default async function PropertyWorkspaceLayout({
   children,

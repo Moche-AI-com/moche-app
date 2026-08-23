@@ -190,24 +190,33 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '.75rem' }}>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 16, padding: '.85rem', background: 'var(--surface)' }}>
-          <div className="muted" style={{ fontSize: '.76rem' }}>Open threads</div>
-          <strong style={{ fontSize: '1.4rem' }}>{threads.length}</strong>
+      <div className="dash-metrics-grid">
+        <div className="card stat-card">
+          <div className="dash-metric-top">
+            <span className="dash-metric-label">Open threads</span>
+            <span className="stat-icon"><MessageSquareText size={15} aria-hidden /></span>
+          </div>
+          <strong className="dash-metric-value" style={{ fontSize: '1.4rem' }}>{threads.length}</strong>
         </div>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 16, padding: '.85rem', background: 'var(--surface)' }}>
-          <div className="muted" style={{ fontSize: '.76rem' }}>Unread messages</div>
-          <strong style={{ fontSize: '1.4rem' }}>{totalUnread}</strong>
+        <div className="card stat-card">
+          <div className="dash-metric-top">
+            <span className="dash-metric-label">Unread messages</span>
+            <span className="stat-icon"><CheckCheck size={15} aria-hidden /></span>
+          </div>
+          <strong className="dash-metric-value" style={{ fontSize: '1.4rem' }}>{totalUnread}</strong>
         </div>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 16, padding: '.85rem', background: 'var(--surface)' }}>
-          <div className="muted" style={{ fontSize: '.76rem' }}>Pinned escalations</div>
-          <strong style={{ fontSize: '1.4rem' }}>{totalPinned}</strong>
+        <div className={`card stat-card${totalPinned > 0 ? ' stat-attn' : ''}`}>
+          <div className="dash-metric-top">
+            <span className="dash-metric-label">Pinned escalations</span>
+            <span className="stat-icon"><AlertTriangle size={15} aria-hidden /></span>
+          </div>
+          <strong className="dash-metric-value" style={{ fontSize: '1.4rem' }}>{totalPinned}</strong>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: selectedThread ? 'minmax(300px, 380px) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap: '1rem', alignItems: 'start' }}>
-        <aside style={{ border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden', background: 'var(--surface)' }}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: '.75rem', alignItems: 'center' }}>
+      <div className={`chat-shell${selectedThread ? ' has-thread' : ''}`}>
+        <aside className="chat-panel">
+          <div className="chat-panel-head">
             <div>
               <strong>Guest threads</strong>
               <div className="muted" style={{ fontSize: '.78rem' }}>Open a thread to reply. Click it again to collapse.</div>
@@ -220,7 +229,7 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
           </div>
 
           {announcementMode && (
-            <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb, var(--teal) 7%, var(--surface))' }}>
+            <div className="chat-announce">
               <label style={{ display: 'flex', gap: '.45rem', alignItems: 'center', fontSize: '.85rem', fontWeight: 650 }}>
                 <input type="checkbox" checked={selectAll} onChange={(event) => setSelectAll(event.target.checked)} />
                 Select All Guests
@@ -241,14 +250,14 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
                   {thread.guestName}
                 </label>
               ))}
-              <textarea value={announcement} onChange={(event) => setAnnouncement(event.target.value)} rows={3} placeholder="Announcement message…" style={{ width: '100%', marginTop: '.65rem' }} />
-              <button type="button" onClick={() => void sendAnnouncement()} disabled={!announcement.trim() || (!selectAll && selectedAnnouncementIds.size === 0)} style={{ marginTop: '.5rem' }}>
+              <textarea className="textarea" value={announcement} onChange={(event) => setAnnouncement(event.target.value)} rows={3} placeholder="Announcement message…" style={{ marginTop: '.65rem' }} />
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => void sendAnnouncement()} disabled={!announcement.trim() || (!selectAll && selectedAnnouncementIds.size === 0)} style={{ marginTop: '.5rem' }}>
                 Send announcement
               </button>
             </div>
           )}
 
-          <div role="list" aria-label="Guest conversations" style={{ display: 'grid', gap: '.55rem', padding: '.75rem' }}>
+          <div role="list" aria-label="Guest conversations" className="chat-thread-list">
             {loadingThreads ? (
               <p className="muted" style={{ padding: '.5rem' }}><Loader2 size={15} className="spin" aria-hidden /> Loading chats…</p>
             ) : threads.length === 0 ? (
@@ -260,25 +269,12 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
                   <button
                     key={thread.id}
                     type="button"
-                    role="listitem"
                     onClick={() => openThread(thread.id)}
-                    aria-expanded={active}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      border: active ? '1px solid color-mix(in srgb, var(--teal) 45%, var(--border))' : '1px solid var(--border)',
-                      borderRadius: 16,
-                      padding: '.8rem',
-                      background: active ? 'color-mix(in srgb, var(--teal) 10%, var(--surface))' : 'var(--surface)',
-                      color: 'inherit',
-                      cursor: 'pointer',
-                      boxShadow: active ? '0 10px 30px rgba(0,0,0,.12)' : 'none',
-                    }}
+                    aria-pressed={active}
+                    className={`chat-thread-item${active ? ' is-active' : ''}`}
                   >
                     <div style={{ display: 'flex', gap: '.7rem', alignItems: 'flex-start' }}>
-                      <span style={{ width: 36, height: 36, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--iris) 14%, var(--surface))', color: 'var(--iris)', fontWeight: 800, flexShrink: 0 }}>
-                        {initials(thread.guestName)}
-                      </span>
+                      <span className="chat-thread-avatar">{initials(thread.guestName)}</span>
                       <span style={{ minWidth: 0, flex: 1 }}>
                         <span style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', alignItems: 'center' }}>
                           <strong style={{ fontWeight: thread.unreadCount > 0 || thread.pinned ? 800 : 650 }}>{thread.guestName}</strong>
@@ -305,8 +301,8 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
         </aside>
 
         {selectedThread ? (
-          <section style={{ border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden', background: 'var(--surface)', boxShadow: '0 18px 50px rgba(0,0,0,.12)' }}>
-            <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: '.75rem', alignItems: 'center' }}>
+          <section className="chat-panel">
+            <div className="chat-panel-head">
               <div>
                 <strong><MessageSquareText size={16} aria-hidden style={{ verticalAlign: '-2px', marginRight: '.35rem' }} />{selectedThread.guestName}</strong>
                 <div className="muted" style={{ fontSize: '.78rem', marginTop: '.2rem' }}>
@@ -318,7 +314,14 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
               </button>
             </div>
 
-            <div aria-live="polite" style={{ flex: 1, padding: '1rem', overflowY: 'auto', maxHeight: 560, background: 'color-mix(in srgb, var(--surface) 88%, var(--bg))' }}>
+            {selectedThread.unresolvedEscalationCount > 0 && (
+              <div className="chat-banner-escalation" role="status">
+                <AlertTriangle size={14} aria-hidden />
+                {selectedThread.unresolvedEscalationCount} unresolved escalation{selectedThread.unresolvedEscalationCount === 1 ? '' : 's'} in this thread — reply to an escalated message and toggle “Resolve on send”.
+              </div>
+            )}
+
+            <div aria-live="polite" className="chat-messages">
               {loadingMessages ? (
                 <p className="muted"><Loader2 size={15} className="spin" aria-hidden /> Loading messages…</p>
               ) : messages.length === 0 ? (
@@ -328,14 +331,14 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
                   const host = message.role === 'host';
                   const escalation = message.messageKind === 'ai_escalation' || Boolean(message.escalationId);
                   return (
-                    <div key={message.id} style={{ display: 'flex', justifyContent: host ? 'flex-end' : 'flex-start', marginBottom: '.75rem' }}>
-                      <div style={{ maxWidth: '78%', borderRadius: host ? '18px 18px 6px 18px' : '18px 18px 18px 6px', padding: '.75rem .85rem', background: escalation ? 'color-mix(in srgb, var(--coral) 10%, var(--surface))' : host ? 'color-mix(in srgb, var(--teal) 12%, var(--surface))' : 'var(--surface)', border: escalation ? '1px solid color-mix(in srgb, var(--coral) 45%, var(--border))' : '1px solid var(--border)' }}>
-                        {escalation && <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center', color: 'var(--coral)', fontSize: '.72rem', fontWeight: 800, marginBottom: '.3rem' }}><AlertTriangle size={13} aria-hidden /> AI escalation</div>}
-                        {message.messageKind === 'announcement' && <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center', color: 'var(--teal)', fontSize: '.72rem', fontWeight: 800, marginBottom: '.3rem' }}><Megaphone size={13} aria-hidden /> Announcement</div>}
-                        <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{message.content}</div>
-                        <div style={{ display: 'flex', gap: '.55rem', alignItems: 'center', marginTop: '.4rem', fontSize: '.72rem', opacity: .75 }}>
+                    <div key={message.id} className={`bubble-row${host ? ' bubble-row-host' : ''}`}>
+                      <div className={`bubble${host ? ' bubble-host' : ' bubble-guest'}${escalation ? ' bubble-escalation' : ''}`}>
+                        {escalation && <div className="bubble-flag bubble-flag-escalation"><AlertTriangle size={13} aria-hidden /> AI escalation</div>}
+                        {message.messageKind === 'announcement' && <div className="bubble-flag bubble-flag-announcement"><Megaphone size={13} aria-hidden /> Announcement</div>}
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
+                        <div className="bubble-meta">
                           <span>{timeLabel(message.createdAt)}</span>
-                          <button type="button" onClick={() => setReplyTo(message)} style={{ border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Reply</button>
+                          <button type="button" className="bubble-reply" onClick={() => setReplyTo(message)}>Reply</button>
                         </div>
                       </div>
                     </div>
@@ -346,40 +349,47 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
             </div>
 
             {replyTo && (
-              <div style={{ margin: '0 1rem .85rem', padding: '.8rem', borderRadius: 14, background: 'color-mix(in srgb, var(--iris) 8%, var(--surface))', border: '1px solid var(--border)' }}>
+              <div className="chat-reply-quote">
                 <div style={{ fontSize: '.84rem' }}>
                   Replying to: “{replyTo.content.slice(0, 140)}{replyTo.content.length > 140 ? '…' : ''}”
                 </div>
-                {replyTo.escalationId && (
-                  <div style={{ display: 'grid', gap: '.45rem', marginTop: '.65rem' }}>
-                    <label style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
-                      <input type="checkbox" checked={resolveEscalation} onChange={(event) => setResolveEscalation(event.target.checked)} />
-                      Mark escalation resolved after sending
-                    </label>
-                    {canLearn && (
-                      <label style={{ display: 'flex', gap: '.45rem', alignItems: 'flex-start' }}>
-                        <input type="checkbox" checked={learnFromReply} onChange={(event) => setLearnFromReply(event.target.checked)} />
-                        <span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontWeight: 700 }}><Brain size={13} aria-hidden /> Use this reply to improve the Brain</span>
-                          <span className="muted" style={{ display: 'block', fontSize: '.76rem', marginTop: '.15rem' }}>
-                            A top model will normalize the question, your reply, and attached thread messages into a pending Q/A proposal for human approval.
-                          </span>
-                        </span>
-                      </label>
-                    )}
-                  </div>
+                <button type="button" className="bubble-reply" onClick={() => { setReplyTo(null); setResolveEscalation(false); setLearnFromReply(false); }} style={{ marginTop: '.55rem' }}>
+                  Cancel reply
+                </button>
+              </div>
+            )}
+
+            {replyTo?.escalationId && (
+              <div className="chip-row">
+                <button
+                  type="button"
+                  className={`chip-toggle chip-coral${resolveEscalation ? ' is-on' : ''}`}
+                  aria-pressed={resolveEscalation}
+                  onClick={() => setResolveEscalation((value) => !value)}
+                >
+                  <CheckCheck size={13} aria-hidden /> Resolve on send
+                </button>
+                {canLearn && (
+                  <button
+                    type="button"
+                    className={`chip-toggle${learnFromReply ? ' is-on' : ''}`}
+                    aria-pressed={learnFromReply}
+                    title="A top model normalizes the question, your reply, and attached thread messages into a pending Q/A proposal for human approval."
+                    onClick={() => setLearnFromReply((value) => !value)}
+                  >
+                    <Brain size={13} aria-hidden /> Improve the Brain
+                  </button>
                 )}
-                <button type="button" onClick={() => { setReplyTo(null); setResolveEscalation(false); setLearnFromReply(false); }} style={{ marginTop: '.55rem', border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Cancel reply</button>
               </div>
             )}
 
             {notice && <p role="status" style={{ color: 'var(--teal)', margin: '0 1rem .75rem' }}>{notice}</p>}
             {error && <p role="alert" style={{ color: 'var(--coral)', margin: '0 1rem .75rem' }}>{error}</p>}
 
-            <div style={{ display: 'flex', gap: '.55rem', padding: '1rem', borderTop: '1px solid var(--border)' }}>
+            <div className="chat-composer">
               <label htmlFor="guest-chat-reply" className="sr-only">Reply to guest</label>
-              <textarea id="guest-chat-reply" value={reply} onChange={(event) => setReply(event.target.value)} rows={2} placeholder="Write a clear, guest-ready reply…" style={{ flex: 1, resize: 'vertical' }} />
-              <button type="button" onClick={() => void sendReply()} disabled={!selectedId || !reply.trim()} aria-label="Send reply">
+              <textarea id="guest-chat-reply" value={reply} onChange={(event) => setReply(event.target.value)} rows={2} placeholder="Write a clear, guest-ready reply…" />
+              <button type="button" className="chat-composer-send" onClick={() => void sendReply()} disabled={!selectedId || !reply.trim()} aria-label="Send reply">
                 <Send size={16} aria-hidden />
               </button>
             </div>
@@ -389,7 +399,7 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
             </div>
           </section>
         ) : (
-          <section style={{ border: '1px dashed var(--border)', borderRadius: 20, padding: '2rem', textAlign: 'center', background: 'var(--surface)' }}>
+          <section className="chat-empty">
             <UserRound size={28} aria-hidden style={{ color: 'var(--text-muted)' }} />
             <h2 style={{ margin: '.7rem 0 .3rem' }}>Select a guest thread</h2>
             <p className="muted" style={{ margin: 0 }}>Open a conversation on the left to reply, resolve escalations, or propose a Brain update.</p>

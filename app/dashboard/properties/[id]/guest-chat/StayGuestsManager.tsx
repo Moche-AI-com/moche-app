@@ -78,7 +78,7 @@ export function StayGuestsManager({ propertyId, stayId }: { propertyId: string; 
   }
 
   return (
-    <details open style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 16, padding: '.9rem', background: 'rgba(255,255,255,.035)' }}>
+    <details open className="card-2" style={{ padding: '.9rem' }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
         <KeyRound size={15} aria-hidden style={{ verticalAlign: '-2px', marginRight: '.35rem' }} />
         Guest IDs for this stay
@@ -93,29 +93,29 @@ export function StayGuestsManager({ propertyId, stayId }: { propertyId: string; 
               <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Guest name (optional)" />
               <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone (optional)" type="tel" />
               <input value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Custom 4-digit ID" inputMode="numeric" />
-              <button type="button" onClick={() => void createGuest()} disabled={busy || !stayId}>
+              <button type="button" className="btn-secondary" onClick={() => void createGuest()} disabled={busy || !stayId}>
                 <Plus size={14} aria-hidden /> Create guest ID
               </button>
             </div>
 
             {createdCode && (
-              <div role="status" style={{ border: '1px solid rgba(51,230,212,.35)', background: 'rgba(51,230,212,.1)', borderRadius: 12, padding: '.75rem' }}>
-                New guest ID: <strong style={{ fontSize: '1.2rem', letterSpacing: '.12em' }}>{createdCode}</strong>
-                <button type="button" onClick={() => void navigator.clipboard?.writeText(createdCode)} style={{ marginLeft: '.6rem' }}>
+              <div role="status" className="alert alert-success">
+                New guest ID: <strong className="portal-code" style={{ fontSize: '1.2rem' }}>{createdCode}</strong>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => void navigator.clipboard?.writeText(createdCode)} style={{ marginLeft: '.6rem' }}>
                   <Copy size={13} aria-hidden /> Copy
                 </button>
                 <div className="muted" style={{ fontSize: '.78rem', marginTop: '.25rem' }}>Share this code with only that guest. It stops working after the property grace period.</div>
               </div>
             )}
 
-            {error && <p role="alert" style={{ color: '#ffb08f' }}>{error}</p>}
+            {error && <p role="alert" style={{ color: 'var(--coral)' }}>{error}</p>}
 
             <div style={{ display: 'grid', gap: '.45rem' }}>
               {guests.length === 0 ? (
                 <p className="muted">No guest IDs yet for this stay.</p>
               ) : (
                 guests.map((guest) => (
-                  <div key={guest.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '.75rem', border: '1px solid rgba(255,255,255,.08)', borderRadius: 12, padding: '.65rem' }}>
+                  <div key={guest.id} className="card-2" style={{ display: 'flex', justifyContent: 'space-between', gap: '.75rem', padding: '.65rem' }}>
                     <span>
                       <UserRound size={14} aria-hidden style={{ verticalAlign: '-2px', marginRight: '.3rem' }} />
                       {guest.displayName || guest.guestLabel || 'Guest'}
