@@ -1,7 +1,9 @@
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
+import { listPropertySessions } from '@/lib/guest/sessions';
 import { StaysManager } from './StaysManager';
+import { SessionsPanel } from '../SessionsPanel';
 import { ChatPermissionsPanel } from '../guest-chat/ChatPermissionsPanel';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +52,10 @@ export default async function StaysPage({
   // Deep links (notifications, legacy /guest-chat redirect) arrive as ?stay=<id>.
   const initialStayId = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
 
+  // Active guest sessions move here from the property overview: session hygiene
+  // (lost devices, early checkouts) is part of running stays, not an overview widget.
+  const sessions = canManage ? await listPropertySessions((await params).id, true) : [];
+
   return (
     <div>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0 .35rem' }}>Stays</h1>
@@ -84,6 +90,8 @@ export default async function StaysPage({
           bookingReference: s.booking_reference,
         }))}
       />
+
+      {canManage ? <SessionsPanel propertyId={(await params).id} initialSessions={sessions} /> : null}
 
       {canManagePermissions ? (
         <div style={{ marginTop: '1.25rem' }}>

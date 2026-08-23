@@ -11,6 +11,7 @@ import { log } from '@/lib/log';
 export interface StayActionState {
   error?: string;
   ok?: boolean;
+  stayId?: string;
 }
 
 // Host creates a stay. The guest's raw contact is hashed immediately and never stored raw;
@@ -84,7 +85,9 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
     targetId: (stay as { id: string }).id,
   });
   revalidatePath(`/dashboard/properties/${propertyId}/stays`);
-  return { ok: true };
+  // Return the new stay id so the client can auto-provision its guest portal
+  // (link + visit code) in the same flow — no separate manual minting step.
+  return { ok: true, stayId: (stay as { id: string }).id };
 }
 
 // Revoke a stay's access immediately (revokes any active guest sessions too).

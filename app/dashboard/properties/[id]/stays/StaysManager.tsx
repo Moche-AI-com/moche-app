@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { createStayAction, revokeStayAction, type StayActionState } from './actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
@@ -18,7 +18,56 @@ interface Stay {
   bookingReference: string | null;
 }
 
+// Status-only view of a stay's portal link, from GET .../links. Raw tokens and
+// visit codes are hash-only at rest and never reach the client after minting.
+type StayLinkInfo = {
+  linkId: string;
+  stayId: string | null;
+  expiresAt: string | null;
+  codeExpiresAt: string | null;
+  codeRevokedAt: string | null;
+  createdAt: string;
+};
+
 const STATUS_BADGE: Record<string, string> = { active: 'badge-teal', upcoming: 'badge', revoked: 'badge-coral', completed: '' };
+
+function portalStatus(link: StayLinkInfo | undefined): { label: string; tone: string } | null {
+  if (!link) return null;
+  const now = Date.now();
+  if (link.codeRevokedAt) return { label: 'Code revoked', tone: 'badge-coral' };
+  if (link.expiresAt && new Date(link.expiresAt).getTime() < now) return { label: 'Link expired', tone: 'badge-coral' };
+  if (link.codeExpiresAt && new Date(link.codeExpiresAt).getTime() < now) return { label: 'Code expired', tone: 'badge-coral' };
+  return { label: 'Portal active', tone: 'badge-teal' };
+}
+
+function PortalStatusLine({ link }: { link: StayLinkInfo | undefined }) {
+  const status = portalStatus(link);
+  if (!link || !status) {
+    return <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 .5rem' }}>No portal link yet — one is created automatically when you add a stay, or mint one below.</p>;
+  }
+  return (
+    <p style={{ fontSize: '.78rem', margin: '0 0 .5rem', display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <span className={`badge ${status.tone}`}>{status.label}</span>
+      <span className="faint">
+        Created {fmt(link.createdAt)}
+        {!link.codeRevokedAt && link.codeExpiresAt ? ` · code valid until ${fmt(link.codeExpiresAt)}` : ''}
+      </span>
+    </p>
+  );
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      onClick={() => { void navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+    >
+      {copied ? 'Copied!' : label}
+    </button>
+  );
+}
 
 export function StaysManager({
   propertyId,
@@ -41,6 +90,47 @@ export function StaysManager({
   const [selected, setSelected] = useState<string | null>(initialStayId);
   const selectedStay = stays.find((s) => s.id === selected) ?? null;
 
+  // Portal links minted for each stay (status only). Newest first from the
+  // server, so the first entry seen per stay is the current one.
+  const [links, setLinks] = useState<StayLinkInfo[]>([]);
+  const loadLinks = useCallback(async () => {
+    const res = await fetch(`/api/host/properties/${propertyId}/links`, { cache: 'no-store' });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) setLinks(Array.isArray(json.links) ? json.links : []);
+  }, [propertyId]);
+  useEffect(() => { void loadLinks(); }, [loadLinks]);
+  const linkByStay = useMemo(() => {
+    const map = new Map<string, StayLinkInfo>();
+    for (const link of links) {
+      if (link.stayId && !map.has(link.stayId)) map.set(link.stayId, link);
+    }
+    return map;
+  }, [links]);
+
+  // One-time confirmation shown right after a stay is created and its portal
+  // auto-provisioned — the only moment the raw URL + visit code are visible.
+  const [autoPortal, setAutoPortal] = useState<{ stayId: string; url: string; qrDataUrl: string; code: string | null } | null>(null);
+
+  async function provisionPortal(stayId: string) {
+    try {
+      const res = await fetch(`/api/host/properties/${propertyId}/links`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'stay', stayId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) setAutoPortal({ stayId, url: json.url, qrDataUrl: json.qrDataUrl, code: json.code ?? null });
+    } catch {
+      // The stay exists regardless; its portal can still be minted from the detail pane.
+    } finally {
+      void loadLinks();
+    }
+  }
+
+  function handleCreated(stayId: string) {
+    setSelected(stayId);
+    void provisionPortal(stayId);
+  }
+
   function toggle(id: string) {
     setSelected((current) => (current === id ? null : id));
   }
@@ -54,12 +144,40 @@ export function StaysManager({
 
   return (
     <div>
+      {autoPortal && (
+        <div className="card" style={{ padding: '1rem', marginBottom: '1rem', borderColor: 'var(--teal-deep)' }} data-testid={`stay-autoportal-${autoPortal.stayId}`}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <strong>Stay created — the guest portal is ready.</strong>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAutoPortal(null)}>Dismiss</button>
+          </div>
+          <div style={{ display: 'flex', gap: '.75rem', alignItems: 'flex-start', marginTop: '.6rem', flexWrap: 'wrap' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={autoPortal.qrDataUrl} alt="Guest portal QR code" style={{ width: 96, height: 96, borderRadius: 6, background: '#fff', padding: 4 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: '.72rem', wordBreak: 'break-all' }}>{autoPortal.url}</div>
+              {autoPortal.code && (
+                <div style={{ marginTop: '.45rem' }}>
+                  <span className="faint" style={{ fontSize: '.68rem' }}>Visit code</span>
+                  <div style={{ fontFamily: 'monospace', fontSize: '1.35rem', fontWeight: 700, letterSpacing: '.25rem' }}>{autoPortal.code}</div>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '.35rem', marginTop: '.5rem', flexWrap: 'wrap' }}>
+                <CopyButton text={autoPortal.code ? `${autoPortal.url} (code ${autoPortal.code})` : autoPortal.url} label="Copy link + code" />
+              </div>
+            </div>
+          </div>
+          <p className="faint" style={{ fontSize: '.7rem', marginTop: '.5rem' }}>
+            Shown once — copy the link and code now. The portal status stays visible on the stay.
+          </p>
+        </div>
+      )}
+
       {canManage && !showForm && (
         <button className="btn btn-primary" style={{ marginBottom: '1rem' }} onClick={() => setShowForm(true)} data-testid="button-add-stay">
           + Add stay
         </button>
       )}
-      {showForm && canManage && <StayForm propertyId={propertyId} onDone={() => setShowForm(false)} />}
+      {showForm && canManage && <StayForm propertyId={propertyId} onDone={() => setShowForm(false)} onCreated={handleCreated} />}
 
       {stays.length === 0 ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -134,7 +252,17 @@ export function StaysManager({
                 <>
                   <div className="card" style={{ padding: '1rem' }}>
                     <h2 style={{ fontSize: '1rem', margin: '0 0 .6rem' }}>Guest access</h2>
-                    <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                    <PortalStatusLine link={linkByStay.get(selectedStay.id)} />
+                    {portalStatus(linkByStay.get(selectedStay.id))?.label === 'Portal active' ? (
+                      <details>
+                        <summary className="faint" style={{ cursor: 'pointer', fontSize: '.78rem' }}>Issue a new link anyway</summary>
+                        <div style={{ marginTop: '.5rem' }}>
+                          <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                        </div>
+                      </details>
+                    ) : (
+                      <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                    )}
                   </div>
                   <StayGuestsManager propertyId={propertyId} stayId={selectedStay.id} />
                 </>
@@ -153,9 +281,9 @@ export function StaysManager({
   );
 }
 
-function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => void }) {
+function StayForm({ propertyId, onDone, onCreated }: { propertyId: string; onDone: () => void; onCreated: (stayId: string) => void }) {
   const [state, formAction] = useFormState<StayActionState, FormData>(createStayAction, {});
-  if (state.ok) queueMicrotask(onDone);
+  if (state.ok) queueMicrotask(() => { onDone(); if (state.stayId) onCreated(state.stayId); });
   return (
     <form action={formAction} className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderColor: 'var(--teal-deep)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.75rem' }}>

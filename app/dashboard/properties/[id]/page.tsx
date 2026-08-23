@@ -2,9 +2,6 @@ import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, gapPrompts } from '@/lib/brain/health';
-import { listPropertySessions } from '@/lib/guest/sessions';
-import { SessionsPanel } from './SessionsPanel';
-import { PropertyLinkMinter } from './PropertyLinkMinter';
 import { ListingImportKickoff } from './ListingImportKickoff';
 import { DangerZone } from './DangerZone';
 
@@ -45,11 +42,8 @@ export default async function PropertyDetailPage({
   const rawImport = typeof searchParams.import === 'string' ? searchParams.import.trim() : '';
   const listingImportUrl = /^https?:\/\//i.test(rawImport) && rawImport.length <= 2000 ? rawImport : null;
 
-  // Stays is the natural home for guest access management. It cannot be moved
-  // there in this scoped change, so it remains available here behind a collapsed
-  // disclosure rather than removing host functionality.
-  const canManageAccess = can.replyGuests;
-  const sessions = canManageAccess ? await listPropertySessions(property.id, true) : [];
+  // Guest access management lives in the Stays tab (per-stay portal + sessions);
+  // the reusable property QR link lives in Settings.
   const needsAttention = (openEsc ?? 0) + health.gaps.length;
 
   return (
@@ -90,18 +84,6 @@ export default async function PropertyDetailPage({
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras" value="Manage" sub="Add-ons guests can request" />}
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} title="Settings" value="Configure" sub="Branding, tone, modules" />}
       </div>
-
-      {canManageAccess && (
-        <details className="card" style={{ padding: '0 1rem', marginBottom: '1.25rem' }}>
-          <summary style={{ cursor: 'pointer', minHeight: '2.75rem', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
-            Guest access
-          </summary>
-          <div style={{ paddingBottom: '.25rem' }}>
-            <PropertyLinkMinter propertyId={property.id} />
-            <SessionsPanel propertyId={property.id} initialSessions={sessions} />
-          </div>
-        </details>
-      )}
 
       {can.editProperty && <DangerZone propertyId={property.id} propertyName={property.display_name} />}
     </div>

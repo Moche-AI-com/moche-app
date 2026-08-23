@@ -27,6 +27,40 @@ function appBaseUrl(req: Request): string {
   }
 }
 
+// Lists the property's stay links so the Stays tab can show a persistent portal
+// status per stay. Status fields only — tokens and visit codes are hash-only at
+// rest and are never returned here.
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requirePropertyAccess((await params).id);
+  if (!access.isOwner && !access.can.replyGuests) {
+    return NextResponse.json({ error: 'You do not have permission to view links.' }, { status: 403 });
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await (admin as any)
+    .from('guest_access_links')
+    .select('id, stay_id, kind, expires_at, code_expires_at, code_revoked_at, created_at')
+    .eq('property_id', access.property.id)
+    .eq('kind', 'stay')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    log.warn('guest_link_list_failed', { propertyId: access.property.id, error: error.message });
+    return NextResponse.json({ error: 'Could not load guest links.' }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    links: (data ?? []).map((row: any) => ({
+      linkId: row.id,
+      stayId: row.stay_id,
+      expiresAt: row.expires_at,
+      codeExpiresAt: row.code_expires_at,
+      codeRevokedAt: row.code_revoked_at,
+      createdAt: row.created_at,
+    })),
+  });
+}
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requirePropertyAccess((await params).id);
   if (!access.isOwner && !access.can.replyGuests) {
