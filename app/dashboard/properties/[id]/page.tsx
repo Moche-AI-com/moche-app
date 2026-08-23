@@ -61,10 +61,10 @@ export default async function PropertyDetailPage({
             </p>
           </div>
           <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-            <Link href={`/dashboard/properties/${property.id}/stays`} className={`badge ${openEsc ? 'badge-coral' : ''}`} style={{ minHeight: '2.75rem', display: 'inline-flex', alignItems: 'center', textDecoration: 'none', paddingInline: '.65rem' }}>
+            <Link href={`/dashboard/properties/${property.id}/stays`} className={`badge badge-lg${openEsc ? ' badge-coral' : ''}`}>
               {openEsc ?? 0} open escalation{openEsc === 1 ? '' : 's'}
             </Link>
-            <Link href={`/dashboard/properties/${property.id}/brain`} className="badge" style={{ minHeight: '2.75rem', display: 'inline-flex', alignItems: 'center', textDecoration: 'none', paddingInline: '.65rem' }}>
+            <Link href={`/dashboard/properties/${property.id}/brain`} className="badge badge-lg">
               {health.gaps.length} Brain gap{health.gaps.length === 1 ? '' : 's'}
             </Link>
           </div>

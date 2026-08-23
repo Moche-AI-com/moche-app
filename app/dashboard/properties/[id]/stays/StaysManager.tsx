@@ -7,6 +7,7 @@ import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { GuestChatInbox } from '../guest-chat/GuestChatInbox';
 import { StayGuestsManager } from '../guest-chat/StayGuestsManager';
 import { portalCodeStatus } from '@/lib/guest/portal-status';
+import { STATUS_BADGE } from '@/lib/constants';
 
 interface Stay {
   id: string;
@@ -20,8 +21,6 @@ interface Stay {
   /** Masked portal-code state for the stay's latest coded link (Ticket 3). */
   portal?: { linkId: string; codeExpiresAt: string | null; codeRevokedAt: string | null } | null;
 }
-
-const STATUS_BADGE: Record<string, string> = { active: 'badge-teal', upcoming: 'badge', revoked: 'badge-coral', completed: '' };
 
 const PORTAL_TONE: Record<string, string> = { active: 'var(--teal)', expired: 'var(--coral)', revoked: 'var(--coral)' };
 
@@ -71,28 +70,22 @@ export function StaysManager({
           <p className="muted">No stays yet. Add a booking so the guest can verify and use the concierge.</p>
         </div>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: selected ? 'minmax(280px, 360px) minmax(0, 1fr)' : 'minmax(0, 1fr)',
-            gap: '1rem',
-            alignItems: 'start',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+        <div className={`stays-shell${selected ? ' has-selection' : ''}`}>
+          <div className="stay-list">
             <div
-              className="card"
+              className={`card stay-card${selected === 'all' ? ' is-selected' : ''}`}
               role="button"
               tabIndex={0}
               onClick={() => toggle('all')}
               onKeyDown={(event) => selectOnKey(event, 'all')}
-              style={{ padding: '1rem', cursor: 'pointer', borderColor: selected === 'all' ? 'var(--teal-deep)' : undefined }}
               data-testid="card-stay-all"
             >
-              <strong>All conversations</strong>
-              <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
-                Every guest thread for this property in one inbox.
-              </p>
+              <div>
+                <strong>All conversations</strong>
+                <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
+                  Every guest thread for this property in one inbox.
+                </p>
+              </div>
             </div>
 
             {stays.map((s) => {
@@ -100,12 +93,11 @@ export function StaysManager({
               return (
                 <div
                   key={s.id}
-                  className="card"
+                  className={`card stay-card${selected === s.id ? ' is-selected' : ''}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => toggle(s.id)}
                   onKeyDown={(event) => selectOnKey(event, s.id)}
-                  style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', cursor: 'pointer', borderColor: selected === s.id ? 'var(--teal-deep)' : undefined }}
                   data-testid={`card-stay-${s.id}`}
                 >
                   <div>
@@ -196,12 +188,12 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
           Share the link and code with your guest. Opening the link asks for this 4-digit code before the concierge unlocks.
         </p>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ padding: '.6rem .8rem', borderRadius: 8, border: '1px solid var(--teal-deep)', background: 'var(--bg-2, rgba(255,255,255,0.04))' }}>
+          <div className="portal-code-box">
             <div className="faint" style={{ fontSize: '.65rem' }}>Visit code (shown once)</div>
-            <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '.3rem' }} data-testid="stay-portal-code">{state.portalCode}</div>
+            <div className="portal-code" style={{ fontSize: '1.5rem' }} data-testid="stay-portal-code">{state.portalCode}</div>
           </div>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div className="card-2" style={{ padding: '.55rem .75rem', fontFamily: 'monospace', fontSize: '.72rem', wordBreak: 'break-all' }} data-testid="stay-portal-url">{state.portalUrl}</div>
+            <div className="card-2 portal-url" style={{ padding: '.55rem .75rem' }} data-testid="stay-portal-url">{state.portalUrl}</div>
             <div style={{ display: 'flex', gap: '.4rem', marginTop: '.5rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -303,9 +295,9 @@ function PortalCodeRegenerator({ propertyId, stayId, linkId }: { propertyId: str
 
   if (code) {
     return (
-      <div style={{ padding: '.5rem .6rem', borderRadius: 8, border: '1px solid var(--teal-deep)', background: 'var(--bg-2, rgba(255,255,255,0.04))' }} data-testid={`stay-code-regenerated-${stayId}`}>
+      <div className="portal-code-box" data-testid={`stay-code-regenerated-${stayId}`}>
         <div className="faint" style={{ fontSize: '.65rem' }}>New visit code (shown once)</div>
-        <div style={{ fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 700, letterSpacing: '.25rem' }}>{code}</div>
+        <div className="portal-code" style={{ fontSize: '1.3rem' }}>{code}</div>
       </div>
     );
   }
@@ -381,7 +373,7 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={minted.qrDataUrl} alt="Stay QR code" style={{ width: 84, height: 84, borderRadius: 6, background: '#fff', padding: 4 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: 'monospace', fontSize: '.7rem', wordBreak: 'break-all' }}>{minted.url}</div>
+            <div className="portal-url">{minted.url}</div>
             <div style={{ display: 'flex', gap: '.35rem', marginTop: '.4rem', flexWrap: 'wrap' }}>
               <button className="btn btn-ghost btn-sm" onClick={() => { void navigator.clipboard?.writeText(minted.url); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
                 {copied ? 'Copied!' : 'Copy'}
@@ -392,11 +384,11 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
         </div>
 
         {minted.code && !revoked && (
-          <div style={{ marginTop: '.6rem', padding: '.5rem .6rem', borderRadius: 8, background: 'var(--bg-2, rgba(255,255,255,0.04))', border: '1px solid var(--teal-deep)' }}>
+          <div className="portal-code-box" style={{ marginTop: '.6rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem' }}>
               <div>
                 <div className="faint" style={{ fontSize: '.65rem' }}>Visit code (required — shown once)</div>
-                <div style={{ fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 700, letterSpacing: '.25rem' }}>{minted.code}</div>
+                <div className="portal-code" style={{ fontSize: '1.3rem' }}>{minted.code}</div>
               </div>
               <div style={{ display: 'flex', gap: '.3rem' }}>
                 <button className="btn btn-ghost btn-sm" onClick={regenerateCode} disabled={codeBusy} data-testid={`button-regen-code-${stayId}`}>

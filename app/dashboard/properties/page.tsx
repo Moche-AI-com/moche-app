@@ -4,11 +4,9 @@ import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
 import { propertyUsageLine } from '@/lib/dashboard/plan-banner';
+import { STATUS_BADGE } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
-
-// 'archived' is intentionally absent: archived properties are not listed here.
-const STATUS_BADGE: Record<string, string> = { live: 'badge-teal', paused: 'badge-coral', draft: '' };
 
 export default async function PropertiesPage() {
   const ctx = await requireSession();
@@ -63,7 +61,7 @@ export default async function PropertiesPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '1rem' }}>
           {properties!.map((p) => (
-            <Link key={p.id} href={`/dashboard/properties/${p.id}`} className="card" style={{ padding: '1.25rem', display: 'block' }}>
+            <Link key={p.id} href={`/dashboard/properties/${p.id}`} className="card card-interactive rise-in dash-prop-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
                 <strong>{p.display_name}</strong>
                 <span className={`badge ${STATUS_BADGE[p.status] ?? ''}`}>{p.status}</span>
