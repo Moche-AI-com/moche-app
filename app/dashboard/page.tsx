@@ -201,10 +201,14 @@ export default async function DashboardHome({
 
   // Stays and Brain are per-property pages — with exactly one property we can
   // deep-link straight into it; with zero or multiple, send hosts to the
-  // property picker instead of guessing which one they mean.
+  // property picker instead of guessing which one they mean. Escalations
+  // followed guest chat into the per-property Stays workspace (#60), so a
+  // single in-scope property deep-links there too; the portfolio inbox at
+  // /dashboard/escalations remains the multi-property target.
   const singlePropertyId = propertyIds.length === 1 ? propertyIds[0] : null;
   const activeStaysHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/stays` : '/dashboard/properties';
   const knowledgeItemsHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/brain` : '/dashboard/properties';
+  const escalationsHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/stays` : '/dashboard/escalations';
 
   const filterOptions = (allProperties ?? []).map((p) => ({ id: p.id, name: p.display_name as string }));
 
@@ -264,6 +268,7 @@ export default async function DashboardHome({
                 lowRatings={lowRatings}
                 pendingApprovals={proposalSummary.pending}
                 openExtras={openExtrasCount}
+                escalationsHref={escalationsHref}
               />
             ),
           },

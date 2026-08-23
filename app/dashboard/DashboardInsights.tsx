@@ -55,12 +55,18 @@ export function AttentionQueue({
   lowRatings,
   pendingApprovals,
   openExtras,
+  escalationsHref = '/dashboard/escalations',
 }: {
   openEscalations: number;
   openServiceRequests: number;
   lowRatings: number;
   pendingApprovals: number;
   openExtras: number;
+  // Guest questions moved into the per-property Stays workspace when guest
+  // chat merged there (#60). A single in-scope property deep-links straight
+  // into its Stays tab; the portfolio inbox remains the multi-property
+  // fallback.
+  escalationsHref?: string;
 }) {
   const items = [
     {
@@ -72,7 +78,7 @@ export function AttentionQueue({
     {
       n: openEscalations,
       label: openEscalations === 1 ? 'guest question needs an answer' : 'guest questions need answers',
-      href: '/dashboard/escalations',
+      href: escalationsHref,
       icon: MessageCircle,
     },
     {
@@ -253,7 +259,7 @@ export function ActivityTrendCard({ trend }: { trend: ActivityTrend }) {
                 </linearGradient>
               </defs>
               {/* baseline */}
-              <line x1="0" y1={H} x2={W} y2={H} stroke="var(--border)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+              <line x1={0} y1={H} x2={W} y2={H} stroke="var(--border)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
               {days.map((d, i) => {
                 const x = i * (barW + gap);
                 const h = d.questions > 0 ? Math.max((d.questions / scale) * (H - 4), 1.5) : 0;
