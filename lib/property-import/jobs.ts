@@ -7,6 +7,7 @@ import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { slugWithSuffix } from '@/lib/slug';
 import { IMPORT_ATTESTATION_TEXT } from './attestation';
 import { buildListingDraft, detectListingProvider, type ImportedListingDraft } from './extract';
+import { jobErrorReason } from './confidence';
 
 type Client = SupabaseClient<Database>;
 type ImportJobStatus = Database['public']['Enums']['property_import_job_status'];
@@ -57,9 +58,24 @@ export async function runPropertyImportJob(client: Client, input: { jobId: strin
     const page = await fetchUrlContent(input.sourceUrl);
     await client.from('property_import_artifacts').insert({ job_id: input.jobId, kind: 'source_capture', payload: { title: page.title, sourceUrl: page.sourceUrl, text: page.text.slice(0, 100000) } as Json });
 
-    await transition(client, input.jobId, 'extracting', 'Organizing details into review groups', 45);
+    await transition(client, input.jobId, 'extracting', 'Pulling out the details worth keeping', 45);
     const draft = buildListingDraft(page, input.sourceUrl);
     await client.from('property_import_artifacts').insert({ job_id: input.jobId, kind: 'listing_draft', payload: draft as unknown as Json });
+
+    // The confidence gate (§1). A page that yielded nothing trustworthy must not
+    // produce a property row: an empty draft named after a cookie banner is worse
+    // than no draft, because the host then has to find and delete it. Failing here
+    // leaves the host on the intake screen with the three manual paths.
+    if (!draft.assessment.usable) {
+      await client.from('property_import_jobs').update({
+        status: 'failed',
+        stage_detail: draft.assessment.reason,
+        error_reason: jobErrorReason(draft.assessment.verdict),
+        error_message: draft.assessment.reason,
+        updated_at: new Date().toISOString(),
+      }).eq('id', input.jobId);
+      return { ok: false as const, error: draft.assessment.reason, verdict: draft.assessment.verdict };
+    }
 
     await transition(client, input.jobId, 'drafting', 'Creating your draft property', 70);
     const { data: property, error: propertyError } = await client.from('properties').insert({
@@ -73,6 +89,8 @@ export async function runPropertyImportJob(client: Client, input: { jobId: strin
     if (settingsError) throw settingsError;
 
     await transition(client, input.jobId, 'awaiting_review', 'Review the imported details before saving them to the Brain', 100, { property_id: property.id });
+    // Nothing above wrote a Brain fact. Every extracted field still needs the
+    // host's explicit accept on the review screen (Boundary 4).
     return { ok: true as const, propertyId: property.id, draft };
   } catch (error) {
     const failure = safeError(error);
@@ -88,5 +106,12 @@ export function asListingDraft(payload: Json): ImportedListingDraft | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const candidate = payload as unknown as Partial<ImportedListingDraft>;
   if (typeof candidate.listingTitle !== 'string' || !Array.isArray(candidate.reviewGroups) || typeof candidate.sourceUrl !== 'string') return null;
-  return candidate as ImportedListingDraft;
+  // Artifacts written before structured extraction existed have no `fields` and no
+  // `assessment`. They stay readable: an old job's review page shows its groups
+  // and simply offers no structured rows, rather than 404ing.
+  return {
+    ...candidate,
+    fields: Array.isArray(candidate.fields) ? candidate.fields : [],
+    assessment: candidate.assessment ?? { verdict: 'usable', usable: true, confidence: 0, anchors: 0, fieldCount: 0, reason: 'Imported before structured extraction was added.' },
+  } as ImportedListingDraft;
 }
