@@ -1485,3 +1485,291 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   .profile-nav { display: none !important; }
   .profile-shell { display: block !important; }
 }
+
+/* ============================================================
+   Stays workspace + guest chat (Properties UX overhaul, #59)
+   The merged Stays tab: selectable stay list + per-stay detail pane with
+   portal access and the conversation. All state lives in classes so hover,
+   selection, and escalation styling survive a redesign untouched.
+   ============================================================ */
+
+/* Two-pane shell: stay list left, detail right; one column on phones. */
+.stays-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-section);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .stays-shell.has-selection { grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); }
+}
+
+.stay-list { display: flex; flex-direction: column; gap: .6rem; }
+
+/* Selectable stay card. Selection is a teal rail + border, not a background
+   flood, so the status badge inside keeps its own contrast. */
+.stay-card {
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  cursor: pointer;
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+.stay-card:hover { border-color: var(--border-strong); }
+.stay-card.is-selected {
+  border-color: var(--teal-deep);
+  box-shadow: inset 3px 0 0 0 var(--teal), var(--shadow-md);
+}
+.stay-card:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* Monospace display treatment for portal codes and link URLs — the artifact a
+   host copies, so it must read as a value, not a sentence. */
+.portal-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  letter-spacing: .25rem;
+  font-weight: 700;
+}
+.portal-code-box {
+  padding: .6rem .8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--teal-deep);
+  background: var(--bg-2);
+}
+.portal-url {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: .72rem;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* Tappable badge-link (overview "needs attention" chips). 44px touch target. */
+.badge-lg {
+  min-height: 2.75rem;
+  padding-inline: .65rem;
+  text-decoration: none;
+}
+
+/* Referenced by chat panels before this pass but never defined — the buttons
+   rendered with browser-default styling. Self-contained on purpose: it is
+   used without the .btn base class. */
+.btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  font-family: var(--font-body); font-weight: 600; font-size: .85rem;
+  padding: .5rem 1rem; border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text);
+  cursor: pointer; transition: border-color var(--tr), color var(--tr), background var(--tr);
+}
+.btn-secondary:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+.btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---- Guest chat -------------------------------------------------------- */
+
+.chat-shell { display: grid; gap: 1rem; align-items: start; }
+@media (min-width: 900px) {
+  .chat-shell.has-thread { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.chat-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem var(--pad-card);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Escalation state lives on the thread header as a banner, not buried as a
+   badge inside the message stream. */
+.chat-banner-escalation {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .55rem var(--pad-card);
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--coral);
+  background: color-mix(in srgb, var(--coral) 8%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--coral) 35%, var(--border));
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 560px;
+  padding: var(--pad-card);
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+}
+
+/* Message bubbles: host right/teal, guest + AI left/neutral, escalation
+   coral-tinted regardless of author. Radius asymmetry carries the direction. */
+.bubble-row { display: flex; margin-bottom: .75rem; }
+.bubble-row-host { justify-content: flex-end; }
+.bubble {
+  max-width: 78%;
+  padding: .75rem .85rem;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  line-height: 1.5;
+}
+.bubble-host {
+  border-bottom-right-radius: 6px;
+  background: color-mix(in srgb, var(--teal) 12%, var(--surface));
+}
+.bubble-guest { border-bottom-left-radius: 6px; }
+.bubble-escalation {
+  background: color-mix(in srgb, var(--coral) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--coral) 45%, var(--border));
+}
+.bubble-flag {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .72rem;
+  font-weight: 800;
+  margin-bottom: .3rem;
+}
+.bubble-flag-escalation { color: var(--coral); }
+.bubble-flag-announcement { color: var(--teal); }
+.bubble-meta {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  margin-top: .4rem;
+  font-size: .72rem;
+  opacity: .75;
+}
+.bubble-reply {
+  border: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Thread list */
+.chat-thread-list { display: grid; gap: .55rem; padding: .75rem; }
+.chat-thread-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: .8rem;
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color var(--tr), background var(--tr), box-shadow var(--tr);
+}
+.chat-thread-item:hover { border-color: var(--border-strong); }
+.chat-thread-item.is-active {
+  border-color: color-mix(in srgb, var(--teal) 45%, var(--border));
+  background: color-mix(in srgb, var(--teal) 10%, var(--surface));
+  box-shadow: var(--shadow-md);
+}
+.chat-thread-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--iris) 14%, var(--surface));
+  color: var(--iris);
+  font-weight: 800;
+}
+
+/* Composer pinned to the panel bottom; resolve/learn toggles ride above it as
+   chips so the choice is visible before sending, not hidden under the quote. */
+.chat-composer {
+  display: flex;
+  gap: .55rem;
+  padding: .85rem var(--pad-card);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.chat-composer textarea { flex: 1; resize: vertical; }
+.chat-composer-send {
+  align-self: flex-end;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  cursor: pointer;
+  transition: background var(--tr), transform var(--tr);
+}
+.chat-composer-send:hover:not(:disabled) { background: var(--btn-primary-bg-hover); transform: translateY(-1px); }
+.chat-composer-send:disabled { opacity: .55; cursor: not-allowed; }
+
+.chat-reply-quote {
+  margin: 0 var(--pad-card) .85rem;
+  padding: .8rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--iris) 8%, var(--surface));
+  border: 1px solid var(--border);
+}
+
+.chat-announce {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--teal) 7%, var(--surface));
+}
+
+.chat-empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  text-align: center;
+  background: var(--surface);
+}
+
+.chip-row { display: flex; gap: .45rem; flex-wrap: wrap; padding: 0 var(--pad-card) .75rem; }
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .35rem .7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--tr), color var(--tr), background var(--tr);
+}
+.chip-toggle:hover { border-color: var(--teal); color: var(--text); }
+.chip-toggle.is-on {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 10%, var(--surface));
+}
+.chip-toggle.is-on.chip-coral {
+  border-color: var(--coral);
+  color: var(--coral);
+  background: color-mix(in srgb, var(--coral) 10%, var(--surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stay-card, .chat-thread-item, .chip-toggle, .chat-composer-send { transition: none; }
+  .chat-composer-send:hover:not(:disabled) { transform: none; }
+}
