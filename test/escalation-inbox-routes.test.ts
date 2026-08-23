@@ -11,8 +11,8 @@ describe('escalation inbox route capability gates', () => {
     expect(page).toContain('access.can.receiveEscalations');
   });
 
-  it('redirects the legacy property escalations route into Guest Chat', () => {
+  it('redirects the legacy property escalations route into the Stays tab', () => {
     const page = read('app/dashboard/properties/[id]/escalations/page.tsx');
-    expect(page).toContain('redirect(`/dashboard/properties/${propertyId}/guest-chat`)');
+    expect(page).toContain('redirect(`/dashboard/properties/${propertyId}/stays`)');
   });
 });

@@ -13,25 +13,24 @@ describe('property workspace navigation', () => {
     expect(propertySections(propertyId, false)).toEqual([
       { key: 'overview', label: 'Overview', href: base },
       { key: 'stays', label: 'Stays', href: `${base}/stays` },
-      { key: 'guest-chat', label: 'Guest Chat', href: `${base}/guest-chat` },
       { key: 'local', label: 'Local Recs', href: `${base}/local` },
     ]);
 
     expect(propertySections(propertyId, true)).toEqual([
       { key: 'overview', label: 'Overview', href: base },
       { key: 'stays', label: 'Stays', href: `${base}/stays` },
-      { key: 'guest-chat', label: 'Guest Chat', href: `${base}/guest-chat` },
       { key: 'local', label: 'Local Recs', href: `${base}/local` },
       { key: 'extras', label: 'Extras', href: `${base}/extras` },
       { key: 'settings', label: 'Configuration', href: `${base}/settings` },
     ]);
   });
 
-  it('resolves breadcrumb labels, keeping legacy Local manager routes within Local Recs', () => {
+  it('resolves breadcrumb labels, keeping legacy routes within their merged sections', () => {
     expect(propertySectionLabel(base, propertyId)).toBe('Overview');
     expect(propertySectionLabel(`${base}/stays`, propertyId)).toBe('Stays');
-    expect(propertySectionLabel(`${base}/guest-chat`, propertyId)).toBe('Guest Chat');
-    expect(propertySectionLabel(`${base}/escalations`, propertyId)).toBe('Guest Chat');
+    // Guest chat and escalations merged into Stays; their legacy paths resolve there.
+    expect(propertySectionLabel(`${base}/guest-chat`, propertyId)).toBe('Stays');
+    expect(propertySectionLabel(`${base}/escalations`, propertyId)).toBe('Stays');
     expect(propertySectionLabel(`${base}/nearby`, propertyId)).toBe('Local Recs');
     expect(propertySectionLabel(`${base}/recommendations?view=all`, propertyId)).toBe('Local Recs');
     expect(propertySectionLabel(`${base}/brain`, propertyId)).toBe('Brain');

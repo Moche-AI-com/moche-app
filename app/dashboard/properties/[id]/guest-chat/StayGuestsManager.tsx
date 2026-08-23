@@ -3,14 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Copy, KeyRound, Loader2, Plus, UserRound } from 'lucide-react';
 
-type Stay = {
-  id: string;
-  guest_display_name: string;
-  check_in: string;
-  check_out: string;
-  status: string;
-};
-
 type StayGuest = {
   id: string;
   stayId: string;
@@ -24,14 +16,9 @@ type StayGuest = {
   code?: string;
 };
 
-function dateLabel(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-export function StayGuestsManager({ propertyId }: { propertyId: string }) {
-  const [stays, setStays] = useState<Stay[]>([]);
-  const [stayId, setStayId] = useState('');
+// Guest IDs for one stay. The parent (merged Stays tab) owns stay selection, so
+// this panel takes a stayId directly instead of keeping its own stay dropdown.
+export function StayGuestsManager({ propertyId, stayId }: { propertyId: string; stayId: string }) {
   const [guests, setGuests] = useState<StayGuest[]>([]);
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
@@ -41,28 +28,24 @@ export function StayGuestsManager({ propertyId }: { propertyId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch(`/api/host/properties/${propertyId}/stays`, { cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load_failed'))))
-      .then((json) => {
-        const rows = Array.isArray(json.stays) ? json.stays : [];
-        setStays(rows);
-        setStayId(rows[0]?.id ?? '');
-      })
-      .catch(() => setError('Could not load stays.'))
-      .finally(() => setLoading(false));
-  }, [propertyId]);
-
-  const loadGuests = useCallback(async (selectedStayId: string) => {
-    if (!selectedStayId) return;
-    const res = await fetch(`/api/host/properties/${propertyId}/stays/${selectedStayId}/guests`, { cache: 'no-store' });
+  const loadGuests = useCallback(async () => {
+    if (!stayId) return;
+    setLoading(true);
+    const res = await fetch(`/api/host/properties/${propertyId}/stays/${stayId}/guests`, { cache: 'no-store' });
     const json = await res.json().catch(() => ({}));
-    if (res.ok) setGuests(Array.isArray(json.guests) ? json.guests : []);
-  }, [propertyId]);
+    if (res.ok) {
+      setGuests(Array.isArray(json.guests) ? json.guests : []);
+    } else {
+      setError(json.error || 'Could not load guest IDs.');
+    }
+    setLoading(false);
+  }, [propertyId, stayId]);
 
   useEffect(() => {
-    void loadGuests(stayId);
-  }, [stayId, loadGuests]);
+    setCreatedCode(null);
+    setError(null);
+    void loadGuests();
+  }, [loadGuests]);
 
   async function createGuest() {
     if (!stayId || busy) return;
@@ -88,14 +71,14 @@ export function StayGuestsManager({ propertyId }: { propertyId: string }) {
       setDisplayName('');
       setPhone('');
       setCode('');
-      await loadGuests(stayId);
+      await loadGuests();
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <details style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 16, padding: '.9rem', background: 'rgba(255,255,255,.035)' }}>
+    <details open style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 16, padding: '.9rem', background: 'rgba(255,255,255,.035)' }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
         <KeyRound size={15} aria-hidden style={{ verticalAlign: '-2px', marginRight: '.35rem' }} />
         Guest IDs for this stay
@@ -103,22 +86,9 @@ export function StayGuestsManager({ propertyId }: { propertyId: string }) {
 
       <div style={{ marginTop: '.9rem', display: 'grid', gap: '.8rem' }}>
         {loading ? (
-          <p className="muted"><Loader2 size={15} className="spin" aria-hidden /> Loading stays…</p>
-        ) : stays.length === 0 ? (
-          <p className="muted">No active or upcoming stays are available.</p>
+          <p className="muted"><Loader2 size={15} className="spin" aria-hidden /> Loading guest IDs…</p>
         ) : (
           <>
-            <label>
-              Stay
-              <select value={stayId} onChange={(event) => setStayId(event.target.value)} style={{ width: '100%' }}>
-                {stays.map((stay) => (
-                  <option key={stay.id} value={stay.id}>
-                    {stay.guest_display_name} · {dateLabel(stay.check_in)}–{dateLabel(stay.check_out)} · {stay.status}
-                  </option>
-                ))}
-              </select>
-            </label>
-
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '.6rem' }}>
               <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Guest name (optional)" />
               <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone (optional)" type="tel" />
@@ -142,7 +112,7 @@ export function StayGuestsManager({ propertyId }: { propertyId: string }) {
 
             <div style={{ display: 'grid', gap: '.45rem' }}>
               {guests.length === 0 ? (
-                <p className="muted">No guest IDs yet for the selected stay.</p>
+                <p className="muted">No guest IDs yet for this stay.</p>
               ) : (
                 guests.map((guest) => (
                   <div key={guest.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '.75rem', border: '1px solid rgba(255,255,255,.08)', borderRadius: 12, padding: '.65rem' }}>

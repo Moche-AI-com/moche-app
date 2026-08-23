@@ -2,6 +2,7 @@ import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
 import { StaysManager } from './StaysManager';
+import { ChatPermissionsPanel } from '../guest-chat/ChatPermissionsPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export default async function StaysPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: { view?: string | string[] };
+  searchParams?: { view?: string | string[]; stay?: string | string[] };
 }) {
   const view = parseLifecycleView(searchParams?.view);
   const access = await requirePropertyAccess((await params).id);
@@ -41,6 +42,13 @@ export default async function StaysPage({
   ]);
 
   const canManage = access.can.replyGuests || access.isOwner;
+  // Same permission shape the guest-chat page used for announcements and
+  // Brain-learning; the chat surface now lives inside this tab.
+  const canAnnounce = access.isOwner || (access.member as any)?.can_send_announcements === true;
+  const canLearn = access.isOwner || (access.member as any)?.can_publish_guest_answers === true;
+  const canManagePermissions = access.isOwner || access.can.editProperty;
+  // Deep links (notifications, legacy /guest-chat redirect) arrive as ?stay=<id>.
+  const initialStayId = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
 
   return (
     <div>
@@ -48,7 +56,7 @@ export default async function StaysPage({
       <p className="muted" style={{ fontSize: '.9rem', margin: '0 0 1.25rem' }}>
         {view === 'past'
           ? 'Completed and revoked stays. Their guest links no longer work.'
-          : 'Upcoming and in-progress stays. These guests can reach the concierge.'}
+          : 'Upcoming and in-progress stays. Select a stay to manage its guest access and conversation.'}
       </p>
 
       <LifecycleToggle
@@ -62,6 +70,9 @@ export default async function StaysPage({
       <StaysManager
         propertyId={(await params).id}
         canManage={canManage}
+        canAnnounce={canAnnounce}
+        canLearn={canLearn}
+        initialStayId={initialStayId}
         stays={(stays ?? []).map((s) => ({
           id: s.id,
           guestDisplayName: s.guest_display_name,
@@ -73,6 +84,12 @@ export default async function StaysPage({
           bookingReference: s.booking_reference,
         }))}
       />
+
+      {canManagePermissions ? (
+        <div style={{ marginTop: '1.25rem' }}>
+          <ChatPermissionsPanel propertyId={(await params).id} />
+        </div>
+      ) : null}
     </div>
   );
 }

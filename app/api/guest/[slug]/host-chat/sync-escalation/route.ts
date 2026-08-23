@@ -68,7 +68,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       title: `AI escalation at ${(property as any).display_name}`,
       body: parsed.data.question,
       propertyId: session.propertyId,
-      link: `/dashboard/properties/${session.propertyId}/guest-chat?stay=${session.stayId}`,
+      // Deep link into the merged Stays tab (guest chat lives there now).
+      link: `/dashboard/properties/${session.propertyId}/stays?stay=${session.stayId}`,
     }).catch(() => undefined);
   }
 

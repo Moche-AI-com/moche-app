@@ -176,7 +176,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     title: `New guest message at ${property.display_name}`,
     body: `${session.guestDisplayName} sent a message in Host Chat.`,
     propertyId: property.id,
-    link: `/dashboard/properties/${property.id}/guest-chat?stay=${session.stayId}`,
+    // Deep link into the merged Stays tab (guest chat lives there now).
+    link: `/dashboard/properties/${property.id}/stays?stay=${session.stayId}`,
   }).catch(() => undefined);
 
   return NextResponse.json({ ok: true, conversationId: conversation.id, message: mapMessage(inserted) });

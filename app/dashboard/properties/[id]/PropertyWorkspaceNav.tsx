@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-export type PropertySectionKey = 'overview' | 'stays' | 'guest-chat' | 'local' | 'extras' | 'settings';
+export type PropertySectionKey = 'overview' | 'stays' | 'local' | 'extras' | 'settings';
 
 export interface PropertySection {
   key: PropertySectionKey;
@@ -14,7 +14,6 @@ export interface PropertySection {
 const SECTION_LABELS: Record<PropertySectionKey, string> = {
   overview: 'Overview',
   stays: 'Stays',
-  'guest-chat': 'Guest Chat',
   local: 'Local Recs',
   extras: 'Extras',
   settings: 'Configuration',
@@ -26,7 +25,6 @@ export function propertySections(propertyId: string, canEditProperty: boolean): 
   const sections: PropertySection[] = [
     { key: 'overview', label: SECTION_LABELS.overview, href: base },
     { key: 'stays', label: SECTION_LABELS.stays, href: `${base}/stays` },
-    { key: 'guest-chat', label: SECTION_LABELS['guest-chat'], href: `${base}/guest-chat` },
     { key: 'local', label: SECTION_LABELS.local, href: `${base}/local` },
   ];
 
@@ -48,8 +46,9 @@ export function propertySectionLabel(pathname: string, propertyId: string): stri
   const path = cleanPath(pathname);
   const base = `/dashboard/properties/${propertyId}`;
   if (path === base) return SECTION_LABELS.overview;
-  if (path.startsWith(`${base}/stays`)) return SECTION_LABELS.stays;
-  if (path.startsWith(`${base}/guest-chat`) || path.startsWith(`${base}/escalations`)) return SECTION_LABELS['guest-chat'];
+  // Guest chat and the legacy escalations route both merged into the Stays tab;
+  // their old paths still resolve to the Stays label while the redirects stand.
+  if (path.startsWith(`${base}/stays`) || path.startsWith(`${base}/guest-chat`) || path.startsWith(`${base}/escalations`)) return SECTION_LABELS.stays;
   if (
     path.startsWith(`${base}/local`) ||
     path.startsWith(`${base}/nearby`) ||
