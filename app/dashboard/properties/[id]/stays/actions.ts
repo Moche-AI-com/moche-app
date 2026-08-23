@@ -2,9 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireSession, getPropertyAccess } from '@/lib/auth/guards';
 import { stayCreateSchema } from '@/lib/validation';
-import { hashContact } from '@/lib/crypto';
+import { hashContact, generateSessionToken, hashSessionToken, generateVisitCode, hashVisitCode } from '@/lib/crypto';
+import { publicEnv } from '@/lib/env';
+import { DEFAULT_GRACE_PERIOD_HOURS, STAY_LINK_DEFAULT_MAX_REDEMPTIONS, VISIT_CODE_GRACE_PERIOD_HOURS } from '@/lib/constants';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 
@@ -12,6 +15,14 @@ export interface StayActionState {
   error?: string;
   ok?: boolean;
   stayId?: string;
+  /** Raw 4-digit visit code — returned exactly once, never stored raw. */
+  portalCode?: string;
+  /** Full portal URL carrying the one-time token — returned exactly once. */
+  portalUrl?: string;
+  /** When the visit code stops working (check-out + grace). */
+  portalCodeExpiresAt?: string;
+  /** Set when the stay was created but its portal link/code could not be minted. */
+  portalError?: string;
 }
 
 // Host creates a stay. The guest's raw contact is hashed immediately and never stored raw;
@@ -75,6 +86,68 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
     log.warn('stay_create_failed', { propertyId, error: error?.message });
     return { error: 'Could not create the stay.' };
   }
+  const stayId = (stay as { id: string }).id;
+
+  // Ticket 3: creating a stay auto-mints its portal link + 4-digit visit code in
+  // the same action — no separate generate step. Hash-only storage is preserved:
+  // the raw token and code are returned exactly once and never persisted. Expiry
+  // math matches the manual mint route: the link/URL lives until check-out +
+  // DEFAULT_GRACE_PERIOD_HOURS; the code fails closed at check-out +
+  // VISIT_CODE_GRACE_PERIOD_HOURS.
+  let portalCode: string | undefined;
+  let portalUrl: string | undefined;
+  let portalCodeExpiresAt: string | undefined;
+  let portalError: string | undefined;
+  try {
+    const propertySlug = (access.property as { slug?: string | null }).slug;
+    if (!propertySlug) throw new Error('property slug unavailable');
+    const admin = createAdminClient();
+    const token = generateSessionToken();
+    const linkExpiresAt = new Date(checkOut.getTime() + DEFAULT_GRACE_PERIOD_HOURS * 60 * 60 * 1000).toISOString();
+    const { data: link, error: linkError } = await admin
+      .from('guest_access_links')
+      .insert({
+        property_id: propertyId,
+        stay_id: stayId,
+        token_hash: hashSessionToken(token),
+        kind: 'stay',
+        expires_at: linkExpiresAt,
+        max_redemptions: STAY_LINK_DEFAULT_MAX_REDEMPTIONS,
+        require_otp: false,
+        created_by: ctx.user.id,
+      } as never)
+      .select('id')
+      .single();
+    if (linkError || !link) {
+      throw new Error(linkError?.message ?? 'link insert failed');
+    }
+    const linkId = (link as { id: string }).id;
+    const code = generateVisitCode();
+    const codeExpiresAt = new Date(checkOut.getTime() + VISIT_CODE_GRACE_PERIOD_HOURS * 60 * 60 * 1000).toISOString();
+    const { error: codeError } = await admin
+      .from('guest_access_links')
+      .update({ code_hash: hashVisitCode(code, linkId), code_expires_at: codeExpiresAt } as never)
+      .eq('id', linkId);
+    if (codeError) {
+      throw new Error(codeError.message);
+    }
+    await audit(admin, {
+      action: 'guest_link.code_issued',
+      actorProfileId: ctx.user.id,
+      hostAccountId: access.property.host_account_id,
+      propertyId,
+      targetType: 'guest_access_link',
+      targetId: linkId,
+    });
+    portalCode = code;
+    portalUrl = `${publicEnv.appUrl.replace(/\/$/, '')}/stay/${propertySlug}?k=${token}`;
+    portalCodeExpiresAt = codeExpiresAt;
+  } catch (mintError) {
+    // The stay itself is already durable — never fail its creation because the
+    // portal mint failed. The host can mint from the stay's Guest access pane.
+    log.warn('stay_portal_automint_failed', { propertyId, stayId, error: mintError instanceof Error ? mintError.message : String(mintError) });
+    portalError = 'Stay created, but the portal link could not be minted automatically — use the Guest access panel to create it.';
+  }
 
   await audit(supabase, {
     action: 'stay.created',
@@ -82,12 +155,10 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
     hostAccountId: access.property.host_account_id,
     propertyId,
     targetType: 'stay',
-    targetId: (stay as { id: string }).id,
+    targetId: stayId,
   });
   revalidatePath(`/dashboard/properties/${propertyId}/stays`);
-  // Return the new stay id so the client can auto-provision its guest portal
-  // (link + visit code) in the same flow — no separate manual minting step.
-  return { ok: true, stayId: (stay as { id: string }).id };
+  return { ok: true, stayId, portalCode, portalUrl, portalCodeExpiresAt, portalError };
 }
 
 // Revoke a stay's access immediately (revokes any active guest sessions too).

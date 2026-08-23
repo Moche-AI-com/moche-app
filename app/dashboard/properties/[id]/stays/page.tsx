@@ -1,9 +1,7 @@
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
-import { listPropertySessions } from '@/lib/guest/sessions';
 import { StaysManager } from './StaysManager';
-import { SessionsPanel } from '../SessionsPanel';
 import { ChatPermissionsPanel } from '../guest-chat/ChatPermissionsPanel';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +41,31 @@ export default async function StaysPage({
       .eq('lifecycle_status', 'archived'),
   ]);
 
+  // Ticket 3: portal visit-code state per stay, so each row can permanently show
+  // the masked code + status + expiry. The raw code is hash-only and never read
+  // back; the latest coded link per stay wins.
+  const stayIds = (stays ?? []).map((s) => s.id as string);
+  const { data: portalLinks } = stayIds.length
+    ? await supabase
+        .from('guest_access_links')
+        .select('id, stay_id, code_expires_at, code_revoked_at, created_at')
+        .in('stay_id', stayIds)
+        .eq('kind', 'stay')
+        .not('code_hash', 'is', null)
+        .order('created_at', { ascending: false })
+    : { data: [] as { id: string; stay_id: string; code_expires_at: string | null; code_revoked_at: string | null; created_at: string }[] };
+  const portalByStayId = new Map<string, { linkId: string; codeExpiresAt: string | null; codeRevokedAt: string | null }>();
+  for (const link of portalLinks ?? []) {
+    const sid = link.stay_id as string;
+    if (!portalByStayId.has(sid)) {
+      portalByStayId.set(sid, {
+        linkId: link.id as string,
+        codeExpiresAt: (link.code_expires_at as string | null) ?? null,
+        codeRevokedAt: (link.code_revoked_at as string | null) ?? null,
+      });
+    }
+  }
+
   const canManage = access.can.replyGuests || access.isOwner;
   // Same permission shape the guest-chat page used for announcements and
   // Brain-learning; the chat surface now lives inside this tab.
@@ -51,10 +74,6 @@ export default async function StaysPage({
   const canManagePermissions = access.isOwner || access.can.editProperty;
   // Deep links (notifications, legacy /guest-chat redirect) arrive as ?stay=<id>.
   const initialStayId = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
-
-  // Active guest sessions move here from the property overview: session hygiene
-  // (lost devices, early checkouts) is part of running stays, not an overview widget.
-  const sessions = canManage ? await listPropertySessions((await params).id, true) : [];
 
   return (
     <div>
@@ -88,10 +107,9 @@ export default async function StaysPage({
           checkOut: s.check_out,
           status: s.status,
           bookingReference: s.booking_reference,
+          portal: portalByStayId.get(s.id) ?? null,
         }))}
       />
-
-      {canManage ? <SessionsPanel propertyId={(await params).id} initialSessions={sessions} /> : null}
 
       {canManagePermissions ? (
         <div style={{ marginTop: '1.25rem' }}>
