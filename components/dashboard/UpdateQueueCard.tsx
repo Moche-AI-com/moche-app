@@ -3,21 +3,21 @@
 import Link from 'next/link';
 import { ShieldCheck, ArrowUpRight, Sparkles } from 'lucide-react';
 import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
-import { knowledgeQueueHref, primaryQueueHref } from '@/lib/dashboard/knowledge-queue-link';
+import { AI_UPDATES_LABEL, primaryAiUpdatesHref, propertyAiUpdatesHref } from '@/lib/brain/ai-updates';
 import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
 
-// Dashboard tile for the Knowledge Queue (backlog P2-08).
+// Dashboard tile for AI Updates (backlog P2-08).
 //
-// Named "Knowledge Queue", never "reviews": in short-term-rental language a
-// "review" is what a guest writes about the host after checkout. Calling an
-// internal approval list "Reviews" made hosts open it expecting guest ratings.
-// The route stays /dashboard/updates so existing links keep working.
+// Never "reviews": in short-term-rental language a "review" is what a guest
+// writes about the host after checkout, and hosts opened a tab called Reviews
+// expecting guest ratings. See lib/brain/ai-updates.ts for the naming decision.
 //
 // Deliberately a thin summary: count, oldest-pending age, and per-property
-// breakdown. The decision itself lives on /dashboard/updates, because approving
-// AI-drafted text requires actually reading it, and a card on a busy overview
-// page invites approving without reading — which is the exact failure mode the
-// queue exists to prevent.
+// breakdown. The decision itself lives in each property's AI Updates tab,
+// because approving AI-drafted text requires actually reading it, and a card on
+// a busy overview page invites approving without reading — which is the exact
+// failure mode the queue exists to prevent. Every link here therefore lands on
+// the property that owns the suggestion, not on an account-level list.
 export interface UpdateQueueCardRow {
   propertyId: string;
   propertyName: string;
@@ -44,14 +44,14 @@ export function UpdateQueueCard({
   const { isCollapsed, toggle } = useCollapsedCards();
   const collapsed = isCollapsed('update-queue');
   const hasPending = pending > 0;
-  const primaryHref = primaryQueueHref(rows, scopedPropertyId);
+  const primaryHref = primaryAiUpdatesHref(rows, scopedPropertyId);
 
   return (
     <section className="card dash-panel rise-in" data-testid="update-queue-card">
       <div className="dash-panel-head">
         <div>
           <h2 className="dash-section-title">
-            <ShieldCheck size={16} aria-hidden /> Knowledge awaiting review
+            <ShieldCheck size={16} aria-hidden /> {AI_UPDATES_LABEL}
           </h2>
           <p className="dash-section-sub">Draft knowledge waiting for your approval.</p>
         </div>
@@ -65,7 +65,7 @@ export function UpdateQueueCard({
             collapsed={collapsed}
             onToggle={() => toggle('update-queue')}
             panelId="update-queue-body"
-            label="Knowledge awaiting review"
+            label={AI_UPDATES_LABEL}
           />
         </div>
       </div>
@@ -105,7 +105,7 @@ export function UpdateQueueCard({
                   .map((r) => (
                     <li key={r.propertyId} className="dash-topic" data-testid="update-queue-row">
                       <Link
-                        href={knowledgeQueueHref({ propertyId: r.propertyId })}
+                        href={propertyAiUpdatesHref(r.propertyId)}
                         className="dash-topic-row"
                         style={{ textDecoration: 'none', color: 'inherit' }}
                       >
@@ -121,7 +121,7 @@ export function UpdateQueueCard({
               </ul>
             )}
             <Link href={primaryHref} className="dash-panel-link">
-              Open Knowledge Queue <ArrowUpRight size={14} aria-hidden />
+              Review {AI_UPDATES_LABEL} <ArrowUpRight size={14} aria-hidden />
             </Link>
           </>
         ) : (

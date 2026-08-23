@@ -108,3 +108,23 @@ CREATE POLICY brain_write ON public.brain_items AS PERMISSIVE FOR ALL
   WITH CHECK (can_edit_property(property_id));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.brain_items TO authenticated;
+
+-- host_accounts and profiles, stubbed only so
+-- supabase-migrations-PROPOSED-UPDATES.sql can be applied against real Postgres.
+-- Its RLS anchors on property_id, not on either of these — both exist purely to
+-- satisfy the foreign keys, so only the referenced columns are recreated.
+CREATE TABLE IF NOT EXISTS public.host_accounts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+
+-- The AI Updates tab reads and decides proposals as the *caller*, under RLS, so
+-- the caller needs the same table-level grants production gives it. The migration
+-- deliberately grants no INSERT or DELETE to authenticated (see its header note
+-- 3), and section F asserts that absence rather than trusting it.
+DO $$ BEGIN
+  EXECUTE 'GRANT SELECT, UPDATE ON public.proposed_updates TO authenticated';
+EXCEPTION WHEN undefined_table THEN NULL; END $$;

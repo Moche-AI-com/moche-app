@@ -17,10 +17,16 @@ export default async function PropertyWorkspaceLayout({
 }) {
   const { property, can } = await requirePropertyAccess((await params).id);
   const supabase = createClient();
-  const { data: items } = await supabase
-    .from('brain_items')
-    .select('category, status, deleted_at, visibility')
-    .eq('property_id', property.id);
+  // Brain health and the AI Updates badge are both header-level facts, so they
+  // load together in the layout rather than each page repeating the query.
+  const [{ data: items }, { count: pendingUpdates }] = await Promise.all([
+    supabase.from('brain_items').select('category, status, deleted_at, visibility').eq('property_id', property.id),
+    supabase
+      .from('proposed_updates')
+      .select('id', { count: 'exact', head: true })
+      .eq('property_id', property.id)
+      .eq('status', 'pending'),
+  ]);
   const health = computeBrainHealth(items ?? []);
   const location = [property.city, property.region, property.country].filter(Boolean).join(', ') || 'No location set';
 
@@ -84,7 +90,12 @@ export default async function PropertyWorkspaceLayout({
         className="property-workspace-main"
         style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(0, 1fr)', alignItems: 'start', columnGap: '1.5rem', rowGap: '.85rem' }}
       >
-        <PropertyWorkspaceNav propertyId={property.id} propertyName={property.display_name} canEditProperty={can.editProperty} />
+        <PropertyWorkspaceNav
+          propertyId={property.id}
+          propertyName={property.display_name}
+          canEditProperty={can.editProperty}
+          pendingUpdates={pendingUpdates ?? 0}
+        />
         <div style={{ minWidth: 0 }}>{children}</div>
       </div>
     </section>
