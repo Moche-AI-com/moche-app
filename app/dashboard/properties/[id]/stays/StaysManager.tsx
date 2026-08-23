@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useFormState } from 'react-dom';
 import { createStayAction, revokeStayAction, type StayActionState } from './actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
+import { GuestChatInbox } from '../guest-chat/GuestChatInbox';
+import { StayGuestsManager } from '../guest-chat/StayGuestsManager';
 
 interface Stay {
   id: string;
@@ -18,8 +20,37 @@ interface Stay {
 
 const STATUS_BADGE: Record<string, string> = { active: 'badge-teal', upcoming: 'badge', revoked: 'badge-coral', completed: '' };
 
-export function StaysManager({ propertyId, canManage, stays }: { propertyId: string; canManage: boolean; stays: Stay[] }) {
+export function StaysManager({
+  propertyId,
+  canManage,
+  canAnnounce,
+  canLearn,
+  initialStayId,
+  stays,
+}: {
+  propertyId: string;
+  canManage: boolean;
+  canAnnounce: boolean;
+  canLearn: boolean;
+  initialStayId: string | null;
+  stays: Stay[];
+}) {
   const [showForm, setShowForm] = useState(false);
+  // Selection drives the detail pane: a stay id, 'all' for the property-wide
+  // inbox, or null for list-only. Deep links arrive via ?stay=<id>.
+  const [selected, setSelected] = useState<string | null>(initialStayId);
+  const selectedStay = stays.find((s) => s.id === selected) ?? null;
+
+  function toggle(id: string) {
+    setSelected((current) => (current === id ? null : id));
+  }
+
+  function selectOnKey(event: React.KeyboardEvent, id: string) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggle(id);
+    }
+  }
 
   return (
     <div>
@@ -35,31 +66,87 @@ export function StaysManager({ propertyId, canManage, stays }: { propertyId: str
           <p className="muted">No stays yet. Add a booking so the guest can verify and use the concierge.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
-          {stays.map((s) => (
-            <div key={s.id} className="card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }} data-testid={`card-stay-${s.id}`}>
-              <div>
-                <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <strong>{s.guestDisplayName}</strong>
-                  <span className={`badge ${STATUS_BADGE[s.status] ?? ''}`}>{s.status}</span>
-                </div>
-                <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
-                  {fmt(s.checkIn)} → {fmt(s.checkOut)} · {s.contactType} ····{s.contactLast4 ?? '????'}
-                  {s.bookingReference ? ` · ${s.bookingReference}` : ''}
-                </p>
-              </div>
-              {canManage && s.status !== 'revoked' && (
-                <div style={{ display: 'flex', gap: '.4rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <StayLinkMinter propertyId={propertyId} stayId={s.id} />
-                  <form action={revokeStayAction}>
-                    <input type="hidden" name="propertyId" value={propertyId} />
-                    <input type="hidden" name="stayId" value={s.id} />
-                    <button type="submit" className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} data-testid={`button-revoke-${s.id}`}>Revoke access</button>
-                  </form>
-                </div>
-              )}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: selected ? 'minmax(280px, 360px) minmax(0, 1fr)' : 'minmax(0, 1fr)',
+            gap: '1rem',
+            alignItems: 'start',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+            <div
+              className="card"
+              role="button"
+              tabIndex={0}
+              onClick={() => toggle('all')}
+              onKeyDown={(event) => selectOnKey(event, 'all')}
+              style={{ padding: '1rem', cursor: 'pointer', borderColor: selected === 'all' ? 'var(--teal-deep)' : undefined }}
+              data-testid="card-stay-all"
+            >
+              <strong>All conversations</strong>
+              <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
+                Every guest thread for this property in one inbox.
+              </p>
             </div>
-          ))}
+
+            {stays.map((s) => (
+              <div
+                key={s.id}
+                className="card"
+                role="button"
+                tabIndex={0}
+                onClick={() => toggle(s.id)}
+                onKeyDown={(event) => selectOnKey(event, s.id)}
+                style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', cursor: 'pointer', borderColor: selected === s.id ? 'var(--teal-deep)' : undefined }}
+                data-testid={`card-stay-${s.id}`}
+              >
+                <div>
+                  <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <strong>{s.guestDisplayName}</strong>
+                    <span className={`badge ${STATUS_BADGE[s.status] ?? ''}`}>{s.status}</span>
+                  </div>
+                  <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
+                    {fmt(s.checkIn)} → {fmt(s.checkOut)} · {s.contactType} ····{s.contactLast4 ?? '????'}
+                    {s.bookingReference ? ` · ${s.bookingReference}` : ''}
+                  </p>
+                </div>
+                {canManage && s.status !== 'revoked' && (
+                  <div
+                    style={{ display: 'flex', gap: '.4rem', alignItems: 'flex-start', flexWrap: 'wrap' }}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <form action={revokeStayAction}>
+                      <input type="hidden" name="propertyId" value={propertyId} />
+                      <input type="hidden" name="stayId" value={s.id} />
+                      <button type="submit" className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} data-testid={`button-revoke-${s.id}`}>Revoke access</button>
+                    </form>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {selected && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+              {selectedStay && (
+                <>
+                  <div className="card" style={{ padding: '1rem' }}>
+                    <h2 style={{ fontSize: '1rem', margin: '0 0 .6rem' }}>Guest access</h2>
+                    <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                  </div>
+                  <StayGuestsManager propertyId={propertyId} stayId={selectedStay.id} />
+                </>
+              )}
+              <GuestChatInbox
+                propertyId={propertyId}
+                stayId={selected === 'all' ? null : selected}
+                canAnnounce={canAnnounce}
+                canLearn={canLearn}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

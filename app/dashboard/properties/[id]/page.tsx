@@ -67,7 +67,7 @@ export default async function PropertyDetailPage({
             </p>
           </div>
           <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-            <Link href={`/dashboard/properties/${property.id}/escalations`} className={`badge ${openEsc ? 'badge-coral' : ''}`} style={{ minHeight: '2.75rem', display: 'inline-flex', alignItems: 'center', textDecoration: 'none', paddingInline: '.65rem' }}>
+            <Link href={`/dashboard/properties/${property.id}/stays`} className={`badge ${openEsc ? 'badge-coral' : ''}`} style={{ minHeight: '2.75rem', display: 'inline-flex', alignItems: 'center', textDecoration: 'none', paddingInline: '.65rem' }}>
               {openEsc ?? 0} open escalation{openEsc === 1 ? '' : 's'}
             </Link>
             <Link href={`/dashboard/properties/${property.id}/brain`} className="badge" style={{ minHeight: '2.75rem', display: 'inline-flex', alignItems: 'center', textDecoration: 'none', paddingInline: '.65rem' }}>
@@ -85,7 +85,7 @@ export default async function PropertyDetailPage({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
         <Tile href={`/dashboard/properties/${property.id}/brain`} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
         <Tile href={`/dashboard/properties/${property.id}/stays`} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
-        <Tile href={`/dashboard/properties/${property.id}/escalations`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
+        <Tile href={`/dashboard/properties/${property.id}/stays`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
         <Tile href={`/dashboard/properties/${property.id}/local`} title="Local" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras" value="Manage" sub="Add-ons guests can request" />}
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} title="Settings" value="Configure" sub="Branding, tone, modules" />}
