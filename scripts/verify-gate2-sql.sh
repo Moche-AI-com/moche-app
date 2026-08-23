@@ -37,10 +37,17 @@ psql -f "$REPO/supabase-migrations-GATE2-REGISTRY-SEED.sql"
 echo "== applying supabase-migrations-BRAIN-SECTIONS.sql =="
 psql -f "$REPO/supabase-migrations-BRAIN-SECTIONS.sql"
 
-echo "== idempotency: re-applying all three =="
+echo "== applying supabase-migrations-PROPOSED-UPDATES.sql =="
+psql -f "$REPO/supabase-migrations-PROPOSED-UPDATES.sql"
+# The grant lives in the stub file because the table does not exist until the
+# migration above runs; re-running the stubs is idempotent by construction.
+psql -f "$REPO/scripts/gate2-local-stubs.sql"
+
+echo "== idempotency: re-applying all four =="
 psql -f "$REPO/supabase-migrations-GATE2-REGISTRY.sql"
 psql -f "$REPO/supabase-migrations-GATE2-REGISTRY-SEED.sql"
 psql -f "$REPO/supabase-migrations-BRAIN-SECTIONS.sql"
+psql -f "$REPO/supabase-migrations-PROPOSED-UPDATES.sql"
 
 echo "== contract tests =="
 "$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \

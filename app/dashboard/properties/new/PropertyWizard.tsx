@@ -466,7 +466,7 @@ function Finished({ state, propertyId }: { state: WizardFinishState; propertyId:
               Open the Property Brain
             </Link>
             {state.proposalCount ? (
-              <Link className="btn btn-ghost" href={`/dashboard/properties/${propertyId}/brain?tab=updates`}>
+              <Link className="btn btn-ghost" href={`/dashboard/properties/${propertyId}/updates`}>
                 Review {state.proposalCount} suggestion{state.proposalCount === 1 ? '' : 's'}
               </Link>
             ) : null}

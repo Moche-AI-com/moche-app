@@ -444,4 +444,188 @@ SELECT pg_temp.expect_eq(
 
 RESET ROLE;
 
+
+-- ===========================================================================
+-- F. proposed_updates (supabase-migrations-PROPOSED-UPDATES.sql)
+--
+-- Phase E moves the approval queue into a per-property tab, which means a page
+-- rendered under one property's breadcrumb now issues the reads and the decision
+-- writes for that property. The application scopes every query by property_id,
+-- and test/ai-updates-surface.test.ts asserts that it does — but an application
+-- filter is a correctness measure, not a security boundary. If that filter were
+-- ever dropped, RLS is the thing that still stops a viewer of one property from
+-- reading or approving another tenant's proposals. That was previously trusted
+-- rather than asserted, so it is asserted here.
+--
+-- No table structure changed in Phase E; this section is added because the
+-- surface reading the table changed, and the AGENTS.md Boundary 8 pattern
+-- (policy test + cross-account + unassigned-property negative, each paired with
+-- a positive control) is the right shape for that too.
+-- ===========================================================================
+
+RESET ROLE;
+INSERT INTO public.host_accounts (id) VALUES
+  ('dddddddd-dddd-dddd-dddd-dddddddddddd')
+ON CONFLICT DO NOTHING;
+INSERT INTO public.profiles (id) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc')
+ON CONFLICT DO NOTHING;
+
+-- One pending proposal on the property our editor can edit, one on the foreign
+-- tenant's property. Inserted as owner, mirroring production where proposals are
+-- written by server-side ingestion running as the service role.
+INSERT INTO public.proposed_updates
+  (id, property_id, host_account_id, field_path, label, proposed_value, source_type)
+VALUES
+  ('f0000000-0000-0000-0000-000000000001',
+   '11111111-1111-1111-1111-111111111111', 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+   'brain_value.checkout_time', 'Check-out time', '"11:00 AM"'::jsonb, 'listing_url'),
+  ('f0000000-0000-0000-0000-000000000002',
+   '22222222-2222-2222-2222-222222222222', 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+   'brain_value.checkout_time', 'Check-out time', '"10:00 AM"'::jsonb, 'listing_url')
+ON CONFLICT DO NOTHING;
+
+-- The status/review consistency constraint is what stops "denied 3 weeks ago, by
+-- nobody, at no time" from being representable. The trigger stamps reviewed_at on
+-- the transition out of pending, so the constraint can only be violated by
+-- inserting an already-decided row directly.
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.proposed_updates
+    (property_id, host_account_id, field_path, label, proposed_value, source_type,
+     status, reviewed_at)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          'dddddddd-dddd-dddd-dddd-dddddddddddd',
+          'brain_value.parking', 'Parking', '"street"'::jsonb, 'listing_url',
+          'modified', now())$$,
+  'F1 a modified proposal cannot exist without the value that was applied');
+
+-- The source vocabulary is a CHECK, not free text: an unrecognized source would
+-- let ingestion invent a provenance the review UI cannot label.
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.proposed_updates
+    (property_id, host_account_id, field_path, label, proposed_value, source_type)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          'dddddddd-dddd-dddd-dddd-dddddddddddd',
+          'brain_value.parking', 'Parking', '"street"'::jsonb, 'guesswork')$$,
+  'F2 an unrecognized source_type is rejected');
+
+-- field_path is free-form by design (the allowlist lives in the application) but
+-- shape-checked, so a path that could never resolve cannot even be stored.
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.proposed_updates
+    (property_id, host_account_id, field_path, label, proposed_value, source_type)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          'dddddddd-dddd-dddd-dddd-dddddddddddd',
+          '../../etc/passwd', 'Parking', '"street"'::jsonb, 'listing_url')$$,
+  'F3 a malformed field_path is rejected at the column');
+
+SET ROLE authenticated;
+
+-- Editor on property A.
+SET "test.user_id" = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.proposed_updates), 1,
+  'F4 POSITIVE CONTROL: an editor sees their own property''s proposal');
+
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.proposed_updates
+   WHERE property_id = '22222222-2222-2222-2222-222222222222'), 0,
+  'F5 CROSS-ACCOUNT: the foreign tenant''s proposal is invisible even when named');
+
+SELECT pg_temp.expect_affected($$
+  UPDATE public.proposed_updates SET status = 'approved'
+  WHERE id = 'f0000000-0000-0000-0000-000000000002'$$, 0,
+  'F6 CROSS-ACCOUNT: an editor cannot decide a foreign tenant''s proposal');
+
+-- The reassignment attack, the same one brain_items is tested for: WITH CHECK is
+-- what stops a decidable row from being moved somewhere the caller cannot edit.
+-- expect_fail, not expect_affected: USING filters silently, but a WITH CHECK
+-- violation raises. The distinction matters — an expect_affected here would pass
+-- even if the policy had no WITH CHECK at all and the row simply moved.
+SELECT pg_temp.expect_fail($$
+  UPDATE public.proposed_updates
+  SET property_id = '22222222-2222-2222-2222-222222222222'
+  WHERE id = 'f0000000-0000-0000-0000-000000000001'$$,
+  'F7 a proposal cannot be reassigned into a property the caller cannot edit');
+
+-- Proposals are created by server-side ingestion only. A session that could
+-- insert here could fabricate a proposal and then approve its own fabrication,
+-- which defeats the entire purpose of the queue.
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.proposed_updates
+    (property_id, host_account_id, field_path, label, proposed_value, source_type)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          'dddddddd-dddd-dddd-dddd-dddddddddddd',
+          'brain_value.wifi_password', 'Wi-Fi password', '"redacted"'::jsonb,
+          'ai_suggestion')$$,
+  'F8 a browser session cannot fabricate a proposal');
+
+-- No DELETE grant at all, so this is a table-level rejection rather than a
+-- silent no-op. Either would be acceptable; asserting the stronger one.
+SELECT pg_temp.expect_fail($$
+  DELETE FROM public.proposed_updates
+  WHERE id = 'f0000000-0000-0000-0000-000000000001'$$,
+  'F9 a proposal cannot be deleted: rows retire by status, so the record survives');
+
+-- Member but not editor: the tab renders read-only for this user, and the
+-- database agrees rather than relying on the UI to withhold the buttons.
+SET "test.user_id" = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.proposed_updates), 1,
+  'F10 POSITIVE CONTROL: a viewer reads their own property''s proposals');
+
+SELECT pg_temp.expect_affected($$
+  UPDATE public.proposed_updates SET status = 'denied'
+  WHERE id = 'f0000000-0000-0000-0000-000000000001'$$, 0,
+  'F11 a viewer cannot decide a proposal on a property they only read');
+
+-- The editor's own decision, asserted last so the denials above ran against a
+-- genuinely pending row. This is the positive control for the whole section: if
+-- it failed, every denial above would be passing trivially.
+SET "test.user_id" = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+SELECT pg_temp.expect_affected($$
+  UPDATE public.proposed_updates SET status = 'approved'
+  WHERE id = 'f0000000-0000-0000-0000-000000000001'$$, 1,
+  'F12 POSITIVE CONTROL: an editor can decide their own property''s proposal');
+
+-- And the trigger stamped the review time without the API having to remember to.
+SELECT pg_temp.expect_eq(
+  (SELECT reviewed_at IS NOT NULL FROM public.proposed_updates
+   WHERE id = 'f0000000-0000-0000-0000-000000000001'), true,
+  'F13 the review timestamp is stamped by the trigger, not trusted to the caller');
+
+-- UNASSIGNED PROPERTY: a property with no membership row at all. The queue must
+-- not treat "nobody owns this" as "everybody may decide it".
+RESET ROLE;
+INSERT INTO public.properties (id, name) VALUES
+  ('33333333-3333-3333-3333-333333333333', 'Property C (unassigned)')
+ON CONFLICT DO NOTHING;
+INSERT INTO public.proposed_updates
+  (id, property_id, host_account_id, field_path, label, proposed_value, source_type)
+VALUES ('f0000000-0000-0000-0000-000000000003',
+        '33333333-3333-3333-3333-333333333333', 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+        'brain_value.parking', 'Parking', '"driveway"'::jsonb, 'listing_url')
+ON CONFLICT DO NOTHING;
+
+SET ROLE authenticated;
+SET "test.user_id" = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.proposed_updates
+   WHERE property_id = '33333333-3333-3333-3333-333333333333'), 0,
+  'F14 UNASSIGNED: an unassigned property''s proposals are visible to nobody');
+
+SELECT pg_temp.expect_affected($$
+  UPDATE public.proposed_updates SET status = 'approved'
+  WHERE id = 'f0000000-0000-0000-0000-000000000003'$$, 0,
+  'F15 UNASSIGNED: an unassigned property''s proposals are decidable by nobody');
+
+SET "test.user_id" = '';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.proposed_updates), 0,
+  'F16 an unauthenticated session sees no proposals');
+
+RESET ROLE;
+
 \echo '== all contract tests passed =='

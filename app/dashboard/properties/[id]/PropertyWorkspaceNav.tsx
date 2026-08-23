@@ -2,8 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { AI_UPDATES_LABEL } from '@/lib/brain/ai-updates';
 
-export type PropertySectionKey = 'overview' | 'stays' | 'escalations' | 'local' | 'extras' | 'settings';
+export type PropertySectionKey =
+  | 'overview'
+  | 'brain'
+  | 'updates'
+  | 'stays'
+  | 'escalations'
+  | 'local'
+  | 'extras'
+  | 'settings';
 
 export interface PropertySection {
   key: PropertySectionKey;
@@ -13,6 +22,7 @@ export interface PropertySection {
 
 const SECTION_LABELS: Record<string, string> = {
   overview: 'Overview',
+  updates: AI_UPDATES_LABEL,
   stays: 'Stays',
   escalations: 'Escalations',
   local: 'Local Recs',
@@ -29,6 +39,15 @@ export function propertySections(propertyId: string, canEditProperty: boolean): 
   const base = `/dashboard/properties/${propertyId}`;
   const sections: PropertySection[] = [
     { key: 'overview', label: 'Overview', href: base },
+    // Brain and AI Updates sit next to each other and ahead of the operational
+    // tabs: they are the same job seen twice — what is known, and what wants to
+    // change it. Brain was previously reachable only from a button in the page
+    // header, which is why moving between it and the queue used to mean going
+    // back out to the account level. Both are listed for read-only viewers too;
+    // each page renders its own read-only notice rather than pretending the
+    // surface does not exist.
+    { key: 'brain', label: 'Brain', href: `${base}/brain` },
+    { key: 'updates', label: AI_UPDATES_LABEL, href: `${base}/updates` },
     { key: 'stays', label: 'Stays', href: `${base}/stays` },
     { key: 'escalations', label: 'Escalations', href: `${base}/escalations` },
     { key: 'local', label: 'Local Recs', href: `${base}/local` },
@@ -62,10 +81,17 @@ export function PropertyWorkspaceNav({
   propertyId,
   propertyName,
   canEditProperty,
+  pendingUpdates = 0,
 }: {
   propertyId: string;
   propertyName: string;
   canEditProperty: boolean;
+  /**
+   * Pending AI Updates for this property. Shown on the tab so a host learns
+   * something is waiting without opening the tab to find out — the whole point
+   * of moving the queue in here.
+   */
+  pendingUpdates?: number;
 }) {
   const pathname = usePathname();
   const sections = propertySections(propertyId, canEditProperty);
@@ -81,6 +107,8 @@ export function PropertyWorkspaceNav({
         .property-workspace-nav-link { align-items: center; border-radius: var(--radius-md); color: var(--text-muted); display: flex; font-size: .9rem; font-weight: 600; min-height: 2.75rem; padding: .5rem .75rem; text-decoration: none; }
         .property-workspace-nav-link:hover { background: var(--surface); color: var(--text); }
         .property-workspace-nav-link.is-active { background: color-mix(in srgb, var(--teal) 13%, var(--surface)); color: var(--teal); }
+        .property-workspace-nav-link > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .property-workspace-nav-badge { background: var(--coral); border-radius: 999px; color: #fff; flex: 0 0 auto; font-size: .68rem; font-weight: 700; line-height: 1; margin-left: auto; padding: .22rem .4rem; }
         @media (max-width: 899px) {
           .property-workspace-main { grid-template-columns: minmax(0, 1fr) !important; }
           .property-workspace-header { grid-template-columns: minmax(0, 1fr) !important; }
@@ -108,7 +136,12 @@ export function PropertyWorkspaceNav({
                 className={`property-workspace-nav-link${active ? ' is-active' : ''}`}
                 aria-current={active ? 'page' : undefined}
               >
-                {section.label}
+                <span>{section.label}</span>
+                {section.key === 'updates' && pendingUpdates > 0 && (
+                  <span className="property-workspace-nav-badge" data-testid="nav-pending-updates">
+                    {pendingUpdates}
+                  </span>
+                )}
               </Link>
             );
           })}

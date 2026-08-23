@@ -103,7 +103,11 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
         </>
       )}
       {state === 'done' && !filed && (
-        <Link href="/dashboard/updates" className="btn btn-sm btn-ghost" style={{ marginTop: '.6rem', minHeight: 44 }}>
+        <Link
+          href={`/dashboard/properties/${propertyId}/updates`}
+          className="btn btn-sm btn-ghost"
+          style={{ marginTop: '.6rem', minHeight: 44 }}
+        >
           Review imported details
         </Link>
       )}

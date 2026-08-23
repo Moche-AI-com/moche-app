@@ -11,6 +11,7 @@ import {
   type ProposedUpdateStatus,
   type ProposalSourceType,
 } from '@/lib/brain/proposals';
+import type { AiUpdatesView } from '@/lib/brain/ai-updates';
 
 export type ProposalRow = {
   id: string;
@@ -52,17 +53,27 @@ function withText(original: unknown, text: string): unknown {
   return text;
 }
 
-export function UpdateQueueClient({
+export function AiUpdatesQueue({
   rows,
   view,
   propertyNames,
   manageableProperties,
+  showPropertyName = true,
+  emptyPendingCopy,
 }: {
   rows: ProposalRow[];
-  view: 'pending' | 'reviewed';
+  view: AiUpdatesView;
   propertyNames: Record<string, string>;
   /** Property ids this user may act on. Rows outside it render read-only. */
   manageableProperties: string[];
+  /**
+   * The per-property tab already names the property in its breadcrumb and page
+   * header, so repeating it on every row is noise. The account-wide roll-up has
+   * no such context and needs it.
+   */
+  showPropertyName?: boolean;
+  /** Overrides the pending empty state so each surface can say what to do next. */
+  emptyPendingCopy?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -101,7 +112,8 @@ export function UpdateQueueClient({
         <Sparkles size={22} aria-hidden style={{ color: 'var(--text-faint)', marginBottom: '.6rem' }} />
         <p className="muted" style={{ margin: 0 }}>
           {view === 'pending'
-            ? 'Nothing waiting. Import a listing URL or a document and the draft will land here for you to check.'
+            ? (emptyPendingCopy ??
+              'Nothing waiting. Import a listing URL or a document and the draft will land here for you to check.')
             : 'Nothing reviewed yet.'}
         </p>
       </div>
@@ -132,8 +144,8 @@ export function UpdateQueueClient({
                 <div style={{ minWidth: 0, flex: '1 1 20rem' }}>
                   <p style={{ margin: '0 0 .2rem', fontWeight: 600, fontSize: '.95rem' }}>{row.label}</p>
                   <p className="report-list-meta" style={{ margin: 0 }}>
-                    {propertyNames[row.property_id] ?? 'Property'} &middot; {field?.label ?? row.field_path} &middot;{' '}
-                    {sourceLabel} &middot; {fmt(row.created_at)}
+                    {showPropertyName && <>{propertyNames[row.property_id] ?? 'Property'} &middot; </>}
+                    {field?.label ?? row.field_path} &middot; {sourceLabel} &middot; {fmt(row.created_at)}
                   </p>
                   {row.status !== 'pending' && (
                     <p className="report-list-meta" style={{ margin: '.15rem 0 0' }}>
