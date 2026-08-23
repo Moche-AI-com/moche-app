@@ -7,13 +7,15 @@ import { planBannerFor } from '@/lib/dashboard/plan-banner';
 import { computeBrainHealth } from '@/lib/brain/health';
 import { loadValueMetrics, loadGuestFeedback } from '@/lib/dashboard/overview';
 import { loadActivityTrend, loadTopTopics, loadActivityFeed } from '@/lib/dashboard/insights';
-import { ValueHero, ValueMetricsGrid, GuestFeedbackPanel } from './DashboardOverview';
-import { AttentionStrip, ActivityTrendCard, TopTopicsCard, ActivityFeedCard } from './DashboardInsights';
+import { ValueBand, GuestFeedbackPanel } from './DashboardOverview';
+import { AttentionQueue, ActivityTrendCard, TopTopicsCard, ActivityFeedCard } from './DashboardInsights';
+import { OverviewBoard } from './OverviewBoard';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { ExtrasRequestsCard, type ExtrasRequestRow } from '@/components/dashboard/ExtrasRequestsCard';
 import { UpdateQueueCard, type UpdateQueueCardRow } from '@/components/dashboard/UpdateQueueCard';
 import { knowledgeReviewSummary, resolveScope } from '@/lib/dashboard/scope';
 import { isTerminalExtrasStatus, type ExtrasFulfillmentStatus } from '@/lib/extras/lifecycle';
+import styles from './overview.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -176,6 +178,8 @@ export default async function DashboardHome({
       };
     })
     .sort((a, b) => b.count - a.count);
+  // Open extras across the visible scope, for the attention queue.
+  const openExtrasCount = extrasRequestRows.reduce((sum, r) => sum + r.openCount, 0);
 
   // Review-queue summary. knowledgeReviewSummary() delegates its shared queue
   // wording to queueSummary(), while adding the property-level dashboard facts.
@@ -197,10 +201,14 @@ export default async function DashboardHome({
 
   // Stays and Brain are per-property pages — with exactly one property we can
   // deep-link straight into it; with zero or multiple, send hosts to the
-  // property picker instead of guessing which one they mean.
+  // property picker instead of guessing which one they mean. Escalations
+  // followed guest chat into the per-property Stays workspace (#60), so a
+  // single in-scope property deep-links there too; the portfolio inbox at
+  // /dashboard/escalations remains the multi-property target.
   const singlePropertyId = propertyIds.length === 1 ? propertyIds[0] : null;
   const activeStaysHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/stays` : '/dashboard/properties';
   const knowledgeItemsHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/brain` : '/dashboard/properties';
+  const escalationsHref = singlePropertyId ? `/dashboard/properties/${singlePropertyId}/stays` : '/dashboard/escalations';
 
   const filterOptions = (allProperties ?? []).map((p) => ({ id: p.id, name: p.display_name as string }));
 
@@ -216,8 +224,6 @@ export default async function DashboardHome({
         </Link>
       </div>
 
-      <ValueHero hostName={hostName} metrics={metrics} />
-
       {planBanner ? (
         // No marginTop: .dash-overview already supplies --gap-section between
         // its children, and stacking a margin on top of that is what made the
@@ -231,89 +237,132 @@ export default async function DashboardHome({
         </div>
       ) : null}
 
-      <AttentionStrip openEscalations={escCount} openServiceRequests={svcCount} lowRatings={lowRatings} />
+      {/* Zones render inside the reorderable board — hosts can drag them into
+          whatever top-to-bottom order fits how they run their operation. */}
+      <OverviewBoard
+        zones={[
+          {
+            id: 'value',
+            label: 'Value summary',
+            content: (
+              <ValueBand
+                hostName={hostName}
+                metrics={metrics}
+                feedback={feedback}
+                activeStaysHref={activeStaysHref}
+                knowledgeItemsHref={knowledgeItemsHref}
+                upcomingCheckIns={upcomingCheckIns}
+                nextArrival={nextArrival}
+                avgBrainHealthPct={avgBrainHealthPct}
+                propertiesNeedingAttention={propertiesNeedingAttention}
+              />
+            ),
+          },
+          {
+            id: 'attention',
+            label: 'Needs attention',
+            content: (
+              <AttentionQueue
+                openEscalations={escCount}
+                openServiceRequests={svcCount}
+                lowRatings={lowRatings}
+                pendingApprovals={proposalSummary.pending}
+                openExtras={openExtrasCount}
+                escalationsHref={escalationsHref}
+              />
+            ),
+          },
+          {
+            id: 'properties',
+            label: 'Your properties',
+            content: (
+              <>
+                <div className="dash-section-head">
+                  <h2 className="dash-section-title">Your properties</h2>
+                  {(properties?.length ?? 0) > 0 && (
+                    <Link href="/dashboard/properties" className="dash-section-link">
+                      View all <ArrowUpRight size={14} aria-hidden />
+                    </Link>
+                  )}
+                </div>
 
-      <ValueMetricsGrid
-        metrics={metrics}
-        activeStaysHref={activeStaysHref}
-        knowledgeItemsHref={knowledgeItemsHref}
-        upcomingCheckIns={upcomingCheckIns}
-        nextArrival={nextArrival}
-        avgBrainHealthPct={avgBrainHealthPct}
-        propertiesNeedingAttention={propertiesNeedingAttention}
+                {(properties?.length ?? 0) === 0 ? (
+                  <div className="card" style={{ padding: '2.25rem var(--pad-card)', textAlign: 'center' }}>
+                    <p className="muted" style={{ marginBottom: '1rem' }}>
+                      No properties yet. Create your first Property Brain to get started.
+                    </p>
+                    <Link href="/dashboard/properties/new" className="btn btn-primary">
+                      Create a property
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="dash-props-grid">
+                    {properties!.map((p) => {
+                      const health = brainByProperty.get(p.id) ?? 0;
+                      const items = itemsByProperty.get(p.id) ?? 0;
+                      const tier = health >= 70 ? 'var(--teal)' : health >= 40 ? 'var(--iris)' : 'var(--coral)';
+                      return (
+                        <Link key={p.id} href={`/dashboard/properties/${p.id}`} className="card card-interactive rise-in dash-prop-card">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.5rem' }}>
+                            <strong style={{ fontSize: '1.02rem' }}>{p.display_name}</strong>
+                            <span className={`badge ${p.status === 'live' ? 'badge-teal' : 'badge-coral'}`}>{p.status}</span>
+                          </div>
+                          <div className="muted" style={{ fontSize: '.85rem', marginBottom: '.9rem' }}>/{p.slug}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.4rem' }}>
+                            <span className="faint" style={{ fontSize: '.76rem' }}>
+                              {items} knowledge item{items === 1 ? '' : 's'}
+                            </span>
+                            <span style={{ fontSize: '.78rem', fontWeight: 600, color: tier }}>{health}% Brain</span>
+                          </div>
+                          <div style={{ height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.max(health, 3)}%`, height: '100%', background: health >= 70 ? 'var(--grad)' : tier, transition: 'width 600ms var(--ease-out)' }} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '.3rem', marginTop: '.9rem', color: 'var(--teal)', fontSize: '.8rem', fontWeight: 600 }}>
+                            Open <ArrowUpRight size={14} aria-hidden />
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ),
+          },
+          {
+            id: 'insights',
+            label: 'Insights',
+            content: (
+              <div className="dash-insights-row">
+                <ActivityTrendCard trend={trend} />
+                <TopTopicsCard topics={topics} brainHref={knowledgeItemsHref} />
+              </div>
+            ),
+          },
+          {
+            id: 'operations',
+            label: 'Activity & requests',
+            content: (
+              <div className={styles.opsGrid}>
+                <ActivityFeedCard events={feed} />
+                <UpdateQueueCard
+                  rows={updateQueueRows}
+                  detail={proposalSummary.detail}
+                  pending={proposalSummary.pending}
+                  affectedProperties={proposalSummary.affectedProperties}
+                  oldestLabel={proposalSummary.oldestLabel}
+                  scopedPropertyId={activeFilter}
+                />
+                <ExtrasRequestsCard rows={extrasRequestRows} />
+              </div>
+            ),
+          },
+          {
+            id: 'feedback',
+            label: 'Guest feedback',
+            content: <GuestFeedbackPanel feedback={feedback} />,
+          },
+        ]}
       />
-
-      <div className="dash-insights-row">
-        <ActivityTrendCard trend={trend} />
-        <TopTopicsCard topics={topics} brainHref={knowledgeItemsHref} />
-      </div>
-
-      <div className="dash-two-col">
-        <div className="dash-col-main">
-          <div className="dash-section-head">
-            <h2 className="dash-section-title">Your properties</h2>
-            {(properties?.length ?? 0) > 0 && (
-              <Link href="/dashboard/properties" className="dash-section-link">
-                View all <ArrowUpRight size={14} aria-hidden />
-              </Link>
-            )}
-          </div>
-
-          {(properties?.length ?? 0) === 0 ? (
-            <div className="card" style={{ padding: '2.25rem var(--pad-card)', textAlign: 'center' }}>
-              <p className="muted" style={{ marginBottom: '1rem' }}>
-                No properties yet. Create your first Property Brain to get started.
-              </p>
-              <Link href="/dashboard/properties/new" className="btn btn-primary">
-                Create a property
-              </Link>
-            </div>
-          ) : (
-            <div className="dash-props-grid">
-              {properties!.map((p) => {
-                const health = brainByProperty.get(p.id) ?? 0;
-                const items = itemsByProperty.get(p.id) ?? 0;
-                const tier = health >= 70 ? 'var(--teal)' : health >= 40 ? 'var(--iris)' : 'var(--coral)';
-                return (
-                  <Link key={p.id} href={`/dashboard/properties/${p.id}`} className="card card-interactive rise-in dash-prop-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.5rem' }}>
-                      <strong style={{ fontSize: '1.02rem' }}>{p.display_name}</strong>
-                      <span className={`badge ${p.status === 'live' ? 'badge-teal' : 'badge-coral'}`}>{p.status}</span>
-                    </div>
-                    <div className="muted" style={{ fontSize: '.85rem', marginBottom: '.9rem' }}>/{p.slug}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.4rem' }}>
-                      <span className="faint" style={{ fontSize: '.76rem' }}>
-                        {items} knowledge item{items === 1 ? '' : 's'}
-                      </span>
-                      <span style={{ fontSize: '.78rem', fontWeight: 600, color: tier }}>{health}% Brain</span>
-                    </div>
-                    <div style={{ height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.max(health, 3)}%`, height: '100%', background: health >= 70 ? 'var(--grad)' : tier, transition: 'width 600ms var(--ease-out)' }} />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '.3rem', marginTop: '.9rem', color: 'var(--teal)', fontSize: '.8rem', fontWeight: 600 }}>
-                      Open <ArrowUpRight size={14} aria-hidden />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="dash-col-side" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-section)' }}>
-          <ActivityFeedCard events={feed} />
-          <UpdateQueueCard
-            rows={updateQueueRows}
-            detail={proposalSummary.detail}
-            pending={proposalSummary.pending}
-            affectedProperties={proposalSummary.affectedProperties}
-            oldestLabel={proposalSummary.oldestLabel}
-            scopedPropertyId={activeFilter}
-          />
-          <ExtrasRequestsCard rows={extrasRequestRows} />
-          <GuestFeedbackPanel feedback={feedback} />
-        </div>
-      </div>
     </div>
   );
 }
