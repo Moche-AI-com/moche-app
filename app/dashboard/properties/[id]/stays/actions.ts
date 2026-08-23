@@ -171,14 +171,18 @@ export async function revokeStayAction(formData: FormData): Promise<void> {
   const supabase = createClient();
 
   await supabase.from('stays').update({ status: 'revoked' } as never).eq('id', stayId).eq('property_id', propertyId);
-  await supabase
+  // guest_access_sessions and guest_access_links only carry a SELECT policy for
+  // authenticated hosts — writes via the user-context client silently no-op under
+  // RLS. Revocation must fail closed, so both writes go through the service role.
+  const admin = createAdminClient();
+  await admin
     .from('guest_access_sessions')
     .update({ status: 'revoked', revoked_at: new Date().toISOString() } as never)
     .eq('stay_id', stayId)
     .eq('property_id', propertyId);
   // Cancelling the stay also revokes any visit code minted for it (WS-1 lifecycle: fails
   // closed on reservation cancellation, not just on checkout or manual code revoke).
-  await supabase
+  await admin
     .from('guest_access_links')
     .update({ code_revoked_at: new Date().toISOString() } as never)
     .eq('stay_id', stayId)
