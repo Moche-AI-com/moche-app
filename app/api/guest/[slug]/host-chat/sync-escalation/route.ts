@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .maybeSingle();
 
   if (!property || property.id !== session.propertyId) {
-    return NextResponse.json({ error: 'Property not found.' }, { status: 404 }) };
+    return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
   }
 
   const db = admin as any;
