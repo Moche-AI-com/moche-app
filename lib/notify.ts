@@ -214,6 +214,38 @@ export async function notifyGuestReply(p: { contact: string; propertyName: strin
   }
 }
 
+// Host-initiated guest portal share (Stays tab → Share with guests). Moche-AI
+// branded, carrying the host's property name and the stay's one access code.
+// Transactional by construction: the host triggered this exact send for this
+// specific recipient. Returns false when the provider is unconfigured or the
+// send fails — the caller records the outcome in stay_share_invites.
+export async function sendGuestPortalShare(p: {
+  channel: 'sms' | 'email';
+  contact: string;
+  propertyName: string;
+  portalUrl: string;
+  code: string;
+}): Promise<boolean> {
+  if (p.channel === 'email') {
+    return sendHostEmail(
+      p.contact,
+      `Your host shared Moche-AI with you — ${p.propertyName}`,
+      [
+        `Good news — your host at ${p.propertyName} is sharing Moche-AI, their AI concierge, with you for your stay.`,
+        ``,
+        `Open your guest portal: ${p.portalUrl}`,
+        `Your stay access code: ${p.code}`,
+        ``,
+        `Ask the concierge anything about the property, message your host directly, and more.`,
+      ].join('\n'),
+    );
+  }
+  return sendSms(
+    p.contact,
+    `Moche-AI: Your host at ${p.propertyName} is sharing their AI concierge with you. Open ${p.portalUrl} and enter stay code ${p.code}. Reply STOP to opt out.`,
+  );
+}
+
 // Delivers a guest OTP out-of-band (email/SMS).
 // Security contract:
 //   - The full OTP code is NEVER logged (only masked hints in dev fallback).

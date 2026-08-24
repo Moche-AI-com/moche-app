@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireSession, getPropertyAccess } from '@/lib/auth/guards';
 import { stayCreateSchema } from '@/lib/validation';
-import { hashContact, generateSessionToken, hashSessionToken, generateVisitCode, hashVisitCode } from '@/lib/crypto';
+import { hashContact, generateSessionToken, hashSessionToken, generateVisitCode, hashVisitCode, verifyVisitCode } from '@/lib/crypto';
 import { publicEnv } from '@/lib/env';
 import { DEFAULT_GRACE_PERIOD_HOURS, STAY_LINK_DEFAULT_MAX_REDEMPTIONS, VISIT_CODE_GRACE_PERIOD_HOURS } from '@/lib/constants';
 import { audit } from '@/lib/audit';
@@ -122,7 +122,30 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
       throw new Error(linkError?.message ?? 'link insert failed');
     }
     const linkId = (link as { id: string }).id;
-    const code = generateVisitCode();
+
+    // One stay code (2026-08-24): the tokenless portal entry (/auth/code without
+    // ?k=) resolves a bare code to one stay, so codes must be unique across the
+    // property's concurrently coded links. Hashes are per-link salted, so
+    // candidates are verified one by one until one is clear.
+    const { data: siblingLinks } = await admin
+      .from('guest_access_links')
+      .select('id, code_hash')
+      .eq('property_id', propertyId)
+      .not('code_hash', 'is', null)
+      .is('code_revoked_at', null)
+      .gt('code_expires_at', new Date().toISOString());
+    let code = '';
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const candidate = generateVisitCode();
+      const clash = (siblingLinks ?? []).some((sibling: any) =>
+        verifyVisitCode(candidate, sibling.id as string, sibling.code_hash as string));
+      if (!clash) {
+        code = candidate;
+        break;
+      }
+    }
+    if (!code) throw new Error('could not allocate a unique visit code');
+
     const codeExpiresAt = new Date(checkOut.getTime() + VISIT_CODE_GRACE_PERIOD_HOURS * 60 * 60 * 1000).toISOString();
     const { error: codeError } = await admin
       .from('guest_access_links')
