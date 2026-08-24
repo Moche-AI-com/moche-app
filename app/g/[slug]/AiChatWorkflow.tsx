@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ConciergeBell, Loader2, MapPin, Sparkles, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ConciergeBell, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { linkify } from '@/lib/guest/linkify';
+import { CardArt } from './CardArt';
 
 type ChatMsg = {
   id: string;
@@ -168,10 +169,10 @@ export function AiChatWorkflow(props: {
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '.45rem' }}>
+        <h2 className="gp-wf-title gp-title-row">
           <Sparkles size={20} aria-hidden /> Ask a Question
         </h2>
-        <p className="muted" style={{ margin: '.35rem 0 0' }}>
+        <p className="gp-muted" style={{ margin: '.35rem 0 0' }}>
           Get property-safe answers. If the concierge is not confident, it will say so and ping your host instead of guessing.
         </p>
       </div>
@@ -179,78 +180,45 @@ export function AiChatWorkflow(props: {
       <AiDisclosure />
 
       {cards.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: '.65rem', margin: '1rem 0' }}>
+        <div className="gp-assist-grid">
           {cards.map((card) => (
             <button
               key={card.key}
               type="button"
+              className="gp-assist-card"
               onClick={() => void sendMessage(card.prompt)}
               disabled={busy}
-              style={{
-                textAlign: 'left',
-                border: '1px solid rgba(255,255,255,.12)',
-                borderRadius: 16,
-                padding: '.8rem',
-                background: 'rgba(255,255,255,.055)',
-                color: 'inherit',
-                cursor: 'pointer',
-              }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontWeight: 700 }}>
-                {card.key === 'local' ? <MapPin size={15} aria-hidden /> : <Sparkles size={15} aria-hidden />}
-                {card.title}
-              </span>
-              <span className="muted" style={{ display: 'block', fontSize: '.78rem', marginTop: '.35rem' }}>{card.description}</span>
+              <CardArt cardKey={card.key} size={26} />
+              <span className="gp-assist-title">{card.title}</span>
+              <span className="gp-assist-desc">{card.description}</span>
             </button>
           ))}
         </div>
       )}
 
       {escalationNotice && (
-        <div role="status" style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start', border: '1px solid rgba(255,138,92,.45)', background: 'rgba(255,138,92,.14)', borderRadius: 14, padding: '.75rem', marginBottom: '.85rem' }}>
+        <div role="status" className="gp-notice">
           <TriangleAlert size={17} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
             I’m not confident I have the right answer, so I’ve pinged your host. Their reply will appear in Host Chat.
-            <button type="button" onClick={props.onOpenHostChat} style={{ marginLeft: '.5rem', border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>
+            <button type="button" onClick={props.onOpenHostChat} className="gp-msg-link" style={{ marginLeft: '.5rem' }}>
               Open Host Chat
             </button>
           </div>
         </div>
       )}
 
-      <div
-        aria-live="polite"
-        style={{
-          border: '1px solid rgba(255,255,255,.12)',
-          borderRadius: 18,
-          padding: '1rem',
-          minHeight: 300,
-          maxHeight: '48vh',
-          overflowY: 'auto',
-          background: 'rgba(255,255,255,.04)',
-        }}
-      >
+      <div aria-live="polite" className="gp-chat-panel">
         {messages.length === 0 ? (
-          <p className="muted">Choose a card above or ask anything about your stay.</p>
+          <p className="gp-muted">Choose a card above or ask anything about your stay.</p>
         ) : (
           messages.map((message) => (
-            <div key={message.id} style={{ display: 'flex', justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '.7rem' }}>
-              <div
-                style={{
-                  maxWidth: '84%',
-                  borderRadius: message.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                  padding: '.75rem .85rem',
-                  background: message.role === 'user'
-                    ? 'linear-gradient(135deg, rgba(51,230,212,.28), rgba(124,140,255,.22))'
-                    : message.role === 'host'
-                      ? 'rgba(255,138,92,.16)'
-                      : 'rgba(255,255,255,.1)',
-                  border: '1px solid rgba(255,255,255,.1)',
-                }}
-              >
-                {message.role === 'host' && <div style={{ fontSize: '.72rem', fontWeight: 700, marginBottom: '.3rem', color: '#ffb08f' }}>Host reply</div>}
+            <div key={message.id} className={`gp-msg-row ${message.role === 'user' ? 'gp-msg-row-user' : ''}`}>
+              <div className={`gp-msg ${message.role === 'user' ? 'gp-msg-user' : message.role === 'host' ? 'gp-msg-host' : ''}`}>
+                {message.role === 'host' && <div className="gp-msg-tag">Host reply</div>}
                 <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.45 }}><LinkedText text={message.content} /></div>
-                {message.isEmergency && <p style={{ margin: '.45rem 0 0', fontSize: '.78rem', color: '#ffb08f' }}>If this is an emergency, contact local emergency services first.</p>}
+                {message.isEmergency && <p className="gp-msg-emergency">If this is an emergency, contact local emergency services first.</p>}
               </div>
             </div>
           ))
@@ -258,26 +226,28 @@ export function AiChatWorkflow(props: {
         <div ref={endRef} />
       </div>
 
-      {error && <p role="alert" style={{ color: '#ffb08f' }}>{error}</p>}
+      {error && <p role="alert" className="gp-alert-text">{error}</p>}
 
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void sendMessage(input);
         }}
-        style={{ display: 'flex', gap: '.5rem', marginTop: '.85rem' }}
+        className="gp-input-row"
+        style={{ marginTop: '.85rem' }}
       >
         <label htmlFor="ai-chat-input" className="sr-only">Ask the concierge</label>
         <textarea
           id="ai-chat-input"
+          className="gp-input"
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Ask about Wi-Fi, check-in, trash, local places…"
           rows={2}
-          style={{ flex: 1, resize: 'vertical', borderRadius: 14, border: '1px solid rgba(255,255,255,.14)', background: 'rgba(255,255,255,.06)', color: 'inherit', padding: '.8rem' }}
+          style={{ resize: 'vertical' }}
         />
-        <button type="submit" disabled={busy || !input.trim()} aria-label="Ring the service bell" style={{ minWidth: 52, borderRadius: 14 }}>
-          {busy ? <Loader2 size={18} className="spin" aria-hidden /> : <ConciergeBell size={18} aria-hidden />}
+        <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label="Ring the service bell">
+          {busy ? <Loader2 size={18} className="gp-spin" aria-hidden /> : <ConciergeBell size={18} aria-hidden />}
         </button>
       </form>
     </section>
