@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFormState } from 'react-dom';
+import { Mail, MessageSquareText, Send } from 'lucide-react';
 import { createStayAction, revokeStayAction, type StayActionState } from './actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { GuestChatInbox } from '../guest-chat/GuestChatInbox';
@@ -29,14 +30,12 @@ export function StaysManager({
   propertyId,
   canManage,
   canAnnounce,
-  canLearn,
   initialStayId,
   stays,
 }: {
   propertyId: string;
   canManage: boolean;
   canAnnounce: boolean;
-  canLearn: boolean;
   initialStayId: string | null;
   stays: Stay[];
 }) {
@@ -112,7 +111,7 @@ export function StaysManager({
                     </p>
                     {portalState && s.portal && (
                       <p className="faint" style={{ fontSize: '.76rem', marginTop: '.2rem' }} data-testid={`portal-status-${s.id}`}>
-                        Portal code{' '}
+                        Stay code{' '}
                         {s.portal.code
                           ? <strong className="portal-code" style={{ fontSize: '.85rem', letterSpacing: '.15rem' }}>{s.portal.code}</strong>
                           : '••••'}
@@ -144,7 +143,10 @@ export function StaysManager({
               {selectedStay && (
                 <>
                   <div className="card" style={{ padding: '1rem' }}>
-                    <h2 style={{ fontSize: '1rem', margin: '0 0 .6rem' }}>Guest access</h2>
+                    <h2 style={{ fontSize: '1rem', margin: '0 0 .6rem' }}>Stay access code</h2>
+                    <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .6rem' }}>
+                      One code covers every guest on this stay. Guests enter it once per device, then their session is remembered.
+                    </p>
                     {selectedStay.portal ? (
                       <div>
                         <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .5rem' }}>
@@ -156,7 +158,7 @@ export function StaysManager({
                         {selectedStay.portal.code ? (
                           <div className="portal-code-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
                             <div>
-                              <div className="faint" style={{ fontSize: '.65rem' }}>Visit code</div>
+                              <div className="faint" style={{ fontSize: '.65rem' }}>Access code</div>
                               <div className="portal-code" style={{ fontSize: '1.3rem' }} data-testid={`portal-code-${selectedStay.id}`}>{selectedStay.portal.code}</div>
                             </div>
                             <CopyCodeButton code={selectedStay.portal.code} />
@@ -173,6 +175,11 @@ export function StaysManager({
                       <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
                     )}
                   </div>
+                  <ShareStayPanel
+                    propertyId={propertyId}
+                    stayId={selectedStay.id}
+                    enabled={Boolean(selectedStay.portal?.code) && portalCodeStatus(selectedStay.portal) === 'active'}
+                  />
                   <StayGuestsManager propertyId={propertyId} stayId={selectedStay.id} />
                 </>
               )}
@@ -180,7 +187,6 @@ export function StaysManager({
                 propertyId={propertyId}
                 stayId={selected === 'all' ? null : selected}
                 canAnnounce={canAnnounce}
-                canLearn={canLearn}
               />
             </div>
           )}
@@ -203,11 +209,128 @@ function CopyCodeButton({ code }: { code: string }) {
   );
 }
 
+type ShareInvite = {
+  id: string;
+  channel: 'sms' | 'email';
+  destinationLast4: string | null;
+  status: 'queued' | 'sent' | 'failed';
+  createdAt: string;
+};
+
+// Share this stay's portal link + access code with a guest. Moche-AI sends the
+// message itself (Twilio SMS / Resend email), branded as Moche-AI on the
+// host's behalf, so the guest never has to hunt for the link.
+function ShareStayPanel({ propertyId, stayId, enabled }: { propertyId: string; stayId: string; enabled: boolean }) {
+  const [channel, setChannel] = useState<'sms' | 'email'>('sms');
+  const [destination, setDestination] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [invites, setInvites] = useState<ShareInvite[]>([]);
+
+  const loadInvites = useCallback(async () => {
+    const res = await fetch(`/api/host/properties/${propertyId}/stays/${stayId}/share`, { cache: 'no-store' });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) setInvites(Array.isArray(json.invites) ? json.invites : []);
+  }, [propertyId, stayId]);
+
+  useEffect(() => {
+    setInvites([]);
+    setError(null);
+    setNotice(null);
+    void loadInvites();
+  }, [loadInvites]);
+
+  async function send() {
+    if (busy || !destination.trim()) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/host/properties/${propertyId}/stays/${stayId}/share`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ channel, destination: destination.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error || 'Could not send the invite.');
+        return;
+      }
+      setNotice(channel === 'sms'
+        ? 'Text sent — your guest gets the portal link and stay code in a moment.'
+        : 'Email sent — your guest gets the portal link and stay code in a moment.');
+      setDestination('');
+      await loadInvites();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: '1rem' }} data-testid="share-stay-panel">
+      <h2 style={{ fontSize: '1rem', margin: '0 0 .4rem' }}>Share with guests</h2>
+      <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .65rem' }}>
+        Moche-AI texts or emails your guest the guest-portal link and this stay's access code for you.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '.6rem', alignItems: 'center' }}>
+        <select
+          className="select"
+          value={channel}
+          onChange={(event) => setChannel(event.target.value as 'sms' | 'email')}
+          aria-label="Delivery channel"
+          data-testid="share-channel"
+        >
+          <option value="sms">Text message</option>
+          <option value="email">Email</option>
+        </select>
+        <input
+          className="input"
+          value={destination}
+          onChange={(event) => setDestination(event.target.value)}
+          placeholder={channel === 'sms' ? '+1 555 000 0000' : 'guest@email.com'}
+          inputMode={channel === 'sms' ? 'tel' : 'email'}
+          aria-label={channel === 'sms' ? 'Guest phone number' : 'Guest email address'}
+          data-testid="share-destination"
+        />
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => void send()}
+          disabled={busy || !enabled || !destination.trim()}
+          data-testid="share-send"
+        >
+          <Send size={14} aria-hidden /> {busy ? 'Sending…' : 'Send invite'}
+        </button>
+      </div>
+      {!enabled && (
+        <p className="faint" style={{ fontSize: '.72rem', margin: '.45rem 0 0' }}>
+          This stay needs an active access code before you can share it — use Regenerate code above.
+        </p>
+      )}
+      {notice && <p role="status" style={{ color: 'var(--teal)', fontSize: '.8rem', margin: '.5rem 0 0' }}>{notice}</p>}
+      {error && <p role="alert" style={{ color: 'var(--coral)', fontSize: '.8rem', margin: '.5rem 0 0' }}>{error}</p>}
+      {invites.length > 0 && (
+        <div style={{ display: 'grid', gap: '.35rem', marginTop: '.65rem' }} data-testid="share-log">
+          {invites.map((invite) => (
+            <div key={invite.id} className="faint" style={{ fontSize: '.74rem', display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {invite.channel === 'email' ? <Mail size={12} aria-hidden /> : <MessageSquareText size={12} aria-hidden />}
+              <span>{invite.channel === 'email' ? 'Email' : 'Text'} to ••••{invite.destinationLast4 ?? '????'}</span>
+              <span className={`badge ${invite.status === 'sent' ? 'badge-teal' : invite.status === 'failed' ? 'badge-coral' : ''}`}>{invite.status}</span>
+              <span>{new Date(invite.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => void }) {
   const [state, formAction] = useFormState<StayActionState, FormData>(createStayAction, {});
   const [copied, setCopied] = useState(false);
-  // Auto-close only when there is nothing to hand off: a freshly minted visit
-  // code is shown exactly once, so the form stays open until the host confirms.
+  // Auto-close only when there is nothing to hand off: a freshly minted access
+  // code confirmation stays open until the host acknowledges it.
   if (state.ok && !state.portalCode && !state.portalError) queueMicrotask(onDone);
 
   if (state.ok && state.portalCode) {
@@ -215,11 +338,11 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
       <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem', borderColor: 'var(--teal-deep)' }} data-testid="stay-portal-confirmation">
         <h3 style={{ fontSize: '1.05rem', marginBottom: '.4rem' }}>Stay created — guest portal ready</h3>
         <p className="muted" style={{ fontSize: '.85rem', marginBottom: '.9rem' }}>
-          Share the link and code with your guest. Opening the link asks for this 4-digit code before the concierge unlocks.
+          Share the link and code with your guests — one code covers the whole party. Opening the link asks for this 4-digit code before the concierge unlocks.
         </p>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div className="portal-code-box">
-            <div className="faint" style={{ fontSize: '.65rem' }}>Visit code (shown once)</div>
+            <div className="faint" style={{ fontSize: '.65rem' }}>Stay access code</div>
             <div className="portal-code" style={{ fontSize: '1.5rem' }} data-testid="stay-portal-code">{state.portalCode}</div>
           </div>
           <div style={{ flex: 1, minWidth: 220 }}>
@@ -238,8 +361,8 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
           </div>
         </div>
         <p className="faint" style={{ fontSize: '.72rem', marginTop: '.7rem' }}>
-          Shown once and never stored in readable form — copy both now.
-          {state.portalCodeExpiresAt ? ` The code works until ${fmt(state.portalCodeExpiresAt)} (check-out + grace).` : ''}
+          The code stays re-viewable from the stay's access panel for the life of the stay — no regenerate loop.
+          {state.portalCodeExpiresAt ? ` It works until ${fmt(state.portalCodeExpiresAt)} (check-out + grace).` : ''}
         </p>
         <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: '.8rem' }} onClick={onDone} data-testid="button-portal-confirmation-done">
           Done
@@ -303,9 +426,9 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
   );
 }
 
-// Regenerating the visit code is deliberately a small secondary action: the
+// Regenerating the access code is deliberately a small secondary action: the
 // primary flow is the automatic mint at stay creation (Ticket 3). The new code
-// is shown exactly once; the old one stops working immediately.
+// replaces the old one immediately and stays re-viewable from the access panel.
 function PortalCodeRegenerator({ propertyId, stayId, linkId }: { propertyId: string; stayId: string; linkId: string }) {
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -326,7 +449,7 @@ function PortalCodeRegenerator({ propertyId, stayId, linkId }: { propertyId: str
   if (code) {
     return (
       <div className="portal-code-box" data-testid={`stay-code-regenerated-${stayId}`}>
-        <div className="faint" style={{ fontSize: '.65rem' }}>New visit code (shown once)</div>
+        <div className="faint" style={{ fontSize: '.65rem' }}>New access code</div>
         <div className="portal-code" style={{ fontSize: '1.3rem' }}>{code}</div>
       </div>
     );
@@ -417,7 +540,7 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
           <div className="portal-code-box" style={{ marginTop: '.6rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem' }}>
               <div>
-                <div className="faint" style={{ fontSize: '.65rem' }}>Visit code (required — shown once)</div>
+                <div className="faint" style={{ fontSize: '.65rem' }}>Access code (required)</div>
                 <div className="portal-code" style={{ fontSize: '1.3rem' }}>{minted.code}</div>
               </div>
               <div style={{ display: 'flex', gap: '.3rem' }}>
@@ -443,8 +566,8 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
 
         <p className="faint" style={{ fontSize: '.68rem', marginTop: '.4rem' }}>
           {minted.code
-            ? 'Shown once — copy the link and code now. Share both with your whole party: opening the link asks for this 4-digit code before the concierge unlocks.'
-            : 'Shown once — copy it now. Share with your whole party: anyone who opens it goes straight into the concierge, no email or phone verification needed.'}
+            ? 'Copy the link and code now. Share both with your whole party: opening the link asks for this 4-digit code before the concierge unlocks.'
+            : 'Copy it now. Share with your whole party: anyone who opens it goes straight into the concierge, no email or phone verification needed.'}
         </p>
       </div>
     );
@@ -456,7 +579,7 @@ function StayLinkMinter({ propertyId, stayId }: { propertyId: string; stayId: st
         {busy ? 'Creating…' : 'Create shareable guest link'}
       </button>
       <p className="faint" style={{ fontSize: '.68rem', marginTop: '.25rem', maxWidth: 320 }}>
-        One link for the whole party — comes with a 4-digit visit code guests enter once to unlock the concierge.
+        One link for the whole party — comes with a 4-digit stay code guests enter once per device to unlock the concierge.
       </p>
       {err && <p style={{ color: 'var(--coral)', fontSize: '.72rem', marginTop: '.25rem' }}>{err}</p>}
     </div>
