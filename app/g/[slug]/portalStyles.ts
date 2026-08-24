@@ -8,6 +8,8 @@
 // solid values (never opacity-dimmed white over a dark guess) so BOTH themes
 // keep readable contrast — a guest switching theme must never lose a message,
 // placeholder, or button label to a same-color background.
+import { useCallback, useEffect, useState } from 'react';
+
 export const PORTAL_CSS = `
 .gp-v2 {
   --gp-bg: #0b0f0e;
@@ -145,7 +147,7 @@ export const PORTAL_CSS = `
 }
 
 .gp-wf-header { display: flex; align-items: center; gap: 10px; padding: 4px 0 14px; }
-.gp-back { display: inline-flex; align-items: center; gap: 4px; background: var(--gp-ghost-bg); border: 1px solid var(--gp-border); color: inherit; border-radius: 10px; padding: 9px 12px; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+.gp-back { display: inline-flex; align-items: center; gap: 4px; background: var(--gp-ghost-bg); border: 1px solid var(--gp-border); color: inherit; border-radius: 10px; padding: 9px 12px; font-size: 0.88rem; font-weight: 600; cursor: pointer; text-decoration: none; }
 .gp-wf-title { font-family: var(--font-portal-serif), Georgia, serif; font-size: 1.25rem; font-weight: 600; }
 
 .gp-banner { border-radius: 12px; padding: 11px 14px; font-size: 0.85rem; line-height: 1.45; margin-bottom: 14px; color: var(--gp-text); }
@@ -203,6 +205,7 @@ export const PORTAL_CSS = `
 
 .gp-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--gp-ghost-bg); color: var(--gp-text); border: 1px solid var(--gp-border); }
 .gp-badge-waiting { background: var(--gp-accent-soft-bg); color: var(--gp-accent-text); border-color: var(--gp-accent-soft-border); }
+.gp-badge-pick { background: var(--gp-primary-soft); color: var(--gp-icon); border-color: var(--gp-primary); }
 
 .gp-offer { background: var(--gp-surface); border: 1px solid var(--gp-border); border-radius: 14px; padding: 15px; margin-bottom: 10px; cursor: pointer; text-align: left; width: 100%; color: inherit; }
 .gp-offer:hover { border-color: var(--gp-primary); }
@@ -237,6 +240,57 @@ export const PORTAL_CSS = `
 .gp-picker-item-title { font-weight: 650; }
 .gp-picker-item-sub { display: block; font-size: .78rem; color: var(--gp-muted); margin-top: 1px; }
 
+/* Local guide (/g/[slug]/local). */
+.gp-section-title { font-family: var(--font-portal-serif), Georgia, serif; font-size: 1.15rem; font-weight: 600; margin: 20px 0 10px; display: flex; align-items: center; gap: .45rem; }
+.gp-filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.gp-filter-chip { background: var(--gp-ghost-bg); border: 1px solid var(--gp-border); color: inherit; border-radius: 999px; padding: 8px 13px; font-size: .82rem; font-weight: 600; cursor: pointer; }
+.gp-filter-chip:hover { border-color: var(--gp-primary); }
+.gp-filter-chip-on { border-color: var(--gp-primary); background: var(--gp-primary-soft); color: var(--gp-icon); }
+.gp-place-card { display: flex; gap: 12px; background: var(--gp-surface); border: 1px solid var(--gp-border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+.gp-place-icon { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--gp-art-bg); border: 1px solid var(--gp-border); color: var(--gp-icon); }
+.gp-place-body { flex: 1; min-width: 0; }
+.gp-place-title { font-weight: 700; font-size: .98rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gp-place-meta { font-size: .8rem; color: var(--gp-muted); margin-top: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.gp-place-note { font-size: .85rem; color: var(--gp-text); margin: 8px 0 0; line-height: 1.45; }
+.gp-place-addr { font-size: .78rem; color: var(--gp-faint); margin: 6px 0 0; }
+.gp-place-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.gp-place-link { display: inline-flex; align-items: center; gap: 5px; font-size: .82rem; font-weight: 600; color: var(--gp-icon); background: var(--gp-ghost-bg); border: 1px solid var(--gp-border); border-radius: 999px; padding: 7px 12px; text-decoration: none; }
+.gp-place-link:hover { border-color: var(--gp-primary); }
+
 .gp-spin { animation: gp-spin 1s linear infinite; }
 @keyframes gp-spin { to { transform: rotate(360deg); } }
 `;
+
+// ---------------------------------------------------------------------------
+// Portal theme hook (client). Shared by the portal shell and the local guide so
+// the guest's light/dark choice follows them across portal pages. Dark is the
+// default; a stored light choice applies right after mount.
+// ---------------------------------------------------------------------------
+export type PortalTheme = 'dark' | 'light';
+const THEME_STORAGE_KEY = 'gp-theme';
+
+export function usePortalTheme(): { theme: PortalTheme; toggleTheme: () => void } {
+  const [theme, setTheme] = useState<PortalTheme>('dark');
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(THEME_STORAGE_KEY) === 'light') setTheme('light');
+    } catch {
+      // Private-browsing modes can throw; the dark default simply stays.
+    }
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next: PortalTheme = current === 'dark' ? 'light' : 'dark';
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // Still applies for this view even if it cannot persist.
+      }
+      return next;
+    });
+  }, []);
+
+  return { theme, toggleTheme };
+}

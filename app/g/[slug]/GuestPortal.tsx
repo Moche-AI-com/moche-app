@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useState, type CSSProperties } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { CodeEntry } from './CodeEntry';
 import { RegisterForm } from './RegisterForm';
@@ -9,12 +9,9 @@ import { AiChatWorkflow } from './AiChatWorkflow';
 import { HostChatWorkflow } from './HostChatWorkflow';
 import { MaintenanceWorkflow } from './MaintenanceWorkflow';
 import { ExtrasWorkflow, type GuestExtraOffer } from './ExtrasWorkflow';
-import { PORTAL_CSS } from './portalStyles';
+import { PORTAL_CSS, usePortalTheme } from './portalStyles';
 
 export type PortalStep = 'code' | 'register' | 'menu' | 'ask' | 'host' | 'maintenance' | 'extras';
-
-type PortalTheme = 'dark' | 'light';
-const THEME_STORAGE_KEY = 'gp-theme';
 
 // Enhanced guest portal shell: a step machine covering
 //   code entry → registration → main menu → one of four workflows.
@@ -48,30 +45,7 @@ export function GuestPortal(props: {
     return 'register';
   });
   const [guestName, setGuestName] = useState<string | null>(props.guestName);
-  const [theme, setTheme] = useState<PortalTheme>('dark');
-
-  // Restore the guest's theme choice after mount. Reading localStorage during
-  // SSR would crash, so the first paint is always the dark default and a stored
-  // light choice applies immediately after.
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem(THEME_STORAGE_KEY) === 'light') setTheme('light');
-    } catch {
-      // Private-browsing modes can throw; the dark default simply stays.
-    }
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    setTheme((current) => {
-      const next: PortalTheme = current === 'dark' ? 'light' : 'dark';
-      try {
-        window.localStorage.setItem(THEME_STORAGE_KEY, next);
-      } catch {
-        // Still applies for this view even if it cannot persist.
-      }
-      return next;
-    });
-  }, []);
+  const { theme, toggleTheme } = usePortalTheme();
 
   const goMenu = useCallback(() => setStep('menu'), []);
   const goCode = useCallback(() => setStep('code'), []);
