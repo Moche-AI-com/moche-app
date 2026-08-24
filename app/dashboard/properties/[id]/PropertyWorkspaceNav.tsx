@@ -108,6 +108,10 @@ export function PropertyWorkspaceNav({
           })}
         </div>
       </nav>
+      {/* The workspace shell grid (.property-workspace-header / -main) lives in
+          globals.css: those elements render in the parent layout, and scoped
+          styled-jsx could never match them — the mobile collapse was dead code
+          until it moved there. */}
       <style jsx>{`
         .property-workspace-breadcrumb { grid-column: 1 / -1; display: flex; align-items: center; min-height: 2.75rem; gap: .45rem; font-size: .82rem; color: var(--text-muted); }
         .property-workspace-breadcrumb a { color: inherit; text-decoration: none; min-height: 2.75rem; display: inline-flex; align-items: center; }
@@ -117,8 +121,6 @@ export function PropertyWorkspaceNav({
         .property-workspace-nav-links a { display: flex; align-items: center; min-height: 2.35rem; padding: .45rem .65rem; border-radius: 10px; color: var(--text-muted); text-decoration: none; font-size: .9rem; }
         .property-workspace-nav-links a:hover, .property-workspace-nav-links a.active { color: var(--text); background: rgba(255,255,255,.07); }
         @media (max-width: 860px) {
-          .property-workspace-main { grid-template-columns: minmax(0, 1fr) !important; }
-          .property-workspace-header { grid-template-columns: minmax(0, 1fr) !important; }
           .property-workspace-nav { overflow-x: auto; padding-bottom: .2rem; scrollbar-width: thin; }
           .property-workspace-nav-links { flex-direction: row; min-width: max-content; }
         }
