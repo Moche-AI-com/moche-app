@@ -45,16 +45,12 @@ export default async function StaysPage({
   // Ticket 2B: the admin client reads portal links and decrypts their codes — the
   // host is already authorized by requirePropertyAccess above, and portal_code_read
   // is service_role-only by design. Rows minted before the Vault envelope have no
-  // code_secret_ref and render masked.
-  //
-  // The query goes through `(admin as any)`: code_secret_ref lands in the generated
-  // types only after the migration is applied and types are regenerated, and the
-  // codebase's existing idiom for pre-types columns is the any-cast (see the guests
-  // route's stay_guests queries).
+  // code_secret_ref and render masked. The query is fully typed against the
+  // regenerated database types.
   const stayIds = (stays ?? []).map((s) => s.id as string);
   const admin = createAdminClient();
   const { data: portalLinks } = stayIds.length
-    ? await (admin as any)
+    ? await admin
         .from('guest_access_links')
         .select('id, stay_id, code_expires_at, code_revoked_at, code_secret_ref, created_at')
         .in('stay_id', stayIds)
@@ -67,9 +63,9 @@ export default async function StaysPage({
     const sid = link.stay_id as string;
     if (portalByStayId.has(sid)) continue;
     let code: string | null = null;
-    const ref = (link as { code_secret_ref?: string | null }).code_secret_ref ?? null;
+    const ref = link.code_secret_ref ?? null;
     if (ref && ref.startsWith('vault:')) {
-      const { data: decrypted } = await (admin as any).rpc('portal_code_read', { p_secret_id: ref.slice('vault:'.length) });
+      const { data: decrypted } = await admin.rpc('portal_code_read', { p_secret_id: ref.slice('vault:'.length) });
       if (typeof decrypted === 'string' && decrypted) code = decrypted;
     }
     portalByStayId.set(sid, {
