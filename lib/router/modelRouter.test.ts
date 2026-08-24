@@ -298,6 +298,7 @@ describe('routedCompletion', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_CONCIERGE_ENABLED: 'true',
       OPENROUTER_GUEST_MODEL_ALLOWLIST: 'openai/gpt-4o-mini,openai/gpt-4o-mini,unreviewed/model',
       // Ignored on the guest route; present to prove the allowlist wins.
       OPENROUTER_MODEL_CONCIERGE: 'anthropic/claude-haiku-4.5',
