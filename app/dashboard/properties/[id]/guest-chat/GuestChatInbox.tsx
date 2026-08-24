@@ -6,6 +6,7 @@ import {
   Brain,
   CheckCheck,
   ChevronDown,
+  Languages,
   Loader2,
   Megaphone,
   MessageSquareText,
@@ -40,6 +41,10 @@ type ChatMessage = {
   messageKind: string;
   replyToMessageId: string | null;
   escalationId: string | null;
+  // Auto-translation of a guest's message into the host's language (the guest
+  // picked a language in the portal). The original above is always preserved.
+  hostTranslation?: string | null;
+  hostTranslationLang?: string | null;
 };
 
 function shortId(id: string | null) {
@@ -336,6 +341,15 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce, canLearn }: { 
                         {escalation && <div className="bubble-flag bubble-flag-escalation"><AlertTriangle size={13} aria-hidden /> AI escalation</div>}
                         {message.messageKind === 'announcement' && <div className="bubble-flag bubble-flag-announcement"><Megaphone size={13} aria-hidden /> Announcement</div>}
                         <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
+                        {message.role === 'guest' && message.hostTranslation ? (
+                          <div
+                            className="muted"
+                            style={{ marginTop: '.45rem', paddingTop: '.45rem', borderTop: '1px dashed rgba(128,128,128,.35)', fontSize: '.8rem', display: 'flex', gap: '.35rem', alignItems: 'flex-start' }}
+                          >
+                            <Languages size={12} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+                            <span style={{ whiteSpace: 'pre-wrap' }}>{message.hostTranslation}</span>
+                          </div>
+                        ) : null}
                         <div className="bubble-meta">
                           <span>{timeLabel(message.createdAt)}</span>
                           <button type="button" className="bubble-reply" onClick={() => setReplyTo(message)}>Reply</button>

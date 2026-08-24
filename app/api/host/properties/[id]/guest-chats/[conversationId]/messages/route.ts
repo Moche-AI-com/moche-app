@@ -25,6 +25,10 @@ function mapMessage(row: any) {
     messageKind: (row.message_kind ?? 'text') as string,
     replyToMessageId: (row.reply_to_message_id ?? null) as string | null,
     escalationId: (row.escalation_id ?? null) as string | null,
+    // Auto-translation of a guest message into the host's language (written by
+    // the guest host-chat route; null when none was needed or produced).
+    hostTranslation: (row.host_translation ?? null) as string | null,
+    hostTranslationLang: (row.host_translation_lang ?? null) as string | null,
   };
 }
 
@@ -52,7 +56,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const { data: rows, error } = await (admin as any)
     .from('messages')
-    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
+    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id, host_translation, host_translation_lang')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
     .limit(500);

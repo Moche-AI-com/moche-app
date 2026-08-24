@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { notify } from '@/lib/notify';
+import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
+import { translateForHost } from '@/lib/guest/translate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +13,9 @@ export const dynamic = 'force-dynamic';
 const postSchema = z.object({
   message: z.string().trim().min(1, 'Write a message first.').max(2000),
   replyToMessageId: z.string().uuid().optional(),
+  // The guest's portal language (Globe picker). Optional — older clients and
+  // "Automatic" mode simply send nothing, and no translation runs.
+  language: z.string().trim().max(40).optional(),
 });
 
 type AuthSuccess = {
@@ -92,6 +97,10 @@ function mapMessage(row: any) {
     messageKind: (row.message_kind ?? 'text') as string,
     replyToMessageId: (row.reply_to_message_id ?? null) as string | null,
     escalationId: (row.escalation_id ?? null) as string | null,
+    // Host-facing auto-translation of a guest message (null when the guest
+    // writes in the host's language or translation was skipped/failed).
+    hostTranslation: (row.host_translation ?? null) as string | null,
+    hostTranslationLang: (row.host_translation_lang ?? null) as string | null,
   };
 }
 
@@ -104,7 +113,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
 
   const { data: rows, error } = await (auth.admin as any)
     .from('messages')
-    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
+    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id, host_translation, host_translation_lang')
     .eq('conversation_id', conversation.id)
     .order('created_at', { ascending: true })
     .limit(300);
@@ -149,6 +158,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     if (!replyTo) return NextResponse.json({ error: 'The message you are replying to was not found.' }, { status: 404 });
   }
 
+  // Guest UX pass — translate the guest's words into the host's language so the
+  // host reads Host Chat without a translator app. The ORIGINAL stays in
+  // `content` untouched (a mistranslated door code must never be the only copy);
+  // the translation rides in its own columns for host-facing surfaces. Same
+  // language on both sides (or an unknown picker value) stores no translation.
+  const guestLanguage = resolveLanguage(parsed.data.language);
+  let hostTranslation: string | null = null;
+  let hostTranslationLang: string | null = null;
+  if (guestLanguage) {
+    const { data: langSettings } = await (admin as any)
+      .from('property_settings')
+      .select('host_language')
+      .eq('property_id', session.propertyId)
+      .maybeSingle();
+    const hostLanguage = (langSettings?.host_language as string | null) ?? DEFAULT_HOST_LANGUAGE;
+    const translated = await translateForHost(parsed.data.message, guestLanguage.code, hostLanguage);
+    hostTranslation = translated.translated;
+    hostTranslationLang = translated.translated ? (resolveLanguage(hostLanguage)?.code ?? DEFAULT_HOST_LANGUAGE) : null;
+
+    // Persist the choice on the stay so every later surface (notifications, a
+    // second device, the next visit) knows what the guest reads.
+    void (admin as any).from('stays').update({ guest_language: guestLanguage.code }).eq('id', session.stayId);
+  }
+
   const now = new Date().toISOString();
   const { data: inserted, error } = await (admin as any)
     .from('messages')
@@ -159,8 +192,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       content: parsed.data.message,
       message_kind: 'text',
       reply_to_message_id: replyToId,
+      host_translation: hostTranslation,
+      host_translation_lang: hostTranslationLang,
     })
-    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
+    .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id, host_translation, host_translation_lang')
     .single();
 
   if (error) return NextResponse.json({ error: 'Could not send your message.' }, { status: 500 });

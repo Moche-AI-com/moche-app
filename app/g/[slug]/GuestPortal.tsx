@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { CodeEntry } from './CodeEntry';
 import { RegisterForm } from './RegisterForm';
@@ -9,9 +9,13 @@ import { AiChatWorkflow } from './AiChatWorkflow';
 import { HostChatWorkflow } from './HostChatWorkflow';
 import { MaintenanceWorkflow } from './MaintenanceWorkflow';
 import { ExtrasWorkflow, type GuestExtraOffer } from './ExtrasWorkflow';
+import { LanguagePicker } from '@/components/guest/LanguagePicker';
+import { resolveLanguage } from '@/lib/guest/languages';
 import { PORTAL_CSS, usePortalTheme } from './portalStyles';
 
 export type PortalStep = 'code' | 'register' | 'menu' | 'ask' | 'host' | 'maintenance' | 'extras';
+
+const LANG_STORAGE_KEY = 'gp-lang';
 
 // Enhanced guest portal shell: a step machine covering
 //   code entry → registration → main menu → one of four workflows.
@@ -21,6 +25,12 @@ export type PortalStep = 'code' | 'register' | 'menu' | 'ask' | 'host' | 'mainte
 // the header. The choice persists on the device (localStorage) and every color
 // flows through the semantic variables in portalStyles.ts, so text stays
 // readable against its background in both themes.
+//
+// Language: the header Globe sets the guest's language. It is sent with every
+// concierge + host-chat request (the AI replies in it; the host receives an
+// auto-translation), persists on-device, and is restored from the stay record
+// (stays.guest_language) on return visits — the server value wins because it
+// is the one the host's notifications were already translated against.
 export function GuestPortal(props: {
   fontClassName: string;
   slug: string;
@@ -38,6 +48,7 @@ export function GuestPortal(props: {
   initialRegistered: boolean;
   extrasOffers: GuestExtraOffer[];
   accessToken: string | null;
+  initialLanguage: string | null;
 }) {
   const [step, setStep] = useState<PortalStep>(() => {
     if (!props.initialVerified) return 'code';
@@ -46,6 +57,35 @@ export function GuestPortal(props: {
   });
   const [guestName, setGuestName] = useState<string | null>(props.guestName);
   const { theme, toggleTheme } = usePortalTheme();
+  const [language, setLanguageState] = useState<string | null>(props.initialLanguage);
+
+  // No server-known language yet: fall back to this device's stored choice,
+  // then to the browser's language as a first guess (resolveLanguage maps
+  // regional variants like pt-PT onto the picker's codes).
+  useEffect(() => {
+    if (props.initialLanguage) return;
+    try {
+      const stored = window.localStorage.getItem(LANG_STORAGE_KEY);
+      if (stored && resolveLanguage(stored)) {
+        setLanguageState(stored);
+        return;
+      }
+      const browser = resolveLanguage(window.navigator.language);
+      if (browser) setLanguageState(browser.code);
+    } catch {
+      // Private-browsing modes can throw; Automatic stays in effect.
+    }
+  }, [props.initialLanguage]);
+
+  const setLanguage = useCallback((code: string | null) => {
+    setLanguageState(code);
+    try {
+      if (code) window.localStorage.setItem(LANG_STORAGE_KEY, code);
+      else window.localStorage.removeItem(LANG_STORAGE_KEY);
+    } catch {
+      // Still applies for this session even if it cannot persist.
+    }
+  }, []);
 
   const goMenu = useCallback(() => setStep('menu'), []);
   const goCode = useCallback(() => setStep('code'), []);
@@ -80,6 +120,7 @@ export function GuestPortal(props: {
             {props.location ? <div className="gp-property-loc">{props.location}</div> : null}
           </div>
           <div className="gp-header-actions">
+            <LanguagePicker value={language} onChange={setLanguage} />
             <button type="button" className="gp-icon-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>
               {theme === 'dark' ? <Sun size={17} aria-hidden /> : <Moon size={17} aria-hidden />}
             </button>
@@ -133,6 +174,7 @@ export function GuestPortal(props: {
               slug={props.slug}
               propertyId={props.propertyId}
               hostPreview={props.hostPreview}
+              language={language}
               onBack={goMenu}
               onOpenHostChat={openHostChat}
               onSessionExpired={goCode}
@@ -143,6 +185,7 @@ export function GuestPortal(props: {
             <HostChatWorkflow
               slug={props.slug}
               guestName={guestName}
+              language={language}
               onBack={goMenu}
               onSessionExpired={goCode}
             />

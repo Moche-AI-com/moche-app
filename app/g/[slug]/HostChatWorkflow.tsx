@@ -42,6 +42,9 @@ function timeLabel(value: string) {
 export function HostChatWorkflow(props: {
   slug: string;
   guestName: string | null;
+  // The guest's portal language (Globe picker). Sent with each message so the
+  // host receives an auto-translation alongside the original.
+  language?: string | null;
   onBack: () => void;
   onSessionExpired: () => void;
 }) {
@@ -84,7 +87,7 @@ export function HostChatWorkflow(props: {
       const res = await fetch(`/api/guest/${props.slug}/host-chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message, replyToMessageId: replyTo?.id }),
+        body: JSON.stringify({ message, replyToMessageId: replyTo?.id, language: props.language ?? undefined }),
       });
       if (res.status === 401) {
         props.onSessionExpired();

@@ -72,6 +72,20 @@ export default async function GuestPortalPage({
     guestName = session.guestDisplayName ?? null;
   }
 
+  // The stay's saved language (written by the chat/host-chat routes whenever the
+  // guest picks one) restores the Globe picker on return visits and other devices.
+  // Same loose-cast pattern as registered_at until database.types.ts regenerates.
+  let initialLanguage: string | null = null;
+  if (verified && session) {
+    const { data: stayRow } = await admin
+      .from('stays')
+      .select('guest_language')
+      .eq('id', session.stayId)
+      .maybeSingle();
+    const lang = (stayRow as Record<string, unknown> | null)?.guest_language;
+    initialLanguage = typeof lang === 'string' && lang.length > 0 ? lang : null;
+  }
+
   // Extras are loaded server-side only once a session exists (they are stay-scoped).
   let offers: GuestExtraOffer[] = [];
   if (verified) {
@@ -102,6 +116,7 @@ export default async function GuestPortalPage({
       initialRegistered={initialRegistered || isHostPreview}
       extrasOffers={offers}
       accessToken={typeof token === 'string' && token.length > 0 ? token : null}
+      initialLanguage={initialLanguage}
     />
   );
 }

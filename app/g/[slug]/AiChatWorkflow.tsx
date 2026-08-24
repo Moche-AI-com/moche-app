@@ -116,6 +116,9 @@ export function AiChatWorkflow(props: {
   slug: string;
   propertyId: string;
   hostPreview: boolean;
+  // The guest's portal language (Globe picker). Sent with every message — the
+  // concierge replies in it, and any escalation is translated for the host.
+  language?: string | null;
   onBack: () => void;
   onOpenHostChat: () => void;
   onSessionExpired: () => void;
@@ -219,7 +222,7 @@ export function AiChatWorkflow(props: {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, language: props.language ?? undefined }),
       });
       if (res.status === 401 && !props.hostPreview) {
         props.onSessionExpired();
@@ -292,6 +295,7 @@ export function AiChatWorkflow(props: {
         body: JSON.stringify({
           message:
             'I was looking for appliance instructions (coffee maker, toaster, washer, etc.), but no appliances are listed for this property yet. Could you add them in the Brain, or tell me how they work?',
+          language: props.language ?? undefined,
         }),
       });
       if (res.status === 401) {
