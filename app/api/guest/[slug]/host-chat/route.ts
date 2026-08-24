@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic';
 const postSchema = z.object({
   message: z.string().trim().min(1, 'Write a message first.').max(2000),
   replyToMessageId: z.string().uuid().optional(),
+  escalationId: z.string().uuid().optional(),
 });
 
 type AuthSuccess = {
@@ -149,6 +150,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     if (!replyTo) return NextResponse.json({ error: 'The message you are replying to was not found.' }, { status: 404 });
   }
 
+  // A guest can attach their reply to one of this stay's escalations. The row is
+  // verified against the session's own property + stay before it is used, so a
+  // guest can never write onto another stay's escalation.
+  let escalation: { id: string; status: string } | null = null;
+  if (parsed.data.escalationId) {
+    const { data } = await (admin as any)
+      .from('escalations')
+      .select('id, status')
+      .eq('id', parsed.data.escalationId)
+      .eq('property_id', session.propertyId)
+      .eq('stay_id', session.stayId)
+      .maybeSingle();
+    if (!data) return NextResponse.json({ error: 'That escalation was not found for this stay.' }, { status: 404 });
+    escalation = data;
+  }
+
   const now = new Date().toISOString();
   const { data: inserted, error } = await (admin as any)
     .from('messages')
@@ -159,6 +176,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       content: parsed.data.message,
       message_kind: 'text',
       reply_to_message_id: replyToId,
+      escalation_id: escalation?.id ?? null,
     })
     .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
     .single();
@@ -170,14 +188,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .update({ last_message_at: now, host_read_at: null, guest_read_at: now })
     .eq('id', conversation.id);
 
+  // A guest reply on an answered/handled escalation reopens it (owner decision
+  // 2026-08-24): the host sees it pinned again instead of missing the follow-up.
+  let reopened = false;
+  if (escalation && escalation.status !== 'open') {
+    await (admin as any)
+      .from('escalations')
+      .update({ status: 'open', pinned: true, resolved_at: null })
+      .eq('id', escalation.id);
+    reopened = true;
+  }
+
   await notify(admin, {
     hostAccountId: property.host_account_id,
-    kind: 'system',
-    title: `New guest message at ${property.display_name}`,
-    body: `${session.guestDisplayName} sent a message in Host Chat.`,
+    kind: reopened ? 'escalation' : 'system',
+    title: reopened ? `Escalation reopened at ${property.display_name}` : `New guest message at ${property.display_name}`,
+    body: reopened
+      ? `${session.guestDisplayName} replied to a handled escalation.`
+      : `${session.guestDisplayName} sent a message in Host Chat.`,
     propertyId: property.id,
-    // Deep link into the merged Stays tab (guest chat lives there now).
-    link: `/dashboard/properties/${property.id}/stays?stay=${session.stayId}`,
+    // Deep link straight into the full-page conversation (Stays redesign).
+    link: `/dashboard/properties/${property.id}/stays/${session.stayId}/conversations/${conversation.id}`,
   }).catch(() => undefined);
 
   return NextResponse.json({ ok: true, conversationId: conversation.id, message: mapMessage(inserted) });

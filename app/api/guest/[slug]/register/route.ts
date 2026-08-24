@@ -16,6 +16,11 @@ export const dynamic = 'force-dynamic';
 // PII posture matches the existing stack: the phone number is stored on the
 // identity only as HMAC hash + last4; the plaintext number lands only on the
 // guest's own session row (used for notification delivery when consented).
+//
+// One stay code (2026-08-24): registration also attaches a stay_guests identity
+// row (no PIN) so host chat threads attribute to this guest and the host sees
+// who has joined the stay. A returning guest on a new device reclaims their
+// existing row by phone hash instead of creating a duplicate.
 const registerSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.').max(80),
   lastName: z.string().trim().min(1, 'Last name is required.').max(80),
@@ -115,6 +120,61 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // Associate the guest with the reservation.
   await admin.from('stays').update({ guest_identity_id: identityId }).eq('id', session.stayId);
 
+  // One stay code: attach (or reclaim) this stay's stay_guests identity row, so
+  // host chat threads attribute to the guest and the host sees who has joined.
+  const db = admin as any;
+  const { data: sessionRow } = await db
+    .from('guest_access_sessions')
+    .select('stay_guest_id')
+    .eq('id', session.sessionId)
+    .maybeSingle();
+
+  let stayGuestId = (sessionRow?.stay_guest_id as string | null) ?? null;
+  if (!stayGuestId) {
+    const { data: existingGuest } = await db
+      .from('stay_guests')
+      .select('id')
+      .eq('property_id', session.propertyId)
+      .eq('stay_id', session.stayId)
+      .eq('phone_hash', contactHash)
+      .maybeSingle();
+
+    if (existingGuest) {
+      stayGuestId = existingGuest.id as string;
+      await db
+        .from('stay_guests')
+        .update({
+          guest_identity_id: identityId,
+          display_name: displayName,
+          notification_consent: notificationConsent,
+          notification_consent_at: notificationConsent ? now : null,
+        })
+        .eq('id', stayGuestId);
+    } else {
+      const { data: createdGuest, error: stayGuestError } = await db
+        .from('stay_guests')
+        .insert({
+          property_id: session.propertyId,
+          stay_id: session.stayId,
+          guest_identity_id: identityId,
+          display_name: displayName,
+          phone_hash: contactHash,
+          phone_last4: phoneDigits.slice(-4),
+          notification_consent: notificationConsent,
+          notification_consent_at: notificationConsent ? now : null,
+          terms_accepted_at: now,
+        })
+        .select('id')
+        .single();
+      if (stayGuestError) {
+        // Non-fatal: the identity + session are already durable. The host simply
+        // sees one fewer named guest until the next registration.
+        log.warn('guest_register_stay_guest_failed', { propertyId: session.propertyId, err: String(stayGuestError) });
+      }
+      stayGuestId = (createdGuest?.id as string | undefined) ?? null;
+    }
+  }
+
   // Mark the session registered and record the consent choice on it.
   const { error: sessErr } = await admin
     .from('guest_access_sessions')
@@ -125,6 +185,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       notification_consent_at: notificationConsent ? now : null,
       registered_at: now,
       guest_identity_id: identityId,
+      stay_guest_id: stayGuestId,
     } as never)
     .eq('id', session.sessionId);
   if (sessErr) {

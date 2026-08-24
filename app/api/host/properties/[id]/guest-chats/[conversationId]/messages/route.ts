@@ -47,10 +47,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const admin = createAdminClient();
+  const db = admin as any;
   const conversation = await loadConversation(admin, id, conversationId);
   if (!conversation) return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
 
-  const { data: rows, error } = await (admin as any)
+  const { data: rows, error } = await db
     .from('messages')
     .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
     .eq('conversation_id', conversationId)
@@ -58,12 +59,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .limit(500);
   if (error) return NextResponse.json({ error: 'Could not load messages.' }, { status: 500 });
 
-  await (admin as any)
+  // Escalation state rides along so the full-page thread can badge and gate the
+  // highlighted Reply CTA without a second round-trip.
+  const { data: escRows } = await db
+    .from('escalations')
+    .select('id, question, status, created_at, resolved_at')
+    .eq('property_id', id)
+    .or(`conversation_id.eq.${conversationId},host_conversation_id.eq.${conversationId}`)
+    .order('created_at', { ascending: true })
+    .limit(50);
+
+  await db
     .from('conversations')
     .update({ host_read_at: new Date().toISOString() })
     .eq('id', conversationId);
 
-  return NextResponse.json({ conversation, messages: (rows ?? []).map(mapMessage) });
+  return NextResponse.json({ conversation, messages: (rows ?? []).map(mapMessage), escalations: escRows ?? [] });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; conversationId: string }> }) {
@@ -154,12 +165,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
       if (parsed.data.learnFromReply) {
         try {
+          // Learn from the escalation thread only — never the whole
+          // conversation — so the normalizer reads exactly the messages this
+          // escalation resolved. Keeps the proposal focused and the token
+          // spend small.
           const { data: threadRows } = await db
             .from('messages')
             .select('id, role, content, created_at')
             .eq('conversation_id', conversationId)
+            .eq('escalation_id', escalationId)
             .order('created_at', { ascending: true })
-            .limit(200);
+            .limit(100);
 
           const normalized = await normalizeGuestAnswerForBrain({
             question: escalation.question,

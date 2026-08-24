@@ -6,6 +6,7 @@ import { DEFAULT_MODULES, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_GRACE_PERIOD_HOU
 import { DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { SettingsForms } from './SettingsForms';
 import { PropertyLinkMinter } from '../PropertyLinkMinter';
+import { ChatPermissionsPanel } from '../guest-chat/ChatPermissionsPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +66,7 @@ export default async function PropertySettingsPage({ params }: { params: Promise
       <div style={{ margin: '.5rem 0 1.5rem' }}>
         <h1 style={{ fontSize: '1.8rem' }}>Settings</h1>
         <p className="faint" style={{ fontSize: '.85rem', marginTop: '.25rem' }}>
-          {property.display_name} — branding, concierge voice, and portal modules.
+          {property.display_name} — branding, concierge voice, portal modules, and team chat.
         </p>
       </div>
       <SettingsForms property={property} settings={normalized} premiumUnlocked={premiumUnlocked} reviewUnlocked={ent.reviewNudge} planName={planName} />
@@ -74,6 +75,13 @@ export default async function PropertySettingsPage({ params }: { params: Promise
           property-scoped tooling, so it lives in Configuration — not per-stay. */}
       <div style={{ marginTop: '1.5rem' }}>
         <PropertyLinkMinter propertyId={property.id} />
+      </div>
+
+      {/* Team chat permissions are per-property configuration, so they live here
+          in Settings — not on the Stays workspace. The panel enforces its own
+          permissions server-side on every read and write. */}
+      <div style={{ marginTop: '1.5rem' }}>
+        <ChatPermissionsPanel propertyId={property.id} />
       </div>
     </div>
   );
