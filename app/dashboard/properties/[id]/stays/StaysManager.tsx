@@ -44,6 +44,8 @@ export function StaysManager({
   // inbox, or null for list-only. Deep links arrive via ?stay=<id>.
   const [selected, setSelected] = useState<string | null>(initialStayId);
   const selectedStay = stays.find((s) => s.id === selected) ?? null;
+  // portalCodeStatus takes a non-null PortalCodeState — guard the optional chain.
+  const selectedPortalState = selectedStay?.portal ? portalCodeStatus(selectedStay.portal) : null;
 
   function toggle(id: string) {
     setSelected((current) => (current === id ? null : id));
@@ -178,7 +180,7 @@ export function StaysManager({
                   <ShareStayPanel
                     propertyId={propertyId}
                     stayId={selectedStay.id}
-                    enabled={Boolean(selectedStay.portal?.code) && portalCodeStatus(selectedStay.portal) === 'active'}
+                    enabled={Boolean(selectedStay.portal?.code) && selectedPortalState === 'active'}
                   />
                   <StayGuestsManager propertyId={propertyId} stayId={selectedStay.id} />
                 </>
@@ -271,7 +273,7 @@ function ShareStayPanel({ propertyId, stayId, enabled }: { propertyId: string; s
     <div className="card" style={{ padding: '1rem' }} data-testid="share-stay-panel">
       <h2 style={{ fontSize: '1rem', margin: '0 0 .4rem' }}>Share with guests</h2>
       <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .65rem' }}>
-        Moche-AI texts or emails your guest the guest-portal link and this stay's access code for you.
+        Moche-AI texts or emails your guest the guest-portal link and this stay’s access code for you.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '.6rem', alignItems: 'center' }}>
         <select
@@ -361,7 +363,7 @@ function StayForm({ propertyId, onDone }: { propertyId: string; onDone: () => vo
           </div>
         </div>
         <p className="faint" style={{ fontSize: '.72rem', marginTop: '.7rem' }}>
-          The code stays re-viewable from the stay's access panel for the life of the stay — no regenerate loop.
+          The code stays re-viewable from the stay’s access panel for the life of the stay — no regenerate loop.
           {state.portalCodeExpiresAt ? ` It works until ${fmt(state.portalCodeExpiresAt)} (check-out + grace).` : ''}
         </p>
         <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: '.8rem' }} onClick={onDone} data-testid="button-portal-confirmation-done">

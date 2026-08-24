@@ -74,7 +74,10 @@ export function ConversationThread({
   const endRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const escalationById = useMemo(() => new Map(escalations.map((e) => [e.id, e])), [escalations]);
+  const escalationById = useMemo(
+    () => new Map<string, ThreadEscalation>(escalations.map((e): [string, ThreadEscalation] => [e.id, e])),
+    [escalations],
+  );
   const openEscalations = escalations.filter((e) => e.status !== 'resolved');
 
   const load = useCallback(async () => {
