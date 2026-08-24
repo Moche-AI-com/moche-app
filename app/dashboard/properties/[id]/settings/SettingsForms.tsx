@@ -267,7 +267,9 @@ function BrandingForm({ property }: { property: Property }) {
         <input className="input" id="displayName" name="displayName" maxLength={120} defaultValue={property.display_name} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      {/* grid-2 opts each two-column row into the existing 480px single-column
+          collapse utility — inline grid styles alone never collapse. */}
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="city">City</label>
           <input className="input" id="city" name="city" maxLength={120} defaultValue={property.city ?? ''} />
@@ -278,7 +280,7 @@ function BrandingForm({ property }: { property: Property }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="country">Country</label>
           <input className="input" id="country" name="country" maxLength={120} defaultValue={property.country ?? ''} />
@@ -299,7 +301,7 @@ function BrandingForm({ property }: { property: Property }) {
         initialQuery={property.address_line1 ?? ''}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="addressLine1">Address line 1</label>
           <input className="input" id="addressLine1" name="addressLine1" maxLength={200} defaultValue={property.address_line1 ?? ''} placeholder="12 Ocean View Rd" />
@@ -321,7 +323,7 @@ function BrandingForm({ property }: { property: Property }) {
         </select>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="brandPrimary">Brand color</label>
           <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
@@ -369,7 +371,7 @@ function ConciergeForm({ propertyId, settings, premiumUnlocked, planName }: { pr
 
       {/* FREE — always editable: the three core sliders. */}
       <h3 style={{ fontSize: '.95rem', marginBottom: '.6rem' }}>Core controls</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="aiTemperature">
             Creativity ({(settings.ai_temperature ?? 0.2).toFixed(1)})
@@ -493,7 +495,7 @@ function ConciergeForm({ propertyId, settings, premiumUnlocked, planName }: { pr
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+          <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
             <div className="field">
               <label className="label" htmlFor="conciergeLanguage">Response language</label>
               <select className="select" id="conciergeLanguage" name="language" defaultValue={settings.language || 'auto'} data-testid="select-language">

@@ -33,16 +33,10 @@ export default async function PropertyWorkspaceLayout({
         ← All properties
       </Link>
 
-      <header
-        className="card property-workspace-header"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(220px, 300px)',
-          gap: '1rem',
-          padding: '1rem 1.15rem',
-          marginBottom: '1rem',
-        }}
-      >
+      {/* Grid styles live in globals.css (.property-workspace-header /
+          .property-workspace-main) — class-driven so the 860px mobile collapse
+          actually applies. Inline grid styles would override it. */}
+      <header className="card property-workspace-header">
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.55rem', margin: 0 }}>{property.display_name}</h1>
@@ -79,10 +73,7 @@ export default async function PropertyWorkspaceLayout({
         </div>
       </header>
 
-      <div
-        className="property-workspace-main"
-        style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(0, 1fr)', alignItems: 'start', columnGap: '1.5rem', rowGap: '.85rem' }}
-      >
+      <div className="property-workspace-main">
         <PropertyWorkspaceNav propertyId={property.id} propertyName={property.display_name} canEditProperty={can.editProperty} />
         <div style={{ minWidth: 0 }}>{children}</div>
       </div>

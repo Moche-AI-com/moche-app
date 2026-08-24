@@ -1773,3 +1773,32 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   .stay-card, .chat-thread-item, .chip-toggle, .chat-composer-send { transition: none; }
   .chat-composer-send:hover:not(:disabled) { transform: none; }
 }
+
+/* ============================================================
+   Property workspace shell — the responsive frame every /properties/[id]
+   page renders inside. Mobile-first: single column by default so a phone
+   never gets the two-column squeeze; the nav rail and header aside earn
+   their columns at 860px.
+   (These rules used to live in a scoped <style jsx> block inside
+   PropertyWorkspaceNav, but the elements they target render in the parent
+   layout — scoped styled-jsx could never match them, so the mobile
+   collapse never ran.)
+   ============================================================ */
+.property-workspace-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1rem;
+}
+.property-workspace-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  column-gap: 1.5rem;
+  row-gap: .85rem;
+}
+@media (min-width: 860px) {
+  .property-workspace-header { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); }
+  .property-workspace-main { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); }
+}
