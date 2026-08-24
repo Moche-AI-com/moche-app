@@ -119,6 +119,9 @@ export function StayGuestsManager({ propertyId, stayId }: { propertyId: string; 
                     <span>
                       <UserRound size={14} aria-hidden style={{ verticalAlign: '-2px', marginRight: '.3rem' }} />
                       {guest.displayName || guest.guestLabel || 'Guest'}
+                      {guest.code ? (
+                        <strong className="portal-code" style={{ fontSize: '.9rem', letterSpacing: '.15rem', marginLeft: '.45rem' }}>{guest.code}</strong>
+                      ) : null}
                       <span className="muted" style={{ marginLeft: '.45rem', fontSize: '.78rem' }}>
                         {guest.phoneLast4 ? `••••${guest.phoneLast4}` : 'No phone'} · {guest.registered ? 'Registered' : 'Not registered'}
                       </span>

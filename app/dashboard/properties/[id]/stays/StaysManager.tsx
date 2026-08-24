@@ -18,8 +18,9 @@ interface Stay {
   checkOut: string;
   status: string;
   bookingReference: string | null;
-  /** Masked portal-code state for the stay's latest coded link (Ticket 3). */
-  portal?: { linkId: string; codeExpiresAt: string | null; codeRevokedAt: string | null } | null;
+  /** Portal state for the stay's latest coded link. `code` is present when the
+      link was minted with the Vault envelope (Ticket 2B); older links show masked. */
+  portal?: { linkId: string; code?: string | null; codeExpiresAt: string | null; codeRevokedAt: string | null } | null;
 }
 
 const PORTAL_TONE: Record<string, string> = { active: 'var(--teal)', expired: 'var(--coral)', revoked: 'var(--coral)' };
@@ -111,7 +112,11 @@ export function StaysManager({
                     </p>
                     {portalState && s.portal && (
                       <p className="faint" style={{ fontSize: '.76rem', marginTop: '.2rem' }} data-testid={`portal-status-${s.id}`}>
-                        Portal code •••• · <span style={{ color: PORTAL_TONE[portalState], fontWeight: 600 }}>{portalState}</span>
+                        Portal code{' '}
+                        {s.portal.code
+                          ? <strong className="portal-code" style={{ fontSize: '.85rem', letterSpacing: '.15rem' }}>{s.portal.code}</strong>
+                          : '••••'}
+                        {' '}· <span style={{ color: PORTAL_TONE[portalState], fontWeight: 600 }}>{portalState}</span>
                         {s.portal.codeExpiresAt ? ` · expires ${fmt(s.portal.codeExpiresAt)}` : ''}
                       </p>
                     )}
@@ -143,12 +148,24 @@ export function StaysManager({
                     {selectedStay.portal ? (
                       <div>
                         <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .5rem' }}>
-                          Portal code •••• ·{' '}
                           <span style={{ color: PORTAL_TONE[portalCodeStatus(selectedStay.portal)], fontWeight: 600 }}>
                             {portalCodeStatus(selectedStay.portal)}
                           </span>
-                          {selectedStay.portal.codeExpiresAt ? ` · expires ${fmt(selectedStay.portal.codeExpiresAt)}` : ''}
+                          {selectedStay.portal.codeExpiresAt ? ` · code expires ${fmt(selectedStay.portal.codeExpiresAt)}` : ''}
                         </p>
+                        {selectedStay.portal.code ? (
+                          <div className="portal-code-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
+                            <div>
+                              <div className="faint" style={{ fontSize: '.65rem' }}>Visit code</div>
+                              <div className="portal-code" style={{ fontSize: '1.3rem' }} data-testid={`portal-code-${selectedStay.id}`}>{selectedStay.portal.code}</div>
+                            </div>
+                            <CopyCodeButton code={selectedStay.portal.code} />
+                          </div>
+                        ) : (
+                          <p className="faint" style={{ fontSize: '.72rem', margin: '0 0 .5rem' }}>
+                            This stay's code was minted before codes became re-viewable, so it shows masked. Regenerate to issue a fresh, visible code.
+                          </p>
+                        )}
                         <PortalCodeRegenerator propertyId={propertyId} stayId={selectedStay.id} linkId={selectedStay.portal.linkId} />
                       </div>
                     ) : (
@@ -170,6 +187,19 @@ export function StaysManager({
         </div>
       )}
     </div>
+  );
+}
+
+function CopyCodeButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      onClick={() => { void navigator.clipboard?.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+    >
+      {copied ? 'Copied!' : 'Copy code'}
+    </button>
   );
 }
 
