@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import type { AIProvider, ChatMessage, GenerateOptions, GenerateResult, IntentType } from './provider';
-import { EMBED_DIM } from './provider';
+import type { AIProvider, AIMessage, GenerateOptions, GenerateResult, IntentType } from './provider';
+import { EMBED_DIM, messageContentText } from './provider';
 
 // Deterministic, offline dev-fallback provider.
 // - Embeddings: hashed pseudo-random vectors seeded by token content, so identical
@@ -65,10 +65,12 @@ export function fallbackClassifyIntent(text: string): IntentType {
   return 'information';
 }
 
-function extractContextBlock(messages: ChatMessage[]): string {
-  // The system prompt embeds retrieved chunks in a delimited block.
-  const sys = messages.find((m) => m.role === 'system')?.content ?? '';
-  const match = sys.match(/<untrusted_context>([\s\S]*?)<\/untrusted_context>/);
+function extractContextBlock(messages: AIMessage[]): string {
+  // The system prompt embeds retrieved chunks in a delimited block. Multimodal
+  // content is flattened to its text parts first — image parts carry no context.
+  const sys = messages.find((m) => m.role === 'system');
+  const text = sys ? messageContentText(sys.content) : '';
+  const match = text.match(/<untrusted_context>([\s\S]*?)<\/untrusted_context>/);
   return match ? match[1].trim() : '';
 }
 
@@ -81,8 +83,9 @@ export const fallbackProvider: AIProvider = {
     return texts.map(fallbackEmbed);
   },
 
-  async generate(messages: ChatMessage[], _opts?: GenerateOptions): Promise<GenerateResult> {
-    const question = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  async generate(messages: AIMessage[], _opts?: GenerateOptions): Promise<GenerateResult> {
+    const questionMessage = [...messages].reverse().find((m) => m.role === 'user');
+    const question = questionMessage ? messageContentText(questionMessage.content) : '';
     const context = extractContextBlock(messages);
     if (!context) {
       return {

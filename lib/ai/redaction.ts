@@ -16,6 +16,7 @@
 //     guest with a `[redacted]` marker printed next to it.
 
 import { looksLikeCredentialValue } from '@/lib/brain/redact';
+import type { MessageContent } from './provider';
 
 // --- Labeled secrets: password / passcode / access|door|gate|lock|wifi codes ---
 //
@@ -159,10 +160,18 @@ export function redactPII(text: string): string {
     .replace(LONG_DIGITS_RE, (m) => `***${m.slice(-2)}`);
 }
 
+// Redact a possibly-multimodal message content. Text parts are redacted; image
+// parts pass through untouched — they are CDN URLs extracted from a public page,
+// and running the digit rules over a URL would mangle it into a broken link.
+function redactContent(content: MessageContent): MessageContent {
+  if (typeof content === 'string') return redactPII(content);
+  return content.map((part) => (part.type === 'text' ? { ...part, text: redactPII(part.text) } : part));
+}
+
 // Convenience: redact every message's content, preserving roles. Used by the
 // external routing path so the whole conversation is sanitized in one call.
-export function redactMessages<T extends { role: string; content: string }>(messages: T[]): T[] {
-  return messages.map((m) => ({ ...m, content: redactPII(m.content) }));
+export function redactMessages<T extends { role: string; content: MessageContent }>(messages: T[]): T[] {
+  return messages.map((m) => ({ ...m, content: redactContent(m.content) }));
 }
 
 // True if the string STILL appears to contain raw PII after a redaction pass.
@@ -175,4 +184,11 @@ export function containsLikelyPII(text: string): boolean {
   if (email.test(text)) return true;
   const ccMatches = text.match(/\b(?:\d[ -]?){13,19}\b/g) ?? [];
   return ccMatches.some((m) => luhnValid(m));
+}
+
+// Multimodal variant of containsLikelyPII: scans text parts only. Image parts are
+// URLs, not guest text, and a long digit run in a CDN path is not a credit card.
+export function contentContainsLikelyPII(content: MessageContent): boolean {
+  if (typeof content === 'string') return containsLikelyPII(content);
+  return content.some((part) => part.type === 'text' && containsLikelyPII(part.text));
 }

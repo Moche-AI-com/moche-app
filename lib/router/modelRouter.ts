@@ -1,9 +1,9 @@
 import 'server-only';
 import { getAIProvider } from '@/lib/ai';
-import type { ChatMessage, GenerateOptions, GenerateResult } from '@/lib/ai/provider';
+import type { AIMessage, GenerateOptions, GenerateResult } from '@/lib/ai/provider';
 import { serverEnv } from '@/lib/env';
 import { log } from '@/lib/log';
-import { redactPII, redactMessages, containsLikelyPII } from '@/lib/ai/redaction';
+import { redactPII, redactMessages, contentContainsLikelyPII } from '@/lib/ai/redaction';
 import {
   providerBlock,
   routineGuestModelChain,
@@ -78,7 +78,12 @@ export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string
 // Order matters: cheapest capable model first. The in-house provider remains the final
 // backstop if the whole OpenRouter request fails (see routedCompletion).
 const TASK_FALLBACKS: Record<TaskType, readonly string[]> = {
-  extraction: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'],
+  // Extraction has NO lower-tier in-router fallback on purpose. Its highest-stakes
+  // caller is property onboarding, where the output becomes canonical Brain content
+  // after host review. A silent downgrade to a cheaper model would turn weak output
+  // into guest-facing truth, so if the strong tier is unavailable the request fails
+  // and the caller surfaces a try-again / manual-entry path instead.
+  extraction: [],
   classification: ['openai/gpt-4o-mini'],
   concierge: ['openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
   general: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
@@ -131,15 +136,17 @@ export { PROVIDER_ROUTING_POLICY as ZDR_PROVIDER_RESTRICTION } from '@/lib/route
 export { ProviderIneligibleError } from '@/lib/router/providerAllowlist';
 
 // Defense-in-depth: after redaction, refuse the external route if any message content
-// still trips the PII detector. Pure + exported so the guarantee is directly testable.
-export function assertNoResidualPII(messages: ChatMessage[]): void {
-  if (messages.some((m) => containsLikelyPII(m.content))) {
+// still trips the PII detector. Multimodal messages are scanned on their text parts
+// only — image parts are CDN URLs, not guest text. Pure + exported so the guarantee
+// is directly testable.
+export function assertNoResidualPII(messages: AIMessage[]): void {
+  if (messages.some((m) => contentContainsLikelyPII(m.content))) {
     throw new ExternalRouteRefused('redacted payload still contains likely PII');
   }
 }
 
 async function openrouterGenerate(
-  messages: ChatMessage[],
+  messages: AIMessage[],
   opts: GenerateOptions | undefined,
   task: TaskType,
 ): Promise<GenerateResult> {
@@ -212,7 +219,7 @@ async function openrouterGenerate(
 // falls back to the in-house provider (with the original messages) so enabling routing
 // can never degrade correctness.
 export async function routedCompletion(
-  messages: ChatMessage[],
+  messages: AIMessage[],
   opts?: GenerateOptions,
   route?: RouteOptions,
 ): Promise<GenerateResult> {

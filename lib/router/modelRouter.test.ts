@@ -20,7 +20,7 @@ function routerEnv(over: Partial<RouterEnv> = {}): RouterEnv {
     openrouterApiKey: 'test-key',
     openrouterModel: 'openai/gpt-4o-mini',
     openrouterBaseUrl: 'https://openrouter.ai/api/v1',
-    openrouterModelExtraction: 'openai/gpt-4o-mini',
+    openrouterModelExtraction: 'openai/gpt-4o',
     openrouterModelClassification: 'meta-llama/llama-3.1-8b-instruct',
     openrouterModelConcierge: 'anthropic/claude-haiku-4.5',
     openrouterModelGeneral: 'openai/gpt-4o-mini',
@@ -53,7 +53,7 @@ describe('classifyTask', () => {
 describe('modelForTask', () => {
   const env = routerEnv();
   it('maps each task to its tier model', () => {
-    expect(modelForTask('extraction', env)).toBe('openai/gpt-4o-mini');
+    expect(modelForTask('extraction', env)).toBe('openai/gpt-4o');
     expect(modelForTask('classification', env)).toBe('meta-llama/llama-3.1-8b-instruct');
     expect(modelForTask('concierge', env)).toBe('anthropic/claude-haiku-4.5');
     expect(modelForTask('general', env)).toBe('openai/gpt-4o-mini');
@@ -96,6 +96,28 @@ describe('assertNoResidualPII', () => {
   it('passes once the same content is redacted', () => {
     const redacted = redactPII('email me at raw@example.com');
     expect(() => assertNoResidualPII([{ role: 'user', content: redacted }])).not.toThrow();
+  });
+  it('scans text parts of multimodal messages and passes image parts through', () => {
+    const withPii = [
+      {
+        role: 'user' as const,
+        content: [
+          { type: 'text' as const, text: 'email me at raw@example.com' },
+          { type: 'image_url' as const, image_url: { url: 'https://cdn.example.com/pictures/pool.jpg' } },
+        ],
+      },
+    ];
+    expect(() => assertNoResidualPII(withPii)).toThrow(ExternalRouteRefused);
+    const clean = [
+      {
+        role: 'user' as const,
+        content: [
+          { type: 'text' as const, text: 'the pool looks great' },
+          { type: 'image_url' as const, image_url: { url: 'https://cdn.example.com/pictures/pool.jpg' } },
+        ],
+      },
+    ];
+    expect(() => assertNoResidualPII(clean)).not.toThrow();
   });
 });
 
@@ -175,8 +197,8 @@ describe('routedCompletion', () => {
     expect(res.model).toBe('dev-fallback-chat');
   });
 
-  it('with key + extraction: routes to gpt-4o-mini with hardened ZDR', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse('openai/gpt-4o-mini'));
+  it('with key + extraction: routes to the strong tier with hardened ZDR', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse('openai/gpt-4o'));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -184,7 +206,7 @@ describe('routedCompletion', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = lastBody(fetchMock);
-    expect(body.model).toBe('openai/gpt-4o-mini');
+    expect(body.model).toBe('openai/gpt-4o');
     expect(body.provider).toEqual({
       require_parameters: true,
       zdr: true,
@@ -197,6 +219,18 @@ describe('routedCompletion', () => {
     expect(headers.Authorization).toBe('Bearer test-key');
     expect(headers['X-OpenRouter-ZDR']).toBe('true');
     expect(res.text).toBe('external-answer');
+  });
+
+  // Onboarding correctness over availability: extraction must never fail over to a
+  // cheaper model in-router. If the strong tier is down, the caller surfaces a
+  // try-again / manual-entry path rather than saving weak output to the Brain.
+  it('sends no lower-tier fallback chain for extraction', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
+
+    await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+    expect(lastBody(fetchMock).models).toEqual(['openai/gpt-4o']);
   });
 
   it('with key + classification: routes to the llama tier', async () => {
@@ -264,7 +298,6 @@ describe('routedCompletion', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
-      OPENROUTER_CONCIERGE_ENABLED: 'true',
       OPENROUTER_GUEST_MODEL_ALLOWLIST: 'openai/gpt-4o-mini,openai/gpt-4o-mini,unreviewed/model',
       // Ignored on the guest route; present to prove the allowlist wins.
       OPENROUTER_MODEL_CONCIERGE: 'anthropic/claude-haiku-4.5',
@@ -320,20 +353,20 @@ describe('routedCompletion', () => {
     expect(provider.only).toEqual(['azure', 'google-vertex', 'openai', 'anthropic']);
   });
 
-  // Restored coverage: the pre-allowlist suite asserted this on the concierge tier,
-  // which is now allowlist-governed and de-duplicated by parseAllowlist. The
-  // primary-plus-fallbacks path still exists for every other tier, and a duplicate slug
-  // there wastes a retry on a model that already failed.
+  // Extraction has no fallbacks by design (see TASK_FALLBACKS), so a per-tier override
+  // produces a single-model chain and duplicates are impossible there. Other tiers
+  // still carry primary-plus-fallbacks, and a duplicate slug wastes a retry on a
+  // model that already failed.
   it('never sends a duplicate slug when a per-tier override equals a fallback', async () => {
     const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
-      // Deliberately set the primary to one of the extraction fallbacks.
-      OPENROUTER_MODEL_EXTRACTION: 'google/gemini-2.5-flash',
+      // Deliberately set the primary to one of the general fallbacks.
+      OPENROUTER_MODEL_GENERAL: 'google/gemini-2.5-flash',
     });
 
-    await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+    await routedCompletion(MESSAGES, undefined, { task: 'general' });
 
     const models = lastBody(fetchMock).models as string[];
     expect(models[0]).toBe('google/gemini-2.5-flash');
