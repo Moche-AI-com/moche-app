@@ -163,7 +163,7 @@ export function StaysManager({
                           </div>
                         ) : (
                           <p className="faint" style={{ fontSize: '.72rem', margin: '0 0 .5rem' }}>
-                            This stay's code was minted before codes became re-viewable, so it shows masked. Regenerate to issue a fresh, visible code.
+                            This code was minted before codes became re-viewable, so it shows masked. Regenerate to issue a fresh, visible code.
                           </p>
                         )}
                         <PortalCodeRegenerator propertyId={propertyId} stayId={selectedStay.id} linkId={selectedStay.portal.linkId} />

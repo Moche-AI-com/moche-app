@@ -46,10 +46,15 @@ export default async function StaysPage({
   // host is already authorized by requirePropertyAccess above, and portal_code_read
   // is service_role-only by design. Rows minted before the Vault envelope have no
   // code_secret_ref and render masked.
+  //
+  // The query goes through `(admin as any)`: code_secret_ref lands in the generated
+  // types only after the migration is applied and types are regenerated, and the
+  // codebase's existing idiom for pre-types columns is the any-cast (see the guests
+  // route's stay_guests queries).
   const stayIds = (stays ?? []).map((s) => s.id as string);
   const admin = createAdminClient();
   const { data: portalLinks } = stayIds.length
-    ? await admin
+    ? await (admin as any)
         .from('guest_access_links')
         .select('id, stay_id, code_expires_at, code_revoked_at, code_secret_ref, created_at')
         .in('stay_id', stayIds)
