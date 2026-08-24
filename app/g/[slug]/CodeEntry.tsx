@@ -4,10 +4,10 @@ import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react
 
 const CODE_LENGTH = 4;
 
-// Step 1 of the portal: each guest uses their own 4-digit stay guest ID. Returning
-// guests confirm the phone number on their profile when they use a new device.
-// Falls back to the original stay-level code endpoint for links minted before
-// per-guest IDs existed.
+// Step 1 of the portal: one 4-digit stay code shared by the whole party. Once a
+// guest is in, their session on this device is their saved account — they only
+// re-enter the code (and their details) on a different browser. Legacy per-guest
+// PINs minted before the merge still verify through the guest-code endpoint first.
 export function CodeEntry(props: {
   slug: string;
   accessToken: string | null;
@@ -60,8 +60,9 @@ export function CodeEntry(props: {
         return;
       }
 
-      // Backward compatibility: existing stay links minted before stay_guests still
-      // verify through the original endpoint. New per-guest codes win first.
+      // The shared stay code verifies through the original stay-link endpoint.
+      // (Legacy order preserved: per-guest PINs win first so a PIN entry never
+      // burns the link's attempt counter.)
       if (!needsPhone && res.status === 400) {
         const legacy = await fetch(`/api/guest/${props.slug}/auth/code`, {
           method: 'POST',
@@ -75,7 +76,7 @@ export function CodeEntry(props: {
         }
       }
 
-      setError(json.error || 'That code does not match an active guest for this stay.');
+      setError(json.error || 'That code does not match this stay. Check with your host and try again.');
     } finally {
       setBusy(false);
     }
@@ -83,8 +84,8 @@ export function CodeEntry(props: {
 
   return (
     <section aria-label="Guest verification">
-      <h2>Enter your guest ID</h2>
-      <p className="muted">Use the 4-digit code your host shared for this stay.</p>
+      <h2>Enter your stay code</h2>
+      <p className="muted">The 4-digit code your host shared for this stay — everyone in your party uses the same one.</p>
       <div style={{ display: 'flex', gap: '.55rem', justifyContent: 'center', margin: '1.25rem 0' }}>
         {digits.map((digit, index) => (
           <input
