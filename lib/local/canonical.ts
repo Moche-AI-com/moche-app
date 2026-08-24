@@ -40,10 +40,12 @@ export interface CanonicalPlaceRow {
     address: string | null;
     provider: string;
     last_refreshed_at: string;
-    website: string | null;
-    phone: string | null;
-    lat: number | null;
-    lon: number | null;
+    // Optional on the RAW joined row: the select always returns them, but
+    // hand-built fixtures and pre-field rows may omit them entirely.
+    website?: string | null;
+    phone?: string | null;
+    lat?: number | null;
+    lon?: number | null;
   } | null;
 }
 
@@ -62,10 +64,10 @@ export function mapCanonicalPlaceRow(row: CanonicalPlaceRow): LocalPlaceRow | nu
     distanceMiles: row.distance_miles,
     lastRefreshedAt: row.places.last_refreshed_at,
     provider: row.places.provider,
-    website: row.places.website,
-    phone: row.places.phone,
-    lat: row.places.lat,
-    lng: row.places.lon,
+    website: row.places.website ?? null,
+    phone: row.places.phone ?? null,
+    lat: row.places.lat ?? null,
+    lng: row.places.lon ?? null,
   };
 }
 
