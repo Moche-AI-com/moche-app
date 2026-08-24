@@ -42,6 +42,11 @@ describe('canonical local places', () => {
       distanceMiles: 0.4,
       lastRefreshedAt: '2026-01-01T00:00:00Z',
       provider: 'osm',
+      // Contact/geo fields map to explicit nulls when the joined row omits them.
+      website: null,
+      phone: null,
+      lat: null,
+      lng: null,
     });
   });
 

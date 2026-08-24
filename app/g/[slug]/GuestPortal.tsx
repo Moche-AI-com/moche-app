@@ -98,8 +98,9 @@ export function GuestPortal(props: {
 
   // The host's property photo leads the entry steps AND the main menu; on the
   // workflow screens it collapses to a slim banner so chat space is untouched.
+  // (The condition stays inline: extracting it to a boolean would break TS
+  // narrowing on coverImageUrl at the img below.)
   const showHero = step === 'code' || step === 'register' || step === 'menu';
-  const showCompactHero = !showHero && !!props.coverImageUrl;
 
   const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 
@@ -131,7 +132,7 @@ export function GuestPortal(props: {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={props.coverImageUrl} alt="" className="gp-hero" />
         ) : null}
-        {showCompactHero ? (
+        {!showHero && props.coverImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={props.coverImageUrl} alt="" className="gp-hero-compact" />
         ) : null}
