@@ -50,13 +50,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const admin = createAdminClient();
   const { data, error } = await (admin as any)
     .from('stay_guests')
-    .select('id, stay_id, display_name, guest_label, phone_last4, guest_identity_id, notification_consent, pin_expires_at, pin_revoked_at, created_at')
+    .select('id, stay_id, display_name, guest_label, phone_last4, guest_identity_id, notification_consent, pin_expires_at, pin_revoked_at, pin_secret_ref, created_at')
     .eq('property_id', id)
     .eq('stay_id', stayId)
     .order('created_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: 'Could not load guest IDs.' }, { status: 500 });
-  return NextResponse.json({ guests: (data ?? []).map((row: any) => guestRow(row)) });
+
+  // Ticket 2B: decrypt each guest's PIN for display. Rows minted before the Vault
+  // envelope have no pin_secret_ref and render without a code. portal_code_read is
+  // service_role-only; this route has already authorized the host above.
+  const guests: any[] = [];
+  for (const row of data ?? []) {
+    let code: string | undefined;
+    const ref = row.pin_secret_ref as string | null;
+    if (ref && ref.startsWith('vault:')) {
+      const { data: decrypted } = await (admin as any).rpc('portal_code_read', { p_secret_id: ref.slice('vault:'.length) });
+      if (typeof decrypted === 'string' && decrypted) code = decrypted;
+    }
+    guests.push(guestRow(row, Boolean(code), code ?? ''));
+  }
+  return NextResponse.json({ guests });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; stayId: string }> }) {
@@ -103,6 +117,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!code) return NextResponse.json({ error: 'Could not allocate a unique guest code.' }, { status: 500 });
 
   const guestId = crypto.randomUUID();
+
+  // Ticket 2B: vault the PIN so the host can re-view it on the guest row. The hash
+  // stays the verification path; a Vault failure degrades to hash-only (shown once).
+  let pinSecretRef: string | null = null;
+  try {
+    const { data: secretId, error: vaultError } = await (admin as any).rpc('portal_code_store', {
+      p_secret: code,
+      p_name: `stay-guest:${guestId}`,
+    });
+    if (!vaultError && secretId) pinSecretRef = `vault:${secretId}`;
+  } catch {
+    pinSecretRef = null;
+  }
+
   const expiresAt = new Date(new Date(stay.check_out).getTime() + (await graceHours(admin, id)) * 60 * 60 * 1000).toISOString();
   const phone = parsed.data.phone?.trim() ?? '';
   const { data: created, error } = await db
@@ -118,6 +146,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       pin_hash: hashVisitCode(code, guestId),
       pin_stay_hash: hashVisitCode(code, stayId),
       pin_expires_at: expiresAt,
+      ...(pinSecretRef ? { pin_secret_ref: pinSecretRef } : {}),
     })
     .select('id, stay_id, display_name, guest_label, phone_last4, guest_identity_id, notification_consent, pin_expires_at, pin_revoked_at')
     .single();

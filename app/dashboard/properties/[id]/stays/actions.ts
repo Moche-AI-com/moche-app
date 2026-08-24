@@ -131,6 +131,24 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
     if (codeError) {
       throw new Error(codeError.message);
     }
+
+    // Ticket 2B: vault the code so it stays host-viewable for the life of the stay.
+    // The hash remains the verification path; a Vault failure degrades to hash-only.
+    try {
+      const { data: secretId, error: vaultError } = await (admin as any).rpc('portal_code_store', {
+        p_secret: code,
+        p_name: `stay-link:${linkId}:${Date.now()}`,
+      });
+      if (!vaultError && secretId) {
+        await admin
+          .from('guest_access_links')
+          .update({ code_secret_ref: `vault:${secretId}` } as never)
+          .eq('id', linkId);
+      }
+    } catch {
+      // Display-only enhancement — never fail the mint over it.
+    }
+
     await audit(admin, {
       action: 'guest_link.code_issued',
       actorProfileId: ctx.user.id,

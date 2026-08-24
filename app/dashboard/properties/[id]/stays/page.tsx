@@ -1,8 +1,7 @@
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
-import { listPropertySessions } from '@/lib/guest/sessions';
-import { SessionsPanel } from '../SessionsPanel';
 import { StaysManager } from './StaysManager';
 import { ChatPermissionsPanel } from '../guest-chat/ChatPermissionsPanel';
 
@@ -43,29 +42,42 @@ export default async function StaysPage({
       .eq('lifecycle_status', 'archived'),
   ]);
 
-  // Ticket 3: portal visit-code state per stay, so each row can permanently show
-  // the masked code + status + expiry. The raw code is hash-only and never read
-  // back; the latest coded link per stay wins.
+  // Ticket 2B: the admin client reads portal links and decrypts their codes — the
+  // host is already authorized by requirePropertyAccess above, and portal_code_read
+  // is service_role-only by design. Rows minted before the Vault envelope have no
+  // code_secret_ref and render masked.
+  //
+  // The query goes through `(admin as any)`: code_secret_ref lands in the generated
+  // types only after the migration is applied and types are regenerated, and the
+  // codebase's existing idiom for pre-types columns is the any-cast (see the guests
+  // route's stay_guests queries).
   const stayIds = (stays ?? []).map((s) => s.id as string);
+  const admin = createAdminClient();
   const { data: portalLinks } = stayIds.length
-    ? await supabase
+    ? await (admin as any)
         .from('guest_access_links')
-        .select('id, stay_id, code_expires_at, code_revoked_at, created_at')
+        .select('id, stay_id, code_expires_at, code_revoked_at, code_secret_ref, created_at')
         .in('stay_id', stayIds)
         .eq('kind', 'stay')
         .not('code_hash', 'is', null)
         .order('created_at', { ascending: false })
-    : { data: [] as { id: string; stay_id: string; code_expires_at: string | null; code_revoked_at: string | null; created_at: string }[] };
-  const portalByStayId = new Map<string, { linkId: string; codeExpiresAt: string | null; codeRevokedAt: string | null }>();
+    : { data: [] as { id: string; stay_id: string; code_expires_at: string | null; code_revoked_at: string | null; code_secret_ref: string | null; created_at: string }[] };
+  const portalByStayId = new Map<string, { linkId: string; code: string | null; codeExpiresAt: string | null; codeRevokedAt: string | null }>();
   for (const link of portalLinks ?? []) {
     const sid = link.stay_id as string;
-    if (!portalByStayId.has(sid)) {
-      portalByStayId.set(sid, {
-        linkId: link.id as string,
-        codeExpiresAt: (link.code_expires_at as string | null) ?? null,
-        codeRevokedAt: (link.code_revoked_at as string | null) ?? null,
-      });
+    if (portalByStayId.has(sid)) continue;
+    let code: string | null = null;
+    const ref = (link as { code_secret_ref?: string | null }).code_secret_ref ?? null;
+    if (ref && ref.startsWith('vault:')) {
+      const { data: decrypted } = await (admin as any).rpc('portal_code_read', { p_secret_id: ref.slice('vault:'.length) });
+      if (typeof decrypted === 'string' && decrypted) code = decrypted;
     }
+    portalByStayId.set(sid, {
+      linkId: link.id as string,
+      code,
+      codeExpiresAt: (link.code_expires_at as string | null) ?? null,
+      codeRevokedAt: (link.code_revoked_at as string | null) ?? null,
+    });
   }
 
   const canManage = access.can.replyGuests || access.isOwner;
@@ -76,11 +88,6 @@ export default async function StaysPage({
   const canManagePermissions = access.isOwner || access.can.editProperty;
   // Deep links (notifications, legacy /guest-chat redirect) arrive as ?stay=<id>.
   const initialStayId = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
-
-  // Active guest sessions live in the Stays tab (moved off the property overview
-  // in this PR); the panel is host tooling, so it follows the same canManage
-  // gate as stay creation.
-  const sessions = canManage ? await listPropertySessions((await params).id, true) : [];
 
   return (
     <div>
@@ -117,12 +124,6 @@ export default async function StaysPage({
           portal: portalByStayId.get(s.id) ?? null,
         }))}
       />
-
-      {canManage && (
-        <div style={{ marginTop: '1.25rem' }}>
-          <SessionsPanel propertyId={(await params).id} initialSessions={sessions} />
-        </div>
-      )}
 
       {canManagePermissions ? (
         <div style={{ marginTop: '1.25rem' }}>

@@ -36,6 +36,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const code = generateVisitCode();
   const codeExpiresAt = new Date(new Date(stay.check_out).getTime() + VISIT_CODE_GRACE_PERIOD_HOURS * 60 * 60 * 1000).toISOString();
 
+  // Ticket 2B: vault the new code so it stays host-viewable. The retired code's
+  // secret remains in Vault for audit (GATE3 versioning pattern) while the row
+  // points at the new one; a Vault failure degrades to hash-only.
+  let codeSecretRef: string | null = null;
+  try {
+    const { data: secretId, error: vaultError } = await (admin as any).rpc('portal_code_store', {
+      p_secret: code,
+      p_name: `stay-link:${link.id}:regen:${Date.now()}`,
+    });
+    if (!vaultError && secretId) codeSecretRef = `vault:${secretId}`;
+  } catch {
+    codeSecretRef = null;
+  }
+
   const { error } = await admin
     .from('guest_access_links')
     .update({
@@ -44,6 +58,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       code_revoked_at: null,
       code_attempt_count: 0,
       code_first_used_at: null,
+      ...(codeSecretRef ? { code_secret_ref: codeSecretRef } : {}),
     } as never)
     .eq('id', link.id);
   if (error) {

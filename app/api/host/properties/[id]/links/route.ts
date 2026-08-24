@@ -110,6 +110,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       log.warn('guest_link_code_mint_failed', { propertyId: property.id, linkId, error: codeError.message });
       return NextResponse.json({ error: 'Could not create the access code.' }, { status: 500 });
     }
+
+    // Ticket 2B: vault the code so the host can re-view it for the life of the stay.
+    // The hash remains the verification path; a Vault failure degrades to hash-only
+    // (the code is still returned once below, exactly as before).
+    try {
+      const { data: secretId, error: vaultError } = await (admin as any).rpc('portal_code_store', {
+        p_secret: code,
+        p_name: `stay-link:${linkId}:${Date.now()}`,
+      });
+      if (!vaultError && secretId) {
+        await admin
+          .from('guest_access_links')
+          .update({ code_secret_ref: `vault:${secretId}` } as never)
+          .eq('id', linkId);
+      }
+    } catch {
+      // Display-only enhancement — never fail the mint over it.
+    }
+
     await audit(admin, {
       action: 'guest_link.code_issued',
       actorProfileId: user?.id ?? null,
