@@ -5,8 +5,16 @@ import type { Database, Json } from '@/lib/database.types';
 import { DEFAULT_MODULES } from '@/lib/constants';
 import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { slugWithSuffix } from '@/lib/slug';
+import { routedCompletion } from '@/lib/router/modelRouter';
+import { serverEnv } from '@/lib/env';
 import { IMPORT_ATTESTATION_TEXT } from './attestation';
-import { buildListingDraft, detectListingProvider, type ImportedListingDraft } from './extract';
+import {
+  assessFetchedPage,
+  buildListingDraft,
+  detectListingProvider,
+  ListingContentUnusableError,
+  type ImportedListingDraft,
+} from './extract';
 
 type Client = SupabaseClient<Database>;
 type ImportJobStatus = Database['public']['Enums']['property_import_job_status'];
@@ -44,11 +52,50 @@ async function transition(client: Client, jobId: string, status: ImportJobStatus
   if (error) throw error;
 }
 
+const UNUSABLE_SOURCE_MESSAGE =
+  "We couldn't read enough from this link. It may be blocked, private, or not a listing page. Try another public listing link, or set up the property manually instead.";
+
 function safeError(error: unknown): { reason: string; message: string } {
   if (isSsrfError(error)) return { reason: 'unsafe_url', message: 'That URL is not safe to fetch. Use a public https listing URL.' };
+  if (error instanceof ListingContentUnusableError) return { reason: 'source_unusable', message: UNUSABLE_SOURCE_MESSAGE };
   const message = error instanceof Error ? error.message : 'Could not read that listing.';
+  if (/extraction_model_mismatch/.test(message)) {
+    return { reason: 'extraction_unavailable', message: 'Our high-reliability import service is temporarily unavailable. Please try again shortly, or set up the property manually.' };
+  }
+  if (/unusable output/i.test(message)) {
+    return { reason: 'extraction_failed', message: "We could not confidently extract this listing's details. Try a different public listing link, or set up the property manually." };
+  }
   if (/blocking automated|no readable text/i.test(message)) return { reason: 'source_unreadable', message: 'We could not read that listing. You can continue by entering details manually.' };
   return { reason: 'import_failed', message: 'We could not import that listing. Please try again or enter details manually.' };
+}
+
+/**
+ * Runs the extraction prompt through the router's high-reliability extraction tier
+ * and refuses the result if any other model answered. Onboarding output becomes
+ * canonical Brain content after host review, so a silent downgrade to a cheaper
+ * model — via in-router fallback or the in-house provider — is a failure here,
+ * not a rescue.
+ */
+async function generateExtraction(prompt: string): Promise<string> {
+  const result = await routedCompletion(
+    [{ role: 'user', content: prompt }],
+    { temperature: 0.1, maxTokens: 4000 },
+    { task: 'extraction' },
+  );
+  assertExtractionModel(result.model);
+  return result.text;
+}
+
+function assertExtractionModel(model: string): void {
+  // AI_DEV_FALLBACK is a dev-only stub provider and is never enabled in production
+  // (isProductionRuntime gates it in lib/ai). Skipping the check keeps local import
+  // development possible without a router key.
+  if (serverEnv.aiDevFallback) return;
+  const bare = (m: string) => m.trim().split(':')[0].split('/').pop() ?? '';
+  const expected = serverEnv.openrouterModelExtraction;
+  if (!model || (model !== expected && bare(model) !== bare(expected))) {
+    throw new Error('extraction_model_mismatch');
+  }
 }
 
 export async function runPropertyImportJob(client: Client, input: { jobId: string; hostAccountId: string; createdBy: string; sourceUrl: string }) {
@@ -57,8 +104,13 @@ export async function runPropertyImportJob(client: Client, input: { jobId: strin
     const page = await fetchUrlContent(input.sourceUrl);
     await client.from('property_import_artifacts').insert({ job_id: input.jobId, kind: 'source_capture', payload: { title: page.title, sourceUrl: page.sourceUrl, text: page.text.slice(0, 100000) } as Json });
 
-    await transition(client, input.jobId, 'extracting', 'Organizing details into review groups', 45);
-    const draft = buildListingDraft(page, input.sourceUrl);
+    // Gate before any model spend: a blocked, thin, or non-listing page fails here
+    // with guidance, instead of producing a draft property full of guesses.
+    const assessment = assessFetchedPage(page);
+    if (!assessment.usable) throw new ListingContentUnusableError(assessment.reason);
+
+    await transition(client, input.jobId, 'extracting', 'Analyzing the listing with AI', 45);
+    const draft = await buildListingDraft(page, input.sourceUrl, generateExtraction);
     await client.from('property_import_artifacts').insert({ job_id: input.jobId, kind: 'listing_draft', payload: draft as unknown as Json });
 
     await transition(client, input.jobId, 'drafting', 'Creating your draft property', 70);

@@ -94,10 +94,14 @@ export const serverEnv = {
   openrouterBaseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
 
   // Per-tier model slugs. Each task type maps to a cost/quality-appropriate model.
-  // Extraction & general use a cheap, reliable small model; classification uses an
+  // Extraction deliberately does NOT inherit the legacy OPENROUTER_MODEL fallback:
+  // its highest-stakes caller is property onboarding, whose output becomes canonical
+  // Brain content after host review. That runs once per property, so reliability
+  // beats token cost — an unset tier must land on the strong default, not on
+  // whatever cheap slug the legacy default happens to hold. Classification uses an
   // open-weight Llama; concierge (guest-facing) uses a stronger model but is gated OFF.
   openrouterModelExtraction:
-    process.env.OPENROUTER_MODEL_EXTRACTION ?? process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
+    process.env.OPENROUTER_MODEL_EXTRACTION ?? 'openai/gpt-4o',
   openrouterModelClassification:
     process.env.OPENROUTER_MODEL_CLASSIFICATION ?? 'meta-llama/llama-3.1-8b-instruct',
   // Gemini 2.5 Flash: verified available under our Zero-Data-Retention provider

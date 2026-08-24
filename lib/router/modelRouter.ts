@@ -78,7 +78,12 @@ export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string
 // Order matters: cheapest capable model first. The in-house provider remains the final
 // backstop if the whole OpenRouter request fails (see routedCompletion).
 const TASK_FALLBACKS: Record<TaskType, readonly string[]> = {
-  extraction: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'],
+  // Extraction has NO lower-tier in-router fallback on purpose. Its highest-stakes
+  // caller is property onboarding, where the output becomes canonical Brain content
+  // after host review. A silent downgrade to a cheaper model would turn weak output
+  // into guest-facing truth, so if the strong tier is unavailable the request fails
+  // and the caller surfaces a try-again / manual-entry path instead.
+  extraction: [],
   classification: ['openai/gpt-4o-mini'],
   concierge: ['openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
   general: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
