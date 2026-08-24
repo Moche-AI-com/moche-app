@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { AIMessage } from '@/lib/ai/provider';
 import {
   assessFetchedPage,
   buildListingDraft,
   detectListingProvider,
+  extractListingImageUrls,
   parseExtractionResponse,
 } from './extract';
 
@@ -10,6 +12,11 @@ const PAGE = {
   title: 'Cedar Cottage',
   sourceUrl: 'https://www.vrbo.com/123',
   text: 'Cedar Cottage is a 3 bedroom, 2 bathroom house that sleeps six guests. Amenities include wifi, a pool, a full kitchen, a washer and dryer, and free parking. House rules: no smoking, no parties, pets considered. Check-in starts at 4pm with a smart lock and check-out is at 11am. The welcome book answers frequently asked questions about the oven and thermostat. '.repeat(6),
+};
+
+const PAGE_WITH_PHOTO = {
+  ...PAGE,
+  text: `${PAGE.text} ![Pool and deck](https://cdn.example.com/pictures/pool.jpg)`,
 };
 
 const VALID_JSON = JSON.stringify({
@@ -43,6 +50,23 @@ describe('assessFetchedPage', () => {
   it('rejects long pages with no listing signals', () => {
     const text = 'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor. '.repeat(20);
     expect(assessFetchedPage({ ...PAGE, text })).toEqual({ usable: false, reason: 'not_a_listing' });
+  });
+});
+
+describe('extractListingImageUrls', () => {
+  it('extracts listing photos and skips icons and logos', () => {
+    const md =
+      '![Living room](https://a0.muscache.com/im/pictures/abc.jpg?aki=1) ![logo](https://cdn.example.com/logo.png) ![Pool](https://images.cdn.vrbo.io/odstrc/xyz.jpg)';
+    const urls = extractListingImageUrls(md);
+    expect(urls).toContain('https://a0.muscache.com/im/pictures/abc.jpg?aki=1');
+    expect(urls).toHaveLength(2);
+  });
+  it('dedupes and caps the set', () => {
+    const md = Array.from({ length: 9 }, (_, i) => `![p${i}](https://cdn.example.com/photo${i % 6}.jpg)`).join(' ');
+    expect(extractListingImageUrls(md)).toHaveLength(5);
+  });
+  it('returns nothing when the page has no photo syntax', () => {
+    expect(extractListingImageUrls(PAGE.text)).toEqual([]);
   });
 });
 
@@ -99,5 +123,47 @@ describe('buildListingDraft', () => {
     const arrival = draft.reviewGroups.find((group) => group.key === 'arrival_access');
     expect(arrival?.text).not.toContain('4321');
     expect(arrival?.text).toContain('Check-in is at 4pm');
+  });
+
+  it('attaches listing photos as multimodal content when present', async () => {
+    const seen: AIMessage[][] = [];
+    await buildListingDraft(PAGE_WITH_PHOTO, PAGE.sourceUrl, async (messages) => {
+      seen.push(messages);
+      return VALID_JSON;
+    });
+    const content = seen[0][0].content;
+    expect(Array.isArray(content)).toBe(true);
+    if (Array.isArray(content)) {
+      expect(content.some((part) => part.type === 'image_url')).toBe(true);
+      expect(content.some((part) => part.type === 'text' && part.text.includes('PHOTOS:'))).toBe(true);
+    }
+  });
+  it('sends a plain text message when the page has no photos', async () => {
+    const seen: AIMessage[][] = [];
+    await buildListingDraft(PAGE, PAGE.sourceUrl, async (messages) => {
+      seen.push(messages);
+      return VALID_JSON;
+    });
+    expect(typeof seen[0][0].content).toBe('string');
+  });
+  it('retries text-only when the multimodal call is rejected', async () => {
+    let calls = 0;
+    const draft = await buildListingDraft(PAGE_WITH_PHOTO, PAGE.sourceUrl, async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('image_url content is not supported by this model');
+      return VALID_JSON;
+    });
+    expect(calls).toBe(2);
+    expect(draft.reviewGroups).toHaveLength(5);
+  });
+  it('never retries a model mismatch into a weaker path', async () => {
+    let calls = 0;
+    await expect(
+      buildListingDraft(PAGE_WITH_PHOTO, PAGE.sourceUrl, async () => {
+        calls += 1;
+        throw new Error('extraction_model_mismatch');
+      }),
+    ).rejects.toThrow('extraction_model_mismatch');
+    expect(calls).toBe(1);
   });
 });

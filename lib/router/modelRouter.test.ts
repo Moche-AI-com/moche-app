@@ -97,6 +97,28 @@ describe('assertNoResidualPII', () => {
     const redacted = redactPII('email me at raw@example.com');
     expect(() => assertNoResidualPII([{ role: 'user', content: redacted }])).not.toThrow();
   });
+  it('scans text parts of multimodal messages and passes image parts through', () => {
+    const withPii = [
+      {
+        role: 'user' as const,
+        content: [
+          { type: 'text' as const, text: 'email me at raw@example.com' },
+          { type: 'image_url' as const, image_url: { url: 'https://cdn.example.com/pictures/pool.jpg' } },
+        ],
+      },
+    ];
+    expect(() => assertNoResidualPII(withPii)).toThrow(ExternalRouteRefused);
+    const clean = [
+      {
+        role: 'user' as const,
+        content: [
+          { type: 'text' as const, text: 'the pool looks great' },
+          { type: 'image_url' as const, image_url: { url: 'https://cdn.example.com/pictures/pool.jpg' } },
+        ],
+      },
+    ];
+    expect(() => assertNoResidualPII(clean)).not.toThrow();
+  });
 });
 
 describe('ZDR_PROVIDER_RESTRICTION', () => {

@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@/lib/database.types';
+import type { AIMessage } from '@/lib/ai/provider';
 import { DEFAULT_MODULES } from '@/lib/constants';
 import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { slugWithSuffix } from '@/lib/slug';
@@ -70,15 +71,15 @@ function safeError(error: unknown): { reason: string; message: string } {
 }
 
 /**
- * Runs the extraction prompt through the router's high-reliability extraction tier
+ * Runs the extraction messages through the router's high-reliability extraction tier
  * and refuses the result if any other model answered. Onboarding output becomes
  * canonical Brain content after host review, so a silent downgrade to a cheaper
  * model — via in-router fallback or the in-house provider — is a failure here,
  * not a rescue.
  */
-async function generateExtraction(prompt: string): Promise<string> {
+async function generateExtraction(messages: AIMessage[]): Promise<string> {
   const result = await routedCompletion(
-    [{ role: 'user', content: prompt }],
+    messages,
     { temperature: 0.1, maxTokens: 4000 },
     { task: 'extraction' },
   );

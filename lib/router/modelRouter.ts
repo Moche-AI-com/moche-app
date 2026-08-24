@@ -1,9 +1,9 @@
 import 'server-only';
 import { getAIProvider } from '@/lib/ai';
-import type { ChatMessage, GenerateOptions, GenerateResult } from '@/lib/ai/provider';
+import type { AIMessage, GenerateOptions, GenerateResult } from '@/lib/ai/provider';
 import { serverEnv } from '@/lib/env';
 import { log } from '@/lib/log';
-import { redactPII, redactMessages, containsLikelyPII } from '@/lib/ai/redaction';
+import { redactPII, redactMessages, contentContainsLikelyPII } from '@/lib/ai/redaction';
 import {
   providerBlock,
   routineGuestModelChain,
@@ -136,15 +136,17 @@ export { PROVIDER_ROUTING_POLICY as ZDR_PROVIDER_RESTRICTION } from '@/lib/route
 export { ProviderIneligibleError } from '@/lib/router/providerAllowlist';
 
 // Defense-in-depth: after redaction, refuse the external route if any message content
-// still trips the PII detector. Pure + exported so the guarantee is directly testable.
-export function assertNoResidualPII(messages: ChatMessage[]): void {
-  if (messages.some((m) => containsLikelyPII(m.content))) {
+// still trips the PII detector. Multimodal messages are scanned on their text parts
+// only — image parts are CDN URLs, not guest text. Pure + exported so the guarantee
+// is directly testable.
+export function assertNoResidualPII(messages: AIMessage[]): void {
+  if (messages.some((m) => contentContainsLikelyPII(m.content))) {
     throw new ExternalRouteRefused('redacted payload still contains likely PII');
   }
 }
 
 async function openrouterGenerate(
-  messages: ChatMessage[],
+  messages: AIMessage[],
   opts: GenerateOptions | undefined,
   task: TaskType,
 ): Promise<GenerateResult> {
@@ -217,7 +219,7 @@ async function openrouterGenerate(
 // falls back to the in-house provider (with the original messages) so enabling routing
 // can never degrade correctness.
 export async function routedCompletion(
-  messages: ChatMessage[],
+  messages: AIMessage[],
   opts?: GenerateOptions,
   route?: RouteOptions,
 ): Promise<GenerateResult> {
