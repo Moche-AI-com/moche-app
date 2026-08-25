@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useFormState } from 'react-dom';
 import { Plus, Pencil, Trash2, GripVertical } from 'lucide-react';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
@@ -48,7 +48,7 @@ export function ExtrasManager({ propertyId, offers }: { propertyId: string; offe
           <h2 style={{ fontSize: '1.15rem' }}>Extras</h2>
           <p className="muted" style={{ fontSize: '.85rem', marginTop: '.25rem' }}>
             Offers your guests can request from the portal (late checkout, mid-stay clean, airport transfer…).
-            A request reaches you through your usual escalations and notifications. Add options
+            A request lands in your Host Chat thread with the guest and in your Extras queue. Add options
             (blue bike / pink bike) and a unit (&ldquo;towels&rdquo;) so a request tells you exactly what to bring.
           </p>
         </div>
@@ -57,6 +57,13 @@ export function ExtrasManager({ propertyId, offers }: { propertyId: string; offe
             <Plus size={15} aria-hidden style={{ marginRight: '.35rem' }} /> Add offer
           </button>
         )}
+      </div>
+
+      <div className="card" style={{ padding: '.85rem 1rem', marginBottom: '1rem', borderLeft: '3px solid var(--teal)' }}>
+        <p className="muted" style={{ fontSize: '.85rem', margin: 0 }}>
+          Moche-AI never charges your guest or collects payment for these offers — you arrange payment and
+          fulfillment directly with the guest. These tools keep the requests organized; the work stays yours.
+        </p>
       </div>
 
       {adding && (
@@ -134,6 +141,16 @@ export function ExtrasManager({ propertyId, offers }: { propertyId: string; offe
   );
 }
 
+// The offer form's five sections, in the order a host thinks about them: what it
+// is, what it costs, how many, what's included, and how it shows up for guests.
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="faint" style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.05em', margin: '1rem 0 .4rem' }}>
+      {children}
+    </p>
+  );
+}
+
 function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string; offer?: ExtraRow; onDone: () => void; onCancel: () => void }) {
   const action = offer ? updateExtraAction : createExtraAction;
   const [state, formAction] = useFormState<ExtraFormState, FormData>(action, {});
@@ -150,46 +167,69 @@ function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string
       <input type="hidden" name="propertyId" value={propertyId} />
       {offer && <input type="hidden" name="offerId" value={offer.id} />}
 
+      <SectionLabel>What it is</SectionLabel>
       <label className="label">Title</label>
       <input name="title" className="input" defaultValue={offer?.title ?? ''} placeholder="Late checkout" required maxLength={120} data-testid="input-extra-title" />
 
       <label className="label" style={{ marginTop: '.75rem' }}>Description</label>
       <textarea name="description" className="input" defaultValue={offer?.description ?? ''} placeholder="Stay until 2pm — we'll skip the rush." rows={2} maxLength={1000} data-testid="input-extra-description" />
 
-      <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginTop: '.75rem' }}>
-        <div style={{ flex: 1, minWidth: 140 }}>
-          <label className="label">Price text</label>
-          <input name="priceText" className="input" defaultValue={offer?.price_text ?? ''} placeholder="$35" maxLength={60} data-testid="input-extra-price" />
-        </div>
-        <div style={{ flex: 1, minWidth: 140 }}>
-          <label className="label">CTA label</label>
-          <input name="ctaLabel" className="input" defaultValue={offer?.cta_label ?? 'Request'} placeholder="Request" maxLength={40} data-testid="input-extra-cta" />
-        </div>
-        <div style={{ width: 110 }}>
-          <label className="label">Sort</label>
-          <input name="sortOrder" type="number" className="input" defaultValue={offer?.sort_order ?? 0} min={0} max={9999} data-testid="input-extra-sort" />
-        </div>
+      <label className="label" style={{ marginTop: '.75rem' }}>Category</label>
+      <select
+        name="category"
+        className="select"
+        defaultValue={offer?.category ?? ''}
+        data-testid="select-extra-category"
+      >
+        <option value="">Uncategorized (shows under &ldquo;More&rdquo;)</option>
+        {EXTRAS_CATEGORIES.filter((c) => c.id !== 'more').map((c) => (
+          <option key={c.id} value={c.id}>{c.label}</option>
+        ))}
+      </select>
+      <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+        Guests browse by category first, so grouping helps once you have more than a few.
+      </p>
+
+      <SectionLabel>What it costs</SectionLabel>
+      <label className="label">Price text</label>
+      <input name="priceText" className="input" defaultValue={offer?.price_text ?? ''} placeholder="$35" maxLength={60} data-testid="input-extra-price" />
+      <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+        Shown to guests as text only — Moche never collects payment. You arrange it directly with the guest.
+      </p>
+
+      <SectionLabel>How many</SectionLabel>
+      <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }} role="radiogroup" aria-label="Offer type">
+        {([
+          { id: 'quantity' as const, label: 'Countable item', hint: 'Guests choose how many — towels, beach chairs, bikes.' },
+          { id: 'package' as const, label: 'Package', hint: 'One bundle bought as-is — golf package, wedding package.' },
+        ]).map((opt) => (
+          <label
+            key={opt.id}
+            style={{
+              flex: 1, minWidth: 220, display: 'flex', gap: '.55rem', alignItems: 'flex-start',
+              padding: '.7rem .8rem', borderRadius: 10, cursor: 'pointer',
+              border: `1px solid ${kind === opt.id ? 'var(--accent, #c9a96e)' : 'var(--line, rgba(0,0,0,.14)'}`,
+            }}
+          >
+            <input
+              type="radio"
+              name="kind"
+              value={opt.id}
+              checked={kind === opt.id}
+              onChange={() => setKind(opt.id)}
+              data-testid={`radio-extra-kind-${opt.id}`}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              <strong style={{ fontSize: '.88rem', display: 'block' }}>{opt.label}</strong>
+              <span className="faint" style={{ fontSize: '.75rem' }}>{opt.hint}</span>
+            </span>
+          </label>
+        ))}
       </div>
 
-      <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginTop: '.75rem' }}>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <label className="label">Category</label>
-          <select
-            name="category"
-            className="select"
-            defaultValue={offer?.category ?? ''}
-            data-testid="select-extra-category"
-          >
-            <option value="">Uncategorized (shows under &ldquo;More&rdquo;)</option>
-            {EXTRAS_CATEGORIES.filter((c) => c.id !== 'more').map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-          <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
-            Guests browse by category first, so grouping helps once you have more than a few.
-          </p>
-        </div>
-        {!isPackage && (
+      {!isPackage && (
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginTop: '.75rem' }}>
           <div style={{ width: 150 }}>
             <label className="label">Max per request</label>
             <input
@@ -206,8 +246,6 @@ function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string
               Leave blank for up to {extraQuantityCeiling(null)}.
             </p>
           </div>
-        )}
-        {!isPackage && (
           <div style={{ width: 170 }}>
             <label className="label">Unit</label>
             <input
@@ -222,43 +260,10 @@ function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string
               Guests see &ldquo;2 towels&rdquo; instead of a bare &ldquo;2&rdquo;.
             </p>
           </div>
-        )}
-      </div>
-
-      <div style={{ marginTop: '.9rem' }}>
-        <label className="label">Type</label>
-        <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }} role="radiogroup" aria-label="Offer type">
-          {([
-            { id: 'quantity' as const, label: 'Countable item', hint: 'Guests choose how many — towels, beach chairs, bikes.' },
-            { id: 'package' as const, label: 'Package', hint: 'One bundle bought as-is — golf package, wedding package.' },
-          ]).map((opt) => (
-            <label
-              key={opt.id}
-              style={{
-                flex: 1, minWidth: 220, display: 'flex', gap: '.55rem', alignItems: 'flex-start',
-                padding: '.7rem .8rem', borderRadius: 10, cursor: 'pointer',
-                border: `1px solid ${kind === opt.id ? 'var(--accent, #c9a96e)' : 'var(--line, rgba(0,0,0,.14))'}`,
-              }}
-            >
-              <input
-                type="radio"
-                name="kind"
-                value={opt.id}
-                checked={kind === opt.id}
-                onChange={() => setKind(opt.id)}
-                data-testid={`radio-extra-kind-${opt.id}`}
-                style={{ marginTop: 3 }}
-              />
-              <span>
-                <strong style={{ fontSize: '.88rem', display: 'block' }}>{opt.label}</strong>
-                <span className="faint" style={{ fontSize: '.75rem' }}>{opt.hint}</span>
-              </span>
-            </label>
-          ))}
         </div>
-      </div>
+      )}
 
-      <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginTop: '.9rem' }}>
+      <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginTop: '.75rem' }}>
         <div style={{ width: 180 }}>
           <label className="label">Options label</label>
           <input
@@ -287,7 +292,7 @@ function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string
         </div>
       </div>
 
-      <label className="label" style={{ marginTop: '.9rem' }}>What&rsquo;s included</label>
+      <SectionLabel>What&apos;s included</SectionLabel>
       <textarea
         name="details"
         className="input"
@@ -302,6 +307,18 @@ function OfferForm({ propertyId, offer, onDone, onCancel }: { propertyId: string
       <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
         Shown to guests when they open the offer, so they know exactly what they are getting.
       </p>
+
+      <SectionLabel>How it shows</SectionLabel>
+      <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <label className="label">CTA label</label>
+          <input name="ctaLabel" className="input" defaultValue={offer?.cta_label ?? 'Request'} placeholder="Request" maxLength={40} data-testid="input-extra-cta" />
+        </div>
+        <div style={{ width: 110 }}>
+          <label className="label">Sort</label>
+          <input name="sortOrder" type="number" className="input" defaultValue={offer?.sort_order ?? 0} min={0} max={9999} data-testid="input-extra-sort" />
+        </div>
+      </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '.85rem 0 0', fontSize: '.88rem', cursor: 'pointer' }}>
         <input type="checkbox" name="isFavorite" defaultChecked={offer?.is_favorite ?? false} data-testid="checkbox-extra-favorite" />

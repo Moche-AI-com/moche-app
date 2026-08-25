@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Loader2, Minus, Plus, Sparkles } from 'lucide-react';
+import { EXTRAS_GUEST_STATUS_LABEL, type ExtrasFulfillmentStatus } from '@/lib/extras/lifecycle';
 
 export type GuestExtraOffer = {
   id: string;
@@ -275,7 +276,7 @@ export function ExtrasWorkflow(props: {
               <div key={o.id} className="gp-card" style={{ marginBottom: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                   <div className="gp-offer-title">{o.item_title ?? 'Request'}</div>
-                  <span className="gp-badge">{(o.fulfillment_status ?? o.status ?? 'requested').replace(/_/g, ' ')}</span>
+                  <span className="gp-badge">{EXTRAS_GUEST_STATUS_LABEL[(o.fulfillment_status ?? o.status ?? 'requested') as ExtrasFulfillmentStatus] ?? 'Requested'}</span>
                 </div>
                 {o.request_number ? <div className="gp-offer-desc">Ref {o.request_number}</div> : null}
               </div>
