@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
-import { propertyCreateWithGeoSchema, propertyUpdateSchema, propertySettingsSchema } from '@/lib/validation';
+import { propertyAddressSchema, propertyCreateWithGeoSchema, propertyUpdateSchema, propertySettingsSchema } from '@/lib/validation';
 import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
 import { DEFAULT_HOST_LANGUAGE, resolveLanguage } from '@/lib/guest/languages';
 import { computeBrainHealth } from '@/lib/brain/health';
@@ -35,6 +35,9 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
 
   const parsed = propertyCreateWithGeoSchema.safeParse({
     displayName: formData.get('displayName'),
+    addressLine1: formData.get('addressLine1') || '',
+    addressLine2: formData.get('addressLine2') || '',
+    postalCode: formData.get('postalCode') || '',
     city: formData.get('city') || '',
     region: formData.get('region') || '',
     country: formData.get('country') || '',
@@ -52,6 +55,9 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
       host_account_id: ctx.account.id,
       display_name: d.displayName,
       slug: slugWithSuffix(d.displayName),
+      address_line1: d.addressLine1,
+      address_line2: d.addressLine2 || null,
+      postal_code: d.postalCode || null,
       city: d.city || null,
       region: d.region || null,
       country: d.country || null,
@@ -161,6 +167,62 @@ export async function updatePropertyAction(_prev: PropertyFormState, formData: F
   revalidatePath(`/dashboard/properties/${propertyId}`);
   revalidatePath(`/dashboard/properties/${propertyId}/settings`);
   return { success: 'Property saved.' };
+}
+
+// Address captured on the listing-import review page. The import job creates the
+// draft property from the listing title alone (lib/property-import/jobs.ts), so
+// this is where the required main address lands for imported properties. Only
+// address/location fields are touched — name, branding, and cover image belong
+// to their own forms and are never clobbered here.
+export async function updatePropertyAddressAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.editProperty) return { error: 'You do not have permission to edit this property.' };
+
+  const parsed = propertyAddressSchema.safeParse({
+    addressLine1: formData.get('addressLine1') || '',
+    addressLine2: formData.get('addressLine2') || '',
+    city: formData.get('city') || '',
+    region: formData.get('region') || '',
+    postalCode: formData.get('postalCode') || '',
+    country: formData.get('country') || '',
+    lat: formData.get('lat') ?? '',
+    lng: formData.get('lng') ?? '',
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the address.' };
+  const d = parsed.data;
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('properties')
+    .update({
+      address_line1: d.addressLine1,
+      address_line2: d.addressLine2 || null,
+      city: d.city || null,
+      region: d.region || null,
+      postal_code: d.postalCode || null,
+      country: d.country || null,
+      lat: d.lat ?? null,
+      lng: d.lng ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', propertyId);
+
+  if (error) {
+    log.warn('property_address_update_failed', { error: error.message });
+    return { error: 'Could not save the address. Please try again.' };
+  }
+
+  await audit(supabase, {
+    action: 'property.address.updated',
+    actorProfileId: access.property.host_account_id,
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+  });
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  revalidatePath('/dashboard/properties');
+  return { success: 'Address saved.' };
 }
 
 export async function updatePropertySettingsAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {

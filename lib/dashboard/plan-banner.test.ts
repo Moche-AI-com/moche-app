@@ -4,7 +4,6 @@ import {
   daysUntil,
   planBannerFor,
   pluralize,
-  propertyUsageLine,
   type PlanBannerInput,
 } from './plan-banner';
 
@@ -150,15 +149,5 @@ describe('planBannerFor', () => {
   it('prefers read-only over trialing', () => {
     const b = planBannerFor(ent({ trialing: true, isReadOnly: true, trialEnd: '2026-08-12T12:00:00.000Z' }), NOW);
     expect(b?.variant).toBe('read_only');
-  });
-});
-
-describe('propertyUsageLine', () => {
-  it('describes a paid plan', () => {
-    expect(propertyUsageLine(2, 5, true)).toBe('2 of 5 properties used on your plan.');
-  });
-
-  it('does not claim a plan the host does not have', () => {
-    expect(propertyUsageLine(0, 1, false)).toBe('0 of 1 property used on the free build tier.');
   });
 });

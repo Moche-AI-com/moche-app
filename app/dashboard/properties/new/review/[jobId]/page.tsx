@@ -18,12 +18,21 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
   const draft = artifact ? asListingDraft(artifact.payload) : null;
   if (!draft) notFound();
 
+  // The import job created this property from the listing title alone, so it has
+  // no address yet. The review step collects it (required for every new property)
+  // before the host continues on to the property dashboard.
+  const { data: property } = await client
+    .from('properties')
+    .select('address_line1, address_line2, city, region, postal_code, country, lat, lng')
+    .eq('id', job.property_id)
+    .maybeSingle();
+
   return (
     <div>
       <p className="faint" style={{ marginBottom: '.25rem' }}>Step 2 of 2</p>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0' }}>Review imported details</h1>
       <p className="faint" style={{ marginBottom: '1.5rem' }}>From {draft.provider} · {draft.listingTitle}</p>
-      <ImportReviewClient jobId={job.id} propertyId={job.property_id} groups={draft.reviewGroups} />
+      <ImportReviewClient jobId={job.id} propertyId={job.property_id} groups={draft.reviewGroups} initialAddress={property ?? null} />
     </div>
   );
 }

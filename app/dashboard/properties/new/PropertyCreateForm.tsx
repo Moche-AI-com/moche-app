@@ -19,6 +19,20 @@ export function PropertyCreateForm() {
         <label className="label" htmlFor="displayName">Property name *</label>
         <input className="input" id="displayName" name="displayName" maxLength={120} required placeholder="Beachside Cottage" />
       </div>
+      <div className="field">
+        <label className="label" htmlFor="addressLine1">Street address *</label>
+        <input className="input" id="addressLine1" name="addressLine1" maxLength={200} required placeholder="12 Ocean View Rd" />
+      </div>
+      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+        <div className="field">
+          <label className="label" htmlFor="addressLine2">Unit / apartment</label>
+          <input className="input" id="addressLine2" name="addressLine2" maxLength={200} placeholder="Unit 2" />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="postalCode">Postal code</label>
+          <input className="input" id="postalCode" name="postalCode" maxLength={40} placeholder="08001" />
+        </div>
+      </div>
       <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
         <div className="field">
           <label className="label" htmlFor="city">City *</label>
@@ -42,7 +56,7 @@ export function PropertyCreateForm() {
         </div>
       </div>
       <AddressAutocomplete
-        targets={{ city: 'city', state: 'region', country: 'country' }}
+        targets={{ line1: 'addressLine1', city: 'city', state: 'region', postalCode: 'postalCode', country: 'country' }}
       />
 
       <div className="field">

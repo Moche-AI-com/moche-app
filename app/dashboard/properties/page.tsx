@@ -2,29 +2,49 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
-import { propertyUsageLine } from '@/lib/dashboard/plan-banner';
+import { canCreateProperty } from '@/lib/billing/entitlements';
 import { STATUS_BADGE } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
+interface PropertyCardRow {
+  id: string;
+  display_name: string;
+  status: string;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  region: string | null;
+  postal_code: string | null;
+  country: string | null;
+}
+
+// The card shows the property's main address where the /slug link used to sit,
+// e.g. "12 Ocean View Rd, Unit 2, Barcelona, Catalonia, 08001, Spain".
+// Returns null when no street address has been captured yet.
+function cardAddress(p: PropertyCardRow): string | null {
+  if (!p.address_line1 || !p.address_line1.trim()) return null;
+  return [p.address_line1, p.address_line2, p.city, p.region, p.postal_code, p.country]
+    .filter(Boolean)
+    .join(', ');
+}
+
 export default async function PropertiesPage() {
   const ctx = await requireSession();
   const supabase = createClient();
-  const [{ data: properties }, gate, ent] = await Promise.all([
+  const [{ data: properties }, gate] = await Promise.all([
     // Archived properties are excluded and listed under Reports instead,
     // alongside the archived service requests, extras, and stays they relate to.
     // Leaving them here defeated the point of archiving: a host with a dozen
     // retired listings still had to scroll past all of them.
     supabase
       .from('properties')
-      .select('id, display_name, slug, status, city, region')
+      .select('id, display_name, status, address_line1, address_line2, city, region, postal_code, country')
       .eq('host_account_id', ctx.account.id)
       .is('deleted_at', null)
       .neq('status', 'archived')
       .order('created_at', { ascending: false }),
     canCreateProperty(supabase, ctx.account.id),
-    getEntitlements(supabase, ctx.account.id),
   ]);
 
   return (
@@ -32,9 +52,6 @@ export default async function PropertiesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Properties</h1>
-          <p className="muted" style={{ fontSize: '.9rem' }} data-testid="property-usage-line">
-            {propertyUsageLine(gate.used, ent.propertyLimit, ent.active)}
-          </p>
         </div>
         {gate.ok ? (
           // Same treatment as the home dashboard action, so the primary
@@ -60,18 +77,37 @@ export default async function PropertiesPage() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '1rem' }}>
-          {properties!.map((p) => (
-            <Link key={p.id} href={`/dashboard/properties/${p.id}`} className="card card-interactive rise-in dash-prop-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
-                <strong>{p.display_name}</strong>
-                <span className={`badge ${STATUS_BADGE[p.status] ?? ''}`}>{p.status}</span>
+          {properties!.map((p) => {
+            const address = cardAddress(p);
+            return (
+              <div key={p.id}>
+                <Link href={`/dashboard/properties/${p.id}`} className="card card-interactive rise-in dash-prop-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
+                    <strong>{p.display_name}</strong>
+                    <span className={`badge ${STATUS_BADGE[p.status] ?? ''}`}>{p.status}</span>
+                  </div>
+                  {address ? (
+                    <div className="muted" style={{ fontSize: '.85rem' }}>{address}</div>
+                  ) : (
+                    (p.city || p.region) && (
+                      <div className="faint" style={{ fontSize: '.8rem', marginTop: '.35rem' }}>{[p.city, p.region].filter(Boolean).join(', ')}</div>
+                    )
+                  )}
+                </Link>
+                {!address && (
+                  // Sits outside the card's own link (nested links are invalid
+                  // HTML) and lands the host directly on the Settings address form.
+                  <Link
+                    href={`/dashboard/properties/${p.id}/settings`}
+                    className="faint"
+                    style={{ display: 'inline-block', fontSize: '.78rem', marginTop: '.3rem', paddingLeft: '.25rem' }}
+                  >
+                    Add the main address →
+                  </Link>
+                )}
               </div>
-              <div className="muted" style={{ fontSize: '.85rem' }}>/{p.slug}</div>
-              {(p.city || p.region) && (
-                <div className="faint" style={{ fontSize: '.8rem', marginTop: '.35rem' }}>{[p.city, p.region].filter(Boolean).join(', ')}</div>
-              )}
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
