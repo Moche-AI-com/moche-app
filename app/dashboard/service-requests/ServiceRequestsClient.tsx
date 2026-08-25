@@ -7,7 +7,9 @@ import {
   MapPin, Wrench, KeyRound, Clock3, UserRound, CheckCircle2, Printer, Archive,
 } from 'lucide-react';
 import { LifecycleToggle, type LifecycleView } from '@/components/dashboard/LifecycleToggle';
+import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { ALLOWED_TRANSITIONS, type ServiceRequestStatus } from '@/lib/service-requests/lifecycle';
+import { ReportActions } from './ReportActions';
 
 // Which statuses the database projects to lifecycle_status = 'archived'.
 // Kept in one place so the optimistic client-side filter below cannot disagree
@@ -34,6 +36,8 @@ export interface ServiceTicket {
   media_urls: unknown;
   interview_status: string;
   assigned_contact_id: string | null;
+  edited_summary: string | null;
+  edited_details: string | null;
 }
 
 export interface PropertyContactOption {
@@ -192,6 +196,9 @@ function TicketCard({
             {ticket.urgency}
           </span>
           <span className={`badge ${STATUS_BADGE[ticket.status] ?? ''}`}>{STATUS_LABEL[ticket.status] ?? ticket.status}</span>
+          {ticket.edited_summary && (
+            <span className="badge" title="Headline edited by the host">Edited</span>
+          )}
           {/* Opens the print-optimised report in a new tab rather than printing
               this page, so the host gets the full record (timeline, causes,
               parts, resolution) instead of a screenshot of a collapsed card. */}
@@ -209,7 +216,7 @@ function TicketCard({
         </span>
       </div>
 
-      <p style={{ margin: 0 }}>{ticket.summary || ticket.description}</p>
+      <p style={{ margin: 0 }}>{ticket.edited_summary || ticket.summary || ticket.description}</p>
 
       {ticket.interview_status === 'safety_escalated' && (
         <p style={{ display: 'flex', alignItems: 'center', gap: '.35rem', color: '#ff5c5c', fontSize: '.82rem', fontWeight: 600, margin: '.5rem 0 0' }}>
@@ -230,7 +237,12 @@ function TicketCard({
 
       {expanded && (
         <div style={{ marginTop: '.85rem', paddingTop: '.85rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
-          <p className="muted" style={{ margin: 0, fontSize: '.88rem' }}>{ticket.description}</p>
+          <p className="muted" style={{ margin: 0, fontSize: '.88rem' }}>{ticket.edited_details || ticket.description}</p>
+          {ticket.edited_details && (
+            <p className="faint" style={{ margin: 0, fontSize: '.75rem' }}>
+              Edited by the host — the guest's original report stays on the record.
+            </p>
+          )}
 
           {ticket.location_note && (
             <p style={{ display: 'flex', alignItems: 'flex-start', gap: '.4rem', margin: 0, fontSize: '.85rem' }}>
@@ -244,8 +256,7 @@ function TicketCard({
                 <Wrench size={14} aria-hidden style={{ color: 'var(--iris)' }} /> Likely causes (unverified)
               </div>
               <ul style={{ margin: 0, paddingLeft: '1.4rem' }}>
-                {likelyCauses.map((c) => <li key={c}>{c}</li>)}
-              </ul>
+                {likelyCauses.map((c) => <li key={c}>{c}</li>)}</ul>
             </div>
           )}
 
@@ -253,8 +264,7 @@ function TicketCard({
             <div style={{ fontSize: '.85rem' }}>
               <div style={{ fontWeight: 600, marginBottom: '.2rem' }}>Suggested parts</div>
               <ul style={{ margin: 0, paddingLeft: '1.4rem' }}>
-                {suggestedParts.map((p) => <li key={p}>{p}</li>)}
-              </ul>
+                {suggestedParts.map((p) => <li key={p}>{p}</li>)}</ul>
             </div>
           )}
 
@@ -352,6 +362,13 @@ function TicketCard({
                   </select>
                 </label>
               )}
+              <ReportActions
+                ticket={ticket}
+                propertyName={propertyName}
+                contacts={contacts}
+                canManage={canResolve}
+                onEdited={(patch) => onChanged(patch)}
+              />
             </div>
           )}
         </div>
@@ -361,7 +378,7 @@ function TicketCard({
 }
 
 export function ServiceRequestsClient({
-  tickets, propertyNames, properties, contacts, view, activeCount, pastCount,
+  tickets, propertyNames, properties, contacts, view, activeCount, pastCount, activePropertyId,
 }: {
   tickets: ServiceTicket[];
   propertyNames: Record<string, string>;
@@ -370,6 +387,7 @@ export function ServiceRequestsClient({
   view: LifecycleView;
   activeCount: number;
   pastCount: number;
+  activePropertyId: string | null;
 }) {
   const [rows, setRows] = useState(tickets);
   const canResolveMap = useMemo(() => new Map(properties.map((p) => [p.id, p.canResolve])), [properties]);
@@ -431,13 +449,17 @@ export function ServiceRequestsClient({
         </p>
       </div>
 
-      <LifecycleToggle
-        basePath="/dashboard/service-requests"
-        view={view}
-        activeCount={shownActive}
-        pastCount={shownPast}
-        ariaLabel="Filter service requests by status"
-      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '.75rem', flexWrap: 'wrap' }}>
+        <LifecycleToggle
+          basePath="/dashboard/service-requests"
+          view={view}
+          activeCount={shownActive}
+          pastCount={shownPast}
+          extraParams={{ property: activePropertyId ?? undefined }}
+          ariaLabel="Filter service requests by status"
+        />
+        <PropertyFilter properties={properties} activeId={activePropertyId} basePath="/dashboard/service-requests" />
+      </div>
 
       {sorted.length === 0 ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>

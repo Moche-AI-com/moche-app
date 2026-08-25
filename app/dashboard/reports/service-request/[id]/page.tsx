@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireSession, getPropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { PrintButton } from '@/components/dashboard/PrintButton';
+import { ReportActions } from '@/app/dashboard/service-requests/ReportActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,28 +53,43 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
   const access = await getPropertyAccess(ticket.property_id);
   if (!access) notFound();
 
-  const causes = toList(ticket.likely_causes);
-  const parts = toList(ticket.suggested_parts);
-  const flags = toList(ticket.safety_flags);
-  const timeline = toTimeline(ticket.timeline);
+  // edited_* columns land in database.types.ts on the next `supabase gen
+  // types` run; until then, widen the row type locally.
+  const t = ticket as typeof ticket & {
+    edited_summary: string | null;
+    edited_details: string | null;
+    edited_at: string | null;
+  };
 
-  const { data: contact } = ticket.assigned_contact_id
+  const causes = toList(t.likely_causes);
+  const parts = toList(t.suggested_parts);
+  const flags = toList(t.safety_flags);
+  const timeline = toTimeline(t.timeline);
+
+  const { data: contact } = t.assigned_contact_id
     ? await supabase
         .from('property_contacts')
         .select('name, label, contact_type, phone, email')
-        .eq('id', ticket.assigned_contact_id)
+        .eq('id', t.assigned_contact_id)
         .maybeSingle()
     : { data: null };
 
+  // The contact list the share dialog needs: just the assigned contact, in the
+  // shape ReportActions expects.
+  const shareContacts = contact && t.assigned_contact_id
+    ? [{ id: t.assigned_contact_id, name: contact.name, label: contact.label, phone: contact.phone, email: contact.email }]
+    : [];
+
   const rows: Array<[string, string | null]> = [
     ['Property', access.property.display_name],
-    ['Request ID', ticket.id],
-    ['Type', String(ticket.service_type ?? '').replace(/_/g, ' ') || null],
-    ['Urgency', ticket.urgency ?? null],
-    ['Status', STATUS_LABEL[ticket.status] ?? ticket.status],
-    ['Reported', fmt(ticket.created_at)],
-    ['Closed', fmt(ticket.archived_at)],
-    ['Location', ticket.location_note ?? null],
+    ['Request ID', t.id],
+    ['Type', String(t.service_type ?? '').replace(/_/g, ' ') || null],
+    ['Urgency', t.urgency ?? null],
+    ['Status', STATUS_LABEL[t.status] ?? t.status],
+    ['Reported', fmt(t.created_at)],
+    ['Closed', fmt(t.archived_at)],
+    ['Edited by host', fmt(t.edited_at)],
+    ['Location', t.location_note ?? null],
     ['Assigned to', contact ? [contact.name, contact.label].filter(Boolean).join(' \u00b7 ') || contact.contact_type : null],
   ];
 
@@ -81,13 +97,30 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
     <div className="report-sheet">
       <div className="report-toolbar">
         <a href="/dashboard/reports" className="btn btn-ghost btn-sm">← All reports</a>
+        <ReportActions
+          ticket={{
+            id: t.id,
+            property_id: t.property_id,
+            service_type: String(t.service_type ?? 'other'),
+            urgency: String(t.urgency ?? 'medium'),
+            summary: t.summary ?? null,
+            description: t.description ?? null,
+            edited_summary: t.edited_summary,
+            edited_details: t.edited_details,
+            created_at: t.created_at,
+            assigned_contact_id: t.assigned_contact_id ?? null,
+          }}
+          propertyName={access.property.display_name}
+          contacts={shareContacts}
+          canManage={access.can.resolveMaintenance}
+        />
         <PrintButton />
       </div>
 
       <header className="report-head">
         <p className="report-kicker">Service report</p>
         <h1 className="report-title">
-          {ticket.summary || String(ticket.service_type ?? 'Service request').replace(/_/g, ' ')}
+          {t.edited_summary || t.summary || String(t.service_type ?? 'Service request').replace(/_/g, ' ')}
         </h1>
         <p className="report-sub">{access.property.display_name}</p>
       </header>
@@ -114,20 +147,20 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
 
       <section className="report-section">
         <h2>Reported issue</h2>
-        <p>{ticket.description || 'No description recorded.'}</p>
+        <p>{t.edited_details || t.description || 'No description recorded.'}</p>
       </section>
 
-      {ticket.access_instructions && (
+      {t.access_instructions && (
         <section className="report-section">
           <h2>Access instructions</h2>
-          <p>{ticket.access_instructions}</p>
+          <p>{t.access_instructions}</p>
         </section>
       )}
 
-      {ticket.guest_availability && (
+      {t.guest_availability && (
         <section className="report-section">
           <h2>Guest availability</h2>
-          <p>{ticket.guest_availability}</p>
+          <p>{t.guest_availability}</p>
         </section>
       )}
 
@@ -164,7 +197,7 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
 
       <section className="report-section">
         <h2>Resolution</h2>
-        <p>{ticket.resolution_notes || 'Not yet resolved.'}</p>
+        <p>{t.resolution_notes || 'Not yet resolved.'}</p>
       </section>
 
       <footer className="report-foot">
