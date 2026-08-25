@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Archive, Building2, CheckCircle2, MessageSquareReply, Sparkles } from 'lucide-react';
 import { closeEscalationAction, closeHandledEscalationsAction, openEscalationThreadAction, setEscalationStatusAction } from '@/app/dashboard/escalations/actions';
 import { canAnswerEscalation } from '@/lib/dashboard/escalations-permissions';
+import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 
 export interface EscalationRowData {
   id: string;
@@ -232,26 +233,13 @@ export function EscalationInbox({
 
   return (
     <div>
-      {properties.length > 1 && (
-        <div className="esc-filter-row" role="tablist" aria-label="Filter escalations by property">
-          <Link href={filterHref(null, activeStatus)} className={`esc-filter-pill${!activeFilter ? ' is-active' : ''}`}>
-            All properties
-            {totalOpen > 0 && (
-              <span className={`esc-filter-count${!activeFilter ? '' : ' has-open'}`}>{totalOpen}</span>
-            )}
-          </Link>
-          {properties.map((p) => {
-            const openCount = openCountByProperty[p.id] ?? 0;
-            const isActive = activeFilter === p.id;
-            return (
-              <Link key={p.id} href={filterHref(p.id, activeStatus)} className={`esc-filter-pill${isActive ? ' is-active' : ''}`}>
-                {p.name}
-                {openCount > 0 && <span className={`esc-filter-count${isActive ? '' : ' has-open'}`}>{openCount}</span>}
-              </Link>
-            );
-          })}
-        </div>
-      )}
+      {/* Property scoping matches the home overview page: one accessible dropdown
+          instead of a pill row. The component preserves the other search params
+          (like the status filter) when the scope changes, and hides itself for
+          single-property accounts. */}
+      <div style={{ marginBottom: '.75rem' }}>
+        <PropertyFilter properties={properties} activeId={activeFilter} basePath="/dashboard/escalations" />
+      </div>
 
       <div className="esc-filter-row" role="tablist" aria-label="Filter escalations by status">
         {STATUS_TABS.map((tab) => {
