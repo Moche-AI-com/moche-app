@@ -1,39 +1,36 @@
 'use client';
 
-import { ConciergeBell, MessageCircle, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
 import type { PortalStep } from './GuestPortal';
+import { CardArt } from './CardArt';
 
 type MenuKey = Extract<PortalStep, 'ask' | 'host' | 'maintenance' | 'extras'>;
 
-const CARDS: { key: MenuKey; title: string; blurb: string; Icon: LucideIcon }[] = [
+const CARDS: { key: MenuKey; title: string; blurb: string }[] = [
   {
     key: 'ask',
     title: 'Ask Questions',
     blurb: 'Instant AI answers about Wi-Fi, check-in, house rules, local tips and more.',
-    Icon: MessageCircle,
   },
   {
     key: 'host',
     title: 'Message Host Directly',
     blurb: 'Reach your host or property staff — a real person, not the AI.',
-    Icon: ConciergeBell,
   },
   {
     key: 'maintenance',
     title: 'Report Service Maintenance',
     blurb: 'Something not working? Troubleshoot with the AI, then file a report to the team.',
-    Icon: Wrench,
   },
   {
     key: 'extras',
     title: 'Extras & Amenities',
     blurb: 'Browse and request add-ons, upgrades and experiences for your stay.',
-    Icon: Sparkles,
   },
 ];
 
 // Step 3 of the portal: exactly four workflow options, each opening its own
-// distinct workflow.
+// distinct workflow. Every card carries the same brand-gradient art tile with
+// its own line glyph — consistent frame, no stock-photo clutter.
 export function MainMenu(props: {
   propertyName: string;
   guestName: string | null;
@@ -54,7 +51,7 @@ export function MainMenu(props: {
       ) : null}
 
       <div className="gp-menu-grid">
-        {CARDS.map(({ key, title, blurb, Icon }) => (
+        {CARDS.map(({ key, title, blurb }) => (
           <button
             key={key}
             type="button"
@@ -63,7 +60,7 @@ export function MainMenu(props: {
             disabled={props.hostPreview && key !== 'ask'}
             data-testid={`menu-${key}`}
           >
-            <span className="gp-menu-icon"><Icon size={22} aria-hidden /></span>
+            <CardArt cardKey={key} />
             <span className="gp-menu-title">{title}</span>
             <span className="gp-menu-blurb">{blurb}</span>
           </button>

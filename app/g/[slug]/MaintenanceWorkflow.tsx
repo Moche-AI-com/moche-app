@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, Send, Wrench } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ConciergeBell, Loader2, Wrench } from 'lucide-react';
 
 type Turn = { role: 'guest' | 'assistant'; text: string };
 type Phase = 'idle' | 'in_progress' | 'completed' | 'safety_escalated';
@@ -158,7 +158,7 @@ export function MaintenanceWorkflow(props: {
           {checked && resumable ? (
             <div className="gp-card" style={{ marginBottom: 14 }}>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>You have a report in progress</div>
-              <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: 10 }}>{resumable.description}</div>
+              <div className="gp-muted" style={{ fontSize: '0.85rem', marginBottom: 10 }}>{resumable.description}</div>
               <button type="button" className="gp-btn gp-btn-ghost" onClick={resume}>Continue that report</button>
             </div>
           ) : null}
@@ -212,8 +212,8 @@ export function MaintenanceWorkflow(props: {
               maxLength={2000}
               aria-label="Answer"
             />
-            <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label="Send">
-              <Send size={18} aria-hidden />
+            <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label="Ring the service bell">
+              <ConciergeBell size={18} aria-hidden />
             </button>
           </form>
         </>
@@ -227,7 +227,7 @@ export function MaintenanceWorkflow(props: {
           </h2>
           {reference ? (
             <>
-              <div style={{ fontSize: '0.85rem', opacity: 0.65 }}>Reference number</div>
+              <div className="gp-muted" style={{ fontSize: '0.85rem' }}>Reference number</div>
               <div className="gp-ref">{reference}</div>
             </>
           ) : null}

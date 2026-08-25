@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { Moon, Sun } from 'lucide-react';
 import { CodeEntry } from './CodeEntry';
 import { RegisterForm } from './RegisterForm';
 import { MainMenu } from './MainMenu';
@@ -8,12 +9,28 @@ import { AiChatWorkflow } from './AiChatWorkflow';
 import { HostChatWorkflow } from './HostChatWorkflow';
 import { MaintenanceWorkflow } from './MaintenanceWorkflow';
 import { ExtrasWorkflow, type GuestExtraOffer } from './ExtrasWorkflow';
+import { LanguagePicker } from '@/components/guest/LanguagePicker';
+import { resolveLanguage } from '@/lib/guest/languages';
+import { PORTAL_CSS, usePortalTheme } from './portalStyles';
 
 export type PortalStep = 'code' | 'register' | 'menu' | 'ask' | 'host' | 'maintenance' | 'extras';
+
+const LANG_STORAGE_KEY = 'gp-lang';
 
 // Enhanced guest portal shell: a step machine covering
 //   code entry → registration → main menu → one of four workflows.
 // All workflow screens share the chrome defined here (back-to-menu, brand vars).
+//
+// Theme: dark luxury is the default; guests can switch to a light theme from
+// the header. The choice persists on the device (localStorage) and every color
+// flows through the semantic variables in portalStyles.ts, so text stays
+// readable against its background in both themes.
+//
+// Language: the header Globe sets the guest's language. It is sent with every
+// concierge + host-chat request (the AI replies in it; the host receives an
+// auto-translation), persists on-device, and is restored from the stay record
+// (stays.guest_language) on return visits — the server value wins because it
+// is the one the host's notifications were already translated against.
 export function GuestPortal(props: {
   fontClassName: string;
   slug: string;
@@ -31,6 +48,7 @@ export function GuestPortal(props: {
   initialRegistered: boolean;
   extrasOffers: GuestExtraOffer[];
   accessToken: string | null;
+  initialLanguage: string | null;
 }) {
   const [step, setStep] = useState<PortalStep>(() => {
     if (!props.initialVerified) return 'code';
@@ -38,6 +56,36 @@ export function GuestPortal(props: {
     return 'register';
   });
   const [guestName, setGuestName] = useState<string | null>(props.guestName);
+  const { theme, toggleTheme } = usePortalTheme();
+  const [language, setLanguageState] = useState<string | null>(props.initialLanguage);
+
+  // No server-known language yet: fall back to this device's stored choice,
+  // then to the browser's language as a first guess (resolveLanguage maps
+  // regional variants like pt-PT onto the picker's codes).
+  useEffect(() => {
+    if (props.initialLanguage) return;
+    try {
+      const stored = window.localStorage.getItem(LANG_STORAGE_KEY);
+      if (stored && resolveLanguage(stored)) {
+        setLanguageState(stored);
+        return;
+      }
+      const browser = resolveLanguage(window.navigator.language);
+      if (browser) setLanguageState(browser.code);
+    } catch {
+      // Private-browsing modes can throw; Automatic stays in effect.
+    }
+  }, [props.initialLanguage]);
+
+  const setLanguage = useCallback((code: string | null) => {
+    setLanguageState(code);
+    try {
+      if (code) window.localStorage.setItem(LANG_STORAGE_KEY, code);
+      else window.localStorage.removeItem(LANG_STORAGE_KEY);
+    } catch {
+      // Still applies for this session even if it cannot persist.
+    }
+  }, []);
 
   const goMenu = useCallback(() => setStep('menu'), []);
   const goCode = useCallback(() => setStep('code'), []);
@@ -48,26 +96,45 @@ export function GuestPortal(props: {
     '--gp-accent': props.brandAccent ?? '#FF8A5C',
   } as CSSProperties;
 
-  const showHero = step === 'code' || step === 'register';
+  // The host's property photo leads the entry steps AND the main menu; on the
+  // workflow screens it collapses to a slim banner so chat space is untouched.
+  // (The condition stays inline: extracting it to a boolean would break TS
+  // narrowing on coverImageUrl at the img below.)
+  const showHero = step === 'code' || step === 'register' || step === 'menu';
+
+  const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 
   return (
-    <div className={`gp-v2 ${props.fontClassName}`} style={brandVars}>
+    <div className={`gp-v2 ${theme === 'light' ? 'gp-light' : ''} ${props.fontClassName}`} style={brandVars}>
       <style>{PORTAL_CSS}</style>
       <div className="gp-wrap">
         <header className="gp-header">
           {props.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={props.logoUrl} alt="" className="gp-logo" />
-          ) : null}
-          <div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/icon.svg" alt="Moche AI" className="gp-logo" />
+          )}
+          <div className="gp-header-text">
             <div className="gp-property-name">{props.propertyName}</div>
             {props.location ? <div className="gp-property-loc">{props.location}</div> : null}
+          </div>
+          <div className="gp-header-actions">
+            <LanguagePicker value={language} onChange={setLanguage} />
+            <button type="button" className="gp-icon-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>
+              {theme === 'dark' ? <Sun size={17} aria-hidden /> : <Moon size={17} aria-hidden />}
+            </button>
           </div>
         </header>
 
         {showHero && props.coverImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={props.coverImageUrl} alt="" className="gp-hero" />
+        ) : null}
+        {!showHero && props.coverImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={props.coverImageUrl} alt="" className="gp-hero-compact" />
         ) : null}
 
         <main className="gp-main">
@@ -108,6 +175,7 @@ export function GuestPortal(props: {
               slug={props.slug}
               propertyId={props.propertyId}
               hostPreview={props.hostPreview}
+              language={language}
               onBack={goMenu}
               onOpenHostChat={openHostChat}
               onSessionExpired={goCode}
@@ -118,6 +186,7 @@ export function GuestPortal(props: {
             <HostChatWorkflow
               slug={props.slug}
               guestName={guestName}
+              language={language}
               onBack={goMenu}
               onSessionExpired={goCode}
             />
@@ -142,120 +211,3 @@ export function GuestPortal(props: {
     </div>
   );
 }
-
-// Scoped portal styles. Everything hangs off .gp-v2 so nothing leaks into the
-// host dashboard or marketing pages.
-const PORTAL_CSS = `
-.gp-v2 {
-  min-height: 100dvh;
-  background: #0b0f0e;
-  color: #f2f5f4;
-  font-family: var(--font-portal-sans), system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-.gp-wrap {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
-}
-.gp-header { display: flex; align-items: center; gap: 12px; padding: 8px 0 16px; }
-.gp-logo { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; }
-.gp-property-name { font-family: var(--font-portal-serif), Georgia, serif; font-size: 1.35rem; font-weight: 600; }
-.gp-property-loc { font-size: 0.85rem; opacity: 0.65; }
-.gp-hero { width: 100%; height: 160px; object-fit: cover; border-radius: 16px; margin-bottom: 16px; }
-.gp-main { flex: 1; display: flex; flex-direction: column; }
-.gp-footer { text-align: center; font-size: 0.75rem; opacity: 0.45; padding-top: 24px; }
-
-.gp-step-title { font-family: var(--font-portal-serif), Georgia, serif; font-size: 1.6rem; font-weight: 600; margin: 8px 0 4px; }
-.gp-step-sub { font-size: 0.95rem; opacity: 0.7; margin-bottom: 20px; line-height: 1.45; }
-
-.gp-card { background: #131a18; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 18px; }
-
-.gp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 12px; padding: 14px 18px; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: transform 0.05s ease, opacity 0.15s ease; }
-.gp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.gp-btn-primary { background: var(--gp-primary); color: #06201c; }
-.gp-btn-accent { background: var(--gp-accent); color: #2a1408; }
-.gp-btn-ghost { background: rgba(255,255,255,0.07); color: inherit; }
-
-.gp-field { margin-bottom: 14px; }
-.gp-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; opacity: 0.85; }
-.gp-input, .gp-textarea { width: 100%; background: #0f1514; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; color: inherit; padding: 13px 14px; font-size: 1rem; outline: none; box-sizing: border-box; }
-.gp-input:focus, .gp-textarea:focus { border-color: var(--gp-primary); }
-.gp-textarea { min-height: 90px; resize: vertical; font-family: inherit; }
-.gp-field-error { color: #ff9d8a; font-size: 0.82rem; margin-top: 5px; }
-
-.gp-code-row { display: flex; gap: 10px; justify-content: center; margin: 18px 0 8px; }
-.gp-code-box { width: 58px; height: 68px; text-align: center; font-size: 1.9rem; font-weight: 700; background: #0f1514; border: 1.5px solid rgba(255,255,255,0.16); border-radius: 14px; color: inherit; outline: none; }
-.gp-code-box:focus { border-color: var(--gp-primary); }
-.gp-error { background: rgba(255, 107, 84, 0.12); border: 1px solid rgba(255, 107, 84, 0.4); color: #ffb4a3; border-radius: 12px; padding: 11px 14px; font-size: 0.9rem; margin: 12px 0; }
-
-.gp-consent { display: flex; gap: 10px; align-items: flex-start; background: #0f1514; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 13px 14px; margin: 16px 0; cursor: pointer; }
-.gp-consent input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--gp-primary); flex-shrink: 0; }
-.gp-consent-text { font-size: 0.88rem; line-height: 1.4; }
-.gp-consent-opt { display: block; font-size: 0.76rem; opacity: 0.55; margin-top: 2px; }
-
-.gp-menu-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 18px; }
-@media (min-width: 480px) { .gp-menu-grid { grid-template-columns: 1fr 1fr; } }
-.gp-menu-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: left; background: #131a18; border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 18px 16px; cursor: pointer; color: inherit; transition: border-color 0.15s ease, transform 0.05s ease; }
-.gp-menu-card:active { transform: scale(0.985); }
-.gp-menu-card:hover { border-color: var(--gp-primary); }
-.gp-menu-card:disabled { opacity: 0.45; cursor: not-allowed; }
-.gp-menu-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); color: var(--gp-primary); }
-.gp-menu-card:nth-child(2) .gp-menu-icon { color: var(--gp-accent); }
-.gp-menu-title { font-size: 1.02rem; font-weight: 700; }
-.gp-menu-blurb { font-size: 0.83rem; opacity: 0.65; line-height: 1.4; }
-
-.gp-wf-header { display: flex; align-items: center; gap: 10px; padding: 4px 0 14px; }
-.gp-back { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.07); border: none; color: inherit; border-radius: 10px; padding: 9px 12px; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
-.gp-wf-title { font-family: var(--font-portal-serif), Georgia, serif; font-size: 1.25rem; font-weight: 600; }
-
-.gp-banner { border-radius: 12px; padding: 11px 14px; font-size: 0.85rem; line-height: 1.45; margin-bottom: 14px; }
-.gp-banner-host { background: rgba(255, 138, 92, 0.12); border: 1px solid rgba(255, 138, 92, 0.35); }
-
-.gp-chat-list { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding: 4px 0 14px; min-height: 200px; }
-.gp-bubble { max-width: 85%; padding: 11px 14px; border-radius: 16px; font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-.gp-bubble-user { align-self: flex-end; background: var(--gp-primary); color: #06201c; border-bottom-right-radius: 6px; }
-.gp-bubble-assistant { align-self: flex-start; background: #1a2320; border: 1px solid rgba(255,255,255,0.08); border-bottom-left-radius: 6px; }
-.gp-bubble-host { align-self: flex-start; background: rgba(255, 138, 92, 0.16); border: 1px solid rgba(255, 138, 92, 0.35); border-bottom-left-radius: 6px; }
-.gp-bubble-emergency { border-color: #ff6b54; background: rgba(255, 107, 84, 0.14); }
-.gp-bubble-tag { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.6; margin-bottom: 4px; }
-.gp-bubble-meta { display: block; font-size: 0.72rem; opacity: 0.55; margin-top: 6px; }
-
-.gp-chips { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
-.gp-chip { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); color: inherit; border-radius: 999px; padding: 9px 14px; font-size: 0.85rem; cursor: pointer; }
-.gp-chip:hover { border-color: var(--gp-primary); }
-
-.gp-input-row { display: flex; gap: 8px; padding-top: 4px; }
-.gp-input-row .gp-input { flex: 1; }
-.gp-send { width: 50px; flex-shrink: 0; border: none; border-radius: 12px; background: var(--gp-primary); color: #06201c; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.gp-send:disabled { opacity: 0.5; }
-.gp-send-accent { background: var(--gp-accent); color: #2a1408; }
-
-.gp-empty { text-align: center; padding: 40px 20px; opacity: 0.75; font-size: 0.95rem; line-height: 1.5; }
-.gp-confirm { text-align: center; padding: 28px 18px; }
-.gp-confirm-icon { color: var(--gp-primary); margin: 0 auto 12px; }
-.gp-ref { display: inline-block; background: rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 12px; font-weight: 700; letter-spacing: 0.05em; margin: 10px 0; }
-
-.gp-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,0.09); }
-.gp-badge-waiting { background: rgba(255, 138, 92, 0.18); color: var(--gp-accent); }
-
-.gp-offer { background: #131a18; border: 1px solid rgba(255,255,255,0.09); border-radius: 14px; padding: 15px; margin-bottom: 10px; cursor: pointer; text-align: left; width: 100%; color: inherit; }
-.gp-offer:hover { border-color: var(--gp-primary); }
-.gp-offer-title { font-weight: 700; font-size: 0.98rem; }
-.gp-offer-price { color: var(--gp-primary); font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
-.gp-offer-desc { font-size: 0.84rem; opacity: 0.65; margin-top: 6px; line-height: 1.45; }
-.gp-cat { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.5; margin: 18px 0 8px; }
-
-.gp-stepper { display: flex; align-items: center; gap: 14px; }
-.gp-stepper button { width: 38px; height: 38px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: #0f1514; color: inherit; font-size: 1.15rem; cursor: pointer; }
-.gp-stepper span { font-size: 1.05rem; font-weight: 700; min-width: 22px; text-align: center; }
-.gp-variant-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.gp-variant { border: 1px solid rgba(255,255,255,0.15); background: #0f1514; color: inherit; border-radius: 999px; padding: 9px 15px; font-size: 0.88rem; cursor: pointer; }
-.gp-variant-on { border-color: var(--gp-primary); background: rgba(51, 230, 212, 0.12); }
-
-.gp-spin { animation: gp-spin 1s linear infinite; }
-@keyframes gp-spin { to { transform: rotate(360deg); } }
-`;

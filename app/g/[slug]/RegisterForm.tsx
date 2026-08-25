@@ -64,33 +64,64 @@ export function RegisterForm(props: {
 
   return (
     <section aria-label="Guest registration">
-      <h2>Welcome to {props.propertyName}</h2>
-      <p className="muted">Tell us who is staying so your host can recognize your guest ID and reply securely.</p>
-      <form onSubmit={submit} style={{ display: 'grid', gap: '.8rem', marginTop: '1rem' }}>
+      <h2 className="gp-step-title">Welcome to {props.propertyName}</h2>
+      <p className="gp-step-sub">Tell us who is staying so your host can recognize your guest ID and reply securely.</p>
+      <form onSubmit={submit}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.65rem' }}>
-          <label>
-            First name
-            <input value={firstName} onChange={(event) => setFirstName(event.target.value)} autoComplete="given-name" required />
-          </label>
-          <label>
-            Last name
-            <input value={lastName} onChange={(event) => setLastName(event.target.value)} autoComplete="family-name" required />
+          <div className="gp-field">
+            <label className="gp-label" htmlFor="gp-reg-first">First name</label>
+            <input
+              id="gp-reg-first"
+              className="gp-input"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              autoComplete="given-name"
+              required
+            />
+          </div>
+          <div className="gp-field">
+            <label className="gp-label" htmlFor="gp-reg-last">Last name</label>
+            <input
+              id="gp-reg-last"
+              className="gp-input"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              autoComplete="family-name"
+              required
+            />
+          </div>
+        </div>
+        <div className="gp-field">
+          <label className="gp-label" htmlFor="gp-reg-phone">Mobile phone number</label>
+          <input
+            id="gp-reg-phone"
+            className="gp-input"
+            type="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            autoComplete="tel"
+            required
+          />
+        </div>
+        <div className="gp-field">
+          <label className="gp-consent">
+            <input type="checkbox" checked={notificationConsent} onChange={(event) => setNotificationConsent(event.target.checked)} />
+            <span className="gp-consent-text">
+              Text me a neutral alert when my host replies.
+              <span className="gp-consent-opt">Message and data rates may apply.</span>
+            </span>
           </label>
         </div>
-        <label>
-          Mobile phone number
-          <input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" required />
-        </label>
-        <label style={{ display: 'flex', gap: '.55rem', alignItems: 'flex-start' }}>
-          <input type="checkbox" checked={notificationConsent} onChange={(event) => setNotificationConsent(event.target.checked)} />
-          <span>Text me a neutral alert when my host replies. Message and data rates may apply.</span>
-        </label>
-        <label style={{ display: 'flex', gap: '.55rem', alignItems: 'flex-start' }}>
-          <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required />
-          <span>I agree to the guest portal terms and host notification policy.</span>
-        </label>
-        {error && <p role="alert" style={{ color: '#ffb08f' }}>{error}</p>}
-        <button type="submit" disabled={busy || !termsAccepted}>{busy ? 'Saving…' : 'Continue'}</button>
+        <div className="gp-field">
+          <label className="gp-consent">
+            <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required />
+            <span className="gp-consent-text">I agree to the guest portal terms and host notification policy.</span>
+          </label>
+        </div>
+        {error && <div className="gp-error" role="alert">{error}</div>}
+        <button type="submit" className="gp-btn gp-btn-primary" disabled={busy || !termsAccepted}>
+          {busy ? 'Saving…' : 'Continue'}
+        </button>
       </form>
     </section>
   );
