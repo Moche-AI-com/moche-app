@@ -244,7 +244,7 @@ function EditReportDialog({
   return (
     <DialogShell title="Edit report" onClose={onClose}>
       <p className="faint" style={{ margin: 0, fontSize: '.8rem' }}>
-        This is the wording that gets printed, emailed, or texted. The guest's original report is never
+        This is the wording that gets printed, emailed, or texted. The guest’s original report is never
         overwritten — clear both fields and save to revert to it.
       </p>
       <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>

@@ -240,7 +240,7 @@ function TicketCard({
           <p className="muted" style={{ margin: 0, fontSize: '.88rem' }}>{ticket.edited_details || ticket.description}</p>
           {ticket.edited_details && (
             <p className="faint" style={{ margin: 0, fontSize: '.75rem' }}>
-              Edited by the host — the guest's original report stays on the record.
+              Edited by the host — the guest’s original report stays on the record.
             </p>
           )}
 
