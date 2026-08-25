@@ -123,9 +123,3 @@ export function planBannerFor(ent: PlanBannerInput, now: Date = new Date()): Pla
 
   return null;
 }
-
-/** The "N of M used" line above the properties list. */
-export function propertyUsageLine(used: number, limit: number, active: boolean): string {
-  const suffix = active ? 'on your plan' : 'on the free build tier';
-  return `${used} of ${pluralize(limit, 'property', 'properties')} used ${suffix}.`;
-}

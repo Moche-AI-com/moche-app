@@ -53,6 +53,13 @@ const longitude = z.preprocess(emptyToUndefined, z.coerce.number().min(-180).max
 
 export const propertyCreateSchema = z.object({
   displayName: z.string().trim().min(1, 'Property name is required.').max(120),
+  // Street address is required at creation: it is what the Properties tab lists
+  // under each property name, and the concierge + local discovery read it. Line 2
+  // and postal code stay optional. The update schema below re-declares all three
+  // as optional, so older properties without an address can still be edited.
+  addressLine1: z.string().trim().min(1, 'Street address is required.').max(200),
+  addressLine2: z.string().trim().max(200).optional().or(z.literal('')),
+  postalCode: z.string().trim().max(40).optional().or(z.literal('')),
   // City + country are required so every portal has real location context for the
   // concierge and upcoming local-area discovery. Region stays optional.
   city: z.string().trim().min(1, 'City is required.').max(120),
@@ -77,6 +84,14 @@ export const propertyCreateWithGeoSchema = propertyCreateSchema.extend({
   lat: latitude,
   lng: longitude,
 });
+
+// Listing-import review collects the main address on its own: the import job
+// creates the draft property from the listing title alone, before any address
+// exists. Picked from the update schema (everything else stays optional there)
+// with the street address re-required, since every new property must capture one.
+export const propertyAddressSchema = propertyUpdateSchema
+  .pick({ addressLine1: true, addressLine2: true, city: true, region: true, postalCode: true, country: true, lat: true, lng: true })
+  .extend({ addressLine1: z.string().trim().min(1, 'Street address is required.').max(200) });
 
 export const propertySettingsSchema = z.object({
   // A preset ID, never prose (P4-06). Anything else is rejected here rather than
