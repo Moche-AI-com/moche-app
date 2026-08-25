@@ -5,7 +5,7 @@ import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react
 const CODE_LENGTH = 4;
 
 // Step 1 of the portal: one 4-digit stay code shared by the whole party. Once a
-guest is in, their session on this device is their saved account — they only
+// guest is in, their session on this device is their saved account — they only
 // re-enter the code (and their details) on a different browser. Legacy per-guest
 // PINs minted before the merge still verify through the guest-code endpoint first.
 export function CodeEntry(props: {
