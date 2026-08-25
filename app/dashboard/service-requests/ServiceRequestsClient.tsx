@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Sparkles, AlertTriangle, ChevronDown, ChevronUp, Image as ImageIcon,
-  MapPin, Wrench, KeyRound, Clock3, UserRound, CheckCircle2, Printer, Archive,
+  MapPin, Wrench, KeyRound, Clock3, UserRound, UserCheck, CheckCircle2, Archive,
 } from 'lucide-react';
 import { LifecycleToggle, type LifecycleView } from '@/components/dashboard/LifecycleToggle';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
@@ -36,6 +36,7 @@ export interface ServiceTicket {
   media_urls: unknown;
   interview_status: string;
   assigned_contact_id: string | null;
+  assigned_profile_id: string | null;
   edited_summary: string | null;
   edited_details: string | null;
 }
@@ -50,6 +51,15 @@ export interface PropertyContactOption {
   email: string | null;
   is_primary: boolean;
   is_emergency: boolean;
+}
+
+// An internal teammate (account owner or property member) a request can be
+// assigned to.
+export interface MemberOption {
+  id: string;
+  property_id: string;
+  name: string | null;
+  email: string | null;
 }
 
 interface PropertyOption { id: string; name: string; canResolve: boolean }
@@ -99,12 +109,13 @@ function asStringList(v: unknown): string[] {
 }
 
 function TicketCard({
-  ticket, propertyName, canResolve, contacts, onChanged,
+  ticket, propertyName, canResolve, contacts, members, onChanged,
 }: {
   ticket: ServiceTicket;
   propertyName: string;
   canResolve: boolean;
   contacts: PropertyContactOption[];
+  members: MemberOption[];
   onChanged: (patch: Partial<ServiceTicket>) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -126,6 +137,7 @@ function TicketCard({
       return status === 'in_progress' || status === 'resolved';
     });
   const assignedContact = contacts.find((c) => c.id === ticket.assigned_contact_id) ?? null;
+  const assignedMember = members.find((m) => m.id === ticket.assigned_profile_id) ?? null;
 
   async function changeStatus(next: string) {
     if (!canResolve || busyStatus) return;
@@ -199,20 +211,6 @@ function TicketCard({
           {ticket.edited_summary && (
             <span className="badge" title="Headline edited by the host">Edited</span>
           )}
-          {/* Opens the print-optimised report in a new tab rather than printing
-              this page, so the host gets the full record (timeline, causes,
-              parts, resolution) instead of a screenshot of a collapsed card. */}
-          <Link
-            href={`/dashboard/reports/service-request/${ticket.id}`}
-            target="_blank"
-            rel="noopener"
-            className="sr-print-link"
-            title="Open printable report"
-            aria-label={`Open printable report for ${ticket.service_type.replace(/_/g, ' ')} request`}
-            data-testid="service-request-print"
-          >
-            <Printer size={13} aria-hidden />
-          </Link>
         </span>
       </div>
 
@@ -226,13 +224,32 @@ function TicketCard({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginTop: '.65rem', flexWrap: 'wrap' }}>
         {assignedContact && (
-          <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
+          <span className="badge" title="Assigned contact (used on shared reports)" style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
             <UserRound size={12} aria-hidden /> {assignedContact.name ?? assignedContact.label ?? 'Contact'}
+          </span>
+        )}
+        {assignedMember && (
+          <span className="badge" title="Assigned teammate" style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
+            <UserCheck size={12} aria-hidden /> {assignedMember.name ?? assignedMember.email ?? 'Teammate'}
           </span>
         )}
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setExpanded((v) => !v); if (!expanded) loadMedia(); }} data-testid="button-expand-ticket">
           {expanded ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />} {expanded ? 'Hide details' : 'View details'}
         </button>
+      </div>
+
+      {/* One action row per request: Edit report, Assign (teammate), then the
+          icon-only Email / Text / Print buttons with hover tooltips. */}
+      <div style={{ marginTop: '.6rem' }}>
+        <ReportActions
+          ticket={ticket}
+          propertyName={propertyName}
+          contacts={contacts}
+          members={members}
+          canManage={canResolve}
+          onEdited={(patch) => onChanged(patch)}
+          onAssigned={(profileId) => onChanged({ assigned_profile_id: profileId })}
+        />
       </div>
 
       {expanded && (
@@ -362,13 +379,6 @@ function TicketCard({
                   </select>
                 </label>
               )}
-              <ReportActions
-                ticket={ticket}
-                propertyName={propertyName}
-                contacts={contacts}
-                canManage={canResolve}
-                onEdited={(patch) => onChanged(patch)}
-              />
             </div>
           )}
         </div>
@@ -378,12 +388,13 @@ function TicketCard({
 }
 
 export function ServiceRequestsClient({
-  tickets, propertyNames, properties, contacts, view, activeCount, pastCount, activePropertyId,
+  tickets, propertyNames, properties, contacts, members, view, activeCount, pastCount, activePropertyId,
 }: {
   tickets: ServiceTicket[];
   propertyNames: Record<string, string>;
   properties: PropertyOption[];
   contacts: PropertyContactOption[];
+  members: MemberOption[];
   view: LifecycleView;
   activeCount: number;
   pastCount: number;
@@ -400,6 +411,15 @@ export function ServiceRequestsClient({
     }
     return map;
   }, [contacts]);
+  const membersByProperty = useMemo(() => {
+    const map = new Map<string, MemberOption[]>();
+    for (const m of members) {
+      const list = map.get(m.property_id) ?? [];
+      list.push(m);
+      map.set(m.property_id, list);
+    }
+    return map;
+  }, [members]);
 
   // The server already filtered to this view, but a host who resolves a ticket
   // while standing on the Active tab expects it to leave the list immediately
@@ -449,17 +469,20 @@ export function ServiceRequestsClient({
         </p>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '.75rem', flexWrap: 'wrap' }}>
-        <LifecycleToggle
-          basePath="/dashboard/service-requests"
-          view={view}
-          activeCount={shownActive}
-          pastCount={shownPast}
-          extraParams={{ property: activePropertyId ?? undefined }}
-          ariaLabel="Filter service requests by status"
-        />
+      {/* Property scope sits above the Active/Past pills and stretches wide,
+          matching how the Escalations tab presents its filter row. */}
+      <div style={{ width: '100%', maxWidth: '32rem', marginBottom: '.9rem' }}>
         <PropertyFilter properties={properties} activeId={activePropertyId} basePath="/dashboard/service-requests" />
       </div>
+
+      <LifecycleToggle
+        basePath="/dashboard/service-requests"
+        view={view}
+        activeCount={shownActive}
+        pastCount={shownPast}
+        extraParams={{ property: activePropertyId ?? undefined }}
+        ariaLabel="Filter service requests by status"
+      />
 
       {sorted.length === 0 ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -493,6 +516,7 @@ export function ServiceRequestsClient({
               propertyName={propertyNames[s.property_id] ?? 'Property'}
               canResolve={canResolveMap.get(s.property_id) ?? false}
               contacts={contactsByProperty.get(s.property_id) ?? []}
+              members={membersByProperty.get(s.property_id) ?? []}
               onChanged={(patch) => patchTicket(s.id, patch)}
             />
           ))}

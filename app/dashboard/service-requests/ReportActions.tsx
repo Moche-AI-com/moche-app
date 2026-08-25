@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Mail, Pencil, Smartphone, X } from 'lucide-react';
+import { Mail, Pencil, Printer, Smartphone, UserRoundPlus, X } from 'lucide-react';
 import {
   buildServiceReportSms,
   buildServiceReportText,
@@ -21,6 +22,14 @@ export interface ReportActionContact {
   email: string | null;
 }
 
+// An internal teammate (account owner or property member) a request can be
+// assigned to.
+export interface ReportActionMember {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
+
 export interface ReportActionTicket {
   id: string;
   property_id: string;
@@ -32,6 +41,7 @@ export interface ReportActionTicket {
   edited_details: string | null;
   created_at: string;
   assigned_contact_id: string | null;
+  assigned_profile_id: string | null;
 }
 
 interface ShareRow {
@@ -53,25 +63,44 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
-// Edit / Email / Text actions for one service request. Rendered on the Service
-// tab's expanded ticket card and on the printable report page. The share dialog
-// previews the exact message because it reuses the same pure builder the API
-// route sends through (lib/service-requests/share-report.ts).
+// Icon-only action buttons (Email / Text / Print): no text label by design —
+// the tooltip (title) and aria-label carry the meaning on hover / for AT.
+const ICON_BUTTON_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: '2.1rem',
+  minHeight: '2.1rem',
+  padding: '.3rem',
+} as const;
+
+// One action row for a service request: Edit report, Assign (teammate), then
+// the icon-only Email / Text / Print buttons. Rendered on the Service tab's
+// ticket card and on the printable report page. The share dialog previews the
+// exact message because it reuses the same pure builder the API route sends
+// through (lib/service-requests/share-report.ts).
 export function ReportActions({
   ticket,
   propertyName,
   contacts,
+  members = [],
   canManage,
+  printMode = 'link',
   onEdited,
+  onAssigned,
 }: {
   ticket: ReportActionTicket;
   propertyName: string;
   contacts: ReportActionContact[];
+  members?: ReportActionMember[];
   canManage: boolean;
+  /** 'link' opens the printable report in a new tab; 'native' calls window.print(). */
+  printMode?: 'link' | 'native';
   onEdited?: (patch: { edited_summary: string | null; edited_details: string | null }) => void;
+  onAssigned?: (profileId: string | null) => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState<null | 'edit' | 'email' | 'sms'>(null);
+  const [open, setOpen] = useState<null | 'edit' | 'assign' | 'email' | 'sms'>(null);
   const assignedContact = contacts.find((c) => c.id === ticket.assigned_contact_id) ?? null;
   const ready = shareContactReady(assignedContact);
 
@@ -89,36 +118,71 @@ export function ReportActions({
     [ticket, propertyName, assignedContact],
   );
 
-  if (!canManage) return null;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '.45rem' }} data-testid="report-actions">
-      <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('edit')} data-testid="button-edit-report">
-          <Pencil size={13} aria-hidden /> Edit report
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => setOpen('email')}
-          disabled={!ready}
-          title={ready ? 'Email the share-safe report' : 'Assign a contact with a phone or email first'}
-          data-testid="button-email-report"
-        >
-          <Mail size={13} aria-hidden /> Email report
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => setOpen('sms')}
-          disabled={!ready}
-          title={ready ? 'Text the share-safe report' : 'Assign a contact with a phone or email first'}
-          data-testid="button-text-report"
-        >
-          <Smartphone size={13} aria-hidden /> Text report
-        </button>
+      <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {canManage && (
+          <>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('edit')} data-testid="button-edit-report">
+              <Pencil size={13} aria-hidden /> Edit report
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('assign')} data-testid="button-assign-report">
+              <UserRoundPlus size={13} aria-hidden /> Assign
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={ICON_BUTTON_STYLE}
+              onClick={() => setOpen('email')}
+              disabled={!ready}
+              title={ready ? 'Email the share-safe report to someone' : 'Assign a contact with a phone or email first'}
+              aria-label={ready ? 'Email the share-safe report' : 'Email report — assign a contact with a phone or email first'}
+              data-testid="button-email-report"
+            >
+              <Mail size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={ICON_BUTTON_STYLE}
+              onClick={() => setOpen('sms')}
+              disabled={!ready}
+              title={ready ? 'Text the share-safe report to someone' : 'Assign a contact with a phone or email first'}
+              aria-label={ready ? 'Text the share-safe report' : 'Text report — assign a contact with a phone or email first'}
+              data-testid="button-text-report"
+            >
+              <Smartphone size={14} aria-hidden />
+            </button>
+          </>
+        )}
+        {printMode === 'link' ? (
+          <Link
+            href={`/dashboard/reports/service-request/${ticket.id}`}
+            target="_blank"
+            rel="noopener"
+            className="btn btn-ghost btn-sm sr-print-link"
+            style={ICON_BUTTON_STYLE}
+            title="Open the printable report"
+            aria-label="Open the printable report"
+            data-testid="service-request-print"
+          >
+            <Printer size={14} aria-hidden />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={ICON_BUTTON_STYLE}
+            onClick={() => window.print()}
+            title="Print or save as PDF"
+            aria-label="Print or save as PDF"
+            data-testid="button-print-report"
+          >
+            <Printer size={14} aria-hidden />
+          </button>
+        )}
       </div>
-      {!ready && (
+      {canManage && !ready && (
         <p className="faint" style={{ margin: 0, fontSize: '.78rem' }}>
           Assign a contact with a phone number or email to enable sending — the message tells recipients to
           reach the hosts through that contact, so a wrong number never exposes anything private.
@@ -130,6 +194,18 @@ export function ReportActions({
           onClose={() => setOpen(null)}
           onSaved={(patch) => {
             onEdited?.(patch);
+            router.refresh();
+            setOpen(null);
+          }}
+        />
+      )}
+      {open === 'assign' && (
+        <AssignDialog
+          ticket={ticket}
+          members={members}
+          onClose={() => setOpen(null)}
+          onAssigned={(profileId) => {
+            onAssigned?.(profileId);
             router.refresh();
             setOpen(null);
           }}
@@ -276,6 +352,86 @@ function EditReportDialog({
         <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>Cancel</button>
         <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={busy} data-testid="button-edit-save">
           {busy ? 'Saving…' : 'Save report'}
+        </button>
+      </div>
+    </DialogShell>
+  );
+}
+
+function AssignDialog({
+  ticket,
+  members,
+  onClose,
+  onAssigned,
+}: {
+  ticket: ReportActionTicket;
+  members: ReportActionMember[];
+  onClose: () => void;
+  onAssigned: (profileId: string | null) => void;
+}) {
+  const [value, setValue] = useState(ticket.assigned_profile_id ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/host/properties/${ticket.property_id}/service-requests/${ticket.id}/assign`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ profileId: value || null }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not assign this request.');
+      onAssigned(value || null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <DialogShell title="Assign to a teammate" onClose={onClose}>
+      <p className="faint" style={{ margin: 0, fontSize: '.8rem' }}>
+        Assign this request to a teammate. The external contact used on shared Email/Text reports is unchanged.
+      </p>
+      {members.length === 0 ? (
+        <p className="muted" style={{ margin: 0, fontSize: '.85rem' }}>
+          No teammates found for this property. Invite teammates from Profile → User management first.
+        </p>
+      ) : (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>
+          Teammate
+          <select
+            className="select"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            disabled={busy}
+            data-testid="select-assign-member"
+            style={{ minHeight: 44 }}
+          >
+            <option value="">Unassigned</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name ?? m.email ?? 'Teammate'}{m.name && m.email ? ` (${m.email})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {error && <span className="badge badge-coral">{error}</span>}
+      <div style={{ display: 'flex', gap: '.4rem', justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>Cancel</button>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={save}
+          disabled={busy || members.length === 0}
+          data-testid="button-assign-save"
+        >
+          {busy ? 'Saving…' : 'Save assignment'}
         </button>
       </div>
     </DialogShell>
