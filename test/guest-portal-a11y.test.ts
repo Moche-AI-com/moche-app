@@ -12,6 +12,10 @@ const read = (file: string) =>
   readFileSync(resolve(process.cwd(), 'app/g/[slug]', file), 'utf8');
 
 const shell = read('GuestPortal.tsx');
+// The scoped portal design system (inputs, labels, focus states, chat bubbles)
+// lives in the shared portalStyles module — the shell and the local guide both
+// render it. The CSS contract assertions below read from that home.
+const styles = read('portalStyles.ts');
 const workflows = (
   ['AiChatWorkflow.tsx', 'HostChatWorkflow.tsx', 'MaintenanceWorkflow.tsx', 'ExtrasWorkflow.tsx'] as const
 ).map((file) => [file, read(file)] as const);
@@ -43,8 +47,8 @@ describe('guest portal accessibility guardrails', () => {
       expect(source, `${file} chat list is a live region`).toContain('aria-live="polite"');
     }
     // Scoped portal inputs keep a visible focus state and labelled fields.
-    expect(shell).toContain('.gp-input:focus');
-    expect(shell).toContain('.gp-label');
+    expect(styles).toContain('.gp-input:focus');
+    expect(styles).toContain('.gp-label');
     // The AI concierge always discloses itself in the ask workflow.
     expect(read('AiChatWorkflow.tsx')).toContain('AiDisclosure');
   });

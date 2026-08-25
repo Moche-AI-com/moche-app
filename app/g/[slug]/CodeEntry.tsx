@@ -84,13 +84,14 @@ export function CodeEntry(props: {
 
   return (
     <section aria-label="Guest verification">
-      <h2>Enter your stay code</h2>
-      <p className="muted">The 4-digit code your host shared for this stay — everyone in your party uses the same one.</p>
-      <div style={{ display: 'flex', gap: '.55rem', justifyContent: 'center', margin: '1.25rem 0' }}>
+      <h2 className="gp-step-title">Enter your stay code</h2>
+      <p className="gp-step-sub">The 4-digit code your host shared for this stay — everyone in your party uses the same one.</p>
+      <div className="gp-code-row">
         {digits.map((digit, index) => (
           <input
             key={index}
             ref={(node) => { inputsRef.current[index] = node; }}
+            className="gp-code-box"
             value={digit}
             inputMode="numeric"
             autoComplete={index === 0 ? 'one-time-code' : 'off'}
@@ -98,30 +99,34 @@ export function CodeEntry(props: {
             onChange={(event) => setDigit(index, event.target.value)}
             onKeyDown={(event) => onKeyDown(index, event)}
             onPaste={onPaste}
-            style={{ width: 52, height: 58, textAlign: 'center', fontSize: '1.5rem', borderRadius: 14 }}
           />
         ))}
       </div>
 
       {needsPhone && (
-        <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="guest-phone-confirm" style={{ display: 'block', fontWeight: 650, marginBottom: '.35rem' }}>
+        <div className="gp-field" style={{ marginTop: '1rem' }}>
+          <label htmlFor="guest-phone-confirm" className="gp-label">
             Confirm your phone number
           </label>
           <input
             id="guest-phone-confirm"
+            className="gp-input"
             type="tel"
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
             placeholder="Mobile number"
-            style={{ width: '100%' }}
           />
-          <p className="muted" style={{ fontSize: '.82rem' }}>This keeps your saved guest session attached to the right person on this device.</p>
+          <p className="gp-muted" style={{ fontSize: '.82rem', marginTop: 6 }}>This keeps your saved guest session attached to the right person on this device.</p>
         </div>
       )}
 
-      {error && <p role="alert" style={{ color: '#ffb08f' }}>{error}</p>}
-      <button type="button" onClick={() => void submit()} disabled={busy || code.length !== CODE_LENGTH || (needsPhone && !phone.trim())} style={{ width: '100%' }}>
+      {error && <div className="gp-error" role="alert">{error}</div>}
+      <button
+        type="button"
+        className="gp-btn gp-btn-primary"
+        onClick={() => void submit()}
+        disabled={busy || code.length !== CODE_LENGTH || (needsPhone && !phone.trim())}
+      >
         {busy ? 'Checking…' : needsPhone ? 'Confirm and continue' : 'Continue'}
       </button>
     </section>
