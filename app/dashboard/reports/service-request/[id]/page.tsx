@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireSession, getPropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { PrintButton } from '@/components/dashboard/PrintButton';
+import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
 import { ReportActions } from '@/app/dashboard/service-requests/ReportActions';
 
 export const dynamic = 'force-dynamic';
@@ -53,12 +53,13 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
   const access = await getPropertyAccess(ticket.property_id);
   if (!access) notFound();
 
-  // edited_* columns land in database.types.ts on the next `supabase gen
-  // types` run; until then, widen the row type locally.
+  // edited_* / assigned_profile_id land in database.types.ts on the next
+  // `supabase gen types` run; until then, widen the row type locally.
   const t = ticket as typeof ticket & {
     edited_summary: string | null;
     edited_details: string | null;
     edited_at: string | null;
+    assigned_profile_id: string | null;
   };
 
   const causes = toList(t.likely_causes);
@@ -80,6 +81,31 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
     ? [{ id: t.assigned_contact_id, name: contact.name, label: contact.label, phone: contact.phone, email: contact.email }]
     : [];
 
+  // Assignable teammates for the Assign dialog: the account owner plus every
+  // member of this property, read through the service role (member names and
+  // emails are account data the RLS session client does not expose).
+  let members: { id: string; name: string | null; email: string | null }[] = [];
+  let assignedMemberName: string | null = null;
+  if (hasServiceRole()) {
+    const admin = createAdminClient();
+    const [{ data: account }, { data: membershipRows }] = await Promise.all([
+      admin.from('host_accounts').select('owner_id').eq('id', access.property.host_account_id).maybeSingle(),
+      admin.from('property_members').select('profile_id').eq('property_id', t.property_id),
+    ]);
+    const memberIds = [...new Set([account?.owner_id, ...(membershipRows ?? []).map((m) => m.profile_id)].filter((v): v is string => Boolean(v)))];
+    const profileIds = [...new Set([...memberIds, t.assigned_profile_id].filter((v): v is string => Boolean(v)))];
+    const { data: profiles } = profileIds.length
+      ? await admin.from('profiles').select('id, email, full_name').in('id', profileIds)
+      : { data: [] };
+    const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+    members = memberIds
+      .map((pid) => profileById.get(pid))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) => ({ id: p.id, name: (p.full_name ?? '').trim() || null, email: p.email ?? null }));
+    const assignedProfile = t.assigned_profile_id ? profileById.get(t.assigned_profile_id) : null;
+    assignedMemberName = assignedProfile ? (assignedProfile.full_name ?? '').trim() || assignedProfile.email || null : null;
+  }
+
   const rows: Array<[string, string | null]> = [
     ['Property', access.property.display_name],
     ['Request ID', t.id],
@@ -91,6 +117,7 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
     ['Edited by host', fmt(t.edited_at)],
     ['Location', t.location_note ?? null],
     ['Assigned to', contact ? [contact.name, contact.label].filter(Boolean).join(' \u00b7 ') || contact.contact_type : null],
+    ['Assigned user', assignedMemberName],
   ];
 
   return (
@@ -109,12 +136,14 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
             edited_details: t.edited_details,
             created_at: t.created_at,
             assigned_contact_id: t.assigned_contact_id ?? null,
+            assigned_profile_id: t.assigned_profile_id ?? null,
           }}
           propertyName={access.property.display_name}
           contacts={shareContacts}
+          members={members}
           canManage={access.can.resolveMaintenance}
+          printMode="native"
         />
-        <PrintButton />
       </div>
 
       <header className="report-head">
