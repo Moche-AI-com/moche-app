@@ -5,6 +5,7 @@ import { EscalationInbox, type EscalationRowData } from '@/components/dashboard/
 export const dynamic = 'force-dynamic';
 
 const STATUS_FILTERS = ['open', 'answered', 'resolved', 'dismissed'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 // Escalations open across a host's entire portfolio, grouped by property so it's always
 // clear which listing a question belongs to. Supports an optional ?property=<id> filter
@@ -33,7 +34,9 @@ export default async function EscalationsPage({
   const propertyIds = propList.map((p) => p.id);
 
   const activeFilter = searchParams.property && propMap.has(searchParams.property) ? searchParams.property : null;
-  const activeStatus = (STATUS_FILTERS as readonly string[]).includes(searchParams.status ?? '') ? searchParams.status! : null;
+  const activeStatus = (STATUS_FILTERS as readonly string[]).includes(searchParams.status ?? '')
+    ? (searchParams.status as StatusFilter)
+    : null;
 
   let rows: EscalationRowData[] = [];
   if (propertyIds.length) {
