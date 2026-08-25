@@ -1,6 +1,7 @@
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { LifecycleToggle, parseLifecycleView } from '@/components/dashboard/LifecycleToggle';
+import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { ExtrasOrdersClient, type ExtrasOrderRow } from './ExtrasOrdersClient';
 import { isTerminalExtrasStatus, type ExtrasFulfillmentStatus } from '@/lib/extras/lifecycle';
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 // /dashboard/service-requests rather than a tab inside it: an extras order is a
 // revenue event with its own lifecycle, and folding it into the maintenance
 // queue would bury paid requests underneath broken air conditioners.
-export default async function ExtrasPage({ searchParams }: { searchParams?: { view?: string | string[] } }) {
+export default async function ExtrasPage({ searchParams }: { searchParams?: { view?: string | string[]; property?: string | string[] } }) {
   const view = parseLifecycleView(searchParams?.view);
   const ctx = await requireSession();
   const supabase = createClient();
@@ -24,6 +25,12 @@ export default async function ExtrasPage({ searchParams }: { searchParams?: { vi
 
   const propMap = new Map((properties ?? []).map((p) => [p.id, p.display_name]));
   const propIds = (properties ?? []).map((p) => p.id);
+
+  // Property scope dropdown — the same control the overview and Escalations pages
+  // use. Only ever honored when it names a property this account actually owns.
+  const requested = Array.isArray(searchParams?.property) ? searchParams?.property[0] : searchParams?.property;
+  const activeProperty = requested && propMap.has(requested) ? requested : null;
+  const scopeIds = activeProperty ? [activeProperty] : propIds;
 
   let orders: ExtrasOrderRow[] = [];
   let activeCount = 0;
@@ -39,7 +46,7 @@ export default async function ExtrasPage({ searchParams }: { searchParams?: { vi
       .select(
         'id, property_id, stay_id, escalation_id, item_title, item_price_text, quantity, guest_note, host_note, fulfillment_status, request_number, quoted_amount_cents, quote_currency, scheduled_for, declined_reason, expires_at, created_at',
       )
-      .in('property_id', propIds)
+      .in('property_id', scopeIds)
       .order('created_at', { ascending: false })
       .limit(200);
     const allOrders = (rows ?? []) as ExtrasOrderRow[];
@@ -71,6 +78,14 @@ export default async function ExtrasPage({ searchParams }: { searchParams?: { vi
         </p>
       </div>
 
+      <div style={{ marginBottom: '.75rem' }}>
+        <PropertyFilter
+          properties={(properties ?? []).map((p) => ({ id: p.id as string, name: p.display_name as string }))}
+          activeId={activeProperty}
+          basePath="/dashboard/extras"
+        />
+      </div>
+
       <LifecycleToggle
         basePath="/dashboard/extras"
         view={view}
@@ -78,6 +93,7 @@ export default async function ExtrasPage({ searchParams }: { searchParams?: { vi
         pastCount={pastCount}
         pastLabel="Completed"
         ariaLabel="Filter extras requests"
+        extraParams={{ property: activeProperty ?? undefined }}
       />
 
       <ExtrasOrdersClient

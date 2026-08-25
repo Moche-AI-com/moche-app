@@ -2,14 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ExternalLink } from 'lucide-react';
-import Link from 'next/link';
+import { Sparkles, ChevronRight, MessageSquareReply } from 'lucide-react';
 import {
-  EXTRAS_STATUS_LABEL,
+  EXTRAS_HEALTH_LABEL,
+  extrasHealthFor,
+  fulfillmentForHealth,
   isTerminalExtrasStatus,
   nextStatesFor,
   type ExtrasFulfillmentStatus,
+  type ExtrasHealthStatus,
 } from '@/lib/extras/lifecycle';
+import { openExtrasThreadAction } from './actions';
 
 export type ExtrasOrderRow = {
   id: string;
@@ -36,6 +39,13 @@ function fmt(value: string | null) {
   return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const HEALTH_ORDER: ExtrasHealthStatus[] = ['requested', 'in_progress', 'completed', 'cancelled'];
+
+// The granular actions that live on the Details panel rather than the health
+// dropdown — they capture data (a date, an estimate, a note) instead of being
+// a plain state flip.
+const DETAIL_TARGETS: ExtrasFulfillmentStatus[] = ['accepted', 'scheduled', 'needs_details', 'payment_pending', 'declined'];
+
 export function ExtrasOrdersClient({
   orders,
   propertyNames,
@@ -49,57 +59,28 @@ export function ExtrasOrdersClient({
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const manageable = new Set(manageableProperties);
 
-  async function move(order: ExtrasOrderRow, to: ExtrasFulfillmentStatus) {
-    let hostNote: string | undefined;
-    let scheduledFor: string | undefined;
-    let quotedAmountCents: number | undefined;
-    if (to === 'needs_details') {
-      hostNote = window.prompt('What details do you need from the guest?')?.trim();
-      if (!hostNote) return;
-    }
-    if (to === 'declined') {
-      hostNote = window.prompt('Why can this request not be accommodated?')?.trim();
-      if (!hostNote) return;
-    }
-    if (to === 'scheduled') {
-      const rawDate = window.prompt('When is this scheduled? Use a date and time.');
-      if (!rawDate) return;
-      const date = new Date(rawDate);
-      if (Number.isNaN(date.getTime())) {
-        setError('Enter a valid date and time to schedule this request.');
-        return;
-      }
-      scheduledFor = date.toISOString();
-    }
-    if (to === 'accepted') {
-      const rawEstimate = window.prompt('Optional estimate in USD. This is not a charge and your guest must confirm arrangements.');
-      if (rawEstimate?.trim()) {
-        const amount = Number(rawEstimate);
-        if (!Number.isFinite(amount) || amount < 0) {
-          setError('Enter a non-negative estimate or leave it blank.');
-          return;
-        }
-        quotedAmountCents = Math.round(amount * 100);
-      }
-    }
-    setBusy(`${order.id}:${to}`);
+  async function updateOrder(order: ExtrasOrderRow, body: Record<string, unknown>): Promise<boolean> {
+    setBusy(order.id);
     setError(null);
     try {
       const res = await fetch(`/api/host/properties/${order.property_id}/extras-orders/${order.id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: to, hostNote, scheduledFor, quotedAmountCents }),
+        body: JSON.stringify(body),
       });
-      const body = await res.json().catch(() => ({}));
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body?.error ?? 'Could not update the order.');
-        return;
+        setError(typeof json.error === 'string' ? json.error : 'Could not update the request.');
+        return false;
       }
       router.refresh();
+      return true;
     } catch {
       setError('Network error. Please try again.');
+      return false;
     } finally {
       setBusy(null);
     }
@@ -125,62 +106,272 @@ export function ExtrasOrdersClient({
         </p>
       )}
       <div className="report-list">
-        {orders.map((o) => {
-          const displayedStatus = isRequestExpired(o) ? 'expired' : o.fulfillment_status;
-          const actions = manageable.has(o.property_id) ? nextStatesFor(displayedStatus, 'host') : [];
-          return (
-            <div key={o.id} className="report-list-row" data-testid="extras-order-row">
-              <div style={{ minWidth: 0 }}>
-                <p className="report-list-title">
-                  {o.item_title}
-                  {o.quantity > 1 && <span className="faint"> &times;{o.quantity}</span>}
-                  {o.item_price_text && <span className="faint" style={{ fontWeight: 400 }}> &middot; {o.item_price_text}</span>}
-                </p>
-                <p className="report-list-meta">
-                  {propertyNames[o.property_id] ?? 'Property'} &middot;{' '}
-                  <span data-testid="extras-order-status">{EXTRAS_STATUS_LABEL[displayedStatus]}</span> &middot;{' '}
-                  {fmt(o.created_at)}
-                </p>
-                <p className="faint" style={{ fontSize: '.75rem', marginTop: '.2rem' }}>
-                  Request {o.request_number}
-                  {o.scheduled_for ? ` · Scheduled ${fmt(o.scheduled_for)}` : ''}
-                  {o.quoted_amount_cents !== null ? ` · Estimate ${(o.quoted_amount_cents / 100).toFixed(2)} ${o.quote_currency.toUpperCase()}` : ''}
-                </p>
-                {o.guest_note && (
-                  <p className="report-list-meta" style={{ fontStyle: 'italic' }}>
-                    &ldquo;{o.guest_note}&rdquo;
-                  </p>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                {o.escalation_id && (
-                  <Link
-                    href={`/dashboard/escalations/${o.escalation_id}`}
-                    className="btn btn-ghost btn-sm"
-                    title="Open the guest thread"
-                  >
-                    <ExternalLink size={13} aria-hidden /> Thread
-                  </Link>
-                )}
-                {actions.map((to) => (
-                  <button
-                    key={to}
-                    type="button"
-                    className={`btn btn-sm ${to === 'accepted' || to === 'scheduled' || to === 'fulfilled' ? 'btn-primary' : 'btn-ghost'}`}
-                    style={to === 'declined' || to === 'canceled' ? { color: 'var(--coral)' } : undefined}
-                    disabled={busy !== null}
-                    onClick={() => move(o, to)}
-                    data-testid={`extras-order-action-${to}`}
-                  >
-                    {busy === `${o.id}:${to}` ? 'Saving\u2026' : hostActionLabel(to)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {orders.map((o) => (
+          <OrderRow
+            key={o.id}
+            order={o}
+            propertyName={propertyNames[o.property_id] ?? 'Property'}
+            manageable={manageable.has(o.property_id)}
+            busy={busy === o.id}
+            expanded={expandedId === o.id}
+            onToggleExpanded={() => setExpandedId(expandedId === o.id ? null : o.id)}
+            onUpdate={(body) => updateOrder(o, body)}
+          />
+        ))}
       </div>
     </>
+  );
+}
+
+function OrderRow({
+  order,
+  propertyName,
+  manageable,
+  busy,
+  expanded,
+  onToggleExpanded,
+  onUpdate,
+}: {
+  order: ExtrasOrderRow;
+  propertyName: string;
+  manageable: boolean;
+  busy: boolean;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onUpdate: (body: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const router = useRouter();
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  const displayedStatus = isRequestExpired(order) ? 'expired' : order.fulfillment_status;
+  const health = extrasHealthFor(displayedStatus);
+  const terminal = isTerminalExtrasStatus(displayedStatus);
+  const allowed = manageable && !terminal ? nextStatesFor(displayedStatus, 'host') : [];
+  const hasDetailActions = DETAIL_TARGETS.some((to) => allowed.includes(to));
+
+  // Requests are handled in the guest's Host Chat thread, same surface as
+  // escalations: this resolves (or creates) the thread server-side and routes there.
+  async function openThread() {
+    setOpening(true);
+    setOpenError(null);
+    try {
+      const result = await openExtrasThreadAction(order.id);
+      if (result.error || !result.url) throw new Error(result.error ?? 'Could not open the thread.');
+      router.push(result.url);
+    } catch (caught) {
+      setOpenError(caught instanceof Error ? caught.message : 'Could not open the thread.');
+      setOpening(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="report-list-row" data-testid="extras-order-row">
+        <div style={{ minWidth: 0 }}>
+          <p className="report-list-title">
+            {order.item_title}
+            {order.quantity > 1 && <span className="faint"> &times;{order.quantity}</span>}
+            {order.item_price_text && <span className="faint" style={{ fontWeight: 400 }}> &middot; {order.item_price_text}</span>}
+          </p>
+          <p className="report-list-meta">
+            {propertyName} &middot;{' '}
+            <span data-testid="extras-order-status">{EXTRAS_HEALTH_LABEL[health]}</span> &middot;{' '}
+            {fmt(order.created_at)}
+          </p>
+          <p className="faint" style={{ fontSize: '.75rem', marginTop: '.2rem' }}>
+            Request {order.request_number}
+            {order.scheduled_for ? ` · Scheduled ${fmt(order.scheduled_for)}` : ''}
+            {order.quoted_amount_cents !== null ? ` · Estimate ${(order.quoted_amount_cents / 100).toFixed(2)} ${order.quote_currency.toUpperCase()}` : ''}
+          </p>
+          {order.guest_note && (
+            <p className="report-list-meta" style={{ fontStyle: 'italic' }}>
+              &ldquo;{order.guest_note}&rdquo;
+            </p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          {manageable && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => void openThread()} disabled={opening || busy} data-testid={`extras-order-thread-${order.id}`}>
+              <MessageSquareReply size={13} aria-hidden /> {opening ? 'Opening…' : 'Open thread'}
+            </button>
+          )}
+          {manageable && (
+            <select
+              className="select"
+              value={health}
+              disabled={busy || terminal}
+              aria-label={`Set status for ${order.item_title}`}
+              data-testid={`extras-order-health-${order.id}`}
+              onChange={(event) => {
+                const next = event.target.value as ExtrasHealthStatus;
+                const to = fulfillmentForHealth(next);
+                if (to && next !== health) void onUpdate({ status: to });
+              }}
+              style={{ fontSize: '.82rem', minHeight: 36, width: 'auto', padding: '0 .5rem' }}
+            >
+              {HEALTH_ORDER.map((h) => (
+                <option key={h} value={h} disabled={h === 'requested' && health !== 'requested'}>
+                  {EXTRAS_HEALTH_LABEL[h]}
+                </option>
+              ))}
+            </select>
+          )}
+          {manageable && !terminal && hasDetailActions && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onToggleExpanded}
+              aria-expanded={expanded}
+              data-testid={`extras-order-details-${order.id}`}
+            >
+              Details <ChevronRight size={13} aria-hidden style={{ transform: expanded ? 'rotate(90deg)' : 'none' }} />
+            </button>
+          )}
+        </div>
+      </div>
+      {openError && (
+        <p role="alert" className="error" style={{ margin: '.3rem 0 0' }}>
+          {openError}
+        </p>
+      )}
+      {expanded && <DetailsPanel allowed={allowed} busy={busy} onUpdate={onUpdate} />}
+    </div>
+  );
+}
+
+// The data-capturing transitions, as inline fields instead of window prompts:
+// accept with an estimate, schedule, ask the guest for details, mark waiting on
+// (off-platform) payment, or decline with a reason.
+function DetailsPanel({
+  allowed,
+  busy,
+  onUpdate,
+}: {
+  allowed: ExtrasFulfillmentStatus[];
+  busy: boolean;
+  onUpdate: (body: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [estimate, setEstimate] = useState('');
+  const [when, setWhen] = useState('');
+  const [note, setNote] = useState('');
+  const [reason, setReason] = useState('');
+
+  const can = (to: ExtrasFulfillmentStatus) => allowed.includes(to);
+  const estimateInvalid = estimate.trim() !== '' && (!Number.isFinite(Number(estimate)) || Number(estimate) < 0);
+
+  return (
+    <div className="card" style={{ padding: '.85rem 1rem', marginTop: '.35rem' }}>
+      <div style={{ display: 'grid', gap: '.85rem' }}>
+        {can('accepted') && (
+          <div>
+            <span className="label" style={{ marginBottom: '.3rem' }}>Accept with an estimate (optional)</span>
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                step="0.01"
+                value={estimate}
+                onChange={(e) => setEstimate(e.target.value)}
+                placeholder="Estimate in USD"
+                style={{ maxWidth: 180 }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={busy || estimateInvalid}
+                onClick={() =>
+                  void onUpdate({
+                    status: 'accepted',
+                    quotedAmountCents: estimate.trim() ? Math.round(Number(estimate) * 100) : undefined,
+                  })
+                }
+              >
+                Accept request
+              </button>
+            </div>
+            <p className="faint" style={{ fontSize: '.75rem', marginTop: '.3rem' }}>
+              An estimate is not a charge. Moche never collects guest payments — arrange payment directly with the guest.
+            </p>
+          </div>
+        )}
+        {can('scheduled') && (
+          <div>
+            <span className="label" style={{ marginBottom: '.3rem' }}>Schedule it</span>
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+              <input className="input" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={busy || !when}
+                onClick={() => void onUpdate({ status: 'scheduled', scheduledFor: new Date(when).toISOString() })}
+              >
+                Schedule
+              </button>
+            </div>
+          </div>
+        )}
+        {can('needs_details') && (
+          <div>
+            <span className="label" style={{ marginBottom: '.3rem' }}>Ask the guest for details</span>
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+              <input
+                className="input"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="What do you need to know?"
+                style={{ flex: 1, minWidth: 220 }}
+                maxLength={1000}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={busy || !note.trim()}
+                onClick={() => void onUpdate({ status: 'needs_details', hostNote: note.trim() })}
+              >
+                Ask
+              </button>
+            </div>
+          </div>
+        )}
+        {can('payment_pending') && (
+          <div>
+            <span className="label" style={{ marginBottom: '.3rem' }}>Waiting on payment</span>
+            <p className="faint" style={{ fontSize: '.75rem', margin: '0 0 .35rem' }}>
+              The estimate is out and you are waiting for the guest to pay you directly. Moche never collects it.
+            </p>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void onUpdate({ status: 'payment_pending' })}>
+              Mark as waiting on payment
+            </button>
+          </div>
+        )}
+        {can('declined') && (
+          <div>
+            <span className="label" style={{ marginBottom: '.3rem' }}>Decline with a reason</span>
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+              <input
+                className="input"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Why can't this be accommodated?"
+                style={{ flex: 1, minWidth: 220 }}
+                maxLength={1000}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--coral)' }}
+                disabled={busy || !reason.trim()}
+                onClick={() => void onUpdate({ status: 'declined', hostNote: reason.trim() })}
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -188,16 +379,4 @@ function isRequestExpired(order: ExtrasOrderRow): boolean {
   return !isTerminalExtrasStatus(order.fulfillment_status)
     && order.expires_at !== null
     && new Date(order.expires_at).getTime() <= Date.now();
-}
-
-function hostActionLabel(status: ExtrasFulfillmentStatus): string {
-  switch (status) {
-    case 'needs_details': return 'Ask for details';
-    case 'payment_pending': return 'Awaiting off-platform payment';
-    case 'scheduled': return 'Schedule';
-    case 'fulfilled': return 'Mark fulfilled';
-    case 'declined': return 'Decline';
-    case 'canceled': return 'Cancel';
-    default: return EXTRAS_STATUS_LABEL[status];
-  }
 }

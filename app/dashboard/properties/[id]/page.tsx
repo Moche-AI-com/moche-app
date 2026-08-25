@@ -24,12 +24,14 @@ export default async function PropertyDetailPage({
     { count: openEsc },
     { count: curatedCount },
     { count: discoveredCount },
+    { count: openExtras },
   ] = await Promise.all([
     supabase.from('brain_items').select('category, status, deleted_at, visibility').eq('property_id', property.id),
     supabase.from('stays').select('id', { count: 'exact', head: true }).eq('property_id', property.id).is('deleted_at', null),
     supabase.from('escalations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('status', 'open'),
     supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('approved', true).eq('hidden', false).is('deleted_at', null),
     supabase.from('nearby_places').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('hidden', false),
+    supabase.from('extras_orders').select('id', { count: 'exact', head: true }).eq('property_id', property.id).not('fulfillment_status', 'in', '("fulfilled","declined","canceled","expired","refunded")'),
   ]);
 
   const health = computeBrainHealth(items ?? []);
@@ -80,6 +82,9 @@ export default async function PropertyDetailPage({
         <Tile href={`/dashboard/properties/${property.id}/brain`} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
         <Tile href={`/dashboard/properties/${property.id}/stays`} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
         <Tile href={`/dashboard/properties/${property.id}/stays`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
+        {(can.editProperty || can.editBrain) && (
+          <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras requested" value={`${openExtras ?? 0} open`} sub="Guest requests to arrange" />
+        )}
         <Tile href={`/dashboard/properties/${property.id}/local`} title="Local" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras" value="Manage" sub="Add-ons guests can request" />}
         {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} title="Settings" value="Configure" sub="Branding, tone, modules" />}

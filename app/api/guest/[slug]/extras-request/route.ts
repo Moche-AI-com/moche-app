@@ -3,8 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { guestExtraRequestSchema } from '@/lib/validation';
 import { notify } from '@/lib/notify';
-import { signEscalationLinkToken } from '@/lib/crypto';
-import { publicEnv } from '@/lib/env';
 import { capture } from '@/lib/posthog-server';
 import { log } from '@/lib/log';
 import { clampExtraQuantity, DEFAULT_EXTRA_QUANTITY, isPackageExtra, resolveExtraVariant } from '@/lib/guest/extras';
@@ -15,15 +13,15 @@ import { generateRequestNumber } from '@/lib/extras/request-number';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Add-on — a guest taps "Request" on an extra. We DO NOT invent a new
-// notification channel: this reuses the EXISTING escalation + notify() path (the
-// same one the chat route uses for low-confidence questions), so the host is
-// alerted in-app, by email, and (Pro+, consented) by SMS, and can answer via the
-// magic link.
+// Add-on — a guest taps "Request" on an extra. The request lands in the guest's
+// Host Chat thread as a message the host replies to directly (the same surface
+// questions use), and the durable extras_orders row tracks its status. No
+// escalation row is created: requests are revenue-shaped work, not questions,
+// and the Escalations queue stays reserved for things the concierge couldn't answer.
 //
-// It ALSO writes an `extras_orders` row and its first append-only timeline
-// event before notifying anyone. The guest never receives a false confirmation:
-// a request number is returned only after that durable record is created.
+// The order row + its first append-only timeline event are written BEFORE anyone
+// is notified. The guest never receives a false confirmation: a request number
+// is returned only after that durable record is created.
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
@@ -98,16 +96,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     ? await translateForHost(question, guestLanguage?.code ?? null, hostLanguage)
     : { text: question, translated: null, targetLabel: null };
 
-  // Get-or-create the conversation for this stay (same shape as the chat route)
-  // so the request is threaded and visible to the host.
+  // The registered identity behind the session, for the thread link on the order.
+  const { data: sessionRow } = await admin
+    .from('guest_access_sessions')
+    .select('guest_identity_id')
+    .eq('id', session.sessionId)
+    .maybeSingle();
+  const guestIdentityId = (sessionRow as { guest_identity_id?: string | null } | null)?.guest_identity_id ?? null;
+
+  // Get-or-create the guest's Host Chat thread (same shape as the host-chat
+  // route) — the request is a message the host replies to there.
   let conversationId: string | null = null;
   const { data: existing } = await admin
-    .from('conversations').select('id').eq('stay_id', session.stayId).eq('property_id', session.propertyId).maybeSingle();
+    .from('conversations')
+    .select('id')
+    .eq('property_id', session.propertyId)
+    .eq('stay_id', session.stayId)
+    .eq('channel', 'host_chat')
+    .eq('guest_session_id', session.sessionId)
+    .maybeSingle();
   if (existing) {
     conversationId = existing.id;
   } else {
+    const now = new Date().toISOString();
     const { data: conv } = await admin.from('conversations')
-      .insert({ property_id: session.propertyId, stay_id: session.stayId } as never)
+      .insert({
+        property_id: session.propertyId,
+        stay_id: session.stayId,
+        title: `Host Chat — ${session.guestDisplayName}`,
+        channel: 'host_chat',
+        guest_session_id: session.sessionId,
+        guest_identity_id: guestIdentityId,
+        last_message_at: now,
+        guest_read_at: now,
+      } as never)
       .select('id').single();
     conversationId = (conv as { id: string } | null)?.id ?? null;
   }
@@ -116,6 +138,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     await admin.from('messages').insert({
       conversation_id: conversationId, property_id: session.propertyId, role: 'guest', content: question,
     } as never);
+    await admin
+      .from('conversations')
+      .update({ last_message_at: new Date().toISOString(), host_read_at: null })
+      .eq('id', conversationId);
   }
 
   // Create the request before its alert. A unique index remains the final
@@ -129,6 +155,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       property_id: session.propertyId,
       stay_id: session.stayId,
       conversation_id: conversationId,
+      host_conversation_id: conversationId,
+      guest_session_id: session.sessionId,
+      guest_identity_id: guestIdentityId,
       extra_id: offer.id,
       item_title: offer.title,
       item_price_text: offer.price_text ?? null,
@@ -167,31 +196,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: 'Could not save your request. Please try again.' }, { status: 500 });
   }
 
-  // Reuse the escalation mechanism the chat route uses.
-  const { data: esc } = await admin.from('escalations').insert({
-    property_id: session.propertyId,
-    stay_id: session.stayId,
-    conversation_id: conversationId,
-    question: translated.text,
-    status: 'open',
-  } as never).select('id').single();
-  const escId = (esc as { id: string } | null)?.id;
-  if (escId) {
-    await admin.from('extras_orders').update({ escalation_id: escId } as never).eq('id', createdOrder.id);
-  }
-
-  const answerUrl = escId ? `${publicEnv.appUrl}/answer/${signEscalationLinkToken(escId)}` : undefined;
   await notify(admin, {
     hostAccountId: property.host_account_id,
-    kind: 'escalation',
+    kind: 'extras',
     title: isPackage ? 'A guest wants to book a package' : 'A guest wants to add an enhancement',
     body: notificationBody(translated, question),
     propertyId: session.propertyId,
-    link: escId ? `/dashboard/escalations/${escId}` : '/dashboard/escalations',
-    actionUrl: answerUrl,
+    link: conversationId
+      ? `/dashboard/properties/${session.propertyId}/stays/${session.stayId}/conversations/${conversationId}`
+      : '/dashboard/extras',
   });
 
-  log.info('guest_extra_request', { escalationId: escId, orderId: createdOrder.id, quantity });
+  log.info('guest_extra_request', { orderId: createdOrder.id, conversationId, quantity });
   await capture('extra_requested', session.propertyId, { property_id: session.propertyId });
 
   return NextResponse.json({ ok: true, requestNumber: createdOrder.request_number, orderId: createdOrder.id });
