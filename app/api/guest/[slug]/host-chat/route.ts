@@ -225,13 +225,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   // A guest reply on an answered/handled escalation reopens it (owner decision
   // 2026-08-24): the host sees it pinned again instead of missing the follow-up.
+  // Reopening also un-archives, so a reply to an already-closed escalation still
+  // surfaces in the inbox.
   let reopened = false;
   if (escalation && escalation.status !== 'open') {
     await (admin as any)
       .from('escalations')
-      .update({ status: 'open', pinned: true, resolved_at: null })
+      .update({ status: 'open', pinned: true, resolved_at: null, lifecycle_status: 'active', archived_at: null })
       .eq('id', escalation.id);
     reopened = true;
+  }
+
+  // A follow-up not attached to a specific escalation still reopens anything in
+  // this thread that was waiting on the guest ("awaiting guest response") — the
+  // guest just responded. Handled/cancelled rows stay as they are: a new issue
+  // gets its own escalation.
+  if (!escalation) {
+    const { data: waiting } = await (admin as any)
+      .from('escalations')
+      .update({ status: 'open', pinned: true, resolved_at: null, updated_at: now })
+      .eq('host_conversation_id', conversation.id)
+      .eq('status', 'answered')
+      .select('id');
+    reopened = (waiting?.length ?? 0) > 0;
   }
 
   await notify(admin, {
@@ -239,7 +255,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     kind: reopened ? 'escalation' : 'system',
     title: reopened ? `Escalation reopened at ${property.display_name}` : `New guest message at ${property.display_name}`,
     body: reopened
-      ? `${session.guestDisplayName} replied to a handled escalation.`
+      ? `${session.guestDisplayName} replied in Host Chat — an escalation needs another look.`
       : `${session.guestDisplayName} sent a message in Host Chat.`,
     propertyId: property.id,
     // Deep link straight into the full-page conversation (Stays redesign).
