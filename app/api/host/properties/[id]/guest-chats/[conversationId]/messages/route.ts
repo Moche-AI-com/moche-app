@@ -12,7 +12,12 @@ export const dynamic = 'force-dynamic';
 const postSchema = z.object({
   message: z.string().trim().min(1, 'Write a reply first.').max(2000),
   replyToMessageId: z.string().uuid().optional(),
-  resolveEscalation: z.boolean().optional().default(false),
+  // Set when the reply targets an escalation directly (inbox deep link) rather
+  // than a message carrying one.
+  escalationId: z.string().uuid().optional(),
+  // What happens to that escalation when the reply sends: resolved = Handled,
+  // answered = Awaiting guest response, dismissed = Cancelled.
+  escalationOutcome: z.enum(['resolved', 'answered', 'dismissed']).optional().default('answered'),
   learnFromReply: z.boolean().optional().default(false),
 });
 
@@ -127,7 +132,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       author_profile_id: user?.id ?? null,
       message_kind: 'text',
       reply_to_message_id: replyToId,
-      escalation_id: replyTo?.escalation_id ?? null,
+      escalation_id: (replyTo?.escalation_id as string | undefined) ?? parsed.data.escalationId ?? null,
     })
     .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id')
     .single();
@@ -139,7 +144,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .update({ last_message_at: now, host_read_at: now, guest_read_at: null })
     .eq('id', conversationId);
 
-  const escalationId = replyTo?.escalation_id as string | undefined;
+  const escalationId = (replyTo?.escalation_id as string | undefined) ?? parsed.data.escalationId;
   let learningQueued = false;
   let learningError: string | null = null;
 
@@ -152,15 +157,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .maybeSingle();
 
     if (escalation) {
+      const outcome = parsed.data.escalationOutcome;
       await db
         .from('escalations')
         .update({
           host_response: parsed.data.message,
-          status: parsed.data.resolveEscalation ? 'resolved' : 'answered',
+          status: outcome,
           responded_by: user?.id ?? null,
           responded_at: now,
-          resolved_at: parsed.data.resolveEscalation ? now : null,
-          pinned: parsed.data.resolveEscalation ? false : true,
+          resolved_at: outcome === 'answered' ? null : now,
+          pinned: outcome === 'answered',
+          // A fresh reply always resurfaces the row in the inbox, even if the
+          // host had already closed it.
+          lifecycle_status: 'active',
+          archived_at: null,
           host_conversation_id: conversationId,
           guest_session_id: conversation.guest_session_id,
           guest_identity_id: conversation.guest_identity_id,

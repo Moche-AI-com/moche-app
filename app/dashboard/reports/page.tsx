@@ -94,14 +94,15 @@ export default async function ReportsPage({
     stays = stayRes.data ?? [];
     extras = (extrasRes.data ?? []) as typeof extras;
 
-    // Handled escalations — every guest question a real person ended up answering.
-    // Fetched in two hops rather than one join because the thread is the expensive
-    // part and only the escalations that actually have a conversation need it.
+    // Closed escalations — handled or cancelled threads the host explicitly closed
+    // out of the inbox. Fetched in two hops rather than one join because the thread
+    // is the expensive part and only the escalations that actually have a
+    // conversation need it.
     const { data: escRows } = await supabase
       .from('escalations')
       .select('id, property_id, question, status, host_response, responded_at, created_at, conversation_id')
       .in('property_id', scopeIds)
-      .neq('status', 'open')
+      .eq('lifecycle_status', 'archived')
       .order('responded_at', { ascending: false, nullsFirst: false })
       .limit(100);
 
@@ -200,13 +201,13 @@ export default async function ReportsPage({
 
           <section style={{ marginBottom: '2rem' }} data-testid="handled-escalations-section">
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
-              <MessageSquare size={16} aria-hidden /> Handled escalations
+              <MessageSquare size={16} aria-hidden /> Closed escalations
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({handled.length})</span>
             </h2>
             <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .75rem' }}>
-              Every guest question your team answered personally, with the full thread around it. Open one to see what the
-              guest asked, what the concierge had already tried, and what you replied — and to choose whether each of your
-              replies is used to train the concierge for future guests.
+              Guest questions your team handled or cancelled and then closed out of the Escalations inbox. Open one to see
+              what the guest asked, what the concierge had already tried, and what you replied — and to choose whether each
+              of your replies is used to train the concierge for future guests.
             </p>
             <HandledEscalations items={handled} />
           </section>

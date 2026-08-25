@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useFormState } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MessageSquare, ChevronRight, Sparkles } from 'lucide-react';
 import { SubmitButton } from '@/components/FormFeedback';
 import { setMessageTrainingAction, type TrainingFlagState } from './actions';
+import { reopenEscalationAction } from '@/app/dashboard/escalations/actions';
 
 export interface HandledThreadMessage {
   id: string;
@@ -70,6 +72,30 @@ function TrainingToggle({ message, escalationId }: { message: HandledThreadMessa
   );
 }
 
+// Puts a closed escalation back into the active inbox, as it was. The status is
+// untouched — a reopened handled item comes back as Handled, not as a question.
+function ReopenButton({ escalationId }: { escalationId: string }) {
+  const router = useRouter();
+  const [working, setWorking] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      disabled={working}
+      data-testid={`reopen-escalation-${escalationId}`}
+      onClick={async () => {
+        setWorking(true);
+        const formData = new FormData();
+        formData.set('escalationId', escalationId);
+        await reopenEscalationAction({}, formData);
+        router.refresh();
+      }}
+    >
+      {working ? 'Reopening…' : 'Reopen'}
+    </button>
+  );
+}
+
 /**
  * The record of every guest question a real person ended up handling: what was
  * asked, what the team replied, and the full surrounding conversation.
@@ -87,7 +113,7 @@ export function HandledEscalations({ items }: { items: HandledEscalation[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (items.length === 0) {
-    return <p className="muted" style={{ fontSize: '.88rem' }}>No handled escalations yet. When your team answers a guest question, the whole thread is kept here.</p>;
+    return <p className="muted" style={{ fontSize: '.88rem' }}>No closed escalations yet. When your team closes a handled or cancelled escalation, the whole thread is kept here.</p>;
   }
 
   return (
@@ -106,7 +132,7 @@ export function HandledEscalations({ items }: { items: HandledEscalation[] }) {
               <div style={{ minWidth: 0, textAlign: 'left' }}>
                 <p className="report-list-title">{item.question}</p>
                 <p className="report-list-meta">
-                  {item.propertyName} &middot; {item.status === 'dismissed' ? 'Dismissed' : item.status === 'resolved' ? 'Resolved' : 'Answered'} {fmtWhen(item.respondedAt ?? item.createdAt)}
+                  {item.propertyName} &middot; {item.status === 'dismissed' ? 'Cancelled' : item.status === 'resolved' ? 'Handled' : 'Awaiting guest response'} {fmtWhen(item.respondedAt ?? item.createdAt)}
                   {item.messages.length > 0 && <> &middot; {item.messages.length} messages</>}
                 </p>
               </div>
@@ -145,13 +171,15 @@ export function HandledEscalations({ items }: { items: HandledEscalation[] }) {
                     </div>
                   ))
                 )}
-                <Link
-                  href={`/dashboard/escalations/${item.id}`}
-                  className="btn btn-ghost btn-sm"
-                  style={{ alignSelf: 'flex-start', marginTop: '.35rem' }}
-                >
-                  <MessageSquare size={13} aria-hidden /> Open escalation
-                </Link>
+                <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', marginTop: '.35rem', alignSelf: 'flex-start' }}>
+                  <Link
+                    href={`/dashboard/escalations/${item.id}`}
+                    className="btn btn-ghost btn-sm"
+                  >
+                    <MessageSquare size={13} aria-hidden /> Open escalation
+                  </Link>
+                  <ReopenButton escalationId={item.id} />
+                </div>
               </div>
             )}
           </div>

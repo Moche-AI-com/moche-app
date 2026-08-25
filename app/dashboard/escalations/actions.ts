@@ -235,3 +235,265 @@ export async function answerEscalationAction(
     brainCategory: convertToBrain && hostPickedCategory ? parsed.data.brainCategory : undefined,
   });
 }
+
+export interface EscalationThreadTarget {
+  url?: string;
+  error?: string;
+}
+
+// Where an escalation gets handled: the guest's Host Chat thread. The escalation
+// row remembers the thread (host_conversation_id) once it exists, so resolving is
+// a plain lookup from then on. A first open creates the thread, mirroring the
+// guest-side creation in app/api/guest/[slug]/host-chat/route.ts.
+export async function openEscalationThreadAction(escalationId: string): Promise<EscalationThreadTarget> {
+  await requireSession();
+  const supabase = createClient();
+  const { data: esc } = await supabase
+    .from('escalations')
+    .select('id, property_id, stay_id, host_conversation_id, guest_session_id, guest_identity_id, stay_guest_id')
+    .eq('id', escalationId)
+    .maybeSingle();
+  if (!esc) return { error: 'Escalation not found.' };
+
+  const access = await requirePropertyAccess(esc.property_id);
+  if (!access.can.receiveEscalations) return { error: 'You do not have permission to manage escalations for this property.' };
+
+  // Legacy rows without a stay have no thread to route to — the detail page
+  // stays as their fallback surface.
+  if (!esc.stay_id) return { url: `/dashboard/escalations/${escalationId}` };
+
+  const admin = createAdminClient();
+  const db = admin as any;
+  const propertyId = esc.property_id;
+  const stayId = esc.stay_id;
+
+  let conversationId = esc.host_conversation_id ?? null;
+
+  if (!conversationId && esc.guest_session_id) {
+    const { data } = await db
+      .from('conversations')
+      .select('id')
+      .eq('property_id', propertyId)
+      .eq('stay_id', stayId)
+      .eq('channel', 'host_chat')
+      .eq('guest_session_id', esc.guest_session_id)
+      .maybeSingle();
+    conversationId = data?.id ?? null;
+  }
+  if (!conversationId && esc.guest_identity_id) {
+    const { data } = await db
+      .from('conversations')
+      .select('id')
+      .eq('property_id', propertyId)
+      .eq('stay_id', stayId)
+      .eq('channel', 'host_chat')
+      .eq('guest_identity_id', esc.guest_identity_id)
+      .maybeSingle();
+    conversationId = data?.id ?? null;
+  }
+
+  if (!conversationId) {
+    let guestName = 'Guest';
+    if (esc.guest_identity_id) {
+      const { data: identity } = await db
+        .from('guest_identities')
+        .select('first_name, last_name, display_name')
+        .eq('id', esc.guest_identity_id)
+        .maybeSingle();
+      const full = [identity?.first_name, identity?.last_name].filter(Boolean).join(' ').trim();
+      if (full || identity?.display_name) guestName = full || identity.display_name;
+    }
+    if (guestName === 'Guest') {
+      const { data: stay } = await db.from('stays').select('guest_display_name').eq('id', stayId).maybeSingle();
+      if (stay?.guest_display_name) guestName = stay.guest_display_name;
+    }
+
+    const now = new Date().toISOString();
+    const { data: created, error: convErr } = await db
+      .from('conversations')
+      .insert({
+        property_id: propertyId,
+        stay_id: stayId,
+        title: `Host Chat — ${guestName}`,
+        channel: 'host_chat',
+        guest_session_id: esc.guest_session_id,
+        guest_identity_id: esc.guest_identity_id,
+        stay_guest_id: esc.stay_guest_id,
+        last_message_at: now,
+      })
+      .select('id')
+      .single();
+    if (convErr || !created) {
+      log.warn('escalation_thread_create_failed', { error: convErr?.message });
+      return { error: 'Could not open the guest thread. Please try again.' };
+    }
+    conversationId = created.id;
+  }
+
+  // Remember the thread on the escalation so every later open is a plain lookup.
+  if (!esc.host_conversation_id) {
+    await db
+      .from('escalations')
+      .update({ host_conversation_id: conversationId, updated_at: new Date().toISOString() })
+      .eq('id', escalationId);
+  }
+
+  return { url: `/dashboard/properties/${propertyId}/stays/${stayId}/conversations/${conversationId}?escalation=${escalationId}` };
+}
+
+const INBOX_STATUS_SET = ['resolved', 'answered', 'dismissed'] as const;
+
+// Status change without a reply, from the inbox row menu: mark handled, mark
+// awaiting-guest, or cancel a duplicate/irrelevant escalation. Reply-linked
+// transitions stay in the thread composer (guest-chats messages route).
+export async function setEscalationStatusAction(_prev: EscalationActionState, formData: FormData): Promise<EscalationActionState> {
+  const escalationId = String(formData.get('escalationId') ?? '');
+  const status = String(formData.get('status') ?? '');
+  if (!escalationId || !(INBOX_STATUS_SET as readonly string[]).includes(status)) return { error: 'Missing escalation or status.' };
+
+  const ctx = await requireSession();
+  const supabase = createClient();
+  const { data: esc } = await supabase
+    .from('escalations')
+    .select('id, property_id, status')
+    .eq('id', escalationId)
+    .maybeSingle();
+  if (!esc) return { error: 'Escalation not found.' };
+
+  const access = await requirePropertyAccess(esc.property_id);
+  if (!access.can.receiveEscalations) return { error: 'You do not have permission to manage escalations for this property.' };
+  if (esc.status === status) return { ok: true };
+
+  const now = new Date().toISOString();
+  const terminal = status !== 'answered';
+  const { error } = await supabase
+    .from('escalations')
+    .update({
+      status: status as 'resolved' | 'answered' | 'dismissed',
+      resolved_at: terminal ? now : null,
+      pinned: !terminal,
+      updated_at: now,
+    } as never)
+    .eq('id', escalationId);
+  if (error) return { error: 'Could not update the escalation.' };
+
+  await audit(supabase, {
+    action: `escalation.${status}`,
+    actorProfileId: ctx.user.id,
+    hostAccountId: access.property.host_account_id,
+    propertyId: esc.property_id,
+    targetType: 'escalation',
+    targetId: escalationId,
+  });
+  revalidatePath('/dashboard/escalations');
+  return { ok: true };
+}
+
+// Close = archive out of the inbox into Reports. Only terminal rows (handled or
+// cancelled) can close; reopening puts the row back in the inbox as it was.
+export async function closeEscalationAction(_prev: EscalationActionState, formData: FormData): Promise<EscalationActionState> {
+  const escalationId = String(formData.get('escalationId') ?? '');
+  if (!escalationId) return { error: 'Missing escalation.' };
+
+  const ctx = await requireSession();
+  const supabase = createClient();
+  const { data: esc } = await supabase
+    .from('escalations')
+    .select('id, property_id, status')
+    .eq('id', escalationId)
+    .maybeSingle();
+  if (!esc) return { error: 'Escalation not found.' };
+
+  const access = await requirePropertyAccess(esc.property_id);
+  if (!access.can.receiveEscalations) return { error: 'You do not have permission to manage escalations for this property.' };
+  if (esc.status !== 'resolved' && esc.status !== 'dismissed') {
+    return { error: 'Only handled or cancelled escalations can be closed.' };
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('escalations')
+    .update({ lifecycle_status: 'archived', archived_at: now, updated_at: now } as never)
+    .eq('id', escalationId);
+  if (error) return { error: 'Could not close the escalation.' };
+
+  await audit(supabase, {
+    action: 'escalation.closed',
+    actorProfileId: ctx.user.id,
+    hostAccountId: access.property.host_account_id,
+    propertyId: esc.property_id,
+    targetType: 'escalation',
+    targetId: escalationId,
+  });
+  revalidatePath('/dashboard/escalations');
+  revalidatePath('/dashboard/reports');
+  return { ok: true };
+}
+
+export async function reopenEscalationAction(_prev: EscalationActionState, formData: FormData): Promise<EscalationActionState> {
+  const escalationId = String(formData.get('escalationId') ?? '');
+  if (!escalationId) return { error: 'Missing escalation.' };
+
+  const ctx = await requireSession();
+  const supabase = createClient();
+  const { data: esc } = await supabase
+    .from('escalations')
+    .select('id, property_id')
+    .eq('id', escalationId)
+    .maybeSingle();
+  if (!esc) return { error: 'Escalation not found.' };
+
+  const access = await requirePropertyAccess(esc.property_id);
+  if (!access.can.receiveEscalations) return { error: 'You do not have permission to manage escalations for this property.' };
+
+  const { error } = await supabase
+    .from('escalations')
+    .update({ lifecycle_status: 'active', archived_at: null, updated_at: new Date().toISOString() } as never)
+    .eq('id', escalationId);
+  if (error) return { error: 'Could not reopen the escalation.' };
+
+  await audit(supabase, {
+    action: 'escalation.reopened',
+    actorProfileId: ctx.user.id,
+    hostAccountId: access.property.host_account_id,
+    propertyId: esc.property_id,
+    targetType: 'escalation',
+    targetId: escalationId,
+  });
+  revalidatePath('/dashboard/escalations');
+  revalidatePath('/dashboard/reports');
+  return { ok: true };
+}
+
+// Bulk close for a property group header: archives every handled/cancelled row
+// still active for that property.
+export async function closeHandledEscalationsAction(_prev: EscalationActionState, formData: FormData): Promise<EscalationActionState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  if (!propertyId) return { error: 'Missing property.' };
+
+  const ctx = await requireSession();
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.receiveEscalations) return { error: 'You do not have permission to manage escalations for this property.' };
+
+  const supabase = createClient();
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('escalations')
+    .update({ lifecycle_status: 'archived', archived_at: now, updated_at: now } as never)
+    .eq('property_id', propertyId)
+    .eq('lifecycle_status', 'active')
+    .in('status', ['resolved', 'dismissed']);
+  if (error) return { error: 'Could not close the handled escalations.' };
+
+  await audit(supabase, {
+    action: 'escalation.closed_all',
+    actorProfileId: ctx.user.id,
+    hostAccountId: access.property.host_account_id,
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+  });
+  revalidatePath('/dashboard/escalations');
+  revalidatePath('/dashboard/reports');
+  return { ok: true };
+}

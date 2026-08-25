@@ -15,8 +15,10 @@ function fmtDate(iso: string) {
 // pick a different thread. Deep-linkable, so notifications can land here.
 export default async function ConversationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; stayId: string; conversationId: string }>;
+  searchParams: { escalation?: string };
 }) {
   const { id, stayId, conversationId } = await params;
   const access = await requirePropertyAccess(id);
@@ -86,7 +88,7 @@ export default async function ConversationPage({
             : ''}
         </p>
       </div>
-      <ConversationThread propertyId={id} conversationId={conversationId} canLearn={canLearn} />
+      <ConversationThread propertyId={id} conversationId={conversationId} canLearn={canLearn} initialEscalationId={searchParams.escalation ?? null} />
     </div>
   );
 }

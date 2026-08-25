@@ -25,6 +25,17 @@ type ThreadEscalation = {
   resolved_at: string | null;
 };
 
+// Host-facing labels for the escalation lifecycle. The stored enum values stay
+// open/answered/resolved/dismissed; only the words change.
+const ESCALATION_STATUS_LABEL: Record<string, string> = {
+  open: 'needs answer',
+  answered: 'awaiting guest',
+  resolved: 'handled',
+  dismissed: 'cancelled',
+};
+
+type EscalationOutcome = 'resolved' | 'answered' | 'dismissed';
+
 function timeLabel(value: string | null) {
   if (!value) return '';
   const date = new Date(value);
@@ -47,6 +58,10 @@ const CONV_CSS = `
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--coral) 45%, transparent); }
   50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--coral) 0%, transparent); }
 }
+.conv-esc-outcome {
+  border: 0; background: transparent; color: inherit; font: inherit;
+  font-size: .78rem; font-weight: 700; cursor: pointer; padding: 0;
+}
 @media (prefers-reduced-motion: reduce) {
   .conv-esc-reply { animation: none; }
   .conv-esc-reply:hover { transform: none; }
@@ -55,21 +70,25 @@ const CONV_CSS = `
 
 // Full-page host ↔ guest thread. Escalations are the guided path: an
 // unresolved escalation carries a highlighted, pulsing Reply CTA, and the
-// anchored composer offers "Mark handled" and "Teach the Brain" inline.
+// anchored composer offers an outcome dropdown (Handled / Awaiting guest
+// response / Cancelled) and "Teach the Brain" inline.
 export function ConversationThread({
   propertyId,
   conversationId,
   canLearn,
+  initialEscalationId = null,
 }: {
   propertyId: string;
   conversationId: string;
   canLearn: boolean;
+  initialEscalationId?: string | null;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [escalations, setEscalations] = useState<ThreadEscalation[]>([]);
   const [reply, setReply] = useState('');
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  const [markHandled, setMarkHandled] = useState(true);
+  const [activeEscalation, setActiveEscalation] = useState<ThreadEscalation | null>(null);
+  const [escalationOutcome, setEscalationOutcome] = useState<EscalationOutcome>('resolved');
   const [learnFromReply, setLearnFromReply] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -77,12 +96,13 @@ export function ConversationThread({
   const [notice, setNotice] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const autoOpenRef = useRef(false);
 
   const escalationById = useMemo(
     () => new Map<string, ThreadEscalation>(escalations.map((e): [string, ThreadEscalation] => [e.id, e])),
     [escalations],
   );
-  const openEscalations = escalations.filter((e) => e.status !== 'resolved');
+  const openEscalations = escalations.filter((e) => e.status !== 'resolved' && e.status !== 'dismissed');
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/host/properties/${propertyId}/guest-chats/${conversationId}/messages`, { cache: 'no-store' });
@@ -107,21 +127,48 @@ export function ConversationThread({
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
+  // Deep-linked from the Escalations inbox (?escalation=<id>): open the composer
+  // on that escalation once the thread has loaded. When no message in this thread
+  // carries it (the question started in the AI chat), the escalation itself
+  // becomes the reply target instead of a message.
+  useEffect(() => {
+    if (autoOpenRef.current || !initialEscalationId || loading) return;
+    const esc = escalations.find((e) => e.id === initialEscalationId);
+    if (!esc) return;
+    autoOpenRef.current = true;
+    const message = messages.find((m) => m.escalationId === initialEscalationId);
+    if (message) {
+      setReplyTo(message);
+    } else {
+      setActiveEscalation(esc);
+    }
+    setEscalationOutcome('resolved');
+    setLearnFromReply(false);
+    setNotice(null);
+    composerRef.current?.focus();
+  }, [initialEscalationId, escalations, messages, loading]);
+
   function startReply(message: ChatMessage) {
     setReplyTo(message);
     // Replying to an escalation defaults to marking it handled — the host can
-    // opt out with the chip when the reply is a clarifying question.
-    setMarkHandled(Boolean(message.escalationId || message.messageKind === 'ai_escalation'));
+    // switch the outcome with the dropdown when the reply is a follow-up question.
+    setEscalationOutcome('resolved');
     setLearnFromReply(false);
+    setActiveEscalation(null);
     setNotice(null);
     composerRef.current?.focus();
   }
 
   function cancelReply() {
     setReplyTo(null);
-    setMarkHandled(true);
+    setActiveEscalation(null);
+    setEscalationOutcome('resolved');
     setLearnFromReply(false);
   }
+
+  // The escalation this reply acts on: either the replied-to message's
+  // escalation, or the escalation opened directly from the inbox deep link.
+  const replyEscalationId = replyTo?.escalationId ?? activeEscalation?.id ?? null;
 
   async function sendReply() {
     if (!reply.trim() || sending) return;
@@ -135,8 +182,9 @@ export function ConversationThread({
         body: JSON.stringify({
           message: reply.trim(),
           replyToMessageId: replyTo?.id,
-          resolveEscalation: replyTo?.escalationId ? markHandled : false,
-          learnFromReply: replyTo?.escalationId ? learnFromReply : false,
+          escalationId: replyEscalationId ?? undefined,
+          escalationOutcome: replyEscalationId ? escalationOutcome : undefined,
+          learnFromReply: replyEscalationId ? learnFromReply : false,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -176,7 +224,7 @@ export function ConversationThread({
             const host = message.role === 'host';
             const escalation = message.messageKind === 'ai_escalation' || Boolean(message.escalationId);
             const esc = message.escalationId ? escalationById.get(message.escalationId) ?? null : null;
-            const unresolved = escalation && (!esc || esc.status !== 'resolved');
+            const unresolved = escalation && (!esc || (esc.status !== 'resolved' && esc.status !== 'dismissed'));
             return (
               <div key={message.id} className={`bubble-row${host ? ' bubble-row-host' : ''}`}>
                 <div className={`bubble${host ? ' bubble-host' : ' bubble-guest'}${escalation ? ' bubble-escalation' : ''}`}>
@@ -185,7 +233,7 @@ export function ConversationThread({
                       <AlertTriangle size={13} aria-hidden /> AI escalation
                       {esc && (
                         <span style={{ fontSize: '.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                          · {esc.status === 'resolved' ? 'handled' : esc.status}
+                          · {ESCALATION_STATUS_LABEL[esc.status] ?? esc.status}
                         </span>
                       )}
                     </div>
@@ -230,18 +278,37 @@ export function ConversationThread({
         </div>
       )}
 
-      {replyTo?.escalationId && (
-        <div className="chip-row">
-          <button
-            type="button"
-            className={`chip-toggle chip-coral${markHandled ? ' is-on' : ''}`}
-            aria-pressed={markHandled}
-            title="Closes the escalation when your reply sends. Leave it off if you're asking a follow-up question."
-            onClick={() => setMarkHandled((value) => !value)}
-            data-testid="chip-mark-handled"
-          >
-            <CheckCheck size={13} aria-hidden /> Mark handled on send
+      {activeEscalation && !replyTo && (
+        <div className="chat-reply-quote">
+          <div style={{ fontSize: '.84rem' }}>
+            Replying to escalation: “{activeEscalation.question.slice(0, 140)}{activeEscalation.question.length > 140 ? '…' : ''}”
+          </div>
+          <button type="button" className="bubble-reply" onClick={cancelReply} style={{ marginTop: '.55rem' }}>
+            Cancel reply
           </button>
+        </div>
+      )}
+
+      {replyEscalationId && (
+        <div className="chip-row">
+          <label
+            className="chip-toggle chip-coral is-on"
+            title="What happens to the escalation when your reply sends. Pick Awaiting guest response if you're asking them something back, or Cancelled for a duplicate."
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '.35rem', cursor: 'pointer' }}
+          >
+            <CheckCheck size={13} aria-hidden />
+            <select
+              className="conv-esc-outcome"
+              value={escalationOutcome}
+              onChange={(event) => setEscalationOutcome(event.target.value as EscalationOutcome)}
+              aria-label="Escalation outcome when the reply sends"
+              data-testid="select-escalation-outcome"
+            >
+              <option value="resolved">Handled</option>
+              <option value="answered">Awaiting guest response</option>
+              <option value="dismissed">Cancelled</option>
+            </select>
+          </label>
           {canLearn && (
             <button
               type="button"

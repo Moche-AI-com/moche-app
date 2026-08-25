@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Building2, CheckCircle2, MessageSquareReply, Sparkles, ArrowUpRight } from 'lucide-react';
-import { EscalationAnswerForm } from '@/app/dashboard/escalations/[id]/EscalationAnswerForm';
-import { canAnswerEscalation, canTeachFromEscalation } from '@/lib/dashboard/escalations-permissions';
+import { useRouter } from 'next/navigation';
+import { Archive, Building2, CheckCircle2, MessageSquareReply, Sparkles } from 'lucide-react';
+import { closeEscalationAction, closeHandledEscalationsAction, openEscalationThreadAction, setEscalationStatusAction } from '@/app/dashboard/escalations/actions';
+import { canAnswerEscalation } from '@/lib/dashboard/escalations-permissions';
 
 export interface EscalationRowData {
   id: string;
@@ -15,10 +16,19 @@ export interface EscalationRowData {
   hostResponse: string | null;
   createdAt: string;
   respondedAt: string | null;
+  resolvedAt: string | null;
 }
 
-const STATUS_BADGE: Record<string, string> = { open: 'badge-coral', answered: 'badge-teal', resolved: '', dismissed: '' };
-const STATUS_LABEL: Record<string, string> = { open: 'Needs answer', answered: 'Answered', resolved: 'Resolved', dismissed: 'Dismissed' };
+const STATUS_BADGE: Record<string, string> = { open: 'badge-coral', answered: '', resolved: 'badge-teal', dismissed: '' };
+const STATUS_LABEL: Record<string, string> = { open: 'Needs answer', answered: 'Awaiting guest response', resolved: 'Handled', dismissed: 'Cancelled' };
+
+const STATUS_TABS: Array<{ key: string | null; label: string }> = [
+  { key: null, label: 'All active' },
+  { key: 'open', label: 'Needs answer' },
+  { key: 'answered', label: 'Awaiting guest' },
+  { key: 'resolved', label: 'Handled' },
+  { key: 'dismissed', label: 'Cancelled' },
+];
 
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -32,11 +42,68 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function filterHref(property: string | null, status: string | null): string {
+  const params = new URLSearchParams();
+  if (property) params.set('property', property);
+  if (status) params.set('status', status);
+  const qs = params.toString();
+  return qs ? `/dashboard/escalations?${qs}` : '/dashboard/escalations';
+}
+
 function EscalationRow({ row, capabilities }: { row: EscalationRowData; capabilities: { canReceiveEscalations: boolean; canReplyGuests: boolean; canEditBrain: boolean } }) {
-  const [answering, setAnswering] = useState(false);
+  const router = useRouter();
+  const [opening, setOpening] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const isOpen = row.status === 'open';
+  const isTerminal = row.status === 'resolved' || row.status === 'dismissed';
   const canReply = canAnswerEscalation(capabilities);
-  const canTeachBrain = canTeachFromEscalation(capabilities);
+  const canManage = capabilities.canReceiveEscalations;
+
+  // "Answer & teach" moved into the guest's Host Chat thread: the button resolves
+  // (or creates) the thread server-side and routes there, so the host replies in
+  // the same place every time.
+  async function openThread() {
+    setOpening(true);
+    setError(null);
+    try {
+      const result = await openEscalationThreadAction(row.id);
+      if (result.error || !result.url) throw new Error(result.error ?? 'Could not open the thread.');
+      router.push(result.url);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not open the thread.');
+      setOpening(false);
+    }
+  }
+
+  async function setStatus(status: 'resolved' | 'answered' | 'dismissed') {
+    setWorking(true);
+    setError(null);
+    const formData = new FormData();
+    formData.set('escalationId', row.id);
+    formData.set('status', status);
+    const result = await setEscalationStatusAction({}, formData);
+    setWorking(false);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function close() {
+    setWorking(true);
+    setError(null);
+    const formData = new FormData();
+    formData.set('escalationId', row.id);
+    const result = await closeEscalationAction({}, formData);
+    setWorking(false);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+  }
 
   return (
     <div className="card esc-item rise-in" data-testid="escalation-row">
@@ -53,35 +120,71 @@ function EscalationRow({ row, capabilities }: { row: EscalationRowData; capabili
 
       <p className="esc-item-question">{row.question}</p>
 
-      {row.hostResponse ? (
-        <blockquote className="esc-item-response">{row.hostResponse}</blockquote>
-      ) : isOpen && canReply && !answering ? (
-        <div className="esc-item-actions">
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => setAnswering(true)}>
+      {row.hostResponse ? <blockquote className="esc-item-response">{row.hostResponse}</blockquote> : null}
+
+      <div className="esc-item-actions">
+        {canReply && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => void openThread()} disabled={opening || working}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}>
-              <MessageSquareReply size={14} aria-hidden /> {canTeachBrain ? 'Answer & teach the Brain' : 'Answer guest'}
+              <MessageSquareReply size={14} aria-hidden /> {opening ? 'Opening…' : isOpen ? 'Reply in thread' : 'Open thread'}
             </span>
           </button>
-          <Link href={`/dashboard/escalations/${row.id}`} className="dash-section-link" style={{ fontSize: '.82rem' }}>
-            View full conversation <ArrowUpRight size={13} aria-hidden />
-          </Link>
-        </div>
-      ) : null}
-
-      {isOpen && answering && (
-        <div className="esc-quick-form">
-          <EscalationAnswerForm escalationId={row.id} canTeachBrain={canTeachBrain} />
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            style={{ marginTop: '.6rem' }}
-            onClick={() => setAnswering(false)}
+        )}
+        {canManage && (
+          <select
+            className="select"
+            value={row.status}
+            disabled={working}
+            aria-label={`Set status for: ${row.question.slice(0, 60)}`}
+            data-testid={`escalation-status-${row.id}`}
+            onChange={(event) => {
+              const next = event.target.value as 'resolved' | 'answered' | 'dismissed';
+              if (next !== row.status) void setStatus(next);
+            }}
+            style={{ fontSize: '.82rem', minHeight: 36, width: 'auto', padding: '0 .5rem' }}
           >
-            Cancel
+            <option value="open" disabled>
+              Needs answer
+            </option>
+            <option value="resolved">Handled</option>
+            <option value="answered">Awaiting guest response</option>
+            <option value="dismissed">Cancelled</option>
+          </select>
+        )}
+        {canManage && isTerminal && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void close()} disabled={working} data-testid={`escalation-close-${row.id}`}>
+            <Archive size={13} aria-hidden /> Close
           </button>
-        </div>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="error" style={{ marginTop: '.5rem' }}>
+          {error}
+        </p>
       )}
     </div>
+  );
+}
+
+function CloseHandledButton({ propertyId }: { propertyId: string }) {
+  const router = useRouter();
+  const [working, setWorking] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      disabled={working}
+      data-testid={`close-handled-${propertyId}`}
+      onClick={async () => {
+        setWorking(true);
+        const formData = new FormData();
+        formData.set('propertyId', propertyId);
+        await closeHandledEscalationsAction({}, formData);
+        router.refresh();
+      }}
+    >
+      <Archive size={13} aria-hidden /> {working ? 'Closing…' : 'Close all handled'}
+    </button>
   );
 }
 
@@ -90,21 +193,26 @@ export function EscalationInbox({
   properties,
   openCountByProperty,
   activeFilter,
+  activeStatus,
   propertyPermissions,
 }: {
   rows: EscalationRowData[];
   properties: { id: string; name: string }[];
   openCountByProperty: Record<string, number>;
   activeFilter: string | null;
+  activeStatus: string | null;
   propertyPermissions: Record<string, { canReceiveEscalations: boolean; canReplyGuests: boolean; canEditBrain: boolean }>;
 }) {
-  // Open items first within each group \u2014 the ones needing action should never be
-  // buried below already-answered history.
+  // Open items first within each group — the ones needing action should never be
+  // buried below already-answered history. Within the open set the sort is
+  // oldest-first: an escalation queue is worked front-to-back, and the oldest
+  // unanswered question is the one most likely to be costing a review.
   const sorted = useMemo(
     () =>
       [...rows].sort((a, b) => {
         if (a.status === 'open' && b.status !== 'open') return -1;
         if (a.status !== 'open' && b.status === 'open') return 1;
+        if (a.status === 'open' && b.status === 'open') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }),
     [rows],
@@ -126,7 +234,7 @@ export function EscalationInbox({
     <div>
       {properties.length > 1 && (
         <div className="esc-filter-row" role="tablist" aria-label="Filter escalations by property">
-          <Link href="/dashboard/escalations" className={`esc-filter-pill${!activeFilter ? ' is-active' : ''}`}>
+          <Link href={filterHref(null, activeStatus)} className={`esc-filter-pill${!activeFilter ? ' is-active' : ''}`}>
             All properties
             {totalOpen > 0 && (
               <span className={`esc-filter-count${!activeFilter ? '' : ' has-open'}`}>{totalOpen}</span>
@@ -136,7 +244,7 @@ export function EscalationInbox({
             const openCount = openCountByProperty[p.id] ?? 0;
             const isActive = activeFilter === p.id;
             return (
-              <Link key={p.id} href={`/dashboard/escalations?property=${p.id}`} className={`esc-filter-pill${isActive ? ' is-active' : ''}`}>
+              <Link key={p.id} href={filterHref(p.id, activeStatus)} className={`esc-filter-pill${isActive ? ' is-active' : ''}`}>
                 {p.name}
                 {openCount > 0 && <span className={`esc-filter-count${isActive ? '' : ' has-open'}`}>{openCount}</span>}
               </Link>
@@ -145,33 +253,53 @@ export function EscalationInbox({
         </div>
       )}
 
+      <div className="esc-filter-row" role="tablist" aria-label="Filter escalations by status">
+        {STATUS_TABS.map((tab) => {
+          const isActive = activeStatus === tab.key || (!activeStatus && tab.key === null);
+          return (
+            <Link key={tab.label} href={filterHref(activeFilter, tab.key)} className={`esc-filter-pill${isActive ? ' is-active' : ''}`}>
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+
       {grouped.length === 0 ? (
         <div className="card esc-empty">
           <Sparkles size={22} aria-hidden style={{ color: 'var(--teal)', marginBottom: '.6rem' }} />
           <p className="muted" style={{ margin: 0 }}>
-            {activeFilter ? 'No escalations for this property yet.' : 'No escalations yet \u2014 your AI concierge is handling everything.'}
+            {activeStatus
+              ? 'No escalations with this status.'
+              : activeFilter
+                ? 'No escalations for this property yet.'
+                : 'No escalations yet \u2014 your AI concierge is handling everything.'}
           </p>
         </div>
       ) : (
-        grouped.map(([propertyId, group]) => (
-          <div className="esc-group" key={propertyId}>
-            {properties.length > 1 && !activeFilter && (
-              <div className="esc-group-head">
-                <Building2 size={15} aria-hidden style={{ color: 'var(--iris)' }} />
-                <h2 className="esc-group-title">{group.propertyName}</h2>
-                <span className="esc-group-sub">
-                  {group.rows.length} question{group.rows.length === 1 ? '' : 's'}
-                </span>
-              </div>
-            )}
-            {group.rows.map((row) => (
-              <EscalationRow key={row.id} row={row} capabilities={propertyPermissions[row.propertyId] ?? { canReceiveEscalations: false, canReplyGuests: false, canEditBrain: false }} />
-            ))}
-          </div>
-        ))
+        grouped.map(([propertyId, group]) => {
+          const permissions = propertyPermissions[propertyId];
+          const hasTerminal = group.rows.some((r) => r.status === 'resolved' || r.status === 'dismissed');
+          return (
+            <div className="esc-group" key={propertyId}>
+              {properties.length > 1 && !activeFilter && (
+                <div className="esc-group-head">
+                  <Building2 size={15} aria-hidden style={{ color: 'var(--iris)' }} />
+                  <h2 className="esc-group-title">{group.propertyName}</h2>
+                  <span className="esc-group-sub">
+                    {group.rows.length} question{group.rows.length === 1 ? '' : 's'}
+                  </span>
+                  {permissions?.canReceiveEscalations && hasTerminal && <CloseHandledButton propertyId={propertyId} />}
+                </div>
+              )}
+              {group.rows.map((row) => (
+                <EscalationRow key={row.id} row={row} capabilities={propertyPermissions[row.propertyId] ?? { canReceiveEscalations: false, canReplyGuests: false, canEditBrain: false }} />
+              ))}
+            </div>
+          );
+        })
       )}
 
-      {totalOpen === 0 && rows.length > 0 && (
+      {totalOpen === 0 && rows.length > 0 && !activeStatus && (
         <p className="faint" style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginTop: '1rem', fontSize: '.82rem' }}>
           <CheckCircle2 size={14} aria-hidden style={{ color: 'var(--teal)' }} /> All caught up{' \u2014 '}no open escalations.
         </p>

@@ -5,6 +5,7 @@ import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { EscalationAnswerForm } from './EscalationAnswerForm';
+import { openEscalationThreadAction } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export default async function EscalationDetailPage({ params }: { params: Promise
   // bad id) sends them back to the list rather than leaking existence.
   const { data: esc } = await supabase
     .from('escalations')
-    .select('id, property_id, question, status, host_response, conversation_id, created_at, responded_at')
+    .select('id, property_id, question, status, host_response, conversation_id, stay_id, created_at, responded_at')
     .eq('id', (await params).id)
     .maybeSingle();
   if (!esc) redirect('/dashboard/escalations');
@@ -24,6 +25,14 @@ export default async function EscalationDetailPage({ params }: { params: Promise
   // Confirm the host can act on this property (redirects otherwise).
   const access = await requirePropertyAccess(esc.property_id);
   if (!access.can.receiveEscalations) redirect('/dashboard/escalations');
+
+  // Escalations are handled in the guest's Host Chat thread now. Stay-linked rows
+  // redirect there (the resolver finds or creates the thread); legacy stay-less
+  // rows keep this page as their fallback surface.
+  if (esc.stay_id) {
+    const target = await openEscalationThreadAction(esc.id as string);
+    if (target.url) redirect(target.url);
+  }
 
   // Conversation context. messages have no host-side SELECT RLS policy (they are a
   // server-controlled artifact), so read via the service-role client after the access
