@@ -25,6 +25,23 @@ export interface StayActionState {
   portalError?: string;
 }
 
+// Alphabet for stay_reference excludes visually ambiguous characters (no 0/O,
+// 1/I/L) so a reference read over the phone transcribes cleanly.
+const STAY_REFERENCE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+/**
+ * Human-quotable stay reference (Reports rework, #81): 'STY-' + 6 random chars,
+ * unique across all stays via the stays_stay_reference_key index. Displayable
+ * and filterable — unlike the 4-digit visit code, which stays hash-only.
+ */
+function generateStayReference(): string {
+  const bytes = new Uint8Array(6);
+  globalThis.crypto.getRandomValues(bytes);
+  let ref = 'STY-';
+  for (const b of bytes) ref += STAY_REFERENCE_ALPHABET[b % STAY_REFERENCE_ALPHABET.length];
+  return ref;
+}
+
 // Host creates a stay. The guest's raw contact is hashed immediately and never stored raw;
 // only contact_hash + last4 (for host display) are persisted.
 export async function createStayAction(_prev: StayActionState, formData: FormData): Promise<StayActionState> {
@@ -64,29 +81,45 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
   const now = new Date();
   const status = now < checkIn ? 'upcoming' : now > checkOut ? 'completed' : 'active';
 
-  const { data: stay, error } = await supabase
-    .from('stays')
-    .insert({
-      property_id: propertyId,
-      guest_display_name: d.guestDisplayName,
-      contact_hash: contactHash,
-      contact_type: type,
-      contact_last4: last4,
-      check_in: checkIn.toISOString(),
-      check_out: checkOut.toISOString(),
-      guest_count: d.guestCount,
-      booking_reference: d.bookingReference || null,
-      host_notes: d.hostNotes || null,
-      status,
-      created_by: ctx.user.id,
-    } as never)
-    .select('id')
-    .single();
-  if (error || !stay) {
-    log.warn('stay_create_failed', { propertyId, error: error?.message });
+  // The insert retries on a stay_reference unique collision (23505) with a
+  // freshly drawn code — same allocation style as the visit-code loop below.
+  // A DB-side DEFAULT (migration stay_reference_default) covers any insert
+  // path that does not set a reference explicitly.
+  let stay: { id: string } | null = null;
+  let insertError: string | null = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { data, error } = await supabase
+      .from('stays')
+      .insert({
+        property_id: propertyId,
+        guest_display_name: d.guestDisplayName,
+        contact_hash: contactHash,
+        contact_type: type,
+        contact_last4: last4,
+        check_in: checkIn.toISOString(),
+        check_out: checkOut.toISOString(),
+        guest_count: d.guestCount,
+        booking_reference: d.bookingReference || null,
+        host_notes: d.hostNotes || null,
+        status,
+        stay_reference: generateStayReference(),
+        created_by: ctx.user.id,
+      } as never)
+      .select('id')
+      .single();
+    if (!error && data) {
+      stay = data as { id: string };
+      break;
+    }
+    if ((error as { code?: string } | null)?.code === '23505') continue;
+    insertError = error?.message ?? 'insert failed';
+    break;
+  }
+  if (!stay) {
+    log.warn('stay_create_failed', { propertyId, error: insertError ?? 'stay_reference collision retries exhausted' });
     return { error: 'Could not create the stay.' };
   }
-  const stayId = (stay as { id: string }).id;
+  const stayId = stay.id;
 
   // Ticket 3: creating a stay auto-mints its portal link + 4-digit visit code in
   // the same action — no separate generate step. Hash-only storage is preserved:
