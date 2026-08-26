@@ -20,9 +20,9 @@ const postSchema = z.object({
   // What happens to that escalation when the reply sends: resolved = Handled,
   // answered = Awaiting guest response, dismissed = Cancelled.
   escalationOutcome: z.enum(['resolved', 'answered', 'dismissed']).optional().default('answered'),
-  // Set when the reply is the host's response to an Extras request in this
-  // thread. The request follows the reply: in progress for a normal reply,
-  // completed/cancelled when the host chooses that outcome.
+  // Set when the reply is the host's response to an Extras request bubble. The
+  // request follows the reply: in progress for a normal reply, completed or
+  // cancelled when the host chooses that outcome.
   extrasOrderId: z.string().uuid().optional(),
   extrasOutcome: z.enum(['accepted', 'fulfilled', 'canceled']).optional().default('accepted'),
   learnFromReply: z.boolean().optional().default(false),
@@ -93,8 +93,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .limit(500);
   if (error) return NextResponse.json({ error: 'Could not load messages.' }, { status: 500 });
 
-  // Escalation and Extras state ride along so the full-page thread can badge
-  // and gate the highlighted Reply CTA without a second round-trip.
+  // Escalation and Extras state ride along so the thread can badge the request
+  // bubble and gate the highlighted Reply CTA without a second round-trip.
   const [{ data: escRows }, extrasOrders] = await Promise.all([
     db
       .from('escalations')
@@ -273,7 +273,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  // Replying from an Extras request panel updates that request's health in the
+  // Replying from an Extras request bubble updates that request's health in the
   // same motion, mirroring the escalation outcome dropdown. The existing
   // status endpoint remains the granular path; this handles the common reply.
   if (parsed.data.extrasOrderId) {

@@ -82,20 +82,15 @@ const CONV_CSS = `
   transition: transform .2s ease, background .2s ease;
 }
 .conv-esc-reply:hover { transform: translateY(-1px); background: var(--coral-soft); }
-.conv-extras-panel {
-  margin: 0 var(--pad-card) .75rem; padding: .8rem .9rem;
-  border: 1px solid color-mix(in srgb, var(--teal) 45%, transparent);
-  border-left: 4px solid var(--teal); border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--teal) 8%, var(--bg-card));
-  display: grid; gap: .65rem;
+.bubble-extras {
+  border: 1.5px solid color-mix(in srgb, var(--teal) 60%, transparent);
+  box-shadow: inset 3px 0 0 var(--teal);
 }
-.conv-extras-head { display: flex; justify-content: space-between; gap: .5rem; align-items: center; flex-wrap: wrap; }
-.conv-extras-title { display: inline-flex; align-items: center; gap: .4rem; font-weight: 800; color: var(--teal-deep); }
 .conv-extras-reply {
   display: inline-flex; align-items: center; gap: .35rem;
-  border: 0; border-radius: 999px; padding: .38rem .85rem;
+  border: 0; border-radius: 999px; padding: .35rem .8rem;
   background: var(--teal); color: var(--btn-primary-fg);
-  font-size: .78rem; font-weight: 800; cursor: pointer;
+  font-size: .78rem; font-weight: 700; cursor: pointer;
   animation: conv-pulse-teal 2.2s ease-out infinite;
   transition: transform .2s ease, background .2s ease;
 }
@@ -119,8 +114,9 @@ const CONV_CSS = `
 `;
 
 // Full-page host ↔ guest thread. Escalations and Extras requests are the
-// guided paths: unresolved work carries a highlighted, pulsing Reply CTA, and
-// the anchored composer offers the outcome dropdown before sending.
+// guided paths: unresolved work is a specialized bubble with a highlighted,
+// pulsing Reply CTA, and the anchored composer offers the outcome dropdown
+// before sending.
 export function ConversationThread({
   propertyId,
   conversationId,
@@ -155,6 +151,7 @@ export function ConversationThread({
     [escalations],
   );
   const openEscalations = escalations.filter((e) => e.status !== 'resolved' && e.status !== 'dismissed');
+  const latestExtrasOrder = extrasOrders[0] ?? null;
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/host/properties/${propertyId}/guest-chats/${conversationId}/messages`, { cache: 'no-store' });
@@ -208,17 +205,8 @@ export function ConversationThread({
     setEscalationOutcome('resolved');
     setLearnFromReply(false);
     setActiveEscalation(null);
-    setActiveExtrasOrder(null);
-    setNotice(null);
-    composerRef.current?.focus();
-  }
-
-  function startExtrasReply(order: ThreadExtrasOrder) {
-    setActiveExtrasOrder(order);
-    setActiveEscalation(null);
-    setReplyTo(null);
+    setActiveExtrasOrder(message.messageKind === 'extras_request' ? latestExtrasOrder : null);
     setExtrasOutcome('accepted');
-    setLearnFromReply(false);
     setNotice(null);
     composerRef.current?.focus();
   }
@@ -283,30 +271,6 @@ export function ConversationThread({
         </div>
       )}
 
-      {extrasOrders.length > 0 && (
-        <section className="conv-extras-panel" aria-label="Extras requests in this thread">
-          {extrasOrders.map((order) => (
-            <div key={order.id} data-testid={`thread-extras-${order.id}`}>
-              <div className="conv-extras-head">
-                <span className="conv-extras-title"><Sparkles size={14} aria-hidden /> Extras request · {EXTRAS_STATUS_LABEL[order.fulfillmentStatus] ?? order.fulfillmentStatus}</span>
-                <button type="button" className="conv-extras-reply" onClick={() => startExtrasReply(order)} data-testid={`reply-extras-${order.id}`}>
-                  <Sparkles size={12} aria-hidden /> Reply to request
-                </button>
-              </div>
-              <p style={{ margin: '.35rem 0 0', fontSize: '.88rem', fontWeight: 700 }}>
-                {order.itemTitle}{order.quantity > 1 ? ` ×${order.quantity}` : ''}{order.itemPriceText ? ` · ${order.itemPriceText}` : ''}
-              </p>
-              <p className="faint" style={{ fontSize: '.75rem', margin: '.25rem 0 0' }}>
-                Request {order.requestNumber}
-                {order.quotedAmountCents !== null ? ` · Estimate ${(order.quotedAmountCents / 100).toFixed(2)} ${order.quoteCurrency.toUpperCase()}` : ''}
-                {order.scheduledFor ? ` · Scheduled ${timeLabel(order.scheduledFor)}` : ''}
-              </p>
-              {order.guestNote && <p className="muted" style={{ fontSize: '.8rem', margin: '.3rem 0 0', fontStyle: 'italic' }}>“{order.guestNote}”</p>}
-            </div>
-          ))}
-        </section>
-      )}
-
       <div aria-live="polite" className="chat-messages" style={{ maxHeight: 'none', minHeight: 320, flex: 1 }}>
         {loading ? (
           <p className="muted"><Loader2 size={15} className="spin" aria-hidden /> Loading messages…</p>
@@ -316,11 +280,14 @@ export function ConversationThread({
           messages.map((message) => {
             const host = message.role === 'host';
             const escalation = message.messageKind === 'ai_escalation' || Boolean(message.escalationId);
+            const extrasRequest = message.messageKind === 'extras_request';
             const esc = message.escalationId ? escalationById.get(message.escalationId) ?? null : null;
-            const unresolved = escalation && (!esc || (esc.status !== 'resolved' && esc.status !== 'dismissed'));
+            const unresolvedEscalation = escalation && (!esc || (esc.status !== 'resolved' && esc.status !== 'dismissed'));
+            const extrasOrder = extrasRequest ? latestExtrasOrder : null;
+            const unresolvedExtras = extrasRequest && extrasOrder !== null;
             return (
               <div key={message.id} className={`bubble-row${host ? ' bubble-row-host' : ''}`}>
-                <div className={`bubble${host ? ' bubble-host' : ' bubble-guest'}${escalation ? ' bubble-escalation' : ''}`}>
+                <div className={`bubble${host ? ' bubble-host' : ' bubble-guest'}${escalation ? ' bubble-escalation' : ''}${extrasRequest ? ' bubble-extras' : ''}`}>
                   {escalation && (
                     <div className="bubble-flag bubble-flag-escalation">
                       <AlertTriangle size={13} aria-hidden /> AI escalation
@@ -331,8 +298,25 @@ export function ConversationThread({
                       )}
                     </div>
                   )}
+                  {extrasRequest && (
+                    <div className="bubble-flag" style={{ color: 'var(--teal-deep)' }}>
+                      <Sparkles size={13} aria-hidden /> Extras request
+                      {extrasOrder && (
+                        <span style={{ fontSize: '.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                          · {EXTRAS_STATUS_LABEL[extrasOrder.fulfillmentStatus] ?? extrasOrder.fulfillmentStatus}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {message.messageKind === 'announcement' && <div className="bubble-flag bubble-flag-announcement"><Megaphone size={13} aria-hidden /> Announcement</div>}
                   <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
+                  {extrasOrder && (
+                    <p className="faint" style={{ fontSize: '.75rem', margin: '.45rem 0 0' }}>
+                      Request {extrasOrder.requestNumber}
+                      {extrasOrder.quotedAmountCents !== null ? ` · Estimate ${(extrasOrder.quotedAmountCents / 100).toFixed(2)} ${extrasOrder.quoteCurrency.toUpperCase()}` : ''}
+                      {extrasOrder.scheduledFor ? ` · Scheduled ${timeLabel(extrasOrder.scheduledFor)}` : ''}
+                    </p>
+                  )}
                   {message.role === 'guest' && message.hostTranslation ? (
                     <div
                       className="muted"
@@ -344,9 +328,13 @@ export function ConversationThread({
                   ) : null}
                   <div className="bubble-meta">
                     <span>{timeLabel(message.createdAt)}</span>
-                    {unresolved ? (
+                    {unresolvedEscalation ? (
                       <button type="button" className="conv-esc-reply" onClick={() => startReply(message)} data-testid={`reply-escalation-${message.id}`}>
                         <AlertTriangle size={12} aria-hidden /> Reply to escalation
+                      </button>
+                    ) : unresolvedExtras ? (
+                      <button type="button" className="conv-extras-reply" onClick={() => startReply(message)} data-testid={`reply-extras-${message.id}`}>
+                        <Sparkles size={12} aria-hidden /> Reply to request
                       </button>
                     ) : (
                       <button type="button" className="bubble-reply" onClick={() => startReply(message)}>Reply</button>
@@ -361,9 +349,13 @@ export function ConversationThread({
       </div>
 
       {replyTo && (
-        <div className="chat-reply-quote">
+        <div className="chat-reply-quote" style={replyTo.messageKind === 'extras_request' ? { borderLeftColor: 'var(--teal)' } : undefined}>
           <div style={{ fontSize: '.84rem' }}>
-            {replyTo.escalationId ? 'Replying to escalation' : 'Replying to'}: “{replyTo.content.slice(0, 140)}{replyTo.content.length > 140 ? '…' : ''}”
+            {replyTo.escalationId
+              ? 'Replying to escalation'
+              : replyTo.messageKind === 'extras_request'
+                ? 'Replying to Extras request'
+                : 'Replying to'}: “{replyTo.content.slice(0, 140)}{replyTo.content.length > 140 ? '…' : ''}”
           </div>
           <button type="button" className="bubble-reply" onClick={cancelReply} style={{ marginTop: '.55rem' }}>
             Cancel reply
@@ -375,17 +367,6 @@ export function ConversationThread({
         <div className="chat-reply-quote">
           <div style={{ fontSize: '.84rem' }}>
             Replying to escalation: “{activeEscalation.question.slice(0, 140)}{activeEscalation.question.length > 140 ? '…' : ''}”
-          </div>
-          <button type="button" className="bubble-reply" onClick={cancelReply} style={{ marginTop: '.55rem' }}>
-            Cancel reply
-          </button>
-        </div>
-      )}
-
-      {activeExtrasOrder && (
-        <div className="chat-reply-quote" style={{ borderLeftColor: 'var(--teal)' }}>
-          <div style={{ fontSize: '.84rem' }}>
-            Replying to Extras request: “{activeExtrasOrder.itemTitle}” ({activeExtrasOrder.requestNumber})
           </div>
           <button type="button" className="bubble-reply" onClick={cancelReply} style={{ marginTop: '.55rem' }}>
             Cancel reply
