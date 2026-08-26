@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Brain, CheckCheck, Languages, Loader2, Megaphone, Send } from 'lucide-react';
+import { AlertTriangle, Brain, CheckCheck, Languages, Loader2, Megaphone, Send, Sparkles } from 'lucide-react';
 
 type ChatMessage = {
   id: string;
@@ -25,6 +25,20 @@ type ThreadEscalation = {
   resolved_at: string | null;
 };
 
+type ThreadExtrasOrder = {
+  id: string;
+  itemTitle: string;
+  itemPriceText: string | null;
+  quantity: number;
+  guestNote: string | null;
+  requestNumber: string;
+  fulfillmentStatus: string;
+  scheduledFor: string | null;
+  quotedAmountCents: number | null;
+  quoteCurrency: string;
+  createdAt: string;
+};
+
 // Host-facing labels for the escalation lifecycle. The stored enum values stay
 // open/answered/resolved/dismissed; only the words change.
 const ESCALATION_STATUS_LABEL: Record<string, string> = {
@@ -34,7 +48,21 @@ const ESCALATION_STATUS_LABEL: Record<string, string> = {
   dismissed: 'cancelled',
 };
 
+const EXTRAS_STATUS_LABEL: Record<string, string> = {
+  requested: 'requested',
+  needs_details: 'needs details',
+  accepted: 'in progress',
+  payment_pending: 'waiting on payment',
+  scheduled: 'scheduled',
+  fulfilled: 'completed',
+  declined: 'declined',
+  canceled: 'cancelled',
+  expired: 'expired',
+  refunded: 'refunded',
+};
+
 type EscalationOutcome = 'resolved' | 'answered' | 'dismissed';
+type ExtrasOutcome = 'accepted' | 'fulfilled' | 'canceled';
 
 function timeLabel(value: string | null) {
   if (!value) return '';
@@ -42,8 +70,8 @@ function timeLabel(value: string | null) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-// Scoped styles for the highlighted escalation Reply CTA. Kept local (the
-// GuestPortal PORTAL_CSS pattern) so globals.css stays untouched.
+// Scoped styles for the highlighted escalation/Extras Reply CTAs. Kept local
+// (the GuestPortal PORTAL_CSS pattern) so globals.css stays untouched.
 const CONV_CSS = `
 .conv-esc-reply {
   display: inline-flex; align-items: center; gap: .35rem;
@@ -54,24 +82,45 @@ const CONV_CSS = `
   transition: transform .2s ease, background .2s ease;
 }
 .conv-esc-reply:hover { transform: translateY(-1px); background: var(--coral-soft); }
+.conv-extras-panel {
+  margin: 0 var(--pad-card) .75rem; padding: .8rem .9rem;
+  border: 1px solid color-mix(in srgb, var(--teal) 45%, transparent);
+  border-left: 4px solid var(--teal); border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--teal) 8%, var(--bg-card));
+  display: grid; gap: .65rem;
+}
+.conv-extras-head { display: flex; justify-content: space-between; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.conv-extras-title { display: inline-flex; align-items: center; gap: .4rem; font-weight: 800; color: var(--teal-deep); }
+.conv-extras-reply {
+  display: inline-flex; align-items: center; gap: .35rem;
+  border: 0; border-radius: 999px; padding: .38rem .85rem;
+  background: var(--teal); color: var(--btn-primary-fg);
+  font-size: .78rem; font-weight: 800; cursor: pointer;
+  animation: conv-pulse-teal 2.2s ease-out infinite;
+  transition: transform .2s ease, background .2s ease;
+}
+.conv-extras-reply:hover { transform: translateY(-1px); }
+.conv-esc-outcome, .conv-extras-outcome {
+  border: 0; background: transparent; color: inherit; font: inherit;
+  font-size: .78rem; font-weight: 700; cursor: pointer; padding: 0;
+}
 @keyframes conv-pulse-coral {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--coral) 45%, transparent); }
   50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--coral) 0%, transparent); }
 }
-.conv-esc-outcome {
-  border: 0; background: transparent; color: inherit; font: inherit;
-  font-size: .78rem; font-weight: 700; cursor: pointer; padding: 0;
+@keyframes conv-pulse-teal {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--teal) 42%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--teal) 0%, transparent); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .conv-esc-reply { animation: none; }
-  .conv-esc-reply:hover { transform: none; }
+  .conv-esc-reply, .conv-extras-reply { animation: none; }
+  .conv-esc-reply:hover, .conv-extras-reply:hover { transform: none; }
 }
 `;
 
-// Full-page host ↔ guest thread. Escalations are the guided path: an
-// unresolved escalation carries a highlighted, pulsing Reply CTA, and the
-// anchored composer offers an outcome dropdown (Handled / Awaiting guest
-// response / Cancelled) and "Teach the Brain" inline.
+// Full-page host ↔ guest thread. Escalations and Extras requests are the
+// guided paths: unresolved work carries a highlighted, pulsing Reply CTA, and
+// the anchored composer offers the outcome dropdown before sending.
 export function ConversationThread({
   propertyId,
   conversationId,
@@ -85,10 +134,13 @@ export function ConversationThread({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [escalations, setEscalations] = useState<ThreadEscalation[]>([]);
+  const [extrasOrders, setExtrasOrders] = useState<ThreadExtrasOrder[]>([]);
   const [reply, setReply] = useState('');
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [activeEscalation, setActiveEscalation] = useState<ThreadEscalation | null>(null);
+  const [activeExtrasOrder, setActiveExtrasOrder] = useState<ThreadExtrasOrder | null>(null);
   const [escalationOutcome, setEscalationOutcome] = useState<EscalationOutcome>('resolved');
+  const [extrasOutcome, setExtrasOutcome] = useState<ExtrasOutcome>('accepted');
   const [learnFromReply, setLearnFromReply] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -110,6 +162,7 @@ export function ConversationThread({
     if (res.ok) {
       setMessages(Array.isArray(json.messages) ? json.messages : []);
       setEscalations(Array.isArray(json.escalations) ? json.escalations : []);
+      setExtrasOrders(Array.isArray(json.extrasOrders) ? json.extrasOrders : []);
       setError(null);
     } else {
       setError(json.error || 'Could not load messages.');
@@ -155,6 +208,17 @@ export function ConversationThread({
     setEscalationOutcome('resolved');
     setLearnFromReply(false);
     setActiveEscalation(null);
+    setActiveExtrasOrder(null);
+    setNotice(null);
+    composerRef.current?.focus();
+  }
+
+  function startExtrasReply(order: ThreadExtrasOrder) {
+    setActiveExtrasOrder(order);
+    setActiveEscalation(null);
+    setReplyTo(null);
+    setExtrasOutcome('accepted');
+    setLearnFromReply(false);
     setNotice(null);
     composerRef.current?.focus();
   }
@@ -162,13 +226,16 @@ export function ConversationThread({
   function cancelReply() {
     setReplyTo(null);
     setActiveEscalation(null);
+    setActiveExtrasOrder(null);
     setEscalationOutcome('resolved');
+    setExtrasOutcome('accepted');
     setLearnFromReply(false);
   }
 
   // The escalation this reply acts on: either the replied-to message's
   // escalation, or the escalation opened directly from the inbox deep link.
   const replyEscalationId = replyTo?.escalationId ?? activeEscalation?.id ?? null;
+  const replyExtrasOrderId = activeExtrasOrder?.id ?? null;
 
   async function sendReply() {
     if (!reply.trim() || sending) return;
@@ -184,6 +251,8 @@ export function ConversationThread({
           replyToMessageId: replyTo?.id,
           escalationId: replyEscalationId ?? undefined,
           escalationOutcome: replyEscalationId ? escalationOutcome : undefined,
+          extrasOrderId: replyExtrasOrderId ?? undefined,
+          extrasOutcome: replyExtrasOrderId ? extrasOutcome : undefined,
           learnFromReply: replyEscalationId ? learnFromReply : false,
         }),
       });
@@ -212,6 +281,30 @@ export function ConversationThread({
           <AlertTriangle size={14} aria-hidden />
           {openEscalations.length} unresolved escalation{openEscalations.length === 1 ? '' : 's'} in this thread — use the highlighted Reply button on an escalated message to answer it.
         </div>
+      )}
+
+      {extrasOrders.length > 0 && (
+        <section className="conv-extras-panel" aria-label="Extras requests in this thread">
+          {extrasOrders.map((order) => (
+            <div key={order.id} data-testid={`thread-extras-${order.id}`}>
+              <div className="conv-extras-head">
+                <span className="conv-extras-title"><Sparkles size={14} aria-hidden /> Extras request · {EXTRAS_STATUS_LABEL[order.fulfillmentStatus] ?? order.fulfillmentStatus}</span>
+                <button type="button" className="conv-extras-reply" onClick={() => startExtrasReply(order)} data-testid={`reply-extras-${order.id}`}>
+                  <Sparkles size={12} aria-hidden /> Reply to request
+                </button>
+              </div>
+              <p style={{ margin: '.35rem 0 0', fontSize: '.88rem', fontWeight: 700 }}>
+                {order.itemTitle}{order.quantity > 1 ? ` ×${order.quantity}` : ''}{order.itemPriceText ? ` · ${order.itemPriceText}` : ''}
+              </p>
+              <p className="faint" style={{ fontSize: '.75rem', margin: '.25rem 0 0' }}>
+                Request {order.requestNumber}
+                {order.quotedAmountCents !== null ? ` · Estimate ${(order.quotedAmountCents / 100).toFixed(2)} ${order.quoteCurrency.toUpperCase()}` : ''}
+                {order.scheduledFor ? ` · Scheduled ${timeLabel(order.scheduledFor)}` : ''}
+              </p>
+              {order.guestNote && <p className="muted" style={{ fontSize: '.8rem', margin: '.3rem 0 0', fontStyle: 'italic' }}>“{order.guestNote}”</p>}
+            </div>
+          ))}
+        </section>
       )}
 
       <div aria-live="polite" className="chat-messages" style={{ maxHeight: 'none', minHeight: 320, flex: 1 }}>
@@ -289,6 +382,17 @@ export function ConversationThread({
         </div>
       )}
 
+      {activeExtrasOrder && (
+        <div className="chat-reply-quote" style={{ borderLeftColor: 'var(--teal)' }}>
+          <div style={{ fontSize: '.84rem' }}>
+            Replying to Extras request: “{activeExtrasOrder.itemTitle}” ({activeExtrasOrder.requestNumber})
+          </div>
+          <button type="button" className="bubble-reply" onClick={cancelReply} style={{ marginTop: '.55rem' }}>
+            Cancel reply
+          </button>
+        </div>
+      )}
+
       {replyEscalationId && (
         <div className="chip-row">
           <label
@@ -324,6 +428,29 @@ export function ConversationThread({
         </div>
       )}
 
+      {replyExtrasOrderId && (
+        <div className="chip-row">
+          <label
+            className="chip-toggle is-on"
+            title="What happens to the Extras request when your reply sends. In progress acknowledges it; Completed and Cancelled close it."
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '.35rem', cursor: 'pointer' }}
+          >
+            <Sparkles size={13} aria-hidden />
+            <select
+              className="conv-extras-outcome"
+              value={extrasOutcome}
+              onChange={(event) => setExtrasOutcome(event.target.value as ExtrasOutcome)}
+              aria-label="Extras request outcome when the reply sends"
+              data-testid="select-extras-outcome"
+            >
+              <option value="accepted">In progress</option>
+              <option value="fulfilled">Completed</option>
+              <option value="canceled">Cancelled</option>
+            </select>
+          </label>
+        </div>
+      )}
+
       {notice && <p role="status" style={{ color: 'var(--teal)', margin: '0 1rem .75rem' }}>{notice}</p>}
       {error && <p role="alert" style={{ color: 'var(--coral)', margin: '0 1rem .75rem' }}>{error}</p>}
 
@@ -336,7 +463,7 @@ export function ConversationThread({
       </div>
 
       <div className="muted" style={{ padding: '0 1rem .9rem', fontSize: '.76rem', display: 'flex', alignItems: 'center', gap: '.35rem' }}>
-        <CheckCheck size={13} aria-hidden /> This thread marks itself read while open. Escalations stay pinned until you mark them handled.
+        <CheckCheck size={13} aria-hidden /> This thread marks itself read while open. Escalations and Extras requests stay highlighted until handled.
       </div>
     </div>
   );
