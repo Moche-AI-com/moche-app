@@ -14,11 +14,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Add-on — a guest taps "Request" on an extra. The request lands in the guest's
-// Host Chat thread as a specialized request bubble the host replies to directly
-// (the same surface questions use), and the durable extras_orders row tracks its
-// status. No escalation row is created: requests are revenue-shaped work, not
-// questions, and the Escalations queue stays reserved for things the concierge
-// couldn't answer.
+// Host Chat thread as a message the host replies to directly (the same surface
+// questions use), and the durable extras_orders row tracks its status. No
+// escalation row is created: requests are revenue-shaped work, not questions,
+// and the Escalations queue stays reserved for things the concierge couldn't answer.
 //
 // The order row + its first append-only timeline event are written BEFORE anyone
 // is notified. The guest never receives a false confirmation: a request number
@@ -75,7 +74,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const preferredTimeNote = parsed.data.preferredFor ? `Preferred time: ${parsed.data.preferredFor}` : null;
+  const requesterNote = `Requested by: ${parsed.data.guestName}`;
   const guestNote = [parsed.data.note?.trim(), preferredTimeNote].filter(Boolean).join('\n') || null;
+  const orderGuestNote = [requesterNote, guestNote].filter(Boolean).join('\n');
 
   const priceSuffix = offer.price_text ? ` (${offer.price_text})` : '';
   const unit = offer.unit_label?.trim();
@@ -83,7 +84,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const variantSuffix = variant ? ` — ${offer.option_label?.trim() ? `${offer.option_label.trim()}: ` : ''}${variant}` : '';
   const notePart = guestNote ? ` Guest note: "${guestNote}"` : '';
   const lead = isPackage ? 'Package request' : 'Enhancement request';
-  const question = `${lead}: ${offer.title}${variantSuffix}${qtySuffix}${priceSuffix}. Guest would like to add this to their stay.${notePart}`;
+  const question = `${lead}: ${offer.title}${variantSuffix}${qtySuffix}${priceSuffix}. ${parsed.data.guestName} (${session.guestDisplayName} party) would like to add this to their stay.${notePart}`;
 
   // Host-language rendering, same contract as the chat and manual-escalation paths.
   // Only the guest's own free-text note is genuinely translatable here — the rest of
@@ -135,9 +136,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     conversationId = (conv as { id: string } | null)?.id ?? null;
   }
 
-  let requestMessageId: string | null = null;
   if (conversationId) {
-    const { data: message } = await admin.from('messages').insert({
+    await admin.from('messages').insert({
       conversation_id: conversationId,
       property_id: session.propertyId,
       role: 'guest',
@@ -145,8 +145,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       // A dedicated kind lets the host thread render the request as a
       // teal-outlined action bubble, parallel to the escalation bubble.
       message_kind: 'extras_request',
-    } as never).select('id').single();
-    requestMessageId = (message as { id: string } | null)?.id ?? null;
+    } as never);
     await admin
       .from('conversations')
       .update({ last_message_at: new Date().toISOString(), host_read_at: null })
@@ -172,7 +171,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       item_price_text: offer.price_text ?? null,
       item_variant: variant,
       quantity,
-      guest_note: guestNote,
+      guest_note: orderGuestNote,
       status: 'requested',
       fulfillment_status: 'requested',
       request_number: requestNumber,
@@ -197,7 +196,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     from_status: null,
     to_status: 'requested',
     actor_type: 'guest',
-    note: guestNote ? `Request note: ${guestNote}` : 'Request created',
+    note: orderGuestNote ? `Request note: ${orderGuestNote}` : 'Request created',
   } as never);
   if (initialEventError) {
     await admin.from('extras_orders').delete().eq('id', createdOrder.id);
@@ -208,11 +207,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   await notify(admin, {
     hostAccountId: property.host_account_id,
     kind: 'extras',
-    title: isPackage ? 'A guest wants to book a package' : 'A guest wants to add an enhancement',
+    title: `${parsed.data.guestName} (${session.guestDisplayName} party) wants to ${isPackage ? 'book a package' : 'add an enhancement'}`,
     body: notificationBody(translated, question),
     propertyId: session.propertyId,
     link: conversationId
-      ? `/dashboard/properties/${session.propertyId}/stays/${session.stayId}/conversations/${conversationId}${requestMessageId ? `?extrasMessage=${requestMessageId}` : ''}`
+      ? `/dashboard/properties/${session.propertyId}/stays/${session.stayId}/conversations/${conversationId}`
       : '/dashboard/extras',
   });
 

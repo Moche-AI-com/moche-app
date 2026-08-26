@@ -30,6 +30,7 @@ export function ExtrasWorkflow(props: { slug: string; offers: GuestExtraOffer[];
   const [selected, setSelected] = useState<GuestExtraOffer | null>(null);
   const [variant, setVariant] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [guestName, setGuestName] = useState('');
   const [note, setNote] = useState('');
   const [preferredFor, setPreferredFor] = useState('');
   const [busy, setBusy] = useState(false);
@@ -58,9 +59,10 @@ export function ExtrasWorkflow(props: { slug: string; offers: GuestExtraOffer[];
   async function submit() {
     if (!selected || busy) return;
     if (selected.options && selected.options.length > 0 && !variant && selected.kind !== 'package') { setError('Please choose an option before requesting this.'); return; }
+    if (!guestName.trim()) { setError('Please add your name so the host knows who requested this.'); return; }
     setBusy(true); setError(null);
     try {
-      const res = await fetch(`/api/guest/${props.slug}/extras-request`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ offerId: selected.id, quantity: selected.kind === 'package' ? undefined : quantity, variant: variant ?? undefined, note: note.trim() || undefined, preferredFor: preferredFor ? new Date(preferredFor).toISOString() : undefined }) });
+      const res = await fetch(`/api/guest/${props.slug}/extras-request`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ offerId: selected.id, quantity: selected.kind === 'package' ? undefined : quantity, variant: variant ?? undefined, guestName: guestName.trim(), note: note.trim() || undefined, preferredFor: preferredFor ? new Date(preferredFor).toISOString() : undefined }) });
       const json = await res.json().catch(() => ({}));
       if (res.status === 401) { props.onSessionExpired(); return; }
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Could not send your request.');
@@ -85,6 +87,7 @@ export function ExtrasWorkflow(props: { slug: string; offers: GuestExtraOffer[];
         <div className="gp-offer-title" style={{ fontSize: '1.15rem' }}>{selected.title}</div>{selected.price_text ? <div className="gp-offer-price">{selected.price_text}</div> : null}{selected.details || selected.description ? <p className="gp-step-sub" style={{ marginTop: 10 }}>{selected.details ?? selected.description}</p> : null}
         {selected.options && selected.options.length > 0 ? <div className="gp-field"><span className="gp-label">{selected.option_label ?? 'Options'}</span><div className="gp-variant-row">{selected.options.map((opt) => <button key={opt} type="button" className={`gp-variant ${variant === opt ? 'gp-variant-on' : ''}`} onClick={() => setVariant(opt)}>{opt}</button>)}</div></div> : null}
         {selected.kind !== 'package' ? <div className="gp-field"><span className="gp-label">Quantity{selected.unit_label ? ` (${selected.unit_label})` : ''}</span><div className="gp-stepper"><button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="Decrease quantity"><Minus size={16} aria-hidden /></button><span>{quantity}</span><button type="button" onClick={() => setQuantity((q) => Math.min(maxQty, q + 1))} aria-label="Increase quantity"><Plus size={16} aria-hidden /></button></div></div> : null}
+        <div className="gp-field"><label className="gp-label" htmlFor="gp-extra-name">Your name</label><input id="gp-extra-name" className="gp-input" value={guestName} onChange={(e) => setGuestName(e.target.value)} maxLength={120} placeholder="Who should the host expect this from?" required data-testid="input-extra-guest-name" /></div>
         <div className="gp-field"><label className="gp-label" htmlFor="gp-extra-when">Preferred time (optional)</label><input id="gp-extra-when" className="gp-input" type="datetime-local" value={preferredFor} onChange={(e) => setPreferredFor(e.target.value)} /></div>
         <div className="gp-field"><label className="gp-label" htmlFor="gp-extra-note">Note for the host (optional)</label><textarea id="gp-extra-note" className="gp-textarea" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Anything we should know?" /></div>
         {error ? <div className="gp-error" role="alert">{error}</div> : null}<button type="button" className="gp-btn gp-btn-primary" onClick={() => void submit()} disabled={busy}>{busy ? 'Sending…' : (selected.cta_label ?? 'Request')}</button>

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sparkles, ChevronRight, MessageSquareReply } from 'lucide-react';
 import {
-  EXTRAS_HEALTH_LABEL,
   extrasHealthFor,
   fulfillmentForHealth,
   isTerminalExtrasStatus,
@@ -40,6 +39,26 @@ function fmt(value: string | null) {
 }
 
 const HEALTH_ORDER: ExtrasHealthStatus[] = ['requested', 'in_progress', 'completed', 'cancelled'];
+
+// Host-facing workflow words requested for the queue. The stored lifecycle stays
+// unchanged; these labels map the active request states to the host's queue.
+const QUEUE_STATUS_LABEL: Record<ExtrasHealthStatus, string> = {
+  requested: 'New',
+  in_progress: 'In process',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+function queueStatusFor(order: ExtrasOrderRow): string {
+  const status = isRequestExpired(order) ? 'expired' : order.fulfillment_status;
+  if (status === 'needs_details' || status === 'payment_pending') return 'Waiting On Customer';
+  return QUEUE_STATUS_LABEL[extrasHealthFor(status)];
+}
+
+function requesterFor(order: ExtrasOrderRow): string | null {
+  const match = order.guest_note?.match(/^Requested by:\s*(.+)$/m);
+  return match?.[1]?.trim() || null;
+}
 
 // The granular actions that live on the Details panel rather than the health
 // dropdown — they capture data (a date, an estimate, a note) instead of being
@@ -146,6 +165,8 @@ function OrderRow({
 
   const displayedStatus = isRequestExpired(order) ? 'expired' : order.fulfillment_status;
   const health = extrasHealthFor(displayedStatus);
+  const queueStatus = queueStatusFor(order);
+  const requester = requesterFor(order);
   const terminal = isTerminalExtrasStatus(displayedStatus);
   const allowed = manageable && !terminal ? nextStatesFor(displayedStatus, 'host') : [];
   const hasDetailActions = DETAIL_TARGETS.some((to) => allowed.includes(to));
@@ -175,8 +196,9 @@ function OrderRow({
             {order.item_price_text && <span className="faint" style={{ fontWeight: 400 }}> &middot; {order.item_price_text}</span>}
           </p>
           <p className="report-list-meta">
+            {requester ? <><strong>Requested by {requester}</strong> &middot;{' '}</> : null}
             {propertyName} &middot;{' '}
-            <span data-testid="extras-order-status">{EXTRAS_HEALTH_LABEL[health]}</span> &middot;{' '}
+            <span className={`badge ${queueStatus === 'New' ? 'badge-coral' : queueStatus === 'Completed' ? 'badge-teal' : ''}`} data-testid="extras-order-status">{queueStatus}</span> &middot;{' '}
             {fmt(order.created_at)}
           </p>
           <p className="faint" style={{ fontSize: '.75rem', marginTop: '.2rem' }}>
@@ -212,7 +234,7 @@ function OrderRow({
             >
               {HEALTH_ORDER.map((h) => (
                 <option key={h} value={h} disabled={h === 'requested' && health !== 'requested'}>
-                  {EXTRAS_HEALTH_LABEL[h]}
+                  {QUEUE_STATUS_LABEL[h]}
                 </option>
               ))}
             </select>
