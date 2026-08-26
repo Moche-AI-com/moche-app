@@ -10,6 +10,7 @@ on:
     branches: [feat/extras-requests-workflow]
     paths:
       - 'supabase/migrations/**'
+      - '.github/workflows/gen-supabase-types.yml'
 
 # The workflow commits a file, so it needs write access to repository contents.
 permissions:
