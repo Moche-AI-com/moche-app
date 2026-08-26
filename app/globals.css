@@ -1877,3 +1877,153 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   .property-workspace-header { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); }
   .property-workspace-main { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); }
 }
+
+/* ============================================================
+   User management (Profile → User management)
+   Roster-first layout: members and pending invites get the full width and
+   inviting lives in a focused dialog. These rules used to ship inside the
+   client component as a <style jsx> block, but styled-jsx is not wired up
+   in this App Router build, so they never applied and the page rendered
+   unstyled — they live here now.
+   ============================================================ */
+.um-shell { display: flex; flex-direction: column; gap: var(--gap-section); max-width: 980px; }
+.um-header { max-width: 720px; }
+.um-header h1 { margin: 0; font-size: clamp(1.55rem, 3vw, 2.15rem); }
+.um-header > p:not(.um-eyebrow) { color: var(--text-muted); margin: .5rem 0 0; line-height: 1.55; }
+.um-eyebrow { color: var(--teal); font-size: .72rem; font-weight: 700; letter-spacing: .08em; margin: 0 0 .35rem; text-transform: uppercase; }
+.um-summary { display: flex; flex-wrap: wrap; gap: .55rem .9rem; margin-top: 1rem; }
+.um-summary span { background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: .8rem; padding: .35rem .65rem; }
+.um-summary strong { color: var(--text); }
+
+.um-toolbar { display: flex; gap: .75rem; align-items: center; }
+.um-search { flex: 1 1 auto; min-width: 0; }
+.um-toolbar .btn { flex-shrink: 0; }
+
+.um-panel { padding: var(--pad-card); min-width: 0; }
+.um-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.um-section-heading h2 { font-size: 1.1rem; margin: 0; }
+.um-section-heading p:not(.um-eyebrow) { color: var(--text-muted); font-size: .84rem; line-height: 1.45; margin: .35rem 0 0; }
+
+.um-list { display: grid; gap: .75rem; list-style: none; margin: 0; padding: 0; }
+.um-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .9rem; }
+.um-row-top { display: flex; align-items: flex-start; gap: .75rem; }
+.um-avatar {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 38px; height: 38px; border-radius: 999px;
+  background: color-mix(in srgb, var(--iris) 14%, var(--surface));
+  color: var(--iris); font-size: .8rem; font-weight: 800; letter-spacing: .02em;
+}
+.um-avatar-pending { background: color-mix(in srgb, var(--teal) 12%, var(--surface)); color: var(--teal); }
+.um-row-main { min-width: 0; flex: 1; }
+.um-row-title { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; min-width: 0; }
+.um-row-title strong { overflow-wrap: anywhere; }
+.um-row-meta { color: var(--text-faint); font-size: .78rem; line-height: 1.4; margin: .3rem 0 0; overflow-wrap: anywhere; }
+.um-capability-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .55rem; }
+.um-capability-chips .badge { font-size: .67rem; }
+.um-row-actions { display: flex; flex-wrap: wrap; gap: .45rem; align-items: flex-start; flex-shrink: 0; }
+.um-row-actions form { margin: 0; }
+.um-row-actions .alert { flex-basis: 100%; font-size: .78rem; margin: .2rem 0 0; }
+
+.um-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; padding: .5rem; background: color-mix(in srgb, var(--coral) 8%, var(--surface)); border: 1px solid var(--coral); border-radius: var(--radius-md); }
+.um-confirm span { color: var(--text); font-size: .78rem; font-weight: 600; }
+
+.um-editor { border-top: 1px solid var(--border); display: grid; gap: 1.1rem; margin-top: .9rem; padding-top: 1rem; }
+.um-editor .field { margin-bottom: 0; }
+.um-editor-actions { display: flex; justify-content: flex-end; }
+
+.um-step { display: grid; gap: .6rem; }
+.um-step-head { display: flex; align-items: center; gap: .55rem; }
+.um-step-head h3 { font-size: .92rem; margin: 0; }
+.um-step-num {
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--teal); font-size: .72rem; font-weight: 800; flex-shrink: 0;
+}
+.um-note { color: var(--text-muted); font-size: .78rem; line-height: 1.45; margin: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .5rem .65rem; }
+
+.um-role-grid { display: grid; gap: .55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.um-role-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); cursor: pointer; display: grid; gap: .25rem; min-height: 84px; padding: .8rem; text-align: left; transition: border-color var(--tr), box-shadow var(--tr), transform var(--tr); }
+.um-role-card:hover, .um-role-card:focus-visible { border-color: var(--teal); }
+.um-role-card:hover { transform: translateY(-1px); }
+.um-role-card.is-selected { background: color-mix(in srgb, var(--teal) 11%, var(--surface-2)); border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+.um-role-card strong { font-size: .86rem; }
+.um-role-card span { color: var(--text-muted); font-size: .75rem; line-height: 1.35; }
+
+.um-switch-list { display: grid; gap: .45rem; }
+.um-switch-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; color: var(--text-muted); font-size: .78rem; padding: 0 .1rem; }
+.um-switch-head strong { color: var(--text); }
+.um-link-button { background: none; border: none; padding: 0; cursor: pointer; color: var(--teal); font-size: .78rem; font-weight: 700; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--teal) 40%, transparent); }
+.um-link-button:hover { text-decoration-color: var(--teal); }
+.um-switch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  width: 100%; min-height: 44px; padding: .55rem .7rem;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md);
+  color: var(--text); cursor: pointer; text-align: left;
+  transition: border-color var(--tr), background var(--tr);
+}
+.um-switch-row:hover { border-color: var(--border-strong); }
+.um-switch-row.is-on { border-color: color-mix(in srgb, var(--teal) 45%, var(--border)); background: color-mix(in srgb, var(--teal) 7%, var(--surface-2)); }
+.um-switch-text { display: grid; gap: .1rem; min-width: 0; }
+.um-switch-label { font-size: .84rem; font-weight: 600; }
+.um-switch { position: relative; flex-shrink: 0; width: 34px; height: 20px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border-strong); transition: background var(--tr), border-color var(--tr); }
+.um-switch-thumb { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 999px; background: var(--text-muted); transition: transform var(--tr), background var(--tr); }
+.um-switch[data-on='true'] { background: var(--teal); border-color: var(--teal); }
+.um-switch[data-on='true'] .um-switch-thumb { transform: translateX(14px); background: #fff; }
+
+.um-master-toggle, .um-check { display: flex; align-items: center; gap: .65rem; min-height: 44px; padding: .6rem .7rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; }
+.um-master-toggle { margin-bottom: .55rem; }
+.um-master-toggle input, .um-check input { accent-color: var(--teal); flex: 0 0 auto; height: 18px; width: 18px; }
+.um-master-toggle span { display: grid; gap: .1rem; }
+.um-master-toggle strong { font-size: .84rem; }
+.um-master-toggle small { color: var(--text-faint); font-size: .72rem; line-height: 1.3; }
+.um-property-options { display: grid; gap: .45rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.um-check { color: var(--text); font-size: .8rem; line-height: 1.25; min-width: 0; }
+.um-check span { overflow-wrap: anywhere; }
+
+.um-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-md); color: var(--text); padding: 1.25rem; text-align: center; }
+.um-empty p { color: var(--text-muted); font-size: .83rem; line-height: 1.45; margin: .35rem 0 0; }
+
+.um-fresh-link { margin-top: .65rem; display: grid; gap: .45rem; }
+.um-copy-link { display: flex; gap: .45rem; }
+.um-copy-link .input { flex: 1; min-width: 0; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: .75rem; }
+.um-copy-link .btn { flex-shrink: 0; align-self: stretch; }
+
+/* Invite dialog */
+.um-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; flex-direction: column;
+  padding: 1rem; overflow-y: auto;
+  background: rgba(4, 10, 18, .55);
+  backdrop-filter: blur(4px);
+}
+.um-dialog { width: 100%; max-width: 640px; margin: auto; padding: var(--pad-card); border-radius: var(--radius-lg); }
+.um-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.um-dialog-head h2 { margin: 0; font-size: 1.25rem; }
+.um-dialog-sub { color: var(--text-muted); font-size: .84rem; line-height: 1.5; margin: .4rem 0 0; }
+.um-dialog-close {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-muted); cursor: pointer;
+  transition: color var(--tr), border-color var(--tr);
+}
+.um-dialog-close:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.um-invite-form { display: grid; gap: 1.25rem; }
+.um-dialog-actions { display: flex; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; }
+.um-sent-body { display: grid; gap: .75rem; margin-bottom: 1.25rem; }
+.um-sent-body p { color: var(--text-muted); font-size: .85rem; line-height: 1.55; margin: 0; }
+
+@media (max-width: 640px) {
+  .um-toolbar { flex-direction: column; align-items: stretch; }
+  .um-toolbar .btn { width: 100%; }
+  .um-role-grid, .um-property-options { grid-template-columns: 1fr; }
+  .um-row-top { flex-wrap: wrap; }
+  .um-row-actions { width: 100%; }
+  .um-row-actions .btn { min-height: 44px; }
+  .um-dialog-backdrop { padding: .5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .um-role-card, .um-switch-row, .um-switch, .um-switch-thumb, .um-dialog-close { transition: none; }
+  .um-role-card:hover { transform: none; }
+}
