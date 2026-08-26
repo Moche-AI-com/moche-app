@@ -1988,15 +1988,20 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
 .um-copy-link .input { flex: 1; min-width: 0; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: .75rem; }
 .um-copy-link .btn { flex-shrink: 0; align-self: stretch; }
 
-/* Invite dialog */
+/* Invite dialog. The backdrop is a plain block scroller, not a flex column:
+   flex + margin:auto centering clips the top of a dialog taller than the
+   viewport (the four-step invite form always is on a phone), putting the
+   close button out of reach behind the scroll-locked page. Block layout
+   scrolls naturally and the top is always reachable. */
 .um-dialog-backdrop {
   position: fixed; inset: 0; z-index: 80;
-  display: flex; flex-direction: column;
-  padding: 1rem; overflow-y: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4vh 1rem 1rem;
   background: rgba(4, 10, 18, .55);
   backdrop-filter: blur(4px);
 }
-.um-dialog { width: 100%; max-width: 640px; margin: auto; padding: var(--pad-card); border-radius: var(--radius-lg); }
+.um-dialog { width: 100%; max-width: 640px; margin: 0 auto; padding: var(--pad-card); border-radius: var(--radius-lg); }
 .um-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
 .um-dialog-head h2 { margin: 0; font-size: 1.25rem; }
 .um-dialog-sub { color: var(--text-muted); font-size: .84rem; line-height: 1.5; margin: .4rem 0 0; }
@@ -2013,14 +2018,23 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
 .um-sent-body { display: grid; gap: .75rem; margin-bottom: 1.25rem; }
 .um-sent-body p { color: var(--text-muted); font-size: .85rem; line-height: 1.55; margin: 0; }
 
+/* Rows start to squeeze between the 640px phone breakpoint and small tablets —
+   let the actions drop below the member line before they crush the content. */
+@media (max-width: 800px) {
+  .um-row-top { flex-wrap: wrap; }
+  .um-row-actions { width: 100%; }
+  .um-row-actions .um-confirm { width: 100%; }
+}
+
 @media (max-width: 640px) {
   .um-toolbar { flex-direction: column; align-items: stretch; }
   .um-toolbar .btn { width: 100%; }
   .um-role-grid, .um-property-options { grid-template-columns: 1fr; }
-  .um-row-top { flex-wrap: wrap; }
-  .um-row-actions { width: 100%; }
   .um-row-actions .btn { min-height: 44px; }
-  .um-dialog-backdrop { padding: .5rem; }
+  /* The invite form is taller than any phone viewport, so the dialog goes
+     full-screen rather than floating in a card with clipped edges. */
+  .um-dialog-backdrop { padding: 0; }
+  .um-dialog { max-width: none; min-height: 100%; border-radius: 0; border-left: 0; border-right: 0; padding-bottom: calc(var(--pad-card) + env(safe-area-inset-bottom)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
