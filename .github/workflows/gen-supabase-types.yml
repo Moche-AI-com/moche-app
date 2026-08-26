@@ -1,0 +1,57 @@
+name: Generate Supabase Types
+
+# Regenerates lib/database.types.ts from the live Supabase schema and commits
+# the result back to feat/extras-requests-workflow. Trigger it manually, or on
+# pushes to the branch that touch the SQL migrations.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/extras-requests-workflow]
+    paths:
+      - 'supabase/migrations/**'
+
+# The workflow commits a file, so it needs write access to repository contents.
+permissions:
+  contents: write
+
+concurrency:
+  group: gen-supabase-types-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gen-types:
+    name: Regenerate database types
+    runs-on: ubuntu-latest
+    # Only run on the target branch, never on forks (fork PRs cannot read secrets).
+    if: github.ref == 'refs/heads/feat/extras-requests-workflow'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/extras-requests-workflow
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Generate database types
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase gen types typescript \
+            --project-id sqpdzhannyskdiyuarhp \
+            --schema public \
+            > lib/database.types.ts
+
+      - name: Commit regenerated types
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- lib/database.types.ts; then
+            echo "No changes to lib/database.types.ts"
+            exit 0
+          fi
+          git add lib/database.types.ts
+          git commit -m "fix: regenerate Supabase database types"
+          git push origin HEAD:feat/extras-requests-workflow
