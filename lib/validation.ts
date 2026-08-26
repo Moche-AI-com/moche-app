@@ -173,7 +173,7 @@ export const ingestUrlSchema = z.object({
 // the host copies the listing details in directly. Standardized before embedding.
 export const ingestTextSchema = z.object({
   text: z.string().trim().min(20, 'Paste at least a sentence or two.').max(50000),
-  title: z.string().trim().max(200).optional(),
+  title: z.string().trim().max(200).optional().or(z.literal('')),
   category: brainCategoryEnum.default('documents'),
   visibility: brainVisibilityEnum.default('guest'),
   standardize: z.boolean().default(true),
@@ -330,7 +330,8 @@ export const extraOfferSchema = z.object({
   details: z.string().trim().max(2000).optional().or(z.literal('')),
 });
 
-// Add-on — guest requests an extra; routes through the existing escalation path.
+// Add-on — guest requests an extra. The guest's name is required so hosts can
+// track which person on a shared stay asked for the work.
 export const guestExtraRequestSchema = z.object({
   offerId: z.string().uuid(),
   // Advisory only, and optional so the existing one-tap request path keeps
@@ -338,6 +339,7 @@ export const guestExtraRequestSchema = z.object({
   // constraint (1..20) so a bad client is rejected here with a clean 400
   // instead of as a database constraint violation.
   quantity: z.number().int().min(1).max(20).optional(),
+  guestName: z.string().trim().min(1, 'Add your name so the host knows who requested this.').max(120),
   note: z.string().trim().max(1000).optional(),
   // Guest UX pass — the variant the guest picked ("Blue bike"). Validated
   // against the offer's own `options` array server-side, not here: only the
