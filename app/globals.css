@@ -5,9 +5,10 @@
 /* ============================================================
    MOCHE-AI — design tokens
    Light (soft cream) is the default. Dark is opt-in via [data-theme='dark']
-   and persisted in localStorage by <ThemeToggle>. A blocking inline script in
-   app/layout.tsx applies the stored choice before first paint, so the default
-   below is what an unknown visitor sees with no flash.
+   and persisted in localStorage by the theme controls (<ThemeToggle> on the
+   landing page, <ProfileMenu> in the dashboard header). A blocking inline
+   script in app/layout.tsx applies the stored choice before first paint, so
+   the default below is what an unknown visitor sees with no flash.
    ============================================================ */
 :root {
   --font-display: 'Clash Display', 'General Sans', system-ui, sans-serif;
@@ -446,6 +447,78 @@
     font-weight: 600;
   }
 
+  /* ---- Account profile menu ---------------------------------------------
+     Person-icon + name dropdown that replaced the flat Profile tab and the
+     standalone header theme toggle. Anchored to its trigger like the
+     notification panel, but stays a compact menu on phones rather than
+     becoming a sheet — click-outside and Escape live in <ProfileMenu>. */
+  .profile-menu-root { position: relative; }
+  .profile-menu-trigger {
+    display: inline-flex; align-items: center; gap: .45rem;
+    min-height: 44px; padding: 0 .55rem 0 .4rem;
+    border: 1px solid var(--border-strong); border-radius: 9999px;
+    background: var(--surface-glass); backdrop-filter: blur(10px);
+    color: var(--text); font-weight: 600; font-size: .85rem;
+    cursor: pointer; white-space: nowrap;
+    transition: border-color var(--tr), background var(--tr);
+  }
+  .profile-menu-trigger:hover { border-color: var(--teal); }
+  .profile-menu-trigger-active { border-color: var(--teal); color: var(--teal); }
+  .profile-menu-trigger-active .profile-menu-avatar { color: var(--teal); border-color: var(--teal); }
+  .profile-menu-avatar {
+    display: inline-grid; place-items: center; flex-shrink: 0;
+    width: 26px; height: 26px; border-radius: 9999px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  /* Long names ellipsize rather than stretch the header. */
+  .profile-menu-name {
+    max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .profile-menu-chevron { color: var(--text-muted); transition: transform var(--tr); }
+  .profile-menu-chevron[data-open='true'] { transform: rotate(180deg); }
+  .profile-menu-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    width: 240px;
+    max-width: calc(100vw - 2rem);
+    padding: .35rem;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 32px rgba(0,0,0,.28);
+    z-index: 60;
+    display: flex; flex-direction: column;
+  }
+  .profile-menu-item {
+    display: flex; align-items: center; gap: .6rem;
+    width: 100%; min-height: 44px; padding: 0 .75rem;
+    border: none; border-radius: var(--radius-sm);
+    background: transparent; color: var(--text);
+    font-size: .88rem; font-weight: 500; text-align: left;
+    cursor: pointer; text-decoration: none;
+    transition: background var(--tr), color var(--tr);
+  }
+  .profile-menu-item:hover { background: var(--surface-2); }
+  .profile-menu-item svg { color: var(--text-muted); flex-shrink: 0; }
+  .profile-menu-signout, .profile-menu-signout svg { color: var(--coral); }
+  /* The theme switch is its own row: icon + label left, track pinned right. */
+  .profile-menu-switch {
+    margin-left: auto; position: relative; flex-shrink: 0;
+    width: 34px; height: 20px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border-strong);
+    transition: background var(--tr), border-color var(--tr);
+  }
+  .profile-menu-switch-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 999px;
+    background: var(--text-muted);
+    transition: transform var(--tr), background var(--tr);
+  }
+  .profile-menu-switch[data-on='true'] { background: var(--teal); border-color: var(--teal); }
+  .profile-menu-switch[data-on='true'] .profile-menu-switch-thumb { transform: translateX(14px); background: #fff; }
+  .profile-menu-divider { height: 1px; margin: .35rem .5rem; background: var(--border); }
+
   .badge {
     display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .6rem;
     border-radius: 9999px; font-size: .72rem; font-weight: 600; border: 1px solid var(--border-strong);
@@ -752,6 +825,9 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
      purely decorative reinforcement of the read-out. */
   .coverage-cluster, .coverage-node, .coverage-hub { transition: none !important; }
   .coverage-node.is-active { transform: none; }
+  /* The profile menu keeps its state changes (chevron, switch) but drops movement. */
+  .profile-menu-trigger, .profile-menu-item, .profile-menu-chevron,
+  .profile-menu-switch, .profile-menu-switch-thumb { transition: none; }
 }
 
 /* ============================================================
@@ -1708,8 +1784,7 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   align-self: flex-end;
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 40px; height: 40px;
   border-radius: 12px;
   border: 1px solid transparent;
   background: var(--btn-primary-bg);

@@ -63,6 +63,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <DashboardNav
         unread={count ?? 0}
         notifications={recentNotifications ?? []}
+        displayName={(ctx.profile.full_name ?? '').trim() || ctx.profile.email}
         isOwner={ctx.account.owner_id === ctx.user.id}
       />
       <main className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
