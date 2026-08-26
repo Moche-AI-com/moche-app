@@ -70,6 +70,15 @@ function timeLabel(value: string | null) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+// New request messages carry message_kind='extras_request'. Messages created
+// before that marker shipped are plain text, so recognize their deterministic
+// request lead lines too — production history must get the same teal bubble.
+function isExtrasRequestMessage(message: ChatMessage): boolean {
+  if (message.messageKind === 'extras_request') return true;
+  if (message.role !== 'guest') return false;
+  return message.content.startsWith('Enhancement request:') || message.content.startsWith('Package request:');
+}
+
 // Scoped styles for the highlighted escalation/Extras Reply CTAs. Kept local
 // (the GuestPortal PORTAL_CSS pattern) so globals.css stays untouched.
 const CONV_CSS = `
@@ -205,7 +214,7 @@ export function ConversationThread({
     setEscalationOutcome('resolved');
     setLearnFromReply(false);
     setActiveEscalation(null);
-    setActiveExtrasOrder(message.messageKind === 'extras_request' ? latestExtrasOrder : null);
+    setActiveExtrasOrder(isExtrasRequestMessage(message) ? latestExtrasOrder : null);
     setExtrasOutcome('accepted');
     setNotice(null);
     composerRef.current?.focus();
@@ -280,7 +289,7 @@ export function ConversationThread({
           messages.map((message) => {
             const host = message.role === 'host';
             const escalation = message.messageKind === 'ai_escalation' || Boolean(message.escalationId);
-            const extrasRequest = message.messageKind === 'extras_request';
+            const extrasRequest = isExtrasRequestMessage(message);
             const esc = message.escalationId ? escalationById.get(message.escalationId) ?? null : null;
             const unresolvedEscalation = escalation && (!esc || (esc.status !== 'resolved' && esc.status !== 'dismissed'));
             const extrasOrder = extrasRequest ? latestExtrasOrder : null;
@@ -349,11 +358,11 @@ export function ConversationThread({
       </div>
 
       {replyTo && (
-        <div className="chat-reply-quote" style={replyTo.messageKind === 'extras_request' ? { borderLeftColor: 'var(--teal)' } : undefined}>
+        <div className="chat-reply-quote" style={isExtrasRequestMessage(replyTo) ? { borderLeftColor: 'var(--teal)' } : undefined}>
           <div style={{ fontSize: '.84rem' }}>
             {replyTo.escalationId
               ? 'Replying to escalation'
-              : replyTo.messageKind === 'extras_request'
+              : isExtrasRequestMessage(replyTo)
                 ? 'Replying to Extras request'
                 : 'Replying to'}: “{replyTo.content.slice(0, 140)}{replyTo.content.length > 140 ? '…' : ''}”
           </div>
