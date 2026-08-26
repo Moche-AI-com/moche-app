@@ -24,7 +24,9 @@ interface NotifyParams {
 
 // Host notification kinds that fan out to email.
 // 'system' added for WS-1 visit-code lockout alerts (repeated failed attempts).
-const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance', 'billing', 'system']);
+// 'extras' added for guest enhancement requests — a paid-work signal the host
+// should never miss because it sat silently in a queue.
+const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance', 'billing', 'system', 'extras']);
 // Host notification kinds that MAY fan out to SMS (subject to all gates below).
 const SMS_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance']);
 
@@ -310,7 +312,7 @@ export async function notifyGuestOtp(p: { contact: string; code: string; devFall
     const body = new URLSearchParams({
       To: p.contact,
       From: auth.fromNumber,
-      Body: `Your Moche-AI verification code is: ${p.code}\n\nExpires in 10 minutes. Never share this code.`,
+      Body: `Moche-AI verification code: ${p.code}\n\nExpires in 10 minutes. Never share this code.`,
     });
 
     const res = await fetch(

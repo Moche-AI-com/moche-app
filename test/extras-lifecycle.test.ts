@@ -24,13 +24,15 @@ describe('extras lifecycle', () => {
     expect(canTransition('requested', 'scheduled', 'guest')).toBe(false);
     expect(canTransition('requested', 'accepted', 'guest')).toBe(false);
     expect(canTransition('needs_details', 'accepted', 'guest')).toBe(false);
-    expect(canTransition('accepted', 'fulfilled', 'host')).toBe(false);
+    // Hosts can complete work directly from any active state; the granular
+    // estimate/schedule states remain optional record-keeping, not ceremony.
+    expect(canTransition('accepted', 'fulfilled', 'host')).toBe(true);
     expect(canTransition('scheduled', 'needs_details', 'host')).toBe(false);
   });
 
   it('only exposes actions for the relevant actor', () => {
     expect(nextStatesFor('needs_details', 'guest')).toEqual(['requested', 'canceled']);
-    expect(nextStatesFor('needs_details', 'host')).toEqual(['accepted', 'declined', 'canceled']);
+    expect(nextStatesFor('needs_details', 'host')).toEqual(['accepted', 'fulfilled', 'declined', 'canceled']);
     expect(nextStatesFor('accepted', 'guest')).toEqual([]);
   });
 

@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -66,6 +66,124 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_batches: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          property_id: string
+          stay_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          property_id: string
+          stay_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          property_id?: string
+          stay_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_batches_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_batches_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_batches_stay_id_fkey"
+            columns: ["stay_id"]
+            isOneToOne: false
+            referencedRelation: "stays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_recipients: {
+        Row: {
+          batch_id: string
+          conversation_id: string
+          created_at: string
+          guest_identity_id: string | null
+          guest_session_id: string | null
+          id: string
+          status: string
+          stay_guest_id: string | null
+        }
+        Insert: {
+          batch_id: string
+          conversation_id: string
+          created_at?: string
+          guest_identity_id?: string | null
+          guest_session_id?: string | null
+          id?: string
+          status?: string
+          stay_guest_id?: string | null
+        }
+        Update: {
+          batch_id?: string
+          conversation_id?: string
+          created_at?: string
+          guest_identity_id?: string | null
+          guest_session_id?: string | null
+          id?: string
+          status?: string
+          stay_guest_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_recipients_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "announcement_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_recipients_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_recipients_guest_identity_id_fkey"
+            columns: ["guest_identity_id"]
+            isOneToOne: false
+            referencedRelation: "guest_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_recipients_guest_session_id_fkey"
+            columns: ["guest_session_id"]
+            isOneToOne: false
+            referencedRelation: "guest_access_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_recipients_stay_guest_id_fkey"
+            columns: ["stay_guest_id"]
+            isOneToOne: false
+            referencedRelation: "stay_guests"
             referencedColumns: ["id"]
           },
         ]
@@ -271,6 +389,7 @@ export type Database = {
           id: string
           ingestion_error: string | null
           property_id: string
+          section: string | null
           source_type: Database["public"]["Enums"]["source_type"]
           status: Database["public"]["Enums"]["processing_status"]
           title: string
@@ -286,6 +405,7 @@ export type Database = {
           id?: string
           ingestion_error?: string | null
           property_id: string
+          section?: string | null
           source_type?: Database["public"]["Enums"]["source_type"]
           status?: Database["public"]["Enums"]["processing_status"]
           title: string
@@ -301,6 +421,7 @@ export type Database = {
           id?: string
           ingestion_error?: string | null
           property_id?: string
+          section?: string | null
           source_type?: Database["public"]["Enums"]["source_type"]
           status?: Database["public"]["Enums"]["processing_status"]
           title?: string
@@ -348,7 +469,7 @@ export type Database = {
         Insert: {
           audience: Database["public"]["Enums"]["audience_tier"]
           confidence?: number
-          created_at: string
+          created_at?: string
           created_by?: string | null
           field_id: string
           id?: string
@@ -456,35 +577,77 @@ export type Database = {
       }
       conversations: {
         Row: {
+          channel: string
           created_at: string
+          guest_identity_id: string | null
+          guest_read_at: string | null
+          guest_session_id: string | null
+          host_read_at: string | null
           id: string
+          last_message_at: string | null
           property_id: string
+          stay_guest_id: string | null
           stay_id: string
           title: string | null
           updated_at: string
         }
         Insert: {
+          channel?: string
           created_at?: string
+          guest_identity_id?: string | null
+          guest_read_at?: string | null
+          guest_session_id?: string | null
+          host_read_at?: string | null
           id?: string
+          last_message_at?: string | null
           property_id: string
+          stay_guest_id?: string | null
           stay_id: string
           title?: string | null
           updated_at?: string
         }
         Update: {
+          channel?: string
           created_at?: string
+          guest_identity_id?: string | null
+          guest_read_at?: string | null
+          guest_session_id?: string | null
+          host_read_at?: string | null
           id?: string
+          last_message_at?: string | null
           property_id?: string
+          stay_guest_id?: string | null
           stay_id?: string
           title?: string | null
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "conversations_guest_identity_id_fkey"
+            columns: ["guest_identity_id"]
+            isOneToOne: false
+            referencedRelation: "guest_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_guest_session_id_fkey"
+            columns: ["guest_session_id"]
+            isOneToOne: false
+            referencedRelation: "guest_access_sessions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "conversations_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_stay_guest_id_fkey"
+            columns: ["stay_guest_id"]
+            isOneToOne: false
+            referencedRelation: "stay_guests"
             referencedColumns: ["id"]
           },
           {
@@ -512,7 +675,7 @@ export type Database = {
         }
         Insert: {
           brain_item_id?: string | null
-          category: Database["public"]["Enums"]["brain_category"]
+          category?: Database["public"]["Enums"]["brain_category"]
           chunk_index?: number
           content: string
           created_at?: string
@@ -632,6 +795,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      early_access_signups: {
+        Row: {
+          created_at: string
+          desired_plan: string | null
+          email: string
+          features_wanted: string[]
+          id: string
+          name: string | null
+          notes: string | null
+          phone: string | null
+          property_count: string | null
+          property_locations: string | null
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          desired_plan?: string | null
+          email: string
+          features_wanted?: string[]
+          id?: string
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          property_count?: string | null
+          property_locations?: string | null
+          source?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          desired_plan?: string | null
+          email?: string
+          features_wanted?: string[]
+          id?: string
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          property_count?: string | null
+          property_locations?: string | null
+          source?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       escalations: {
         Row: {
@@ -859,7 +1067,7 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
-          actor_type?: Database["public"]["Enums"]["extras_order_event_actor"]
+          actor_type: Database["public"]["Enums"]["extras_order_event_actor"]
           created_at?: string
           from_status?:
             | Database["public"]["Enums"]["extras_fulfillment_status"]
@@ -868,7 +1076,7 @@ export type Database = {
           note?: string | null
           order_id: string
           property_id: string
-          to_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
+          to_status: Database["public"]["Enums"]["extras_fulfillment_status"]
         }
         Update: {
           actor_id?: string | null
@@ -917,7 +1125,10 @@ export type Database = {
           expires_at: string | null
           extra_id: string | null
           fulfillment_status: Database["public"]["Enums"]["extras_fulfillment_status"]
+          guest_identity_id: string | null
           guest_note: string | null
+          guest_session_id: string | null
+          host_conversation_id: string | null
           host_note: string | null
           id: string
           item_price_text: string | null
@@ -946,7 +1157,10 @@ export type Database = {
           expires_at?: string | null
           extra_id?: string | null
           fulfillment_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
+          guest_identity_id?: string | null
           guest_note?: string | null
+          guest_session_id?: string | null
+          host_conversation_id?: string | null
           host_note?: string | null
           id?: string
           item_price_text?: string | null
@@ -960,7 +1174,7 @@ export type Database = {
           quantity?: number
           quote_currency?: string
           quoted_amount_cents?: number | null
-          request_number?: string
+          request_number: string
           scheduled_for?: string | null
           status?: Database["public"]["Enums"]["extras_order_status"]
           stay_id?: string | null
@@ -975,7 +1189,10 @@ export type Database = {
           expires_at?: string | null
           extra_id?: string | null
           fulfillment_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
+          guest_identity_id?: string | null
           guest_note?: string | null
+          guest_session_id?: string | null
+          host_conversation_id?: string | null
           host_note?: string | null
           id?: string
           item_price_text?: string | null
@@ -1015,6 +1232,27 @@ export type Database = {
             columns: ["extra_id"]
             isOneToOne: false
             referencedRelation: "guest_extras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_orders_guest_identity_id_fkey"
+            columns: ["guest_identity_id"]
+            isOneToOne: false
+            referencedRelation: "guest_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_orders_guest_session_id_fkey"
+            columns: ["guest_session_id"]
+            isOneToOne: false
+            referencedRelation: "guest_access_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extras_orders_host_conversation_id_fkey"
+            columns: ["host_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
           {
@@ -1059,26 +1297,26 @@ export type Database = {
         }
         Insert: {
           applicability?: string
-          default_audience?: Database["public"]["Enums"]["audience_tier"]
-          domain?: string
+          default_audience: Database["public"]["Enums"]["audience_tier"]
+          domain: string
           enum_values?: Json | null
           field_id: string
           gap_weight?: number
           hard_block?: boolean
-          interview_prompt?: string
-          label?: string
+          interview_prompt: string
+          label: string
           on_failure_field?: string | null
-          phase?: string[]
-          registry_version?: number
+          phase: string[]
+          registry_version: number
           requires_on_failure?: boolean
           scrape_hint?: string | null
-          sensitivity_tier?: Database["public"]["Enums"]["sensitivity_tier"]
-          storage_column?: string
-          storage_table?: string
+          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
+          storage_column: string
+          storage_table: string
           storage_vault?: boolean
           system_section?: boolean
           ttl_days?: number | null
-          type?: string
+          type: string
         }
         Update: {
           applicability?: string
@@ -1147,14 +1385,14 @@ export type Database = {
           created_by?: string | null
           expires_at?: string | null
           id?: string
-          kind?: string
+          kind: string
           max_redemptions?: number
-          property_id?: string
+          property_id: string
           redemption_count?: number
           require_otp?: boolean
           revoked_at?: string | null
           stay_id?: string | null
-          token_hash?: string
+          token_hash: string
         }
         Update: {
           code_attempt_count?: number
@@ -1207,14 +1445,17 @@ export type Database = {
           expires_at: string
           guest_contact: string | null
           guest_contact_type: string | null
+          guest_identity_id: string | null
           id: string
           ip_hash: string | null
           notification_consent: boolean
           notification_consent_at: string | null
           property_id: string
+          registered_at: string | null
           revoked_at: string | null
           session_token_hash: string
           status: Database["public"]["Enums"]["access_status"]
+          stay_guest_id: string | null
           stay_id: string
           user_agent: string | null
           verified_at: string | null
@@ -1224,15 +1465,18 @@ export type Database = {
           expires_at: string
           guest_contact?: string | null
           guest_contact_type?: string | null
+          guest_identity_id?: string | null
           id?: string
           ip_hash?: string | null
           notification_consent?: boolean
           notification_consent_at?: string | null
           property_id: string
+          registered_at?: string | null
           revoked_at?: string | null
           session_token_hash: string
           status?: Database["public"]["Enums"]["access_status"]
-          stay_id?: string
+          stay_guest_id?: string | null
+          stay_id: string
           user_agent?: string | null
           verified_at?: string | null
         }
@@ -1241,14 +1485,17 @@ export type Database = {
           expires_at?: string
           guest_contact?: string | null
           guest_contact_type?: string | null
+          guest_identity_id?: string | null
           id?: string
           ip_hash?: string | null
           notification_consent?: boolean
           notification_consent_at?: string | null
           property_id?: string
+          registered_at?: string | null
           revoked_at?: string | null
           session_token_hash?: string
           status?: Database["public"]["Enums"]["access_status"]
+          stay_guest_id?: string | null
           stay_id?: string
           user_agent?: string | null
           verified_at?: string | null
@@ -1359,7 +1606,9 @@ export type Database = {
           contact_type: string
           created_at: string
           display_name: string | null
+          first_name: string | null
           id: string
+          last_name: string | null
           property_id: string
         }
         Insert: {
@@ -1368,7 +1617,9 @@ export type Database = {
           contact_type?: string
           created_at?: string
           display_name?: string | null
+          first_name?: string | null
           id?: string
+          last_name?: string | null
           property_id: string
         }
         Update: {
@@ -1377,7 +1628,9 @@ export type Database = {
           contact_type?: string
           created_at?: string
           display_name?: string | null
+          first_name?: string | null
           id?: string
+          last_name?: string | null
           property_id?: string
         }
         Relationships: [
@@ -1761,8 +2014,8 @@ export type Database = {
           key: string
           label: string
           updated_at?: string
-          version?: number
-          weight_hint?: number
+          version: number
+          weight_hint: number
           why: string
         }
         Update: {
@@ -1794,13 +2047,13 @@ export type Database = {
         Insert: {
           accepted_at?: string
           context?: string
-          document_slug?: string
-          document_version?: string
+          document_slug: string
+          document_version: string
           host_account_id?: string | null
           id?: string
           ip?: unknown
           user_agent?: string | null
-          user_id?: string
+          user_id: string
         }
         Update: {
           accepted_at?: string
@@ -1879,15 +2132,15 @@ export type Database = {
           can_resolve_maintenance?: boolean
           can_view_analytics?: boolean
           created_at?: string
-          email?: string
-          expires_at?: string
+          email: string
+          expires_at: string
           host_account_id: string
           id?: string
           invited_by: string
           property_ids?: string[]
           revoked_at?: string | null
-          role?: Database["public"]["Enums"]["member_role"]
-          token_hash?: string
+          role: Database["public"]["Enums"]["member_role"]
+          token_hash: string
         }
         Update: {
           accepted_at?: string | null
@@ -1943,9 +2196,9 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          message_id?: string
+          message_id: string
           property_id: string
-          value?: Database["public"]["Enums"]["feedback_value"]
+          value: Database["public"]["Enums"]["feedback_value"]
         }
         Update: {
           created_at?: string
@@ -1979,11 +2232,16 @@ export type Database = {
           content: string
           conversation_id: string
           created_at: string
+          escalation_id: string | null
+          host_translation: string | null
+          host_translation_lang: string | null
           id: string
           intent: Database["public"]["Enums"]["intent_type"] | null
           latency_ms: number | null
+          message_kind: string
           model: string | null
           property_id: string
+          reply_to_message_id: string | null
           role: Database["public"]["Enums"]["conversation_role"]
           sources: Json | null
         }
@@ -1994,11 +2252,16 @@ export type Database = {
           content: string
           conversation_id: string
           created_at?: string
+          escalation_id?: string | null
+          host_translation?: string | null
+          host_translation_lang?: string | null
           id?: string
           intent?: Database["public"]["Enums"]["intent_type"] | null
           latency_ms?: number | null
+          message_kind?: string
           model?: string | null
           property_id: string
+          reply_to_message_id?: string | null
           role: Database["public"]["Enums"]["conversation_role"]
           sources?: Json | null
         }
@@ -2009,11 +2272,16 @@ export type Database = {
           content?: string
           conversation_id?: string
           created_at?: string
+          escalation_id?: string | null
+          host_translation?: string | null
+          host_translation_lang?: string | null
           id?: string
           intent?: Database["public"]["Enums"]["intent_type"] | null
           latency_ms?: number | null
+          message_kind?: string
           model?: string | null
           property_id?: string
+          reply_to_message_id?: string | null
           role?: Database["public"]["Enums"]["conversation_role"]
           sources?: Json | null
         }
@@ -2033,10 +2301,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "messages_escalation_id_fkey"
+            columns: ["escalation_id"]
+            isOneToOne: false
+            referencedRelation: "escalations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "messages_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
@@ -2204,7 +2486,7 @@ export type Database = {
           host_account_id: string
           id?: string
           invited_email?: string | null
-          profile_id?: string
+          profile_id: string
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
@@ -2259,9 +2541,9 @@ export type Database = {
           lat?: number | null
           lon?: number | null
           name: string
-          normalized_name?: string
+          normalized_name: string
           phone?: string | null
-          provider?: string
+          provider: string
           provider_payload?: Json | null
           provider_place_id?: string | null
           website?: string | null
@@ -2305,7 +2587,7 @@ export type Database = {
           page?: string | null
           property_id?: string | null
           rating?: number | null
-          source?: string
+          source: string
         }
         Update: {
           comment?: string | null
@@ -2367,7 +2649,7 @@ export type Database = {
           deletion_requested_at?: string | null
           email: string
           full_name?: string | null
-          id?: string
+          id: string
           is_admin?: boolean
           mfa_ready?: boolean
           phone?: string | null
@@ -2905,9 +3187,11 @@ export type Database = {
       property_members: {
         Row: {
           can_edit_brain: boolean
+          can_publish_guest_answers: boolean
           can_receive_escalations: boolean
           can_reply_guests: boolean
           can_resolve_maintenance: boolean
+          can_send_announcements: boolean
           can_view_analytics: boolean
           created_at: string
           id: string
@@ -2917,21 +3201,25 @@ export type Database = {
         }
         Insert: {
           can_edit_brain?: boolean
+          can_publish_guest_answers?: boolean
           can_receive_escalations?: boolean
           can_reply_guests?: boolean
           can_resolve_maintenance?: boolean
+          can_send_announcements?: boolean
           can_view_analytics?: boolean
           created_at?: string
           id?: string
           profile_id: string
-          property_id?: string
+          property_id: string
           role?: Database["public"]["Enums"]["member_role"]
         }
         Update: {
           can_edit_brain?: boolean
+          can_publish_guest_answers?: boolean
           can_receive_escalations?: boolean
           can_reply_guests?: boolean
           can_resolve_maintenance?: boolean
+          can_send_announcements?: boolean
           can_view_analytics?: boolean
           created_at?: string
           id?: string
@@ -3232,10 +3520,10 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
-          name?: string
+          name: string
           price_level?: number | null
           priority_weight?: number
-          property_id?: string
+          property_id: string
           tags?: string[]
           url?: string | null
           visibility?: Database["public"]["Enums"]["brain_visibility"]
@@ -3274,14 +3562,83 @@ export type Database = {
           },
         ]
       }
+      service_report_shares: {
+        Row: {
+          body_snapshot: string
+          channel: string
+          created_at: string
+          destination_hash: string
+          destination_last4: string | null
+          error: string | null
+          id: string
+          property_id: string
+          sent_by: string | null
+          service_request_id: string
+          status: string
+        }
+        Insert: {
+          body_snapshot: string
+          channel: string
+          created_at?: string
+          destination_hash: string
+          destination_last4?: string | null
+          error?: string | null
+          id?: string
+          property_id: string
+          sent_by?: string | null
+          service_request_id: string
+          status?: string
+        }
+        Update: {
+          body_snapshot?: string
+          channel?: string
+          created_at?: string
+          destination_hash?: string
+          destination_last4?: string | null
+          error?: string | null
+          id?: string
+          property_id?: string
+          sent_by?: string | null
+          service_request_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_report_shares_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_report_shares_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_report_shares_service_request_id_fkey"
+            columns: ["service_request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_requests: {
         Row: {
           access_instructions: string | null
           archived_at: string | null
           assigned_contact_id: string | null
+          assigned_profile_id: string | null
           conversation_id: string | null
           created_at: string
           description: string
+          edited_at: string | null
+          edited_by: string | null
+          edited_details: string | null
+          edited_summary: string | null
           guest_availability: string | null
           id: string
           interview_status: string
@@ -3308,9 +3665,14 @@ export type Database = {
           access_instructions?: string | null
           archived_at?: string | null
           assigned_contact_id?: string | null
+          assigned_profile_id?: string | null
           conversation_id?: string | null
           created_at?: string
           description: string
+          edited_at?: string | null
+          edited_by?: string | null
+          edited_details?: string | null
+          edited_summary?: string | null
           guest_availability?: string | null
           id?: string
           interview_status?: string
@@ -3337,9 +3699,14 @@ export type Database = {
           access_instructions?: string | null
           archived_at?: string | null
           assigned_contact_id?: string | null
+          assigned_profile_id?: string | null
           conversation_id?: string | null
           created_at?: string
           description?: string
+          edited_at?: string | null
+          edited_by?: string | null
+          edited_details?: string | null
+          edited_summary?: string | null
           guest_availability?: string | null
           id?: string
           interview_status?: string
@@ -3371,10 +3738,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "service_requests_assigned_profile_id_fkey"
+            columns: ["assigned_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "service_requests_conversation_id_fkey"
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_requests_edited_by_fkey"
+            columns: ["edited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -3437,6 +3818,158 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stay_guests: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          guest_identity_id: string | null
+          guest_label: string | null
+          id: string
+          notification_consent: boolean
+          notification_consent_at: string | null
+          phone_hash: string | null
+          phone_last4: string | null
+          pin_attempt_count: number
+          pin_expires_at: string | null
+          pin_first_used_at: string | null
+          pin_hash: string | null
+          pin_revoked_at: string | null
+          pin_secret_ref: string | null
+          pin_stay_hash: string | null
+          property_id: string
+          stay_id: string
+          terms_accepted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          guest_identity_id?: string | null
+          guest_label?: string | null
+          id?: string
+          notification_consent?: boolean
+          notification_consent_at?: string | null
+          phone_hash?: string | null
+          phone_last4?: string | null
+          pin_attempt_count?: number
+          pin_expires_at?: string | null
+          pin_first_used_at?: string | null
+          pin_hash?: string | null
+          pin_revoked_at?: string | null
+          pin_secret_ref?: string | null
+          pin_stay_hash?: string | null
+          property_id: string
+          stay_id: string
+          terms_accepted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          guest_identity_id?: string | null
+          guest_label?: string | null
+          id?: string
+          notification_consent?: boolean
+          notification_consent_at?: string | null
+          phone_hash?: string | null
+          phone_last4?: string | null
+          pin_attempt_count?: number
+          pin_expires_at?: string | null
+          pin_first_used_at?: string | null
+          pin_hash?: string | null
+          pin_revoked_at?: string | null
+          pin_secret_ref?: string | null
+          pin_stay_hash?: string | null
+          property_id?: string
+          stay_id?: string
+          terms_accepted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stay_guests_guest_identity_id_fkey"
+            columns: ["guest_identity_id"]
+            isOneToOne: false
+            referencedRelation: "guest_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stay_guests_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stay_guests_stay_id_fkey"
+            columns: ["stay_id"]
+            isOneToOne: false
+            referencedRelation: "stays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stay_share_invites: {
+        Row: {
+          channel: string
+          created_at: string
+          destination_hash: string
+          destination_last4: string | null
+          error: string | null
+          id: string
+          property_id: string
+          sent_by: string | null
+          status: string
+          stay_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          destination_hash: string
+          destination_last4?: string | null
+          error?: string | null
+          id?: string
+          property_id: string
+          sent_by?: string | null
+          status?: string
+          stay_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          destination_hash?: string
+          destination_last4?: string | null
+          error?: string | null
+          id?: string
+          property_id?: string
+          sent_by?: string | null
+          status?: string
+          stay_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stay_share_invites_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stay_share_invites_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stay_share_invites_stay_id_fkey"
+            columns: ["stay_id"]
+            isOneToOne: false
+            referencedRelation: "stays"
             referencedColumns: ["id"]
           },
         ]
@@ -3698,6 +4231,11 @@ export type Database = {
           title: string
         }[]
       }
+      portal_code_read: { Args: { p_secret_id: string }; Returns: string }
+      portal_code_store: {
+        Args: { p_name: string; p_secret: string }
+        Returns: string
+      }
       property_import_provenance: {
         Args: { p_property_id: string }
         Returns: {
@@ -3825,6 +4363,7 @@ export type Database = {
         | "billing"
         | "review_nudge"
         | "system"
+        | "extras"
       place_recommendation_status: "suggested" | "approved" | "hidden"
       processing_status: "pending" | "processing" | "ready" | "failed" | "stale"
       property_import_job_status:
@@ -4113,6 +4652,7 @@ export const Constants = {
         "billing",
         "review_nudge",
         "system",
+        "extras",
       ],
       place_recommendation_status: ["suggested", "approved", "hidden"],
       processing_status: ["pending", "processing", "ready", "failed", "stale"],
