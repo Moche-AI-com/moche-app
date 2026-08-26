@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireSession, type SessionContext } from '@/lib/auth/guards';
 import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
+import { publicEnv } from '@/lib/env';
 import {
   memberCapabilityUpdateSchema,
   memberInviteSchema,
@@ -22,6 +23,13 @@ import { log } from '@/lib/log';
 export interface MemberActionState {
   error?: string;
   success?: string;
+  /**
+   * The freshly minted invitation URL, returned once at creation/resend so the
+   * owner can copy it directly. The raw token only ever appears here and in the
+   * email — the table keeps its hash — and only the owner-gated session that
+   * created it ever receives it.
+   */
+  inviteLink?: string;
 }
 
 const inviteIdSchema = z.string().uuid();
@@ -51,6 +59,10 @@ function parseCapabilities(role: FormDataEntryValue | null, formData: FormData):
   } catch {
     return null;
   }
+}
+
+function inviteLinkFor(token: string): string {
+  return `${publicEnv.appUrl}/invite/${encodeURIComponent(token)}`;
 }
 
 async function ownerContext(): Promise<{ ctx: SessionContext } | { error: MemberActionState }> {
@@ -224,11 +236,15 @@ export async function inviteMemberAction(
 
   revalidatePath('/dashboard/profile/user-management');
 
-  // Identical success wording protects whether this email already has an account.
+  // Identical success wording protects whether this email already has an
+  // account. The link comes back either way: when the email fails it is the
+  // fallback delivery path, and when it succeeds it saves the owner a resend
+  // if the message lands in spam.
   return {
     success: sent
       ? 'Invitation sent. They can sign in or create an account from the same link.'
-      : 'The invitation was created, but we could not send the email. Use Resend to try again.',
+      : 'The invitation was created, but we could not send the email — share the link below directly instead.',
+    inviteLink: inviteLinkFor(token),
   };
 }
 
@@ -351,11 +367,20 @@ export async function resendInviteAction(
 
   revalidatePath('/dashboard/profile/user-management');
   return sent
-    ? { success: 'A fresh invitation link was sent.' }
-    : { error: 'The invitation was refreshed, but the email could not be sent. Try again shortly.' };
+    ? { success: 'A fresh invitation link was sent.', inviteLink: inviteLinkFor(token) }
+    : { success: 'The invitation was refreshed, but the email could not be sent — share the link below directly instead.', inviteLink: inviteLinkFor(token) };
 }
 
-export async function updateMemberCapabilitiesAction(
+/**
+ * One save for everything an owner controls about a member: their role, their
+ * action switches, and which of the account's properties they can reach. The
+ * role and switches stay account-wide (one set per person — the middle path),
+ * while property rows are reconciled: kept rows get the new role/switches,
+ * newly selected rows are inserted with them, unselected rows are deleted.
+ * Removing someone from every property at once is rejected — that is what
+ * Remove access is for.
+ */
+export async function updateMemberAccessAction(
   _previous: MemberActionState,
   formData: FormData,
 ): Promise<MemberActionState> {
@@ -373,13 +398,22 @@ export async function updateMemberCapabilitiesAction(
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Please check the member settings.' };
 
+  const submittedPropertyIds = formData
+    .getAll('propertyIds')
+    .filter((id): id is string => typeof id === 'string');
+  if (submittedPropertyIds.length === 0) {
+    return { error: 'Select at least one property, or use Remove access to take this person off the account.' };
+  }
+  const scope = await verifiedPropertyIds(owner.ctx.account.id, submittedPropertyIds);
+  if ('error' in scope) return { error: scope.error };
+
   const propertyIds = await accountPropertyIds(owner.ctx.account.id);
   if (propertyIds.length === 0) return { error: 'This account has no properties to update.' };
 
   const admin = createAdminClient();
   const { data: memberships, error: membershipError } = await admin
     .from('property_members')
-    .select('id')
+    .select('id, property_id')
     .eq('profile_id', parsed.data.profileId)
     .in('property_id', propertyIds);
 
@@ -387,21 +421,54 @@ export async function updateMemberCapabilitiesAction(
     return { error: 'This person does not have access on this account.' };
   }
 
-  const { error } = await admin
-    .from('property_members')
-    .update({ role: parsed.data.role, ...capabilities })
-    .eq('profile_id', parsed.data.profileId)
-    .in('property_id', propertyIds);
+  const currentIds = memberships.map((row) => row.property_id);
+  const selected = new Set(scope.ids);
+  const keptIds = currentIds.filter((id) => selected.has(id));
+  const removedIds = currentIds.filter((id) => !selected.has(id));
+  const addedIds = scope.ids.filter((id) => !currentIds.includes(id));
 
-  if (error) return { error: 'Could not update this member. Please try again.' };
+  if (keptIds.length > 0) {
+    const { error } = await admin
+      .from('property_members')
+      .update({ role: parsed.data.role, ...capabilities })
+      .eq('profile_id', parsed.data.profileId)
+      .in('property_id', keptIds);
+    if (error) return { error: 'Could not update this member. Please try again.' };
+  }
+
+  if (addedIds.length > 0) {
+    const { error } = await admin.from('property_members').insert(
+      addedIds.map((propertyId) => ({
+        profile_id: parsed.data.profileId,
+        property_id: propertyId,
+        role: parsed.data.role,
+        ...capabilities,
+      })),
+    );
+    if (error) return { error: 'Could not add the newly selected properties. Please try again.' };
+  }
+
+  if (removedIds.length > 0) {
+    const { error } = await admin
+      .from('property_members')
+      .delete()
+      .eq('profile_id', parsed.data.profileId)
+      .in('property_id', removedIds);
+    if (error) return { error: 'Could not remove the unselected properties. Please try again.' };
+  }
 
   await audit(admin, {
-    action: 'member.capabilities.updated',
+    action: 'member.access.updated',
     actorProfileId: owner.ctx.profile.id,
     hostAccountId: owner.ctx.account.id,
     targetType: 'profile',
     targetId: parsed.data.profileId,
-    metadata: { role: parsed.data.role, capabilities: { ...capabilities } },
+    metadata: {
+      role: parsed.data.role,
+      capabilities: { ...capabilities },
+      addedProperties: addedIds.length,
+      removedProperties: removedIds.length,
+    },
   });
 
   revalidatePath('/dashboard/profile/user-management');

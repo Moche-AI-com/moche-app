@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useActionState, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UserPlus, X } from 'lucide-react';
 import {
   CAPABILITIES,
   DEFAULT_CAPABILITIES_FOR_ROLE,
@@ -14,7 +15,7 @@ import {
   removeMemberAction,
   resendInviteAction,
   revokeInviteAction,
-  updateMemberCapabilitiesAction,
+  updateMemberAccessAction,
   type MemberActionState,
 } from './actions';
 
@@ -38,8 +39,10 @@ export interface PendingInvite {
   role: string;
   createdAt: string;
   expiresAt: string;
+  inviterName: string;
+  propertyNames: string[];
+  coversAllProperties: boolean;
   capabilities: CapabilitySet;
-  propertyIds: string[];
 }
 
 const EMPTY_STATE: MemberActionState = {};
@@ -63,6 +66,10 @@ function formatDate(date: string): string {
   return dateFormatter.format(new Date(date));
 }
 
+function daysUntil(date: string): number {
+  return Math.max(0, Math.ceil((new Date(date).getTime() - Date.now()) / 86_400_000));
+}
+
 function labelForRole(role: string): string {
   return MEMBER_ROLES.find((candidate) => candidate.id === role)?.label ?? role.replace(/_/g, ' ');
 }
@@ -74,9 +81,144 @@ function buildCapabilitySet(enabled: boolean): CapabilitySet {
   );
 }
 
+function initialsFor(name: string | null, email: string): string {
+  const source = (name ?? '').trim() || email;
+  return source
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+}
+
 /* -------------------------------------------------------------------------- */
-/*  Presentational pieces                                                      */
+/*  Shared controls                                                            */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Role + access state for both the invite dialog and the member editor.
+ * Switching roles re-seats the switches on that role's defaults and surfaces a
+ * notice, so the reset is never silent; touching any switch dismisses it.
+ */
+function useRoleAccess(initialRole: InvitableRole, initialCapabilities?: CapabilitySet) {
+  const [role, setRole] = useState<InvitableRole>(initialRole);
+  const [capabilities, setCapabilities] = useState<CapabilitySet>(() => ({
+    ...(initialCapabilities ?? DEFAULT_CAPABILITIES_FOR_ROLE[initialRole]),
+  }));
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+
+  function selectRole(nextRole: InvitableRole) {
+    if (nextRole === role) return;
+    setRole(nextRole);
+    setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE[nextRole] });
+    setResetNotice(
+      `Access switches were reset to the ${labelForRole(nextRole)} defaults. Adjust anything before saving.`,
+    );
+  }
+
+  function changeCapabilities(next: CapabilitySet) {
+    setCapabilities(next);
+    setResetNotice(null);
+  }
+
+  // Hard re-seat without the notice. Stable identity so effects can depend on
+  // it: used after a successful send and to re-sync the member editor when
+  // revalidation delivers fresh server state.
+  const apply = useCallback((nextRole: InvitableRole, nextCapabilities: CapabilitySet) => {
+    setRole(nextRole);
+    setCapabilities({ ...nextCapabilities });
+    setResetNotice(null);
+  }, []);
+
+  return { role, capabilities, resetNotice, selectRole, changeCapabilities, apply };
+}
+
+function RoleCards({
+  value,
+  onSelect,
+}: {
+  value: InvitableRole;
+  onSelect: (role: InvitableRole) => void;
+}) {
+  return (
+    <div className="um-role-grid" role="radiogroup" aria-label="Role">
+      {MEMBER_ROLES.map((candidate) => {
+        const selected = candidate.id === value;
+        return (
+          <button
+            key={candidate.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            className={`um-role-card${selected ? ' is-selected' : ''}`}
+            onClick={() => onSelect(candidate.id)}
+          >
+            <strong>{candidate.label}</strong>
+            <span>{candidate.description}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={`um-switch-row${checked ? ' is-on' : ''}`}
+      onClick={() => onChange(!checked)}
+    >
+      <span className="um-switch-text">
+        <span className="um-switch-label">{label}</span>
+      </span>
+      <span className="um-switch" data-on={checked} aria-hidden>
+        <span className="um-switch-thumb" />
+      </span>
+    </button>
+  );
+}
+
+function AccessSwitches({
+  capabilities,
+  onChange,
+}: {
+  capabilities: CapabilitySet;
+  onChange: (next: CapabilitySet) => void;
+}) {
+  const enabled = CAPABILITIES.reduce((count, c) => count + (capabilities[c.key] ? 1 : 0), 0);
+  const allOn = enabled === CAPABILITIES.length;
+  return (
+    <div className="um-switch-list">
+      <div className="um-switch-head">
+        <span>
+          <strong>{enabled} of {CAPABILITIES.length}</strong> actions on
+        </span>
+        <button type="button" className="um-link-button" onClick={() => onChange(buildCapabilitySet(!allOn))}>
+          {allOn ? 'Turn all off' : 'Turn all on'}
+        </button>
+      </div>
+      {CAPABILITIES.map((capability) => (
+        <Switch
+          key={capability.key}
+          checked={capabilities[capability.key]}
+          onChange={(next) => onChange({ ...capabilities, [capability.key]: next })}
+          label={capability.label}
+        />
+      ))}
+    </div>
+  );
+}
 
 const CapabilityChips = memo(function CapabilityChips({ capabilities }: { capabilities: CapabilitySet }) {
   const labels = useMemo(
@@ -100,204 +242,260 @@ const CapabilityChips = memo(function CapabilityChips({ capabilities }: { capabi
   );
 });
 
-const CapabilityControls = memo(function CapabilityControls({
-  capabilities,
-  onChange,
-}: {
-  capabilities: CapabilitySet;
-  onChange: (next: CapabilitySet) => void;
-}) {
-  const masterRef = useRef<HTMLInputElement>(null);
-  const enabled = useMemo(
-    () => CAPABILITIES.reduce((count, c) => count + (capabilities[c.key] ? 1 : 0), 0),
-    [capabilities],
-  );
-  const allActions = enabled === CAPABILITIES.length;
+/** Copyable invite link shown once after a send/resend — the owner's fallback
+ *  delivery path when the email lands in spam or Resend fails. The read-only
+ *  input is the manual fallback when the clipboard API is blocked. */
+function CopyLink({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (masterRef.current) masterRef.current.indeterminate = enabled > 0 && !allActions;
-  }, [allActions, enabled]);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (permissions, non-secure context) — the input stays
+      // selectable, so nothing is actually lost.
+    }
+  }
 
   return (
-    <fieldset className="um-capability-fieldset">
-      <legend>Actions they can take</legend>
-      <label className="um-master-toggle">
-        <input
-          ref={masterRef}
-          type="checkbox"
-          checked={allActions}
-          onChange={(event) => onChange(buildCapabilitySet(event.target.checked))}
-          aria-label="All actions"
-        />
-        <span>
-          <strong>All actions</strong>
-          <small>Give every available action at once.</small>
-        </span>
-      </label>
-      <div className="um-toggle-grid">
-        {CAPABILITIES.map((capability) => (
-          <label key={capability.key} className="um-toggle">
-            <input
-              type="checkbox"
-              checked={capabilities[capability.key]}
-              onChange={(event) => onChange({ ...capabilities, [capability.key]: event.target.checked })}
-            />
-            <span>{capability.label}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    <div className="um-copy-link">
+      <input
+        className="input"
+        readOnly
+        value={link}
+        onFocus={(event) => event.target.select()}
+        aria-label="Invitation link"
+      />
+      <button type="button" className="btn btn-ghost btn-sm" onClick={copy}>
+        {copied ? 'Copied' : 'Copy link'}
+      </button>
+    </div>
   );
-});
+}
 
-/** Shared inline-confirm pattern for destructive actions (revoke / remove). */
+/** Two-step destructive action. Labels are explicit props — the old string
+ *  munging (label.replace(' this invite?', '')) produced different button text
+ *  than the prompt it stood for. */
 function ConfirmButton({
-  label,
+  idleLabel,
+  prompt,
   confirmLabel,
   ariaLabel,
-  pending,
 }: {
-  label: string;
+  idleLabel: string;
+  prompt: string;
   confirmLabel: string;
   ariaLabel: string;
-  pending?: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
-  return confirming ? (
-    <div className="um-inline-confirm" role="group" aria-label={ariaLabel}>
-      <span>{label}</span>
+  if (!confirming) {
+    return (
+      <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirming(true)}>
+        {idleLabel}
+      </button>
+    );
+  }
+  return (
+    <div className="um-confirm" role="group" aria-label={ariaLabel}>
+      <span>{prompt}</span>
       <SubmitButton className="btn btn-danger btn-sm">{confirmLabel}</SubmitButton>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)} disabled={pending}>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)}>
         Cancel
       </button>
     </div>
-  ) : (
-    <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirming(true)}>
-      {label.replace(' this invite?', '').replace(' access?', '')}
-    </button>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Invite form                                                                */
+/*  Invite dialog                                                              */
 /* -------------------------------------------------------------------------- */
 
-function InviteForm({ properties }: { properties: PropertyOption[] }) {
+function InviteDialog({
+  accountName,
+  properties,
+  onClose,
+}: {
+  accountName: string;
+  properties: PropertyOption[];
+  onClose: () => void;
+}) {
   const [state, formAction, isPending] = useActionState<MemberActionState, FormData>(inviteMemberAction, EMPTY_STATE);
   const formRef = useRef<HTMLFormElement>(null);
-  const [role, setRole] = useState<InvitableRole>('co_host');
-  const [capabilities, setCapabilities] = useState<CapabilitySet>(() => ({
-    ...DEFAULT_CAPABILITIES_FOR_ROLE.co_host,
-  }));
+  const emailRef = useRef<HTMLInputElement>(null);
+  const [email, setEmail] = useState('');
   const [allProperties, setAllProperties] = useState(true);
+  const { role, capabilities, resetNotice, selectRole, changeCapabilities, apply } = useRoleAccess('co_host');
+  const [sentSummary, setSentSummary] = useState<{ email: string; roleLabel: string } | null>(null);
+  // Action results arrive as fresh state objects; handling each object once
+  // lets the owner send a second invite without the confirmation re-appearing.
+  const handledStateRef = useRef<MemberActionState | null>(null);
 
-  const chooseRole = useCallback((nextRole: InvitableRole) => {
-    setRole(nextRole);
-    setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE[nextRole] });
+  // Focus the first field on open and lock the page behind the dialog.
+  useEffect(() => {
+    emailRef.current?.focus();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
   }, []);
 
-  // Reset the form after a successful invite so stale state can't be resent.
   useEffect(() => {
-    if (state.success) {
-      formRef.current?.reset();
-      setRole('co_host');
-      setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE.co_host });
-      setAllProperties(true);
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !isPending) onClose();
     }
-  }, [state.success]);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isPending, onClose]);
 
-  // Capabilities are controlled state, so serialize them explicitly — without
-  // this hidden input the server action receives no capability flags at all.
-  const serializedCapabilities = useMemo(() => JSON.stringify(capabilities), [capabilities]);
+  useEffect(() => {
+    if (!state.success || handledStateRef.current === state) return;
+    handledStateRef.current = state;
+    setSentSummary({ email, roleLabel: labelForRole(role) });
+    formRef.current?.reset();
+    setEmail('');
+    setAllProperties(true);
+    apply('co_host', { ...DEFAULT_CAPABILITIES_FOR_ROLE.co_host });
+  }, [state, email, role, apply]);
 
   return (
-    <section className="um-invite card" aria-labelledby="invite-heading">
-      <div className="um-section-heading">
-        <div>
-          <p className="um-eyebrow">New teammate</p>
-          <h2 id="invite-heading">Invite someone</h2>
-          <p>Choose their role, exact actions, and the properties they can help with.</p>
-        </div>
-      </div>
-      <form action={formAction} ref={formRef}>
-        <FormMessage error={state.error} success={state.success} />
-        <input type="hidden" name="capabilities" value={serializedCapabilities} />
-        <div className="field">
-          <label className="label" htmlFor="memberInviteEmail">
-            Email address
-          </label>
-          <input
-            className="input"
-            id="memberInviteEmail"
-            name="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="name@example.com"
-            required
-            disabled={isPending}
-          />
-        </div>
-
-        <fieldset className="um-role-fieldset">
-          <legend>Role</legend>
-          <input type="hidden" name="role" value={role} />
-          <div className="um-role-grid" role="radiogroup" aria-label="Role">
-            {MEMBER_ROLES.map((candidate) => {
-              const selected = candidate.id === role;
-              return (
-                <button
-                  key={candidate.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  className={`um-role-card${selected ? ' is-selected' : ''}`}
-                  onClick={() => chooseRole(candidate.id)}
-                >
-                  <strong>{candidate.label}</strong>
-                  <span>{candidate.description}</span>
-                </button>
-              );
-            })}
+    <div
+      className="um-dialog-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isPending) onClose();
+      }}
+    >
+      <div className="card um-dialog" role="dialog" aria-modal="true" aria-labelledby="um-invite-title">
+        <div className="um-dialog-head">
+          <div>
+            <p className="um-eyebrow">New teammate</p>
+            <h2 id="um-invite-title">Invite someone to {accountName}</h2>
+            <p className="um-dialog-sub">
+              Four quick choices. They get an email saying who invited them and what they
+              can do — the link inside works for sign-in or a new account, and expires in 7 days.
+            </p>
           </div>
-        </fieldset>
+          <button
+            type="button"
+            className="um-dialog-close"
+            onClick={onClose}
+            disabled={isPending}
+            aria-label="Close invite dialog"
+          >
+            <X size={16} aria-hidden />
+          </button>
+        </div>
 
-        <CapabilityControls capabilities={capabilities} onChange={setCapabilities} />
-
-        <fieldset className="um-property-fieldset">
-          <legend>Property access</legend>
-          <label className="um-master-toggle">
-            <input
-              type="checkbox"
-              checked={allProperties}
-              onChange={(event) => setAllProperties(event.target.checked)}
-              aria-label="All properties"
-            />
-            <span>
-              <strong>All properties</strong>
-              <small>Default access for every current property on this account.</small>
-            </span>
-          </label>
-          {!allProperties && (
-            <div className="um-property-options">
-              {properties.length > 0 ? (
-                properties.map((property) => (
-                  <label key={property.id} className="um-toggle">
-                    <input type="checkbox" name="propertyIds" value={property.id} />
-                    <span>{property.name}</span>
-                  </label>
-                ))
-              ) : (
-                <p className="faint" style={{ margin: 0, fontSize: '.82rem' }}>
-                  Add a property before scoping access.
-                </p>
-              )}
+        {sentSummary && state.success ? (
+          <div className="um-sent">
+            <FormMessage success={state.success} />
+            <div className="um-sent-body">
+              <p>
+                <strong>On its way to {sentSummary.email}.</strong> They’ll see your name, the{' '}
+                {sentSummary.roleLabel} role, and the actions you enabled. If the email doesn’t
+                arrive, share this link directly — it’s the same one from the email:
+              </p>
+              {state.inviteLink ? <CopyLink link={state.inviteLink} /> : null}
             </div>
-          )}
-        </fieldset>
-        <SubmitButton className="btn btn-primary um-submit">Send invitation</SubmitButton>
-      </form>
-    </section>
+            <div className="um-dialog-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setSentSummary(null)}>
+                Invite another
+              </button>
+              <button type="button" className="btn btn-primary" onClick={onClose}>
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form action={formAction} ref={formRef} className="um-invite-form">
+            <FormMessage error={state.error} />
+            <input type="hidden" name="role" value={role} />
+            <input type="hidden" name="capabilities" value={JSON.stringify(capabilities)} />
+
+            <section className="um-step">
+              <div className="um-step-head">
+                <span className="um-step-num" aria-hidden>1</span>
+                <h3>Their email</h3>
+              </div>
+              <input
+                className="input"
+                ref={emailRef}
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="name@example.com"
+                required
+                disabled={isPending}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </section>
+
+            <section className="um-step">
+              <div className="um-step-head">
+                <span className="um-step-num" aria-hidden>2</span>
+                <h3>Their role</h3>
+              </div>
+              <RoleCards value={role} onSelect={selectRole} />
+              {resetNotice ? <p className="um-note" role="status">{resetNotice}</p> : null}
+            </section>
+
+            <section className="um-step">
+              <div className="um-step-head">
+                <span className="um-step-num" aria-hidden>3</span>
+                <h3>What they can do</h3>
+              </div>
+              <AccessSwitches capabilities={capabilities} onChange={changeCapabilities} />
+            </section>
+
+            <section className="um-step">
+              <div className="um-step-head">
+                <span className="um-step-num" aria-hidden>4</span>
+                <h3>Where they can do it</h3>
+              </div>
+              <label className="um-master-toggle">
+                <input
+                  type="checkbox"
+                  checked={allProperties}
+                  onChange={(event) => setAllProperties(event.target.checked)}
+                  aria-label="All properties"
+                />
+                <span>
+                  <strong>All properties</strong>
+                  <small>Every current property on this account.</small>
+                </span>
+              </label>
+              {!allProperties && (
+                properties.length > 0 ? (
+                  <div className="um-property-options">
+                    {properties.map((property) => (
+                      <label key={property.id} className="um-check">
+                        <input type="checkbox" name="propertyIds" value={property.id} />
+                        <span>{property.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="um-note">
+                    Add a property before scoping access — this invite will cover everything for now.
+                  </p>
+                )
+              )}
+            </section>
+
+            <div className="um-dialog-actions">
+              <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isPending}>
+                Cancel
+              </button>
+              <SubmitButton className="btn btn-primary">Send invitation</SubmitButton>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -306,39 +504,52 @@ function InviteForm({ properties }: { properties: PropertyOption[] }) {
 /* -------------------------------------------------------------------------- */
 
 function PendingInviteItem({ invite }: { invite: PendingInvite }) {
-  const [resendState, resendAction, resending] = useActionState<MemberActionState, FormData>(resendInviteAction, EMPTY_STATE);
-  const [revokeState, revokeAction, revoking] = useActionState<MemberActionState, FormData>(revokeInviteAction, EMPTY_STATE);
+  const [resendState, resendAction] = useActionState<MemberActionState, FormData>(resendInviteAction, EMPTY_STATE);
+  const [revokeState, revokeAction] = useActionState<MemberActionState, FormData>(revokeInviteAction, EMPTY_STATE);
+  const daysLeft = daysUntil(invite.expiresAt);
 
   return (
     <li className="um-row">
-      <div className="um-row-main">
-        <div className="um-row-title">
-          <strong>{invite.email}</strong>
-          <span className="badge">{labelForRole(invite.role)}</span>
+      <div className="um-row-top">
+        <span className="um-avatar um-avatar-pending" aria-hidden>
+          {initialsFor(null, invite.email)}
+        </span>
+        <div className="um-row-main">
+          <div className="um-row-title">
+            <strong>{invite.email}</strong>
+            <span className="badge">{labelForRole(invite.role)}</span>
+            <span className="badge badge-coral">
+              {daysLeft === 0 ? 'Expires today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
+            </span>
+          </div>
+          <p className="um-row-meta">
+            Sent {formatDate(invite.createdAt)} by {invite.inviterName} ·{' '}
+            {invite.coversAllProperties ? 'All properties' : invite.propertyNames.join(' · ')}
+          </p>
+          <CapabilityChips capabilities={invite.capabilities} />
+          {resendState.inviteLink ? (
+            <div className="um-fresh-link">
+              <p className="um-note">Fresh link created — it’s also in the re-sent email.</p>
+              <CopyLink link={resendState.inviteLink} />
+            </div>
+          ) : null}
         </div>
-        <p className="um-row-meta">
-          Sent {formatDate(invite.createdAt)} · expires {formatDate(invite.expiresAt)}
-        </p>
-        <CapabilityChips capabilities={invite.capabilities} />
-      </div>
-      <div className="um-row-actions">
-        <form action={resendAction}>
-          <input type="hidden" name="inviteId" value={invite.id} />
-          <SubmitButton className="btn btn-ghost btn-sm">Resend</SubmitButton>
-        </form>
-        <form action={revokeAction}>
-          <input type="hidden" name="inviteId" value={invite.id} />
-          <ConfirmButton
-            label="Revoke this invite?"
-            confirmLabel="Confirm revoke"
-            ariaLabel={`Confirm revocation for ${invite.email}`}
-            pending={revoking}
-          />
-        </form>
-        <FormMessage
-          error={resendState.error ?? revokeState.error}
-          success={resendState.success ?? revokeState.success}
-        />
+        <div className="um-row-actions">
+          <form action={resendAction}>
+            <input type="hidden" name="inviteId" value={invite.id} />
+            <SubmitButton className="btn btn-ghost btn-sm">Resend</SubmitButton>
+          </form>
+          <form action={revokeAction}>
+            <input type="hidden" name="inviteId" value={invite.id} />
+            <ConfirmButton
+              idleLabel="Revoke"
+              prompt={`Revoke the invitation for ${invite.email}?`}
+              confirmLabel="Yes, revoke"
+              ariaLabel={`Confirm revocation for ${invite.email}`}
+            />
+          </form>
+          <FormMessage error={resendState.error ?? revokeState.error} success={revokeState.success} />
+        </div>
       </div>
     </li>
   );
@@ -348,92 +559,127 @@ function PendingInviteItem({ invite }: { invite: PendingInvite }) {
 /*  Members                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function MemberItem({ member }: { member: ManagedMember }) {
+function MemberItem({
+  member,
+  allProperties,
+}: {
+  member: ManagedMember;
+  allProperties: PropertyOption[];
+}) {
   const [editing, setEditing] = useState(false);
-  const [role, setRole] = useState(member.role as InvitableRole);
-  const [capabilities, setCapabilities] = useState<CapabilitySet>(() => ({ ...member.capabilities }));
-  const [updateState, updateAction] = useActionState<MemberActionState, FormData>(updateMemberCapabilitiesAction, EMPTY_STATE);
-  const [removeState, removeAction, removing] = useActionState<MemberActionState, FormData>(removeMemberAction, EMPTY_STATE);
+  const memberRole = member.role as InvitableRole;
+  const { role, capabilities, resetNotice, selectRole, changeCapabilities, apply } = useRoleAccess(
+    memberRole,
+    member.capabilities,
+  );
+  const [updateState, updateAction] = useActionState<MemberActionState, FormData>(updateMemberAccessAction, EMPTY_STATE);
+  const [removeState, removeAction] = useActionState<MemberActionState, FormData>(removeMemberAction, EMPTY_STATE);
 
-  // Collapse the editor once the save succeeds.
+  // Re-sync the editor when revalidation delivers fresh server state (after a
+  // save, or after another row's action re-fetches the page).
+  useEffect(() => {
+    apply(memberRole, member.capabilities);
+  }, [memberRole, member.capabilities, apply]);
+
+  // Collapse the editor once a save succeeds — action results are fresh state
+  // objects, so depending on the object (not the message string) catches every
+  // save, including two identical saves in a row.
   useEffect(() => {
     if (updateState.success) setEditing(false);
-  }, [updateState.success]);
-
-  const handleRoleChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = event.target.value as InvitableRole;
-    setRole(next);
-    setCapabilities({ ...DEFAULT_CAPABILITIES_FOR_ROLE[next] });
-  }, []);
+  }, [updateState]);
 
   const editorId = `member-editor-${member.profileId}`;
-  const serializedCapabilities = useMemo(() => JSON.stringify(capabilities), [capabilities]);
-  const propertySummary = useMemo(
-    () =>
-      member.properties.length > 0
-        ? member.properties.map((property) => property.name).join(' · ')
-        : 'No active property assignments',
-    [member.properties],
-  );
+  const memberPropertyIds = new Set(member.properties.map((property) => property.id));
 
   return (
     <li className="um-row">
-      <div className="um-row-main">
-        <div className="um-row-title">
-          <strong>{member.name || member.email}</strong>
-          <span className="badge">{labelForRole(member.role)}</span>
+      <div className="um-row-top">
+        <span className="um-avatar" aria-hidden>
+          {initialsFor(member.name, member.email)}
+        </span>
+        <div className="um-row-main">
+          <div className="um-row-title">
+            <strong>{member.name || member.email}</strong>
+            <span className="badge">{labelForRole(member.role)}</span>
+          </div>
+          {member.name ? <p className="um-row-meta">{member.email}</p> : null}
+          <CapabilityChips capabilities={member.capabilities} />
+          <p className="um-row-meta">
+            {member.properties.length} of {allProperties.length}{' '}
+            {allProperties.length === 1 ? 'property' : 'properties'}
+          </p>
         </div>
-        {member.name && <p className="um-row-meta">{member.email}</p>}
-        <CapabilityChips capabilities={member.capabilities} />
-        <p className="um-row-meta">{propertySummary}</p>
-      </div>
-      <div className="um-row-actions">
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          aria-expanded={editing}
-          aria-controls={editorId}
-          onClick={() => setEditing((open) => !open)}
-        >
-          {editing ? 'Close editor' : 'Edit access'}
-        </button>
-        <form action={removeAction}>
-          <input type="hidden" name="profileId" value={member.profileId} />
-          <ConfirmButton
-            label="Remove access?"
-            confirmLabel="Confirm remove"
-            ariaLabel={`Confirm removal for ${member.email}`}
-            pending={removing}
-          />
-        </form>
-        <FormMessage error={removeState.error} success={removeState.success} />
+        <div className="um-row-actions">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            aria-expanded={editing}
+            aria-controls={editorId}
+            onClick={() => setEditing((open) => !open)}
+          >
+            {editing ? 'Close' : 'Edit access'}
+          </button>
+          <form action={removeAction}>
+            <input type="hidden" name="profileId" value={member.profileId} />
+            <ConfirmButton
+              idleLabel="Remove"
+              prompt={`Remove ${member.name || member.email} from every property?`}
+              confirmLabel="Yes, remove"
+              ariaLabel={`Confirm removal for ${member.email}`}
+            />
+            <FormMessage error={removeState.error} success={removeState.success} />
+          </form>
+        </div>
       </div>
 
       {editing && (
         <form className="um-editor" id={editorId} action={updateAction}>
           <input type="hidden" name="profileId" value={member.profileId} />
-          <input type="hidden" name="capabilities" value={serializedCapabilities} />
-          <div className="field">
-            <label className="label" htmlFor={`member-role-${member.profileId}`}>
-              Role
-            </label>
-            <select
-              className="select"
-              id={`member-role-${member.profileId}`}
-              name="role"
-              value={role}
-              onChange={handleRoleChange}
-            >
-              {MEMBER_ROLES.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.label}
-                </option>
+          <input type="hidden" name="role" value={role} />
+          <input type="hidden" name="capabilities" value={JSON.stringify(capabilities)} />
+
+          <section className="um-step">
+            <div className="um-step-head">
+              <h3>Role</h3>
+            </div>
+            <RoleCards value={role} onSelect={selectRole} />
+            {resetNotice ? <p className="um-note" role="status">{resetNotice}</p> : null}
+          </section>
+
+          <section className="um-step">
+            <div className="um-step-head">
+              <h3>What they can do</h3>
+            </div>
+            <AccessSwitches capabilities={capabilities} onChange={changeCapabilities} />
+          </section>
+
+          <section className="um-step">
+            <div className="um-step-head">
+              <h3>Properties they can reach</h3>
+            </div>
+            <div className="um-property-options">
+              {allProperties.map((property) => (
+                <label key={property.id} className="um-check">
+                  <input
+                    type="checkbox"
+                    name="propertyIds"
+                    value={property.id}
+                    defaultChecked={memberPropertyIds.has(property.id)}
+                  />
+                  <span>{property.name}</span>
+                </label>
               ))}
-            </select>
-          </div>
-          <CapabilityControls capabilities={capabilities} onChange={setCapabilities} />
+            </div>
+            <p className="um-note">
+              Saving applies the role and actions to every selected property. To remove this
+              person from all of them, use Remove instead.
+            </p>
+          </section>
+
           <FormMessage error={updateState.error} success={updateState.success} />
-          <SubmitButton className="btn btn-primary">Save access</SubmitButton>
+          <div className="um-editor-actions">
+            <SubmitButton className="btn btn-primary btn-sm">Save access</SubmitButton>
+          </div>
         </form>
       )}
     </li>
@@ -455,17 +701,29 @@ export function UserManagementClient({
   members: ManagedMember[];
   invites: PendingInvite[];
 }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const filteredMembers = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return members;
+    return members.filter((member) =>
+      `${member.name ?? ''} ${member.email}`.toLowerCase().includes(needle),
+    );
+  }, [members, query]);
+
   return (
     <section className="um-shell">
       <header className="um-header">
         <p className="um-eyebrow">Account access</p>
         <h1>User management</h1>
         <p>
-          Invite trusted people to <strong>{accountName}</strong>, then decide exactly how they can help.
+          Invite trusted people to <strong>{accountName}</strong>, choose their role, and set
+          exactly what they can do.
         </p>
         <div className="um-summary" aria-label="Access summary">
           <span>
-            <strong>{members.length}</strong> people with access
+            <strong>{members.length}</strong> {members.length === 1 ? 'person' : 'people'} with access
           </span>
           <span>
             <strong>{invites.length}</strong> pending invitation{invites.length === 1 ? '' : 's'}
@@ -476,117 +734,80 @@ export function UserManagementClient({
         </div>
       </header>
 
-      <div className="um-layout">
-        <div className="um-roster">
-          <section className="um-panel card" aria-labelledby="members-heading">
-            <div className="um-section-heading">
-              <div>
-                <p className="um-eyebrow">Live access</p>
-                <h2 id="members-heading">People with access</h2>
-                <p>Review the actions and properties each person can use.</p>
-              </div>
-              <span className="badge badge-teal">{members.length}</span>
-            </div>
-            {members.length > 0 ? (
-              <ul className="um-list">
-                {members.map((member) => (
-                  <MemberItem key={member.profileId} member={member} />
-                ))}
-              </ul>
-            ) : (
-              <div className="um-empty">
-                <strong>No one else has access yet.</strong>
-                <p>Send your first invitation when you are ready to delegate.</p>
-              </div>
-            )}
-          </section>
-
-          <section className="um-panel card" aria-labelledby="invites-heading">
-            <div className="um-section-heading">
-              <div>
-                <p className="um-eyebrow">Awaiting response</p>
-                <h2 id="invites-heading">Pending invitations</h2>
-                <p>Resend a fresh link or revoke access before it is accepted.</p>
-              </div>
-              <span className="badge">{invites.length}</span>
-            </div>
-            {invites.length > 0 ? (
-              <ul className="um-list">
-                {invites.map((invite) => (
-                  <PendingInviteItem key={invite.id} invite={invite} />
-                ))}
-              </ul>
-            ) : (
-              <div className="um-empty">
-                <strong>No invitations pending.</strong>
-                <p>Invites are valid for 7 days and appear here until accepted or revoked.</p>
-              </div>
-            )}
-          </section>
-        </div>
-        <InviteForm properties={properties} />
+      <div className="um-toolbar">
+        <input
+          className="input um-search"
+          type="search"
+          placeholder="Filter by name or email…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Filter members by name or email"
+        />
+        <button type="button" className="btn btn-primary" onClick={() => setInviteOpen(true)}>
+          <UserPlus size={16} aria-hidden /> Invite someone
+        </button>
       </div>
 
-      {/*
-        NOTE: <style jsx> requires styled-jsx (built into Next.js Pages Router,
-        opt-in for App Router). If these styles aren't applying in your App
-        Router setup, move this block to a CSS Module or global stylesheet.
-      */}
-      <style jsx>{`
-        .um-shell { max-width: 1160px; }
-        .um-header { margin-bottom: 1.5rem; max-width: 760px; }
-        .um-header h1, .um-section-heading h2 { margin: 0; }
-        .um-header h1 { font-size: clamp(1.55rem, 3vw, 2.15rem); }
-        .um-header > p:not(.um-eyebrow) { color: var(--text-muted); margin: .5rem 0 0; line-height: 1.55; }
-        .um-eyebrow { color: var(--teal); font-size: .72rem; font-weight: 700; letter-spacing: .08em; margin: 0 0 .35rem; text-transform: uppercase; }
-        .um-summary { display: flex; flex-wrap: wrap; gap: .55rem .9rem; margin-top: 1rem; }
-        .um-summary span { background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: .8rem; padding: .35rem .65rem; }
-        .um-summary strong { color: var(--text); }
-        .um-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .85fr); gap: var(--gap-section); align-items: start; }
-        .um-roster { display: grid; gap: var(--gap-section); min-width: 0; }
-        .um-panel, .um-invite { padding: var(--pad-card); min-width: 0; }
-        .um-section-heading { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
-        .um-section-heading h2 { font-size: 1.1rem; }
-        .um-section-heading p:not(.um-eyebrow) { color: var(--text-muted); font-size: .84rem; line-height: 1.45; margin: .35rem 0 0; }
-        .um-list { display: grid; gap: .75rem; list-style: none; margin: 0; padding: 0; }
-        .um-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); display: grid; gap: .8rem; padding: .9rem; }
-        .um-row-main { min-width: 0; }
-        .um-row-title { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; min-width: 0; }
-        .um-row-title strong { overflow-wrap: anywhere; }
-        .um-row-meta { color: var(--text-faint); font-size: .78rem; line-height: 1.4; margin: .3rem 0 0; overflow-wrap: anywhere; }
-        .um-capability-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .55rem; }
-        .um-capability-chips :global(.badge) { font-size: .67rem; }
-        .um-row-actions { align-items: flex-start; display: flex; flex-wrap: wrap; gap: .45rem; }
-        .um-row-actions form { margin: 0; }
-        .um-row-actions :global(.alert) { flex-basis: 100%; font-size: .78rem; margin: .2rem 0 0; }
-        .um-inline-confirm { align-items: center; background: color-mix(in srgb, var(--coral) 8%, var(--surface)); border: 1px solid var(--coral); border-radius: var(--radius-md); display: flex; flex-wrap: wrap; gap: .45rem; padding: .5rem; }
-        .um-inline-confirm span { color: var(--text); font-size: .78rem; font-weight: 600; }
-        .um-editor { border-top: 1px solid var(--border); display: grid; gap: .9rem; margin-top: .15rem; padding-top: 1rem; }
-        .um-editor :global(.field) { margin-bottom: 0; }
-        .um-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-md); color: var(--text); padding: 1.25rem; text-align: center; }
-        .um-empty p { color: var(--text-muted); font-size: .83rem; line-height: 1.45; margin: .35rem 0 0; }
-        .um-role-fieldset, .um-capability-fieldset, .um-property-fieldset { border: 0; margin: 0 0 1.15rem; min-width: 0; padding: 0; }
-        .um-role-fieldset legend, .um-capability-fieldset legend, .um-property-fieldset legend { color: var(--text); font-size: .88rem; font-weight: 700; margin-bottom: .6rem; padding: 0; }
-        .um-role-grid { display: grid; gap: .55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .um-role-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text); cursor: pointer; display: grid; gap: .25rem; min-height: 88px; padding: .8rem; text-align: left; transition: border-color var(--tr), box-shadow var(--tr), transform var(--tr); }
-        .um-role-card:hover, .um-role-card:focus-visible { border-color: var(--teal); }
-        .um-role-card:hover { transform: translateY(-1px); }
-        .um-role-card.is-selected { background: color-mix(in srgb, var(--teal) 11%, var(--surface-2)); border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
-        .um-role-card strong { font-size: .86rem; }
-        .um-role-card span { color: var(--text-muted); font-size: .75rem; line-height: 1.35; }
-        .um-master-toggle, .um-toggle { align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; display: flex; gap: .65rem; min-height: 44px; padding: .6rem .7rem; }
-        .um-master-toggle { margin-bottom: .55rem; }
-        .um-master-toggle input, .um-toggle input { accent-color: var(--teal); flex: 0 0 auto; height: 18px; width: 18px; }
-        .um-master-toggle span { display: grid; gap: .1rem; }
-        .um-master-toggle strong { font-size: .84rem; }
-        .um-master-toggle small { color: var(--text-faint); font-size: .72rem; line-height: 1.3; }
-        .um-toggle-grid, .um-property-options { display: grid; gap: .45rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .um-toggle { color: var(--text); font-size: .8rem; line-height: 1.25; min-width: 0; }
-        .um-toggle span { overflow-wrap: anywhere; }
-        .um-submit { margin-top: .2rem; width: 100%; }
-        @media (max-width: 920px) { .um-layout { grid-template-columns: 1fr; } .um-invite { order: -1; } }
-        @media (max-width: 560px) { .um-role-grid, .um-toggle-grid, .um-property-options { grid-template-columns: 1fr; } .um-row-actions { width: 100%; } .um-row-actions > form { min-width: 0; } .um-row-actions :global(.btn) { min-height: 44px; } }
-      `}</style>
+      <section className="um-panel card" aria-labelledby="members-heading">
+        <div className="um-section-heading">
+          <div>
+            <p className="um-eyebrow">Live access</p>
+            <h2 id="members-heading">People with access</h2>
+            <p>Edit a role, the actions, or the properties — one save applies it all.</p>
+          </div>
+          <span className="badge badge-teal">{members.length}</span>
+        </div>
+        {members.length > 0 ? (
+          filteredMembers.length > 0 ? (
+            <ul className="um-list">
+              {filteredMembers.map((member) => (
+                <MemberItem key={member.profileId} member={member} allProperties={properties} />
+              ))}
+            </ul>
+          ) : (
+            <div className="um-empty">
+              <strong>No one matches “{query.trim()}”.</strong>
+              <p>Try a different name or email.</p>
+            </div>
+          )
+        ) : (
+          <div className="um-empty">
+            <strong>No one else has access yet.</strong>
+            <p>Send your first invitation when you are ready to delegate.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="um-panel card" aria-labelledby="invites-heading">
+        <div className="um-section-heading">
+          <div>
+            <p className="um-eyebrow">Awaiting response</p>
+            <h2 id="invites-heading">Pending invitations</h2>
+            <p>Resend a fresh link, copy it for another channel, or revoke before it’s accepted.</p>
+          </div>
+          <span className="badge">{invites.length}</span>
+        </div>
+        {invites.length > 0 ? (
+          <ul className="um-list">
+            {invites.map((invite) => (
+              <PendingInviteItem key={invite.id} invite={invite} />
+            ))}
+          </ul>
+        ) : (
+          <div className="um-empty">
+            <strong>No invitations pending.</strong>
+            <p>Invites are valid for 7 days and appear here until accepted or revoked.</p>
+          </div>
+        )}
+      </section>
+
+      {inviteOpen ? (
+        <InviteDialog
+          accountName={accountName}
+          properties={properties}
+          onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }

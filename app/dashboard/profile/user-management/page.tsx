@@ -52,9 +52,14 @@ export default async function UserManagementPage() {
         .select('*')
         .in('property_id', propertyIds)
     : { data: [] };
-  const profileIds = [...new Set((memberships ?? []).map((membership) => membership.profile_id))];
-  const { data: profiles } = profileIds.length
-    ? await admin.from('profiles').select('id, email, full_name').in('id', profileIds)
+
+  // Member and inviter identities resolve in one combined fetch rather than two
+  // round trips; both are just profile rows keyed by id.
+  const memberProfileIds = (memberships ?? []).map((membership) => membership.profile_id);
+  const inviterIds = (invites ?? []).map((invite) => invite.invited_by).filter(Boolean);
+  const identityIds = [...new Set([...memberProfileIds, ...inviterIds])];
+  const { data: profiles } = identityIds.length
+    ? await admin.from('profiles').select('id, email, full_name').in('id', identityIds)
     : { data: [] };
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
 
@@ -84,21 +89,29 @@ export default async function UserManagementPage() {
     });
   }
 
-  const pendingInvites: PendingInvite[] = (invites ?? []).map((invite) => ({
-    id: invite.id,
-    email: invite.email,
-    role: invite.role,
-    createdAt: invite.created_at,
-    expiresAt: invite.expires_at,
-    capabilities: {
-      can_edit_brain: invite.can_edit_brain,
-      can_reply_guests: invite.can_reply_guests,
-      can_receive_escalations: invite.can_receive_escalations,
-      can_resolve_maintenance: invite.can_resolve_maintenance,
-      can_view_analytics: invite.can_view_analytics,
-    },
-    propertyIds: invite.property_ids,
-  }));
+  const pendingInvites: PendingInvite[] = (invites ?? []).map((invite) => {
+    const inviter = invite.invited_by ? profileById.get(invite.invited_by) : undefined;
+    const invitePropertyIds = Array.isArray(invite.property_ids) ? invite.property_ids : [];
+    return {
+      id: invite.id,
+      email: invite.email,
+      role: invite.role,
+      createdAt: invite.created_at,
+      expiresAt: invite.expires_at,
+      inviterName: inviter?.full_name?.trim() || inviter?.email || 'the account owner',
+      coversAllProperties: invitePropertyIds.length === 0,
+      propertyNames: invitePropertyIds
+        .map((propertyId) => propertyNameById.get(propertyId))
+        .filter((name): name is string => Boolean(name)),
+      capabilities: {
+        can_edit_brain: invite.can_edit_brain,
+        can_reply_guests: invite.can_reply_guests,
+        can_receive_escalations: invite.can_receive_escalations,
+        can_resolve_maintenance: invite.can_resolve_maintenance,
+        can_view_analytics: invite.can_view_analytics,
+      },
+    };
+  });
 
   return (
     <UserManagementClient
