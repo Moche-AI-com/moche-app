@@ -20,7 +20,7 @@
     "@sentry/nextjs": "^10.69.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.45.4",
-    "@trigger.dev/sdk": "^4.5.9",
+    "@trigger.dev/sdk": "^4.5.12",
     "lucide-react": "^1.27.0",
     "mammoth": "^1.11.0",
     "next": "16.3.0",
