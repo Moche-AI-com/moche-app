@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Printer, Archive, FileText, Sparkles, Building2, MessageSquare } from 'lucide-react';
+import { Printer, Archive, FileText, Sparkles, Building2, MessageSquare, Users } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
@@ -24,10 +24,11 @@ function fmtDate(value: string | null) {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams?: { property?: string | string[] };
+  searchParams?: Promise<{ property?: string | string[] }>;
 }) {
   const ctx = await requireSession();
   const supabase = createClient();
+  const sp = (await searchParams) ?? {};
 
   // Deliberately NOT filtered on `deleted_at`. Permanently deleting a property
   // keeps the host's reports and leaves the property row behind as a stripped
@@ -56,7 +57,7 @@ export default async function ReportsPage({
   // Only honour a property filter for a property this account actually owns.
   // Otherwise a hand-edited ?property= would produce a confusing empty page
   // instead of simply being ignored.
-  const requested = Array.isArray(searchParams?.property) ? searchParams?.property[0] : searchParams?.property;
+  const requested = Array.isArray(sp.property) ? sp.property[0] : sp.property;
   const activeProperty = requested && propNames.has(requested) ? requested : null;
   const scopeIds = activeProperty ? [activeProperty] : propList.map((p) => p.id);
 
@@ -65,44 +66,82 @@ export default async function ReportsPage({
   let extras: Array<{ id: string; property_id: string; item_title: string; item_price_text: string | null; quantity: number; status: ExtrasOrderStatus; created_at: string; archived_at: string | null }> = [];
   let handled: HandledEscalation[] = [];
 
+  // Exact per-topic totals for the hub cards. Head-only count queries are cheap
+  // and stay accurate past the 200-row list caps below.
+  let staysTotal = 0;
+  let requestsTotal = 0;
+  let extrasTotal = 0;
+  let handledTotal = 0;
+  let guestsTotal = 0;
+
   if (scopeIds.length) {
-    const [reqRes, stayRes, extrasRes] = await Promise.all([
-      supabase
-        .from('service_requests')
-        .select('id, property_id, service_type, status, urgency, created_at, archived_at, summary, description')
-        .in('property_id', scopeIds)
-        .eq('lifecycle_status', 'archived')
-        .order('archived_at', { ascending: false, nullsFirst: false })
-        .limit(200),
-      supabase
-        .from('stays')
-        .select('id, property_id, guest_display_name, check_in, check_out, status, archived_at')
-        .in('property_id', scopeIds)
-        .is('deleted_at', null)
-        .eq('lifecycle_status', 'archived')
-        .order('check_out', { ascending: false, nullsFirst: false })
-        .limit(200),
-      supabase
-        .from('extras_orders')
-        .select('id, property_id, item_title, item_price_text, quantity, status, created_at, archived_at')
-        .in('property_id', scopeIds)
-        .eq('lifecycle_status', 'archived')
-        .order('archived_at', { ascending: false, nullsFirst: false })
-        .limit(200),
-    ]);
+    const [reqRes, stayRes, extrasRes, stayCountRes, reqCountRes, extrasCountRes, handledCountRes, guestsCountRes] =
+      await Promise.all([
+        supabase
+          .from('service_requests')
+          .select('id, property_id, service_type, status, urgency, created_at, archived_at, summary, description')
+          .in('property_id', scopeIds)
+          .eq('lifecycle_status', 'archived')
+          .order('archived_at', { ascending: false, nullsFirst: false })
+          .limit(200),
+        supabase
+          .from('stays')
+          .select('id, property_id, guest_display_name, check_in, check_out, status, archived_at')
+          .in('property_id', scopeIds)
+          .is('deleted_at', null)
+          .eq('lifecycle_status', 'archived')
+          .order('check_out', { ascending: false, nullsFirst: false })
+          .limit(200),
+        supabase
+          .from('extras_orders')
+          .select('id, property_id, item_title, item_price_text, quantity, status, created_at, archived_at')
+          .in('property_id', scopeIds)
+          .eq('lifecycle_status', 'archived')
+          .order('archived_at', { ascending: false, nullsFirst: false })
+          .limit(200),
+        supabase
+          .from('stays')
+          .select('id', { count: 'exact', head: true })
+          .in('property_id', scopeIds)
+          .is('deleted_at', null)
+          .eq('lifecycle_status', 'archived'),
+        supabase
+          .from('service_requests')
+          .select('id', { count: 'exact', head: true })
+          .in('property_id', scopeIds)
+          .eq('lifecycle_status', 'archived'),
+        supabase
+          .from('extras_orders')
+          .select('id', { count: 'exact', head: true })
+          .in('property_id', scopeIds)
+          .eq('lifecycle_status', 'archived'),
+        supabase
+          .from('escalations')
+          .select('id', { count: 'exact', head: true })
+          .in('property_id', scopeIds)
+          .neq('status', 'open'),
+        supabase
+          .from('guest_identities')
+          .select('id', { count: 'exact', head: true })
+          .in('property_id', scopeIds),
+      ]);
     requests = reqRes.data ?? [];
     stays = stayRes.data ?? [];
     extras = (extrasRes.data ?? []) as typeof extras;
+    staysTotal = stayCountRes.count ?? 0;
+    requestsTotal = reqCountRes.count ?? 0;
+    extrasTotal = extrasCountRes.count ?? 0;
+    handledTotal = handledCountRes.count ?? 0;
+    guestsTotal = guestsCountRes.count ?? 0;
 
-    // Closed escalations — handled or cancelled threads the host explicitly closed
-    // out of the inbox. Fetched in two hops rather than one join because the thread
-    // is the expensive part and only the escalations that actually have a
-    // conversation need it.
+    // Handled escalations — every guest question a real person ended up answering.
+    // Fetched in two hops rather than one join because the thread is the expensive
+    // part and only the escalations that actually have a conversation need it.
     const { data: escRows } = await supabase
       .from('escalations')
       .select('id, property_id, question, status, host_response, responded_at, created_at, conversation_id')
       .in('property_id', scopeIds)
-      .eq('lifecycle_status', 'archived')
+      .neq('status', 'open')
       .order('responded_at', { ascending: false, nullsFirst: false })
       .limit(100);
 
@@ -148,6 +187,68 @@ export default async function ReportsPage({
     requests.length === 0 && stays.length === 0 && extras.length === 0 && archivedProps.length === 0 &&
     handled.length === 0;
 
+  // Hub cards: one per report topic. Past stays is the live grid (#81); the
+  // other cards deep-link to their summary section on this page until their
+  // grids land (PR 2: escalations, service requests, guest directory; PR 3:
+  // extras, archived properties).
+  const topicCards: Array<{
+    key: string;
+    href: string | null;
+    icon: typeof Archive;
+    label: string;
+    count: number;
+    sub: string;
+  }> = [
+    {
+      key: 'past-stays',
+      href: '/dashboard/reports/stays',
+      icon: Archive,
+      label: 'Past stays',
+      count: staysTotal,
+      sub: 'Open the grid \u2192',
+    },
+    {
+      key: 'handled-escalations',
+      href: '#handled-escalations',
+      icon: MessageSquare,
+      label: 'Handled escalations',
+      count: handledTotal,
+      sub: 'Summary below \u00b7 grid in PR 2',
+    },
+    {
+      key: 'service-reports',
+      href: '#service-reports',
+      icon: FileText,
+      label: 'Service reports',
+      count: requestsTotal,
+      sub: 'Summary below \u00b7 grid in PR 2',
+    },
+    {
+      key: 'completed-extras',
+      href: '#completed-extras',
+      icon: Sparkles,
+      label: 'Completed extras',
+      count: extrasTotal,
+      sub: 'Summary below \u00b7 grid in PR 3',
+    },
+    {
+      key: 'archived-properties',
+      href: '#archived-properties',
+      icon: Building2,
+      label: 'Archived properties',
+      count: archivedProps.length,
+      sub: 'Summary below \u00b7 grid in PR 3',
+    },
+    {
+      key: 'guest-directory',
+      href: null,
+      icon: Users,
+      label: 'Guest directory',
+      count: guestsTotal,
+      sub: 'Grid in PR 2',
+    },
+  ];
+
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
@@ -160,6 +261,50 @@ export default async function ReportsPage({
 
       <PropertyFilter properties={propList.map((p) => ({ id: p.id, name: p.display_name }))} activeId={activeProperty} basePath="/dashboard/reports" />
 
+      <section aria-label="Report views" style={{ margin: '1.25rem 0 2rem' }}>
+        <h2 style={{ fontSize: '1.1rem', marginBottom: '.4rem' }}>Report views</h2>
+        <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .85rem' }}>
+          Each topic opens as its own spreadsheet-style report — sort any column, drag columns into a new order,
+          filter, print, or export to CSV. A refresh always restores the default view.
+        </p>
+        <div className="dash-props-grid">
+          {topicCards.map((card) => {
+            const Icon = card.icon;
+            const inner = (
+              <>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '.45rem', fontSize: '.85rem', fontWeight: 600 }}>
+                  <Icon size={15} aria-hidden style={{ color: 'var(--teal)', flexShrink: 0 }} /> {card.label}
+                </span>
+                <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '1.7rem', fontWeight: 700, lineHeight: 1.1, margin: '.5rem 0 .3rem' }}>
+                  {card.count}
+                </span>
+                <span className="faint" style={{ fontSize: '.76rem' }}>{card.sub}</span>
+              </>
+            );
+            return card.href ? (
+              <Link
+                key={card.key}
+                href={card.href}
+                className="card card-interactive"
+                style={{ padding: '1rem 1.15rem', display: 'block' }}
+                data-testid={`report-card-${card.key}`}
+              >
+                {inner}
+              </Link>
+            ) : (
+              <div
+                key={card.key}
+                className="card"
+                style={{ padding: '1rem 1.15rem', opacity: 0.75 }}
+                data-testid={`report-card-${card.key}`}
+              >
+                {inner}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {empty ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
           <Archive size={22} aria-hidden style={{ color: 'var(--text-faint)', marginBottom: '.6rem' }} />
@@ -171,7 +316,7 @@ export default async function ReportsPage({
       ) : (
         <>
           {archivedProps.length > 0 && (
-            <section style={{ marginBottom: '2rem' }} data-testid="archived-properties-section">
+            <section id="archived-properties" style={{ marginBottom: '2rem', scrollMarginTop: '1rem' }} data-testid="archived-properties-section">
               <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
                 <Building2 size={16} aria-hidden /> Archived properties
                 <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({archivedProps.length})</span>
@@ -199,20 +344,20 @@ export default async function ReportsPage({
             </section>
           )}
 
-          <section style={{ marginBottom: '2rem' }} data-testid="handled-escalations-section">
+          <section id="handled-escalations" style={{ marginBottom: '2rem', scrollMarginTop: '1rem' }} data-testid="handled-escalations-section">
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
-              <MessageSquare size={16} aria-hidden /> Closed escalations
+              <MessageSquare size={16} aria-hidden /> Handled escalations
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({handled.length})</span>
             </h2>
             <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .75rem' }}>
-              Guest questions your team handled or cancelled and then closed out of the Escalations inbox. Open one to see
-              what the guest asked, what the concierge had already tried, and what you replied — and to choose whether each
-              of your replies is used to train the concierge for future guests.
+              Every guest question your team answered personally, with the full thread around it. Open one to see what the
+              guest asked, what the concierge had already tried, and what you replied — and to choose whether each of your
+              replies is used to train the concierge for future guests.
             </p>
             <HandledEscalations items={handled} />
           </section>
 
-          <section style={{ marginBottom: '2rem' }}>
+          <section id="service-reports" style={{ marginBottom: '2rem', scrollMarginTop: '1rem' }}>
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
               <FileText size={16} aria-hidden /> Service reports
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({requests.length})</span>
@@ -243,7 +388,7 @@ export default async function ReportsPage({
             )}
           </section>
 
-          <section style={{ marginBottom: '2rem' }}>
+          <section id="completed-extras" style={{ marginBottom: '2rem', scrollMarginTop: '1rem' }}>
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
               <Sparkles size={16} aria-hidden /> Completed extras
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({extras.length})</span>
@@ -274,10 +419,18 @@ export default async function ReportsPage({
             )}
           </section>
 
-          <section>
+          <section id="past-stays" style={{ scrollMarginTop: '1rem' }}>
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
               <Archive size={16} aria-hidden /> Past stays
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({stays.length})</span>
+              <Link
+                href="/dashboard/reports/stays"
+                className="dash-section-link"
+                style={{ marginLeft: 'auto', fontSize: '.8rem' }}
+                data-testid="past-stays-grid-link"
+              >
+                Open grid view \u2192
+              </Link>
             </h2>
             {stays.length === 0 ? (
               <p className="muted" style={{ fontSize: '.88rem' }}>No completed stays yet.</p>
