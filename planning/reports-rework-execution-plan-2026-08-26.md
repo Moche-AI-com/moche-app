@@ -2,7 +2,7 @@
 
 **Prepared:** August 26, 2026
 **Scope:** `/dashboard/reports` hub + per-topic spreadsheet-style report pages
-**Status:** Decisions locked; ready for ticket breakdown and PR 1
+**Status:** PR 1 (#85) committed and in CI — production migrations applied, `package-lock.json` regenerated, awaiting a green `npm ci` gate
 **Inputs:** Verified against live repo `Moche-AI-com/moche-app` (Next 16.3.0) and live Supabase schema (project `sqpdzhannyskdiyuarhp`) on 2026-08-26. Builds on `planning/moche-ai-product-enhancement-plan-2026-08-05.md` (shared lifecycle pattern + Reports hub) and `infra/commercial-launch-readiness-2026-08-05.md`.
 
 ---
