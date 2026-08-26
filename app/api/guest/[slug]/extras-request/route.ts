@@ -14,10 +14,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Add-on — a guest taps "Request" on an extra. The request lands in the guest's
-// Host Chat thread as a message the host replies to directly (the same surface
-// questions use), and the durable extras_orders row tracks its status. No
-// escalation row is created: requests are revenue-shaped work, not questions,
-// and the Escalations queue stays reserved for things the concierge couldn't answer.
+// Host Chat thread as a specialized request bubble the host replies to directly
+// (the same surface questions use), and the durable extras_orders row tracks its
+// status. No escalation row is created: requests are revenue-shaped work, not
+// questions, and the Escalations queue stays reserved for things the concierge
+// couldn't answer.
 //
 // The order row + its first append-only timeline event are written BEFORE anyone
 // is notified. The guest never receives a false confirmation: a request number
@@ -134,10 +135,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     conversationId = (conv as { id: string } | null)?.id ?? null;
   }
 
+  let requestMessageId: string | null = null;
   if (conversationId) {
-    await admin.from('messages').insert({
-      conversation_id: conversationId, property_id: session.propertyId, role: 'guest', content: question,
-    } as never);
+    const { data: message } = await admin.from('messages').insert({
+      conversation_id: conversationId,
+      property_id: session.propertyId,
+      role: 'guest',
+      content: question,
+      // A dedicated kind lets the host thread render the request as a
+      // teal-outlined action bubble, parallel to the escalation bubble.
+      message_kind: 'extras_request',
+    } as never).select('id').single();
+    requestMessageId = (message as { id: string } | null)?.id ?? null;
     await admin
       .from('conversations')
       .update({ last_message_at: new Date().toISOString(), host_read_at: null })
@@ -203,7 +212,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     body: notificationBody(translated, question),
     propertyId: session.propertyId,
     link: conversationId
-      ? `/dashboard/properties/${session.propertyId}/stays/${session.stayId}/conversations/${conversationId}`
+      ? `/dashboard/properties/${session.propertyId}/stays/${session.stayId}/conversations/${conversationId}${requestMessageId ? `?extrasMessage=${requestMessageId}` : ''}`
       : '/dashboard/extras',
   });
 
