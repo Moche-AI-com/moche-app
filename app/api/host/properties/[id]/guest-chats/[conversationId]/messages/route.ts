@@ -9,6 +9,8 @@ import { normalizeGuestAnswerForBrain } from '@/lib/brain/guest-answer-learning'
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const ACTIVE_EXTRAS_STATUSES = ['requested', 'needs_details', 'accepted', 'payment_pending', 'scheduled'];
+
 const postSchema = z.object({
   message: z.string().trim().min(1, 'Write a reply first.').max(2000),
   replyToMessageId: z.string().uuid().optional(),
@@ -18,6 +20,11 @@ const postSchema = z.object({
   // What happens to that escalation when the reply sends: resolved = Handled,
   // answered = Awaiting guest response, dismissed = Cancelled.
   escalationOutcome: z.enum(['resolved', 'answered', 'dismissed']).optional().default('answered'),
+  // Set when the reply is the host's response to an Extras request in this
+  // thread. The request follows the reply: in progress for a normal reply,
+  // completed/cancelled when the host chooses that outcome.
+  extrasOrderId: z.string().uuid().optional(),
+  extrasOutcome: z.enum(['accepted', 'fulfilled', 'canceled']).optional().default('accepted'),
   learnFromReply: z.boolean().optional().default(false),
 });
 
@@ -48,6 +55,24 @@ async function loadConversation(admin: ReturnType<typeof createAdminClient>, pro
   return data as any | null;
 }
 
+async function loadExtrasOrders(db: any, propertyId: string, conversation: any) {
+  const clauses = [
+    `host_conversation_id.eq.${conversation.id}`,
+    `conversation_id.eq.${conversation.id}`,
+    `stay_id.eq.${conversation.stay_id}`,
+  ];
+  if (conversation.guest_session_id) clauses.push(`guest_session_id.eq.${conversation.guest_session_id}`);
+  const { data } = await db
+    .from('extras_orders')
+    .select('id, item_title, item_price_text, quantity, guest_note, request_number, fulfillment_status, scheduled_for, quoted_amount_cents, quote_currency, created_at')
+    .eq('property_id', propertyId)
+    .in('fulfillment_status', ACTIVE_EXTRAS_STATUSES)
+    .or(clauses.join(','))
+    .order('created_at', { ascending: false })
+    .limit(20);
+  return (data ?? []) as any[];
+}
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string; conversationId: string }> }) {
   const { id, conversationId } = await params;
   const access = await requirePropertyAccess(id);
@@ -68,22 +93,42 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .limit(500);
   if (error) return NextResponse.json({ error: 'Could not load messages.' }, { status: 500 });
 
-  // Escalation state rides along so the full-page thread can badge and gate the
-  // highlighted Reply CTA without a second round-trip.
-  const { data: escRows } = await db
-    .from('escalations')
-    .select('id, question, status, created_at, resolved_at')
-    .eq('property_id', id)
-    .or(`conversation_id.eq.${conversationId},host_conversation_id.eq.${conversationId}`)
-    .order('created_at', { ascending: true })
-    .limit(50);
+  // Escalation and Extras state ride along so the full-page thread can badge
+  // and gate the highlighted Reply CTA without a second round-trip.
+  const [{ data: escRows }, extrasOrders] = await Promise.all([
+    db
+      .from('escalations')
+      .select('id, question, status, created_at, resolved_at')
+      .eq('property_id', id)
+      .or(`conversation_id.eq.${conversationId},host_conversation_id.eq.${conversationId}`)
+      .order('created_at', { ascending: true })
+      .limit(50),
+    loadExtrasOrders(db, id, conversation),
+  ]);
 
   await db
     .from('conversations')
     .update({ host_read_at: new Date().toISOString() })
     .eq('id', conversationId);
 
-  return NextResponse.json({ conversation, messages: (rows ?? []).map(mapMessage), escalations: escRows ?? [] });
+  return NextResponse.json({
+    conversation,
+    messages: (rows ?? []).map(mapMessage),
+    escalations: escRows ?? [],
+    extrasOrders: extrasOrders.map((order) => ({
+      id: order.id,
+      itemTitle: order.item_title,
+      itemPriceText: order.item_price_text,
+      quantity: order.quantity,
+      guestNote: order.guest_note,
+      requestNumber: order.request_number,
+      fulfillmentStatus: order.fulfillment_status,
+      scheduledFor: order.scheduled_for,
+      quotedAmountCents: order.quoted_amount_cents,
+      quoteCurrency: order.quote_currency,
+      createdAt: order.created_at,
+    })),
+  });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; conversationId: string }> }) {
@@ -225,6 +270,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           learningError = learningFailure instanceof Error ? learningFailure.message : 'Could not queue the Brain update.';
         }
       }
+    }
+  }
+
+  // Replying from an Extras request panel updates that request's health in the
+  // same motion, mirroring the escalation outcome dropdown. The existing
+  // status endpoint remains the granular path; this handles the common reply.
+  if (parsed.data.extrasOrderId) {
+    const { data: order } = await db
+      .from('extras_orders')
+      .select('id, fulfillment_status, status, item_title')
+      .eq('id', parsed.data.extrasOrderId)
+      .eq('property_id', id)
+      .maybeSingle();
+    if (order) {
+      const nextStatus = parsed.data.extrasOutcome;
+      const legacy = nextStatus === 'fulfilled' ? 'fulfilled' : nextStatus === 'canceled' ? 'cancelled' : 'confirmed';
+      await db.from('extras_orders').update({
+        fulfillment_status: nextStatus,
+        status: legacy,
+        host_note: parsed.data.message,
+        updated_at: now,
+      }).eq('id', order.id);
+      await db.from('extras_order_events').insert({
+        order_id: order.id,
+        property_id: id,
+        from_status: order.fulfillment_status,
+        to_status: nextStatus,
+        actor_type: 'host',
+        actor_id: user?.id ?? null,
+        note: 'Updated while replying in Host Chat.',
+      });
     }
   }
 
