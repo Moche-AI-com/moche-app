@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 // Hard cap on one fetch. Archive volumes are small today, but a 60-property
 // host's full history must not arrive as one unbounded payload; the toolbar
-// says "Showing 500 of N" when the cap bites (plan §6 — PR 3 verifies at scale).
+// says "Showing 500 of N" when the cap bites.
 const ROW_CAP = 500;
 
 const STATUS_LABEL: Record<string, string> = {
@@ -100,7 +100,7 @@ export default async function PastStaysReportPage({
 
     if (stays.length > 0) {
       // Companion names + per-stay activity counts: one round trip each,
-      // grouped in memory — the hub's handled-escalations pattern.
+      // grouped in memory.
       const [guestsRes, convosRes, escRes, extrasRes] = await Promise.all([
         supabase.from('stay_guests').select('stay_id, display_name').in('stay_id', stayIds).not('display_name', 'is', null),
         supabase.from('conversations').select('stay_id').in('stay_id', stayIds),
@@ -148,7 +148,7 @@ export default async function PastStaysReportPage({
         const party = `${s.guest_count}${names.length > 0 ? ` — ${shownNames}${overflow > 0 ? ` +${overflow}` : ''}` : ''}`;
         return {
           id: s.id,
-          reference: s.stay_reference ?? '\u2014',
+          reference: s.stay_reference ?? '—',
           guest: s.guest_display_name || 'Guest',
           party,
           property: propNames.get(s.property_id) ?? 'Property',
@@ -158,8 +158,8 @@ export default async function PastStaysReportPage({
           checkOutTs: new Date(s.check_out).getTime(),
           nights: nightsBetween(s.check_in, s.check_out),
           status: STATUS_LABEL[s.status] ?? s.status,
-          language: s.guest_language ?? '\u2014',
-          createdBy: (s.created_by && creatorNames.get(s.created_by)) || '\u2014',
+          language: s.guest_language ?? '—',
+          createdBy: (s.created_by && creatorNames.get(s.created_by)) || '—',
           conversations: convoCounts.get(s.id) ?? 0,
           escalations: escCounts.get(s.id) ?? 0,
           extras: extrasCounts.get(s.id) ?? 0,
@@ -170,16 +170,16 @@ export default async function PastStaysReportPage({
 
   const printSubtitle = [
     `Property: ${activeProperty ? propNames.get(activeProperty) ?? 'Property' : 'All properties'}`,
-    `Check-in: ${from ?? 'any'} \u2192 ${to ?? 'any'}`,
+    `Check-in: ${from ?? 'any'} → ${to ?? 'any'}`,
     `Status: ${status ? STATUS_LABEL[status] : 'All'}`,
-  ].join(' \u00b7 ');
+  ].join(' · ');
 
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
-            \u2190 Reports
+            ← Reports
           </Link>
         </p>
         <h1 style={{ fontSize: '1.8rem', margin: 0, display: 'flex', alignItems: 'center', gap: '.5rem' }}>

@@ -43,7 +43,7 @@ const TYPE_LABEL: Record<ServiceType, string> = {
 };
 
 function humanizeToken(value: string | null | undefined): string {
-  if (!value) return '\u2014';
+  if (!value) return '—';
   const words = value.replace(/_/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -138,17 +138,17 @@ export default async function ServiceReportsPage({
 
   const printSubtitle = [
     `Property: ${activeProperty ? propNames.get(activeProperty) ?? 'Property' : 'All properties'}`,
-    `Requested: ${from ?? 'any'} \u2192 ${to ?? 'any'}`,
+    `Requested: ${from ?? 'any'} → ${to ?? 'any'}`,
     `Status: ${status ? STATUS_LABEL[status] ?? humanizeToken(status) : 'All'}`,
     `Type: ${type ? TYPE_LABEL[type] : 'All'}`,
-  ].join(' \u00b7 ');
+  ].join(' · ');
 
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
-            \u2190 Reports
+            ← Reports
           </Link>
         </p>
         <h1 style={{ fontSize: '1.8rem', margin: 0, display: 'flex', alignItems: 'center', gap: '.5rem' }}>
