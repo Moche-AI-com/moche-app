@@ -106,7 +106,7 @@ export function passwordMeetsRequirements(password: string): boolean {
 // person types, so a too-short password is never a submit-time surprise.
 export function PasswordRequirements({ id, password }: { id: string; password: string }) {
   return (
-    <ul id={id} aria-label="Password requirements" style={{ listStyle: 'none', margin: '.5rem 0 0', padding: 0, display: ' Walton', gap: '.3rem' }}>
+    <ul id={id} aria-label="Password requirements" style={{ listStyle: 'none', margin: '.5rem 0 0', padding: 0, display: 'grid', gap: '.3rem' }}>
       {PASSWORD_RULES.map((rule) => {
         const met = rule.test(password);
         return (
