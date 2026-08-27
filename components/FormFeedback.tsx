@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Check, Circle } from 'lucide-react';
+import { Check, Circle, X } from 'lucide-react';
 
 const visuallyHidden: React.CSSProperties = {
   position: 'absolute',
@@ -128,5 +129,119 @@ export function PasswordRequirements({ id, password }: { id: string; password: s
         );
       })}
     </ul>
+  );
+}
+
+// Token input: a freeform text field that converts an entry into a removable
+// chip only once `validate` accepts it (Enter, comma, or the Add button). Used
+// for the Email report "To"/"CC" fields, where an address must be real before
+// it is added — never a bare string riding along in a JSON body.
+export function ChipInput({
+  id,
+  label,
+  hint,
+  values,
+  onChange,
+  validate,
+  placeholder,
+  inputType = 'text',
+  addLabel = 'Add',
+  testId,
+  disabled = false,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  values: string[];
+  onChange: (next: string[]) => void;
+  validate: (raw: string) => string | null;
+  placeholder?: string;
+  inputType?: string;
+  addLabel?: string;
+  testId?: string;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  function commit() {
+    const candidate = draft.trim();
+    if (!candidate) return;
+    const problem = validate(candidate);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    if (!values.includes(candidate)) onChange([...values, candidate]);
+    setDraft('');
+    setError(null);
+  }
+
+  return (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <div style={{ display: 'flex', gap: '.4rem' }}>
+        <input
+          className="input"
+          id={id}
+          type={inputType}
+          value={draft}
+          placeholder={placeholder}
+          disabled={disabled}
+          data-testid={testId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          onChange={(e) => { setDraft(e.target.value); if (error) setError(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          style={{ minHeight: 44 }}
+        />
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={commit}
+          disabled={disabled || !draft.trim()}
+          data-testid={testId ? `${testId}-add` : undefined}
+          style={{ minHeight: 44 }}
+        >
+          {addLabel}
+        </button>
+      </div>
+      {hint && !error ? <p className="faint" style={{ fontSize: '.74rem', margin: '.3rem 0 0' }}>{hint}</p> : null}
+      {error ? <FieldError id={`${id}-error`} message={error} /> : null}
+      {values.length > 0 ? (
+        <ul style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: '.35rem', margin: '.5rem 0 0', padding: 0 }}>
+          {values.map((v) => (
+            <li
+              key={v}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '.35rem',
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                borderRadius: '999px', padding: '.2rem .35rem .2rem .65rem', fontSize: '.78rem',
+              }}
+            >
+              {v}
+              <button
+                type="button"
+                onClick={() => onChange(values.filter((x) => x !== v))}
+                aria-label={`Remove ${v}`}
+                disabled={disabled}
+                style={{
+                  display: 'inline-grid', placeItems: 'center', width: 18, height: 18,
+                  borderRadius: '999px', border: 'none', background: 'transparent',
+                  color: 'var(--text-faint)', cursor: 'pointer', padding: 0,
+                }}
+              >
+                <X size={11} aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }

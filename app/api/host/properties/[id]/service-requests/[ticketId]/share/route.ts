@@ -5,13 +5,7 @@ import { getUser, requirePropertyAccess } from '@/lib/auth/guards';
 import { hashContact } from '@/lib/crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendServiceReportShare } from '@/lib/notify';
-import {
-  buildServiceReportSms,
-  buildServiceReportSubject,
-  buildServiceReportText,
-  shareContactReady,
-  type ShareReportContact,
-} from '@/lib/service-requests/share-report';
+import { shareContactReady, type ShareReportContact } from '@/lib/service-requests/share-report';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import type { Json as DbJson } from '@/lib/database.types';
@@ -19,17 +13,34 @@ import type { Json as DbJson } from '@/lib/database.types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const postSchema = z.object({
-  channel: z.enum(['sms', 'email']),
-  destination: z.string().trim().min(5).max(320),
-});
+const emailAddress = z.string().trim().email().max(320);
 
-// Sends the share-safe version of a service report (allowlisted fields only —
-// see lib/service-requests/share-report.ts) to any recipient the host chooses,
-// by email (Resend) or text (Twilio). The ticket must have an assigned contact
-// with a phone or email first: the message's follow-up line points recipients
-// at that contact, so a misdirected send exposes nothing internal. Every
-// attempt is logged to service_report_shares (hash + last4 only) and audit_logs.
+const postSchema = z.discriminatedUnion('channel', [
+  // Email: one or more validated To addresses plus optional CC, and the host
+  // may edit the subject/message from the prefilled template before sending.
+  z.object({
+    channel: z.literal('email'),
+    to: z.array(emailAddress).min(1).max(10),
+    cc: z.array(emailAddress).max(10).optional().default([]),
+    subject: z.string().trim().min(1).max(200),
+    message: z.string().trim().min(1).max(4000),
+  }),
+  // SMS: a single recipient per send; the body stays short by design.
+  z.object({
+    channel: z.literal('sms'),
+    to: z.array(z.string().trim().min(5).max(40)).min(1).max(1),
+    message: z.string().trim().min(1).max(1600),
+  }),
+]);
+
+// Sends the service report to recipients the host chose on the compose screen,
+// by email (Resend) or text (Twilio). The compose view prefills from the
+// allowlisted builders in lib/service-requests/share-report.ts and the host can
+// edit before sending; what is submitted here is what leaves the platform. The
+// ticket must still have an assigned contact with a phone or email first — the
+// default template's follow-up line points recipients at that contact, so a
+// misdirected send never strands anyone. Every attempt is logged to
+// service_report_shares (hash + last4 only) and audit_logs.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; ticketId: string }> }) {
   const { id, ticketId } = await params;
   const access = await requirePropertyAccess(id);
@@ -55,14 +66,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const parsed = postSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Enter a valid phone number or email address.' }, { status: 400 });
+    return NextResponse.json({ error: 'Check the recipients and message, then try again.' }, { status: 400 });
   }
-  const { channel, destination } = parsed.data;
-  if (channel === 'email' && !destination.includes('@')) {
-    return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
-  }
-  if (channel === 'sms') {
-    const digits = destination.replace(/\D/g, '');
+  const payload = parsed.data;
+  if (payload.channel === 'sms') {
+    const digits = payload.to[0].replace(/\D/g, '');
     if (digits.length < 7 || digits.length > 15) {
       return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 400 });
     }
@@ -70,7 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { data: ticket } = await db
     .from('service_requests')
-    .select('id, property_id, service_type, urgency, summary, description, edited_summary, edited_details, created_at, assigned_contact_id')
+    .select('id, property_id, assigned_contact_id')
     .eq('id', ticketId)
     .eq('property_id', id)
     .maybeSingle();
@@ -93,42 +101,45 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     );
   }
 
-  const input = {
-    propertyName: access.property.display_name,
-    serviceType: String(ticket.service_type ?? 'other'),
-    urgency: String(ticket.urgency ?? 'medium'),
-    // Host-edited copy wins; the guest's original intake is the fallback.
-    summary: (ticket.edited_summary as string | null) ?? (ticket.summary as string | null),
-    details: (ticket.edited_details as string | null) ?? (ticket.description as string | null),
-    reportedAt: ticket.created_at as string,
-    reference: ticketId,
-    contact: contact as ShareReportContact,
-  };
-  const text = channel === 'email' ? buildServiceReportText(input) : buildServiceReportSms(input);
-  const subject = buildServiceReportSubject(input);
-
-  const sent = await sendServiceReportShare({
-    channel,
-    contact: destination,
-    replyToEmail: (contact as ShareReportContact).email,
-    subject,
-    text,
-  });
-
-  const { contactHash, last4 } = hashContact(destination);
   const user = await getUser();
-  const { error: logError } = await db.from('service_report_shares').insert({
-    property_id: id,
-    service_request_id: ticketId,
-    channel,
-    destination_hash: contactHash,
-    destination_last4: last4,
-    body_snapshot: text,
-    status: sent ? 'sent' : 'failed',
-    error: sent ? null : 'provider_send_failed',
-    sent_by: user?.id ?? null,
-  });
-  if (logError) log.warn('service_report_share_log_failed', { propertyId: id, ticketId, error: logError.message });
+
+  // Email goes out once with the full To/CC list (true CC semantics); SMS has a
+  // single recipient. Either way every destination gets its own masked row in
+  // service_report_shares.
+  const sent =
+    payload.channel === 'email'
+      ? await sendServiceReportShare({
+          channel: 'email',
+          contact: payload.to[0],
+          to: payload.to,
+          cc: payload.cc,
+          replyToEmail: (contact as ShareReportContact).email,
+          subject: payload.subject,
+          text: payload.message,
+        })
+      : await sendServiceReportShare({
+          channel: 'sms',
+          contact: payload.to[0],
+          subject: buildServiceReportFallbackSubject(),
+          text: payload.message,
+        });
+
+  const destinations = payload.channel === 'email' ? [...payload.to, ...payload.cc] : payload.to;
+  for (const destination of destinations) {
+    const { contactHash, last4 } = hashContact(destination);
+    const { error: logError } = await db.from('service_report_shares').insert({
+      property_id: id,
+      service_request_id: ticketId,
+      channel: payload.channel,
+      destination_hash: contactHash,
+      destination_last4: last4,
+      body_snapshot: payload.message,
+      status: sent ? 'sent' : 'failed',
+      error: sent ? null : 'provider_send_failed',
+      sent_by: user?.id ?? null,
+    });
+    if (logError) log.warn('service_report_share_log_failed', { propertyId: id, ticketId, error: logError.message });
+  }
 
   await audit(admin, {
     action: sent ? 'service_request.report_shared' : 'service_request.report_share_failed',
@@ -137,21 +148,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     propertyId: id,
     targetType: 'service_request',
     targetId: ticketId,
-    metadata: { channel } as unknown as DbJson,
+    metadata: { channel: payload.channel, recipients: destinations.length } as unknown as DbJson,
   });
 
   if (!sent) {
     return NextResponse.json(
       {
         error:
-          channel === 'sms'
+          payload.channel === 'sms'
             ? 'The text could not be sent — SMS may not be configured yet. Try email instead.'
-            : 'The email could not be sent. Check the address and try again.',
+            : 'The email could not be sent. Check the addresses and try again.',
       },
       { status: 502 },
     );
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, sent: destinations.length });
 }
 
 // Recent sends for the ticket (newest first). Destinations are masked.

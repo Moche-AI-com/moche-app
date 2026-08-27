@@ -9,16 +9,30 @@ import type { Json as DbJson } from '@/lib/database.types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// The Edit Report dialog works on the whole report, not just the shared copy:
+// type/urgency and the context fields are patched alongside the edited
+// headline/details. Enum values mirror the Postgres enums in
+// supabase/schema.sql (service_type, urgency_level).
 const PatchSchema = z.object({
+  serviceType: z.enum(['maintenance', 'cleaning', 'safety', 'emergency', 'information', 'other']),
+  urgency: z.enum(['low', 'medium', 'high', 'critical']),
   editedSummary: z.string().max(200).nullable(),
   editedDetails: z.string().max(4000).nullable(),
+  locationNote: z.string().max(300).nullable(),
+  accessInstructions: z.string().max(1000).nullable(),
+  guestAvailability: z.string().max(300).nullable(),
+  resolutionNotes: z.string().max(1000).nullable(),
+  likelyCauses: z.array(z.string().trim().min(1).max(300)).max(40),
+  suggestedParts: z.array(z.string().trim().min(1).max(300)).max(40),
+  safetyFlags: z.array(z.string().trim().min(1).max(300)).max(40),
 });
 
-// Host-editable share copy for a service request (Service tab → Edit report).
-// The guest's original intake (summary / description) is never overwritten —
-// outbound (emailed / texted) and printable reports prefer the edited copy,
-// and every edit is timeline- and audit-logged. Saving empty strings clears
-// the edited copy and reverts outbound reports to the guest's wording.
+// Host-editable share copy + context for a service request (Service tab →
+// Edit report). The guest's original intake (summary / description) is never
+// overwritten — outbound (emailed / texted) and printable reports prefer the
+// edited copy, and every edit is timeline- and audit-logged. Saving empty
+// strings clears the edited copy and reverts outbound reports to the guest's
+// wording.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; ticketId: string }> }) {
   const { id, ticketId } = await params;
   const access = await requirePropertyAccess(id);
@@ -28,8 +42,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const parsed = PatchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
-  const editedSummary = parsed.data.editedSummary?.trim() ? parsed.data.editedSummary.trim() : null;
-  const editedDetails = parsed.data.editedDetails?.trim() ? parsed.data.editedDetails.trim() : null;
+  const d = parsed.data;
+  const blank = (v: string | null) => (v && v.trim() ? v.trim() : null);
 
   const admin = createAdminClient();
   const { data: ticket } = await admin
@@ -50,8 +64,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { error } = await admin
     .from('service_requests')
     .update({
-      edited_summary: editedSummary,
-      edited_details: editedDetails,
+      service_type: d.serviceType,
+      urgency: d.urgency,
+      edited_summary: blank(d.editedSummary),
+      edited_details: blank(d.editedDetails),
+      location_note: blank(d.locationNote),
+      access_instructions: blank(d.accessInstructions),
+      guest_availability: blank(d.guestAvailability),
+      resolution_notes: blank(d.resolutionNotes),
+      likely_causes: d.likelyCauses,
+      suggested_parts: d.suggestedParts,
+      safety_flags: d.safetyFlags,
       edited_at: new Date().toISOString(),
       edited_by: user?.id ?? null,
       timeline: [...priorTimeline, timelineEvent] as unknown as DbJson,
@@ -72,5 +95,5 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     targetId: ticketId,
   });
 
-  return NextResponse.json({ ok: true, editedSummary, editedDetails });
+  return NextResponse.json({ ok: true, editedSummary: blank(d.editedSummary), editedDetails: blank(d.editedDetails) });
 }
