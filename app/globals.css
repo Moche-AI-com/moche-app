@@ -2219,3 +2219,54 @@ a.badge-lg.badge-coral:hover { border-color: var(--coral); color: var(--coral); 
   a.badge-lg:hover { transform: none; }
   .prop-tile-arrow { opacity: 1; transform: none; }
 }
+
+/* ============================================================
+   Property workspace, round 2 — slim header brain meter, overview duo
+   The workspace header dropped its hero card; Brain health is a compact
+   meter that is itself the Manage Brain link. The overview gains a
+   two-card row (Property Inbox + Guest access) under the tiles.
+   ============================================================ */
+.brain-meter {
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+  padding: .9rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  min-width: 0;
+  transition: border-color var(--tr), box-shadow var(--tr), transform var(--tr);
+}
+.brain-meter:hover { border-color: var(--teal); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.brain-meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.brain-meter-label {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.brain-meter-score { font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; line-height: 1; }
+.brain-meter-score small { font-size: .72rem; font-weight: 500; color: var(--text-faint); margin-left: .15rem; }
+/* The reused topic-bar primitives are div-styled; as spans inside a link they
+   need display:block to honour the 7px track height. */
+.brain-meter-track { display: block; }
+.brain-meter-track .dash-topic-fill { display: block; }
+.brain-meter-cta { display: inline-flex; align-items: center; gap: .3rem; font-size: .78rem; font-weight: 600; color: var(--teal); }
+
+/* Overview duo: Property Inbox + Guest access side by side on wide screens,
+   stacked on phones. */
+.prop-duo { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 960px) { .prop-duo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.prop-panel { padding: 1.25rem; display: flex; flex-direction: column; }
+.prop-panel-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .8rem; }
+.prop-panel-head h2 { font-size: 1rem; margin: 0; display: inline-flex; align-items: center; gap: .45rem; }
+.prop-panel-head h2 svg { color: var(--teal); }
+/* Pin the footer link to the card bottom so both panels end on one line. */
+.prop-panel .dash-panel-link { margin-top: auto; padding-top: 1rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .brain-meter { transition: none; }
+  .brain-meter:hover { transform: none; }
+}
