@@ -421,23 +421,25 @@ export function ReportGrid<TRow>({
           display: flex; align-items: center; gap: .45rem;
           font-size: .82rem; color: var(--text); cursor: pointer;
         }
-        .rg-print-header, .rg-print-foot { display: none; }
+        .rg-print-header, .rg-print-foot, .report-print-brand { display: none; }
 
         @media (prefers-reduced-motion: reduce) {
           .rg-th { transition: none !important; }
         }
 
         @media print {
-          .rg-toolbar, .rg-filter-row, .rg-grip { display: none !important; }
+          .rg-toolbar, .rg-filter-row, .rg-grip, .no-print { display: none !important; }
           .rg-print-header {
             display: block; margin-bottom: .9rem; padding-bottom: .65rem;
             border-bottom: 2px solid #000;
           }
-          .rg-print-brand {
+          .rg-print-brand, .report-print-brand {
             display: flex; align-items: center; gap: .45rem;
             font-family: var(--font-display); font-weight: 600; font-size: .98rem;
-            color: #000; margin-bottom: .4rem;
+            color: #000;
           }
+          .rg-print-brand { margin-bottom: .4rem; }
+          .report-print-brand { margin-bottom: 1rem; }
           .rg-print-topic {
             font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; margin: 0 0 .15rem;
           }

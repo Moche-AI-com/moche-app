@@ -43,6 +43,9 @@ export default async function ArchivedPropertiesPage({
 
   return (
     <div>
+      {/* This page has no ReportGrid, so it carries the .no-print rule itself —
+          the grid's scoped style block defines it everywhere else. */}
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
       <div className="no-print" style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
