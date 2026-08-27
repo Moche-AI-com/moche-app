@@ -74,8 +74,15 @@ async function sendSms(to: string, message: string): Promise<boolean> {
 // Sends a plain-text host email via Resend (server-side only). replyTo defaults
 // to the monitored transactional identity; host-initiated shares (service
 // reports) pass the assigned contact's address so recipient replies reach the
-// host's team instead of our support inbox.
-async function sendHostEmail(to: string, subject: string, text: string, replyTo: string = EMAIL_REPLY_TO): Promise<boolean> {
+// host's team instead of our support inbox. Accepts a To list and optional CC
+// so the report compose view can address one email to several recipients.
+async function sendHostEmail(
+  to: string | string[],
+  subject: string,
+  text: string,
+  replyTo: string = EMAIL_REPLY_TO,
+  cc?: string[],
+): Promise<boolean> {
   if (!serverEnv.resendApiKey) {
     log.warn('email_disabled_no_resend_key', {});
     return false;
@@ -87,6 +94,7 @@ async function sendHostEmail(to: string, subject: string, text: string, replyTo:
       from: EMAIL_FROM,
       replyTo,
       to,
+      ...(cc && cc.length > 0 ? { cc } : {}),
       subject,
       text,
     });
@@ -253,21 +261,29 @@ export async function sendGuestPortalShare(p: {
 
 // Host-initiated service report share (Service tab → Email/Text report, and the
 // printable report page). Sends the share-safe report text built by
-// lib/service-requests/share-report.ts to a recipient the host typed in.
-// Transactional by construction: the host triggered this exact send for this
-// specific recipient. replyTo is the ticket's assigned contact when it has an
-// email, so a recipient's reply reaches the host's chosen contact rather than
-// our support inbox. Returns false when the provider is unconfigured or the
-// send fails — the caller records the outcome in service_report_shares.
+// lib/service-requests/share-report.ts to recipients the host chose on the
+// compose screen. Transactional by construction: the host triggered this exact
+// send for these specific recipients. replyTo is the ticket's assigned contact
+// when it has an email, so a recipient's reply reaches the host's chosen
+// contact rather than our support inbox. Returns false when the provider is
+// unconfigured or the send fails — the caller records the outcome in
+// service_report_shares.
 export async function sendServiceReportShare(p: {
   channel: 'sms' | 'email';
+  /** SMS: the destination number. Email: fallback recipient when `to` is omitted. */
   contact: string;
+  /** Email only: full To list (the compose view collects one chip per address). */
+  to?: string[];
+  /** Email only: CC recipients. */
+  cc?: string[];
   replyToEmail?: string | null;
-  subject: string;
+  /** Email only; ignored for SMS. */
+  subject?: string;
   text: string;
 }): Promise<boolean> {
   if (p.channel === 'email') {
-    return sendHostEmail(p.contact, p.subject, p.text, p.replyToEmail ?? undefined);
+    const to = p.to && p.to.length > 0 ? p.to : [p.contact];
+    return sendHostEmail(to, p.subject ?? 'Service report', p.text, p.replyToEmail ?? undefined, p.cc);
   }
   return sendSms(p.contact, p.text);
 }

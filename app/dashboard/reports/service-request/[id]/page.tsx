@@ -129,30 +129,11 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
         <DomeMark size={22} variant="mono" />
         <span>Moche-AI</span>
       </div>
-      <div className="report-toolbar">
-        <a href="/dashboard/reports" className="btn btn-ghost btn-sm">← All reports</a>
-        <ReportActions
-          ticket={{
-            id: t.id,
-            property_id: t.property_id,
-            service_type: String(t.service_type ?? 'other'),
-            urgency: String(t.urgency ?? 'medium'),
-            summary: t.summary ?? null,
-            description: t.description ?? null,
-            edited_summary: t.edited_summary,
-            edited_details: t.edited_details,
-            created_at: t.created_at,
-            assigned_contact_id: t.assigned_contact_id ?? null,
-            assigned_profile_id: t.assigned_profile_id ?? null,
-          }}
-          propertyName={access.property.display_name}
-          contacts={shareContacts}
-          members={members}
-          canManage={access.can.resolveMaintenance}
-          printMode="native"
-        />
-      </div>
 
+      {/* The sheet reads top-to-bottom as the report itself: header, facts,
+          then the narrative sections. Working controls (Edit, Assign, Email,
+          Text, Print) live at the foot so the top stays a client-facing
+          document on screen and on paper. */}
       <header className="report-head">
         <p className="report-kicker">Service report</p>
         <h1 className="report-title">
@@ -240,6 +221,43 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
         <span>Moche AI service report</span>
         <span>Generated {fmt(new Date().toISOString())}</span>
       </footer>
+
+      {/* Working controls. The print stylesheet already hides .report-toolbar,
+          so a hard copy is the report alone — no buttons, no chrome. */}
+      <div
+        className="report-toolbar"
+        role="toolbar"
+        aria-label="Report actions"
+        style={{ justifyContent: 'flex-start', marginTop: '2rem', marginBottom: 0, paddingTop: '1rem', borderTop: '1px solid var(--border)' }}
+      >
+        <ReportActions
+          ticket={{
+            id: t.id,
+            property_id: t.property_id,
+            service_type: String(t.service_type ?? 'other'),
+            urgency: String(t.urgency ?? 'medium'),
+            summary: t.summary ?? null,
+            description: t.description ?? null,
+            edited_summary: t.edited_summary,
+            edited_details: t.edited_details,
+            created_at: t.created_at,
+            assigned_contact_id: t.assigned_contact_id ?? null,
+            assigned_profile_id: t.assigned_profile_id ?? null,
+            location_note: t.location_note ?? null,
+            access_instructions: t.access_instructions ?? null,
+            guest_availability: t.guest_availability ?? null,
+            resolution_notes: t.resolution_notes ?? null,
+            likely_causes: t.likely_causes,
+            suggested_parts: t.suggested_parts,
+            safety_flags: t.safety_flags,
+          }}
+          propertyName={access.property.display_name}
+          contacts={shareContacts}
+          members={members}
+          canManage={access.can.resolveMaintenance}
+          printMode="native"
+        />
+      </div>
     </div>
   );
 }
