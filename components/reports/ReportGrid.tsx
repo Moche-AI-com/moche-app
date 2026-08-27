@@ -32,6 +32,7 @@ import {
 } from '@dnd-kit/sortable';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, GripVertical, Printer } from 'lucide-react';
 import { downloadCsv, toCsv } from '@/lib/reports/csv';
+import { DomeMark } from '@/components/Logo';
 
 /**
  * ReportGrid — the shared spreadsheet-style table behind every Reports topic
@@ -236,9 +237,13 @@ export function ReportGrid<TRow>({
 
   return (
     <div data-testid="report-grid">
-      {/* Print-only header: makes a printout self-describing — topic, the
+      {/* Print-only letterhead: the client-facing header — brand, topic, the
           server-side filters in force, and when it was generated. */}
       <div className="rg-print-header" aria-hidden>
+        <div className="rg-print-brand">
+          <DomeMark size={20} variant="mono" />
+          <span>Moche-AI</span>
+        </div>
         <p className="rg-print-topic">{topic}</p>
         {printSubtitle ? <p className="rg-print-sub">{printSubtitle}</p> : null}
         <p className="rg-print-sub">Generated {printedAt ?? ''}</p>
@@ -343,6 +348,14 @@ export function ReportGrid<TRow>({
         </DndContext>
       </div>
 
+      {/* Print-only footer: the printed page stands alone as a record. */}
+      <div className="rg-print-foot" aria-hidden>
+        <span>Moche-AI · {topic}</span>
+        <span>
+          {shownRows.length} {shownRows.length === 1 ? 'row' : 'rows'}
+        </span>
+      </div>
+
       {/* Grid styles live here rather than in globals.css so the whole pattern
           ships as one component. Screen rules use the design tokens; the print
           block extends the global @media print rules (which already force a
@@ -408,7 +421,7 @@ export function ReportGrid<TRow>({
           display: flex; align-items: center; gap: .45rem;
           font-size: .82rem; color: var(--text); cursor: pointer;
         }
-        .rg-print-header { display: none; }
+        .rg-print-header, .rg-print-foot { display: none; }
 
         @media (prefers-reduced-motion: reduce) {
           .rg-th { transition: none !important; }
@@ -416,11 +429,24 @@ export function ReportGrid<TRow>({
 
         @media print {
           .rg-toolbar, .rg-filter-row, .rg-grip { display: none !important; }
-          .rg-print-header { display: block; margin-bottom: .75rem; }
+          .rg-print-header {
+            display: block; margin-bottom: .9rem; padding-bottom: .65rem;
+            border-bottom: 2px solid #000;
+          }
+          .rg-print-brand {
+            display: flex; align-items: center; gap: .45rem;
+            font-family: var(--font-display); font-weight: 600; font-size: .98rem;
+            color: #000; margin-bottom: .4rem;
+          }
           .rg-print-topic {
             font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; margin: 0 0 .15rem;
           }
           .rg-print-sub { margin: 0; font-size: .8rem; color: #333; }
+          .rg-print-foot {
+            display: flex; justify-content: space-between; gap: 1rem;
+            margin-top: .9rem; padding-top: .55rem; border-top: 1px solid #ccc;
+            font-size: .74rem; color: #333;
+          }
           .rg-table-wrap { overflow: visible !important; border: none !important; box-shadow: none !important; }
           .rg-table { font-size: 11px; }
           .rg-table tr { break-inside: avoid; page-break-inside: avoid; }

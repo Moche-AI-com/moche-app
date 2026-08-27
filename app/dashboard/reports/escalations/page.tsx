@@ -121,7 +121,7 @@ export default async function HandledEscalationsReportPage({
 
   return (
     <div>
-      <div style={{ marginBottom: '1.25rem' }}>
+      <div className="no-print" style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
             ← Reports
@@ -138,15 +138,17 @@ export default async function HandledEscalationsReportPage({
         </p>
       </div>
 
-      <PropertyFilter
-        properties={propList.map((p) => ({ id: p.id, name: p.display_name }))}
-        activeId={activeProperty}
-        basePath="/dashboard/reports/escalations"
-      />
+      <div className="no-print">
+        <PropertyFilter
+          properties={propList.map((p) => ({ id: p.id, name: p.display_name }))}
+          activeId={activeProperty}
+          basePath="/dashboard/reports/escalations"
+        />
+      </div>
 
       <form
         method="get"
-        className="card"
+        className="card no-print"
         style={{
           padding: '.9rem 1rem',
           margin: '.85rem 0 1.1rem',
