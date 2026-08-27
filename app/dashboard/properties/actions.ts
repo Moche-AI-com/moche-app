@@ -200,7 +200,6 @@ export async function updatePropertyAddressAction(_prev: PropertyFormState, form
       address_line2: d.addressLine2 || null,
       city: d.city || null,
       region: d.region || null,
-      postal_code: d.postalCode || null,
       country: d.country || null,
       lat: d.lat ?? null,
       lng: d.lng ?? null,
@@ -595,7 +594,9 @@ export async function restorePropertyAction(_prev: PropertyFormState, formData: 
  * is erased and what is kept.
  *
  * Three things guard the destructive path, in order:
- *   1. `requirePropertyAccess` + `editProperty` — the real authorisation check.
+ *   1. `requirePropertyAccess` + `isOwner` — the real authorisation check. Only
+ *      the main account holder can erase a property; no delegated role can,
+ *      whatever capabilities they have been granted.
  *   2. The typed confirmation — protects against a misclick, not an attacker.
  *      It is verified HERE and not only in the dialog, because a client-side
  *      confirmation is a UI affordance and not a gate.
@@ -609,8 +610,9 @@ export async function restorePropertyAction(_prev: PropertyFormState, formData: 
 export async function deletePropertyAction(_prev: PropertyFormState, formData: FormData): Promise<PropertyFormState> {
   const propertyId = String(formData.get('propertyId') ?? '');
   const access = await requirePropertyAccess(propertyId);
-  if (!access.can.editProperty) {
-    return { error: 'You do not have permission to delete this property.' };
+  // Owner-only: the main account holder, not any role with property edit rights.
+  if (!access.isOwner) {
+    return { error: 'Only the account owner can permanently delete a property.' };
   }
 
   const typed = formData.get('confirm');

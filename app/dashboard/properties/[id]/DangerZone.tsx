@@ -11,12 +11,12 @@ import { DELETE_CONFIRMATION_WORD } from '@/lib/properties/delete-confirmation';
  * Permanent-delete affordance for a property, rendered at the bottom of the
  * property's Configuration page.
  *
- * Deliberately NOT sitting next to Archive in the header controls, and no
- * longer on the overview page either: Archive is reversible and lives with
- * the other status buttons, while this is the one action in the property
- * that cannot be undone. It sits inside Configuration — a surface only
- * property editors can open — at the very bottom, behind its own
- * confirmation, where a host has to go looking for it.
+ * Owner-only by contract: the settings page renders this solely for the main
+ * account holder (access.isOwner), and deletePropertyAction re-checks isOwner
+ * server-side. Archive remains the reversible alternative on the header status
+ * controls; this is the one action in the property that cannot be undone, so it
+ * sits at the bottom of Configuration, behind its own typed confirmation, where
+ * a host has to go looking for it.
  *
  * The typed word is a misclick guard, not a security control — the server action
  * re-checks both permission and the typed word, and reads the required word from

@@ -30,10 +30,10 @@ export default async function PropertyWorkspaceLayout({
           back-to-properties link that used to sit here duplicated the
           breadcrumb's first crumb. */}
 
-      {/* Grid styles live in globals.css (.property-workspace-header /
-          .property-workspace-main) — class-driven so the 860px mobile collapse
-          actually applies. Inline grid styles would override it. */}
-      <header className="card property-workspace-header">
+      {/* Slim command strip, not a hero card: identity + status actions on the
+          left, Brain health as a compact meter on the right. Grid rules live in
+          globals.css (.property-workspace-header) so the 860px collapse applies. */}
+      <header className="property-workspace-header">
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.55rem', margin: 0 }}>{property.display_name}</h1>
@@ -54,20 +54,28 @@ export default async function PropertyWorkspaceLayout({
           )}
         </div>
 
-        <div className="card-2" style={{ padding: '.8rem .9rem', alignSelf: 'start' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem' }}>
-            <div>
-              <div className="faint" style={{ fontSize: '.72rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>Brain health</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '.35rem', marginTop: '.1rem' }}>
-                <strong style={{ fontSize: '1.35rem', color: health.score >= 70 ? 'var(--teal)' : health.score >= 40 ? 'var(--iris)' : 'var(--coral)' }}>{health.score}</strong>
-                <span className="muted" style={{ fontSize: '.8rem' }}>/100</span>
-              </div>
-            </div>
-            <Link href={`/dashboard/properties/${property.id}/brain`} className="btn btn-sm btn-ghost" style={{ minHeight: '2.75rem' }}>
-              Manage Brain
-            </Link>
-          </div>
-        </div>
+        {/* The whole meter is the Manage Brain link — the gradient bar carries
+            the score at a glance, so the number never needs its own card. */}
+        <Link
+          href={`/dashboard/properties/${property.id}/brain`}
+          className="brain-meter"
+          aria-label={`Brain health ${health.score} out of 100. Manage Brain.`}
+        >
+          <span className="brain-meter-top">
+            <span className="brain-meter-label">Brain health</span>
+            <span
+              className="brain-meter-score"
+              style={{ color: health.score >= 70 ? 'var(--teal)' : health.score >= 40 ? 'var(--iris)' : 'var(--coral)' }}
+            >
+              {health.score}
+              <small>/100</small>
+            </span>
+          </span>
+          <span className="dash-topic-track brain-meter-track" aria-hidden>
+            <span className="dash-topic-fill" style={{ width: `${health.score}%` }} />
+          </span>
+          <span className="brain-meter-cta">Manage Brain →</span>
+        </Link>
       </header>
 
       <div className="property-workspace-main">

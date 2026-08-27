@@ -1,10 +1,14 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import {
+  AlertTriangle,
   ArrowRight,
   Brain,
   CalendarDays,
+  Check,
   LifeBuoy,
   MapPin,
+  QrCode,
   Settings,
   Sparkles,
   type LucideIcon,
@@ -13,8 +17,11 @@ import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, gapPrompts } from '@/lib/brain/health';
 import { ListingImportKickoff } from './ListingImportKickoff';
+import { CopyPortalLink } from './CopyPortalLink';
 
 export const dynamic = 'force-dynamic';
+
+const dayFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 
 export default async function PropertyDetailPage({
   params,
@@ -34,6 +41,7 @@ export default async function PropertyDetailPage({
     { count: curatedCount },
     { count: discoveredCount },
     { count: openExtras },
+    { data: inboxRows },
   ] = await Promise.all([
     supabase.from('brain_items').select('category, status, deleted_at, visibility').eq('property_id', property.id),
     supabase.from('stays').select('id', { count: 'exact', head: true }).eq('property_id', property.id).is('deleted_at', null),
@@ -41,6 +49,9 @@ export default async function PropertyDetailPage({
     supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('approved', true).eq('hidden', false).is('deleted_at', null),
     supabase.from('nearby_places').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('hidden', false),
     supabase.from('extras_orders').select('id', { count: 'exact', head: true }).eq('property_id', property.id).not('fulfillment_status', 'in', '("fulfilled","declined","canceled","expired","refunded")'),
+    // The Inbox card previews the newest few open escalations; the full list
+    // lives in the Stays tab, where the conversations are.
+    supabase.from('escalations').select('id, question, created_at').eq('property_id', property.id).eq('status', 'open').order('created_at', { ascending: false }).limit(3),
   ]);
 
   const health = computeBrainHealth(items ?? []);
@@ -53,9 +64,16 @@ export default async function PropertyDetailPage({
   const rawImport = typeof searchParams.import === 'string' ? searchParams.import.trim() : '';
   const listingImportUrl = /^https?:\/\//i.test(rawImport) && rawImport.length <= 2000 ? rawImport : null;
 
-  // Guest access management lives in the Stays tab (per-stay portal + sessions);
-  // the reusable property QR link lives in Settings.
+  // The stable portal URL is safe to show and copy: guests still verify with the
+  // contact on their booking before anything about a stay is revealed.
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host');
+  const proto = h.get('x-forwarded-proto') ?? 'https';
+  const portalUrl = host ? `${proto}://${host}/g/${property.slug}` : null;
+
+  const base = `/dashboard/properties/${property.id}`;
   const needsAttention = (openEsc ?? 0) + health.gaps.length;
+  const inbox = inboxRows ?? [];
 
   return (
     <div>
@@ -63,52 +81,114 @@ export default async function PropertyDetailPage({
         <ListingImportKickoff propertyId={property.id} listingUrl={listingImportUrl} />
       )}
 
-      <section className="card rise-in" style={{ padding: '1rem 1.1rem', marginBottom: '1.25rem' }} aria-labelledby="needs-attention-heading">
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
-          <div>
-            <h2 id="needs-attention-heading" style={{ fontSize: '1rem', margin: 0 }}>Needs attention</h2>
-            <p className="muted" style={{ fontSize: '.84rem', margin: '.25rem 0 0' }}>
-              {needsAttention === 0 ? 'Everything is looking good.' : `${needsAttention} item${needsAttention === 1 ? '' : 's'} to review across guest support and your Brain.`}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-            <Link href={`/dashboard/properties/${property.id}/stays`} className={`badge badge-lg${openEsc ? ' badge-coral' : ''}`}>
-              {openEsc ?? 0} open escalation{openEsc === 1 ? '' : 's'}
-            </Link>
-            <Link href={`/dashboard/properties/${property.id}/brain`} className="badge badge-lg">
-              {health.gaps.length} Brain gap{health.gaps.length === 1 ? '' : 's'}
-            </Link>
-          </div>
+      {/* Attention strip, not a card: a single quiet line when all is well,
+          count chips + gap prompts when something needs the host. Reuses the
+          home dashboard's dash-attn pattern. */}
+      <div className={`dash-attn rise-in${needsAttention === 0 ? ' dash-attn-clear' : ''}`} style={{ marginBottom: '1.25rem' }}>
+        <span className={`dash-attn-icon${needsAttention === 0 ? ' dash-attn-icon-clear' : ''}`} aria-hidden>
+          {needsAttention === 0 ? <Check size={15} /> : <AlertTriangle size={15} />}
+        </span>
+        <div className="dash-attn-body">
+          <strong className="dash-attn-title">{needsAttention === 0 ? 'All clear' : 'Needs attention'}</strong>
+          <span className="dash-attn-sub">
+            {needsAttention === 0
+              ? 'No open escalations or Brain gaps — the concierge has things covered.'
+              : `${needsAttention} item${needsAttention === 1 ? '' : 's'} to review across guest support and your Brain.`}
+          </span>
+          {needsAttention > 0 && (
+            <div className="dash-attn-chips">
+              <Link href={`${base}/stays`} className="dash-attn-chip dash-attn-chip-link">
+                <strong>{openEsc ?? 0}</strong> open escalation{openEsc === 1 ? '' : 's'}
+              </Link>
+              <Link href={`${base}/brain`} className="dash-attn-chip dash-attn-chip-link">
+                <strong>{health.gaps.length}</strong> Brain gap{health.gaps.length === 1 ? '' : 's'}
+              </Link>
+            </div>
+          )}
+          {prompts.length > 0 && (
+            <ul className="muted" style={{ fontSize: '.82rem', margin: '.75rem 0 0', paddingLeft: '1.1rem' }}>
+              {prompts.map((prompt, index) => <li key={index} style={{ marginBottom: '.25rem' }}>{prompt}</li>)}
+            </ul>
+          )}
         </div>
-        {prompts.length > 0 && (
-          <ul className="muted" style={{ fontSize: '.82rem', margin: '.85rem 0 0', paddingLeft: '1.1rem' }}>
-            {prompts.map((prompt, index) => <li key={index} style={{ marginBottom: '.25rem' }}>{prompt}</li>)}
-          </ul>
-        )}
-      </section>
+      </div>
 
-      {/* One tile per job-to-be-done. The old grid had a pair of Extras tiles
-          pointing at the same place; that duplicate is merged. Escalations
-          still deep-links into the merged Stays tab, where guest conversations
-          live — it earns its own tile because the open count is an attention
-          metric, not navigation. */}
+      {/* One tile per job-to-be-done. Escalations deep-links into the merged
+          Stays tab — it earns its own tile because the open count is an
+          attention metric, not navigation. */}
       <section aria-labelledby="property-workspace-heading">
         <h2 id="property-workspace-heading" className="sr-only">Workspace</h2>
-        <div className="prop-tile-grid">
-          <Tile href={`/dashboard/properties/${property.id}/brain`} icon={Brain} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
-          <Tile href={`/dashboard/properties/${property.id}/stays`} icon={CalendarDays} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
-          <Tile href={`/dashboard/properties/${property.id}/stays`} icon={LifeBuoy} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" attention={(openEsc ?? 0) > 0} />
+        <div className="prop-tile-grid" style={{ marginBottom: '1.25rem' }}>
+          <Tile href={`${base}/brain`} icon={Brain} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
+          <Tile href={`${base}/stays`} icon={CalendarDays} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
+          <Tile href={`${base}/stays`} icon={LifeBuoy} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" attention={(openEsc ?? 0) > 0} />
           {(can.editProperty || can.editBrain) && (
-            <Tile href={`/dashboard/properties/${property.id}/extras`} icon={Sparkles} title="Extras" value={`${openExtras ?? 0} open`} sub="Add-ons guests can request" />
+            <Tile href={`${base}/extras`} icon={Sparkles} title="Extras" value={`${openExtras ?? 0} open`} sub="Add-ons guests can request" />
           )}
-          <Tile href={`/dashboard/properties/${property.id}/local`} icon={MapPin} title="Local Recs" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
-          {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} icon={Settings} title="Configuration" value="Configure" sub="Branding, tone, modules" />}
+          <Tile href={`${base}/local`} icon={MapPin} title="Local Recs" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
+          {can.editProperty && <Tile href={`${base}/settings`} icon={Settings} title="Configuration" value="Configure" sub="Branding, tone, modules" />}
         </div>
       </section>
 
-      {/* Permanent delete moved to the bottom of Configuration — the only
-          surface gated to property editors — so this page stays focused on
-          day-to-day work. See settings/page.tsx for the DangerZone. */}
+      <div className="prop-duo">
+        {/* Property Inbox: the newest open guest questions, one tap into Stays. */}
+        <section className="card prop-panel rise-in" aria-labelledby="property-inbox-heading">
+          <div className="prop-panel-head">
+            <h2 id="property-inbox-heading">
+              <LifeBuoy size={15} aria-hidden /> Property Inbox
+            </h2>
+            {(openEsc ?? 0) > 0 && <span className="badge badge-coral">{openEsc} open</span>}
+          </div>
+          {inbox.length > 0 ? (
+            <div className="dash-feed">
+              {inbox.map((esc) => (
+                <Link key={esc.id} href={`${base}/stays`} className="dash-feed-link">
+                  <span className="dash-feed-icon" aria-hidden>
+                    <LifeBuoy size={14} />
+                  </span>
+                  <span className="dash-feed-main">
+                    <span className="dash-feed-detail" style={{ color: 'var(--text)', fontWeight: 600 }}>
+                      {esc.question || 'Guest question'}
+                    </span>
+                    <span className="dash-feed-meta">Opened {dayFormat.format(new Date(esc.created_at))} · Awaiting a reply</span>
+                  </span>
+                  <ArrowRight size={14} className="dash-feed-arrow" aria-hidden />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="muted" style={{ fontSize: '.85rem', margin: 0, lineHeight: 1.5 }}>
+              No open guest questions. Anything the concierge cannot answer lands here first.
+            </p>
+          )}
+          <Link href={`${base}/stays`} className="dash-panel-link">Open inbox →</Link>
+        </section>
+
+        {/* Guest access: the stable portal link plus the QR/print entry point.
+            The QR never needs "generating" — the welcome card renders it on
+            demand, and verification at the portal is what protects the stay. */}
+        <section className="card prop-panel rise-in" aria-labelledby="guest-access-heading">
+          <div className="prop-panel-head">
+            <h2 id="guest-access-heading">
+              <QrCode size={15} aria-hidden /> Guest access
+            </h2>
+          </div>
+          <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .9rem', lineHeight: 1.5 }}>
+            Guests scan the portal QR and verify with the contact on their booking — their stay code unlocks the right stay.
+          </p>
+          {portalUrl && (
+            <div className="card-2" style={{ padding: '.55rem .75rem', display: 'flex', alignItems: 'center', gap: '.75rem', justifyContent: 'space-between' }}>
+              <span className="portal-url">{portalUrl}</span>
+              <CopyPortalLink url={portalUrl} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '.9rem' }}>
+            <Link href={`${base}/welcome-card`} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
+              <QrCode size={15} aria-hidden /> View QR &amp; print card
+            </Link>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
