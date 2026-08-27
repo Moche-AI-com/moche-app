@@ -187,13 +187,12 @@ export default async function ReportsPage({
     requests.length === 0 && stays.length === 0 && extras.length === 0 && archivedProps.length === 0 &&
     handled.length === 0;
 
-  // Hub cards: one per report topic. Past stays is the live grid (#81); the
-  // other cards deep-link to their summary section on this page until their
-  // grids land (PR 2: escalations, service requests, guest directory; PR 3:
-  // extras, archived properties).
+  // Hub cards: one per report topic, each linking straight to its grid. The
+  // expandable thread view (with the AI-training switches) stays on this page —
+  // it is a detail surface, not a spreadsheet.
   const topicCards: Array<{
     key: string;
-    href: string | null;
+    href: string;
     icon: typeof Archive;
     label: string;
     count: number;
@@ -209,27 +208,27 @@ export default async function ReportsPage({
     },
     {
       key: 'handled-escalations',
-      href: '#handled-escalations',
+      href: '/dashboard/reports/escalations',
       icon: MessageSquare,
       label: 'Handled escalations',
       count: handledTotal,
-      sub: 'Summary below \u00b7 grid in PR 2',
+      sub: 'Open the grid \u2192',
     },
     {
       key: 'service-reports',
-      href: '#service-reports',
+      href: '/dashboard/reports/service-requests',
       icon: FileText,
       label: 'Service reports',
       count: requestsTotal,
-      sub: 'Summary below \u00b7 grid in PR 2',
+      sub: 'Open the grid \u2192',
     },
     {
       key: 'completed-extras',
-      href: '#completed-extras',
+      href: '/dashboard/reports/extras',
       icon: Sparkles,
       label: 'Completed extras',
       count: extrasTotal,
-      sub: 'Summary below \u00b7 grid in PR 3',
+      sub: 'Open the grid \u2192',
     },
     {
       key: 'archived-properties',
@@ -237,15 +236,15 @@ export default async function ReportsPage({
       icon: Building2,
       label: 'Archived properties',
       count: archivedProps.length,
-      sub: 'Summary below \u00b7 grid in PR 3',
+      sub: 'Summary below',
     },
     {
       key: 'guest-directory',
-      href: null,
+      href: '/dashboard/reports/guests',
       icon: Users,
       label: 'Guest directory',
       count: guestsTotal,
-      sub: 'Grid in PR 2',
+      sub: 'Open the grid \u2192',
     },
   ];
 
@@ -270,18 +269,7 @@ export default async function ReportsPage({
         <div className="dash-props-grid">
           {topicCards.map((card) => {
             const Icon = card.icon;
-            const inner = (
-              <>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '.45rem', fontSize: '.85rem', fontWeight: 600 }}>
-                  <Icon size={15} aria-hidden style={{ color: 'var(--teal)', flexShrink: 0 }} /> {card.label}
-                </span>
-                <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '1.7rem', fontWeight: 700, lineHeight: 1.1, margin: '.5rem 0 .3rem' }}>
-                  {card.count}
-                </span>
-                <span className="faint" style={{ fontSize: '.76rem' }}>{card.sub}</span>
-              </>
-            );
-            return card.href ? (
+            return (
               <Link
                 key={card.key}
                 href={card.href}
@@ -289,17 +277,14 @@ export default async function ReportsPage({
                 style={{ padding: '1rem 1.15rem', display: 'block' }}
                 data-testid={`report-card-${card.key}`}
               >
-                {inner}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '.45rem', fontSize: '.85rem', fontWeight: 600 }}>
+                  <Icon size={15} aria-hidden style={{ color: 'var(--teal)', flexShrink: 0 }} /> {card.label}
+                </span>
+                <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '1.7rem', fontWeight: 700, lineHeight: 1.1, margin: '.5rem 0 .3rem' }}>
+                  {card.count}
+                </span>
+                <span className="faint" style={{ fontSize: '.76rem' }}>{card.sub}</span>
               </Link>
-            ) : (
-              <div
-                key={card.key}
-                className="card"
-                style={{ padding: '1rem 1.15rem', opacity: 0.75 }}
-                data-testid={`report-card-${card.key}`}
-              >
-                {inner}
-              </div>
             );
           })}
         </div>
@@ -348,6 +333,14 @@ export default async function ReportsPage({
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
               <MessageSquare size={16} aria-hidden /> Handled escalations
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({handled.length})</span>
+              <Link
+                href="/dashboard/reports/escalations"
+                className="dash-section-link"
+                style={{ marginLeft: 'auto', fontSize: '.8rem' }}
+                data-testid="handled-escalations-grid-link"
+              >
+                Open grid view \u2192
+              </Link>
             </h2>
             <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .75rem' }}>
               Every guest question your team answered personally, with the full thread around it. Open one to see what the
@@ -361,6 +354,14 @@ export default async function ReportsPage({
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
               <FileText size={16} aria-hidden /> Service reports
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({requests.length})</span>
+              <Link
+                href="/dashboard/reports/service-requests"
+                className="dash-section-link"
+                style={{ marginLeft: 'auto', fontSize: '.8rem' }}
+                data-testid="service-reports-grid-link"
+              >
+                Open grid view \u2192
+              </Link>
             </h2>
             {requests.length === 0 ? (
               <p className="muted" style={{ fontSize: '.88rem' }}>No resolved service requests yet.</p>
@@ -392,6 +393,14 @@ export default async function ReportsPage({
             <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.75rem' }}>
               <Sparkles size={16} aria-hidden /> Completed extras
               <span className="faint" style={{ fontSize: '.8rem', fontWeight: 400 }}>({extras.length})</span>
+              <Link
+                href="/dashboard/reports/extras"
+                className="dash-section-link"
+                style={{ marginLeft: 'auto', fontSize: '.8rem' }}
+                data-testid="completed-extras-grid-link"
+              >
+                Open grid view \u2192
+              </Link>
             </h2>
             {extras.length === 0 ? (
               <p className="muted" style={{ fontSize: '.88rem' }}>No completed extras yet.</p>
