@@ -13,9 +13,7 @@ const ROW_CAP = 500;
 
 type EscalationStatus = Database['public']['Enums']['escalation_status'];
 
-// Anything but 'open' is archived history. 'closed' is not a stored value —
-// closing maps to the other terminal statuses — but a stale enum entry costs
-// nothing in the fallback.
+// Anything but 'open' is archived history.
 const STATUS_OPTIONS: readonly EscalationStatus[] = ['resolved', 'answered', 'dismissed'];
 
 const STATUS_LABEL: Record<string, string> = {
@@ -25,7 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function humanizeToken(value: string | null | undefined): string {
-  if (!value) return '\u2014';
+  if (!value) return '—';
   const words = value.replace(/_/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -83,8 +81,7 @@ export default async function HandledEscalationsReportPage({
   let totalCount = 0;
 
   if (scopeIds.length > 0) {
-    // Same archive definition as the hub's handled-escalations section: anything
-    // no longer open, answered-most-recent-first.
+    // Anything no longer open, answered-most-recent-first.
     let query = supabase
       .from('escalations')
       .select('*', { count: 'exact' })
@@ -105,7 +102,7 @@ export default async function HandledEscalationsReportPage({
       question: e.question,
       property: propNames.get(e.property_id) ?? 'Property',
       status: STATUS_LABEL[e.status] ?? humanizeToken(e.status),
-      response: e.host_response?.trim() || '\u2014',
+      response: e.host_response?.trim() || '—',
       asked: fmtDateInTz(e.created_at, propTimezones.get(e.property_id)),
       handled: fmtDateInTz(e.responded_at, propTimezones.get(e.property_id)),
       askedTs: new Date(e.created_at).getTime(),
@@ -118,16 +115,16 @@ export default async function HandledEscalationsReportPage({
 
   const printSubtitle = [
     `Property: ${activeProperty ? propNames.get(activeProperty) ?? 'Property' : 'All properties'}`,
-    `Asked: ${from ?? 'any'} \u2192 ${to ?? 'any'}`,
+    `Asked: ${from ?? 'any'} → ${to ?? 'any'}`,
     `Status: ${status ? STATUS_LABEL[status] ?? humanizeToken(status) : 'All'}`,
-  ].join(' \u00b7 ');
+  ].join(' · ');
 
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
-            \u2190 Reports
+            ← Reports
           </Link>
         </p>
         <h1 style={{ fontSize: '1.8rem', margin: 0, display: 'flex', alignItems: 'center', gap: '.5rem' }}>
@@ -136,8 +133,8 @@ export default async function HandledEscalationsReportPage({
         <p className="muted" style={{ fontSize: '.9rem', margin: '.35rem 0 0' }}>
           Every guest question your team answered personally, as a spreadsheet: sort any column, drag columns into
           the order you want, filter by question, property, or response, then print or export exactly what you see.
-          The hub keeps the expandable thread view with its training switches. Refreshing the page restores the
-          default view.
+          Open a row to see the full thread and choose which replies train the concierge. Refreshing the page
+          restores the default view.
         </p>
       </div>
 

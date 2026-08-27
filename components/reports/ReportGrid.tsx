@@ -307,7 +307,7 @@ export function ReportGrid<TRow>({
                           className="input rg-filter-input"
                           value={(header.column.getFilterValue() as string) ?? ''}
                           onChange={(e) => header.column.setFilterValue(e.target.value)}
-                          placeholder="Filter\u2026"
+                          placeholder="Filter…"
                           aria-label={`Filter by ${header.column.columnDef.header as string}`}
                           data-testid={`rg-filter-${header.column.id}`}
                         />
