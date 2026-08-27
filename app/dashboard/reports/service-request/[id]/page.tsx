@@ -116,7 +116,7 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
     ['Closed', fmt(t.archived_at)],
     ['Edited by host', fmt(t.edited_at)],
     ['Location', t.location_note ?? null],
-    ['Assigned to', contact ? [contact.name, contact.label].filter(Boolean).join(' \u00b7 ') || contact.contact_type : null],
+    ['Assigned to', contact ? [contact.name, contact.label].filter(Boolean).join(' · ') || contact.contact_type : null],
     ['Assigned user', assignedMemberName],
   ];
 
@@ -213,10 +213,10 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
           <ol className="report-timeline">
             {timeline.map((entry, i) => (
               <li key={i}>
-                <span className="report-timeline-when">{fmt(entry.at) ?? '\u2014'}</span>
+                <span className="report-timeline-when">{fmt(entry.at) ?? '—'}</span>
                 <span>
                   {entry.status ? <strong>{STATUS_LABEL[entry.status] ?? entry.status}</strong> : null}
-                  {entry.note ? `${entry.status ? ' \u00b7 ' : ''}${entry.note}` : null}
+                  {entry.note ? `${entry.status ? ' · ' : ''}${entry.note}` : null}
                 </span>
               </li>
             ))}

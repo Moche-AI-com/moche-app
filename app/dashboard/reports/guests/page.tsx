@@ -86,15 +86,15 @@ export default async function GuestDirectoryPage({
 
   const printSubtitle = [
     `Property: ${activeProperty ? propNames.get(activeProperty) ?? 'Property' : 'All properties'}`,
-    `Added: ${from ?? 'any'} \u2192 ${to ?? 'any'}`,
-  ].join(' \u00b7 ');
+    `Added: ${from ?? 'any'} → ${to ?? 'any'}`,
+  ].join(' · ');
 
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
-            \u2190 Reports
+            ← Reports
           </Link>
         </p>
         <h1 style={{ fontSize: '1.8rem', margin: 0, display: 'flex', alignItems: 'center', gap: '.5rem' }}>

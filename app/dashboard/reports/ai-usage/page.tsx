@@ -1,40 +1,58 @@
 import Link from 'next/link';
-import { Sparkles } from 'lucide-react';
+import { Cpu } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
-import { fmtDateInTz, fmtMoneyFromCents } from '@/lib/reports/format';
-import { EXTRAS_ORDER_STATUS_LABEL, type ExtrasOrderStatus } from '@/lib/dashboard/extras-orders';
-import { ExtrasReport, type ExtrasReportRow } from './ExtrasReport';
+import { fmtDateTimeInTz } from '@/lib/reports/format';
+import { AiUsageReport, type AiUsageReportRow } from './AiUsageReport';
 
 export const dynamic = 'force-dynamic';
 
 const ROW_CAP = 500;
 
-interface ExtrasSearchParams {
+const KIND_OPTIONS = ['chat', 'ingest'] as const;
+
+function humanizeToken(value: string | null | undefined): string {
+  if (!value) return '—';
+  const words = value.replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function fmtUsd(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—';
+  // Per-call costs run to fractions of a cent, so four decimals stay honest.
+  return `$${value.toFixed(4)}`;
+}
+
+function fmtLatency(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return '—';
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+interface AiUsageSearchParams {
   property?: string;
   from?: string;
   to?: string;
-  status?: string;
+  kind?: string;
 }
 
-type ExtrasOrderRow = {
+type AiUsageRow = {
   id: string;
-  property_id: string;
-  item_title: string;
-  item_price_text: string | null;
-  quantity: number;
-  status: ExtrasOrderStatus;
+  property_id: string | null;
+  kind: string;
+  model: string | null;
+  total_tokens: number | null;
+  est_cost_usd: number | null;
+  cache_hit: boolean | null;
+  latency_ms: number | null;
   created_at: string;
-  archived_at: string | null;
-  quoted_amount_cents: number | null;
-  quote_currency: string | null;
 };
 
-export default async function CompletedExtrasReportPage({
+export default async function AiUsageReportPage({
   searchParams,
 }: {
-  searchParams?: Promise<ExtrasSearchParams>;
+  searchParams?: Promise<AiUsageSearchParams>;
 }) {
   const ctx = await requireSession();
   const supabase = createClient();
@@ -57,46 +75,49 @@ export default async function CompletedExtrasReportPage({
 
   const from = sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : null;
   const to = sp.to && /^\d{4}-\d{2}-\d{2}$/.test(sp.to) ? sp.to : null;
-  const status =
-    sp.status === 'fulfilled' || sp.status === 'declined' || sp.status === 'cancelled' ? sp.status : null;
+  const kind = KIND_OPTIONS.includes(sp.kind as (typeof KIND_OPTIONS)[number]) ? (sp.kind as string) : null;
 
-  let rows: ExtrasReportRow[] = [];
+  let rows: AiUsageReportRow[] = [];
   let totalCount = 0;
 
-  if (scopeIds.length > 0) {
-    let query = supabase
-      .from('extras_orders')
+  // ai_usage is service-role only by design (RLS denies anon/authenticated —
+  // telemetry is written fire-and-forget by server routes). Without a service
+  // key the grid renders its empty state rather than failing.
+  if (scopeIds.length > 0 && hasServiceRole()) {
+    const admin = createAdminClient();
+    let query = admin
+      .from('ai_usage')
       .select('*', { count: 'exact' })
       .in('property_id', scopeIds)
-      .eq('lifecycle_status', 'archived')
-      .order('archived_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
       .limit(ROW_CAP);
     if (from) query = query.gte('created_at', `${from}T00:00:00.000Z`);
     if (to) query = query.lte('created_at', `${to}T23:59:59.999Z`);
-    if (status) query = query.eq('status', status);
+    if (kind) query = query.eq('kind', kind);
 
-    const { data: orderData, count } = await query;
+    const { data: usageData, count } = await query;
     totalCount = count ?? 0;
-    const orders = (orderData ?? []) as ExtrasOrderRow[];
+    const usage = (usageData ?? []) as AiUsageRow[];
 
-    rows = orders.map((o) => ({
-      id: o.id,
-      item: o.quantity > 1 ? `${o.item_title} ×${o.quantity}` : o.item_title,
-      property: propNames.get(o.property_id) ?? 'Property',
-      quantity: o.quantity,
-      price: o.item_price_text?.trim() || fmtMoneyFromCents(o.quoted_amount_cents, o.quote_currency),
-      status: EXTRAS_ORDER_STATUS_LABEL[o.status] ?? o.status,
-      requested: fmtDateInTz(o.created_at, propTimezones.get(o.property_id)),
-      completed: fmtDateInTz(o.archived_at, propTimezones.get(o.property_id)),
-      requestedTs: new Date(o.created_at).getTime(),
-      completedTs: o.archived_at ? new Date(o.archived_at).getTime() : 0,
+    rows = usage.map((u) => ({
+      id: u.id,
+      when: fmtDateTimeInTz(u.created_at, u.property_id ? propTimezones.get(u.property_id) : null),
+      whenTs: new Date(u.created_at).getTime(),
+      property: (u.property_id && propNames.get(u.property_id)) ?? 'Property',
+      kind: humanizeToken(u.kind),
+      model: u.model ?? '—',
+      tokens: u.total_tokens ?? 0,
+      cost: fmtUsd(u.est_cost_usd === null || u.est_cost_usd === undefined ? null : Number(u.est_cost_usd)),
+      cache: u.cache_hit ? 'Hit' : 'Miss',
+      latency: fmtLatency(u.latency_ms),
+      latencyMs: u.latency_ms ?? 0,
     }));
   }
 
   const printSubtitle = [
     `Property: ${activeProperty ? propNames.get(activeProperty) ?? 'Property' : 'All properties'}`,
-    `Requested: ${from ?? 'any'} → ${to ?? 'any'}`,
-    `Status: ${status ? EXTRAS_ORDER_STATUS_LABEL[status] : 'All'}`,
+    `When: ${from ?? 'any'} → ${to ?? 'any'}`,
+    `Kind: ${kind ? humanizeToken(kind) : 'All'}`,
   ].join(' · ');
 
   return (
@@ -108,19 +129,19 @@ export default async function CompletedExtrasReportPage({
           </Link>
         </p>
         <h1 style={{ fontSize: '1.8rem', margin: 0, display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-          <Sparkles size={20} aria-hidden /> Completed extras
+          <Cpu size={20} aria-hidden /> AI usage
         </h1>
         <p className="muted" style={{ fontSize: '.9rem', margin: '.35rem 0 0' }}>
-          Every extras order that reached a final state, as a spreadsheet: sort any column, drag columns into the
-          order you want, filter by item or property, then print or export exactly what you see. Refreshing the
-          page restores the default view.
+          Every concierge call and knowledge ingestion, as a spreadsheet: model, tokens, estimated cost, cache hits,
+          and latency. Sort any column, drag columns into the order you want, filter, print, or export exactly what
+          you see. Refreshing the page restores the default view.
         </p>
       </div>
 
       <PropertyFilter
         properties={propList.map((p) => ({ id: p.id, name: p.display_name }))}
         activeId={activeProperty}
-        basePath="/dashboard/reports/extras"
+        basePath="/dashboard/reports/ai-usage"
       />
 
       <form
@@ -137,31 +158,33 @@ export default async function CompletedExtrasReportPage({
       >
         {activeProperty ? <input type="hidden" name="property" value={activeProperty} /> : null}
         <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.78rem', fontWeight: 600 }} className="muted">
-          Requested from
+          From
           <input className="input" type="date" name="from" defaultValue={from ?? ''} style={{ minHeight: 40, width: 'auto' }} />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.78rem', fontWeight: 600 }} className="muted">
-          Requested to
+          To
           <input className="input" type="date" name="to" defaultValue={to ?? ''} style={{ minHeight: 40, width: 'auto' }} />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.78rem', fontWeight: 600 }} className="muted">
-          Status
-          <select className="select" name="status" defaultValue={status ?? ''} style={{ minHeight: 40, width: 'auto' }}>
+          Kind
+          <select className="select" name="kind" defaultValue={kind ?? ''} style={{ minHeight: 40, width: 'auto' }}>
             <option value="">All</option>
-            <option value="fulfilled">Fulfilled</option>
-            <option value="declined">Declined</option>
-            <option value="cancelled">Cancelled</option>
+            {KIND_OPTIONS.map((k) => (
+              <option key={k} value={k}>
+                {humanizeToken(k)}
+              </option>
+            ))}
           </select>
         </label>
-        <button type="submit" className="btn btn-primary btn-sm" data-testid="extras-filters-apply">
+        <button type="submit" className="btn btn-primary btn-sm" data-testid="ai-usage-filters-apply">
           Apply
         </button>
-        <Link href="/dashboard/reports/extras" className="btn btn-ghost btn-sm" data-testid="extras-filters-reset">
+        <Link href="/dashboard/reports/ai-usage" className="btn btn-ghost btn-sm" data-testid="ai-usage-filters-reset">
           Reset
         </Link>
       </form>
 
-      <ExtrasReport rows={rows} printSubtitle={printSubtitle} totalCount={totalCount} />
+      <AiUsageReport rows={rows} printSubtitle={printSubtitle} totalCount={totalCount} />
     </div>
   );
 }
