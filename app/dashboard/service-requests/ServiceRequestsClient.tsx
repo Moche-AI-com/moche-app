@@ -239,8 +239,9 @@ function TicketCard({
         </button>
       </div>
 
-      {/* One action row per request: Edit report, Assign (teammate), then the
-          icon-only Email / Text / Print buttons with hover tooltips. */}
+      {/* One action row per request: "View report" opens the printable report
+          page (where editing lives); Assign stays on the card; the icon-only
+          Email / Text / Print buttons sit alongside with hover tooltips. */}
       <div style={{ marginTop: '.6rem' }}>
         <ReportActions
           ticket={ticket}
@@ -248,6 +249,7 @@ function TicketCard({
           contacts={contacts}
           members={members}
           canManage={canResolve}
+          layout="card"
           onEdited={(patch) => onChanged(patch)}
           onAssigned={(profileId) => onChanged({ assigned_profile_id: profileId })}
         />

@@ -121,19 +121,55 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
     ['Assigned user', assignedMemberName],
   ];
 
+  // One ticket shape feeds both ReportActions instances (header share icons +
+  // footer Edit/Assign) — identical data, two layouts.
+  const actionTicket = {
+    id: t.id,
+    property_id: t.property_id,
+    service_type: String(t.service_type ?? 'other'),
+    urgency: String(t.urgency ?? 'medium'),
+    summary: t.summary ?? null,
+    description: t.description ?? null,
+    edited_summary: t.edited_summary,
+    edited_details: t.edited_details,
+    created_at: t.created_at,
+    assigned_contact_id: t.assigned_contact_id ?? null,
+    assigned_profile_id: t.assigned_profile_id ?? null,
+    location_note: t.location_note ?? null,
+    access_instructions: t.access_instructions ?? null,
+    guest_availability: t.guest_availability ?? null,
+    resolution_notes: t.resolution_notes ?? null,
+    likely_causes: t.likely_causes,
+    suggested_parts: t.suggested_parts,
+    safety_flags: t.safety_flags,
+  };
+
   return (
     <div className="report-sheet">
       {/* Print-only letterhead: the sheet reads as a Moche-AI document when it
-          leaves the app — on paper, in a PDF, in an email attachment. */}
+          leaves the app — on paper, in a PDF, in an email attachment. Hidden
+          on screen (the report page doesn't render ReportGrid, so it carries
+          the hide/show rule itself). */}
+      <style>{`.report-print-brand { display: none; } @media print { .report-print-brand { display: flex; align-items: center; gap: .45rem; margin-bottom: 1rem; color: #000; font-family: var(--font-display); font-weight: 600; } }`}</style>
       <div className="report-print-brand" aria-hidden>
         <DomeMark size={22} variant="mono" />
         <span>Moche-AI</span>
       </div>
 
-      {/* The sheet reads top-to-bottom as the report itself: header, facts,
-          then the narrative sections. Working controls (Edit, Assign, Email,
-          Text, Print) live at the foot so the top stays a client-facing
-          document on screen and on paper. */}
+      {/* Share actions sit top-right of the report on screen; Edit report and
+          Assign stay at the foot. The header row is hidden from print via
+          .report-toolbar (the global print block already hides it). */}
+      <div className="report-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '.5rem' }}>
+        <ReportActions
+          ticket={actionTicket}
+          propertyName={access.property.display_name}
+          contacts={shareContacts}
+          canManage={access.can.resolveMaintenance}
+          layout="header"
+          printMode="native"
+        />
+      </div>
+
       <header className="report-head">
         <p className="report-kicker">Service report</p>
         <h1 className="report-title">
@@ -222,39 +258,21 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
         <span>Generated {fmt(new Date().toISOString())}</span>
       </footer>
 
-      {/* Working controls. The print stylesheet already hides .report-toolbar,
-          so a hard copy is the report alone — no buttons, no chrome. */}
+      {/* Edit + Assign stay at the foot of the report. The print stylesheet
+          hides .report-toolbar, so a hard copy is the report alone. */}
       <div
         className="report-toolbar"
         role="toolbar"
         aria-label="Report actions"
-        style={{ justifyContent: 'flex-start', marginTop: '2rem', marginBottom: 0, paddingTop: '1rem', borderTop: '1px solid var(--border)' }}
+        style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '2rem', marginBottom: 0, paddingTop: '1rem', borderTop: '1px solid var(--border)' }}
       >
         <ReportActions
-          ticket={{
-            id: t.id,
-            property_id: t.property_id,
-            service_type: String(t.service_type ?? 'other'),
-            urgency: String(t.urgency ?? 'medium'),
-            summary: t.summary ?? null,
-            description: t.description ?? null,
-            edited_summary: t.edited_summary,
-            edited_details: t.edited_details,
-            created_at: t.created_at,
-            assigned_contact_id: t.assigned_contact_id ?? null,
-            assigned_profile_id: t.assigned_profile_id ?? null,
-            location_note: t.location_note ?? null,
-            access_instructions: t.access_instructions ?? null,
-            guest_availability: t.guest_availability ?? null,
-            resolution_notes: t.resolution_notes ?? null,
-            likely_causes: t.likely_causes,
-            suggested_parts: t.suggested_parts,
-            safety_flags: t.safety_flags,
-          }}
+          ticket={actionTicket}
           propertyName={access.property.display_name}
           contacts={shareContacts}
           members={members}
           canManage={access.can.resolveMaintenance}
+          layout="page"
           printMode="native"
         />
       </div>
