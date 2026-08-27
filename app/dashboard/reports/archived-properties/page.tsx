@@ -43,7 +43,10 @@ export default async function ArchivedPropertiesPage({
 
   return (
     <div>
-      <div style={{ marginBottom: '1.25rem' }}>
+      {/* This page has no ReportGrid, so it carries the .no-print rule itself —
+          the grid's scoped style block defines it everywhere else. */}
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <div className="no-print" style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
             ← Reports
@@ -59,11 +62,13 @@ export default async function ArchivedPropertiesPage({
         </p>
       </div>
 
-      <PropertyFilter
-        properties={propList.map((p) => ({ id: p.id, name: p.display_name }))}
-        activeId={activeProperty}
-        basePath="/dashboard/reports/archived-properties"
-      />
+      <div className="no-print">
+        <PropertyFilter
+          properties={propList.map((p) => ({ id: p.id, name: p.display_name }))}
+          activeId={activeProperty}
+          basePath="/dashboard/reports/archived-properties"
+        />
+      </div>
 
       <div style={{ marginTop: '1rem' }}>
         {archived.length === 0 ? (

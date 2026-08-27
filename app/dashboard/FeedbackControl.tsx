@@ -9,6 +9,7 @@ import { submitHostFeedbackAction, type HostFeedbackState } from './feedback-act
 // Add-on — a small, non-intrusive "Feedback" launcher pinned to the dashboard footer.
 // Opens a compact popover with a 1-5 rating + optional note. Never a blocking modal;
 // writes a private product_feedback row (source='host') for owner-only analytics.
+// The feedback-control class excludes it from report printouts (globals.css print block).
 export function FeedbackControl() {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(0);
@@ -16,7 +17,7 @@ export function FeedbackControl() {
   const [state, formAction] = useFormState<HostFeedbackState, FormData>(submitHostFeedbackAction, {});
 
   return (
-    <div style={{ position: 'fixed', right: '1.1rem', bottom: '1.1rem', zIndex: 30 }}>
+    <div className="feedback-control" style={{ position: 'fixed', right: '1.1rem', bottom: '1.1rem', zIndex: 30 }}>
       {open && (
         <div className="card" style={{ position: 'absolute', bottom: 'calc(100% + .6rem)', right: 0, width: 300, padding: '1.1rem' }} data-testid="host-feedback-popover">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.5rem' }}>

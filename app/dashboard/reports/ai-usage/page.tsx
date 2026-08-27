@@ -122,7 +122,7 @@ export default async function AiUsageReportPage({
 
   return (
     <div>
-      <div style={{ marginBottom: '1.25rem' }}>
+      <div className="no-print" style={{ marginBottom: '1.25rem' }}>
         <p style={{ margin: '0 0 .35rem', fontSize: '.82rem' }}>
           <Link href="/dashboard/reports" className="muted">
             ← Reports
@@ -138,15 +138,17 @@ export default async function AiUsageReportPage({
         </p>
       </div>
 
-      <PropertyFilter
-        properties={propList.map((p) => ({ id: p.id, name: p.display_name }))}
-        activeId={activeProperty}
-        basePath="/dashboard/reports/ai-usage"
-      />
+      <div className="no-print">
+        <PropertyFilter
+          properties={propList.map((p) => ({ id: p.id, name: p.display_name }))}
+          activeId={activeProperty}
+          basePath="/dashboard/reports/ai-usage"
+        />
+      </div>
 
       <form
         method="get"
-        className="card"
+        className="card no-print"
         style={{
           padding: '.9rem 1rem',
           margin: '.85rem 0 1.1rem',

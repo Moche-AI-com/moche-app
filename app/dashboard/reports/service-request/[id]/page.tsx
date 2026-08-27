@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireSession, getPropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
+import { DomeMark } from '@/components/Logo';
 import { ReportActions } from '@/app/dashboard/service-requests/ReportActions';
 
 export const dynamic = 'force-dynamic';
@@ -122,6 +123,12 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
 
   return (
     <div className="report-sheet">
+      {/* Print-only letterhead: the sheet reads as a Moche-AI document when it
+          leaves the app — on paper, in a PDF, in an email attachment. */}
+      <div className="report-print-brand" aria-hidden>
+        <DomeMark size={22} variant="mono" />
+        <span>Moche-AI</span>
+      </div>
       <div className="report-toolbar">
         <a href="/dashboard/reports" className="btn btn-ghost btn-sm">← All reports</a>
         <ReportActions
