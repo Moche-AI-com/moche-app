@@ -4,30 +4,9 @@ import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { canCreateProperty } from '@/lib/billing/entitlements';
 import { STATUS_BADGE } from '@/lib/constants';
+import { cardAddress } from '@/lib/properties/address';
 
 export const dynamic = 'force-dynamic';
-
-interface PropertyCardRow {
-  id: string;
-  display_name: string;
-  status: string;
-  address_line1: string | null;
-  address_line2: string | null;
-  city: string | null;
-  region: string | null;
-  postal_code: string | null;
-  country: string | null;
-}
-
-// The card shows the property's main address where the /slug link used to sit,
-// e.g. "12 Ocean View Rd, Unit 2, Barcelona, Catalonia, 08001, Spain".
-// Returns null when no street address has been captured yet.
-function cardAddress(p: PropertyCardRow): string | null {
-  if (!p.address_line1 || !p.address_line1.trim()) return null;
-  return [p.address_line1, p.address_line2, p.city, p.region, p.postal_code, p.country]
-    .filter(Boolean)
-    .join(', ');
-}
 
 export default async function PropertiesPage() {
   const ctx = await requireSession();

@@ -15,6 +15,7 @@ import { ExtrasRequestsCard, type ExtrasRequestRow } from '@/components/dashboar
 import { UpdateQueueCard, type UpdateQueueCardRow } from '@/components/dashboard/UpdateQueueCard';
 import { knowledgeReviewSummary, resolveScope } from '@/lib/dashboard/scope';
 import { isTerminalExtrasStatus, type ExtrasFulfillmentStatus } from '@/lib/extras/lifecycle';
+import { cardAddress } from '@/lib/properties/address';
 import styles from './overview.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ export default async function DashboardHome({
   // other dashboard page already uses (see app/dashboard/properties/page.tsx,
   // app/dashboard/escalations/page.tsx, app/dashboard/service-requests/page.tsx).
   const [{ data: allProperties }, { data: openEsc }, { data: services }, ent] = await Promise.all([
-    supabase.from('properties').select('id, display_name, slug, status').eq('host_account_id', accountId).is('deleted_at', null),
+    supabase.from('properties').select('id, display_name, status, address_line1, address_line2, city, region, postal_code, country').eq('host_account_id', accountId).is('deleted_at', null),
     supabase.from('escalations').select('id, property_id').eq('status', 'open'),
     supabase.from('service_requests').select('id, property_id').in('status', ['new', 'acknowledged', 'in_progress']),
     getEntitlements(supabase, accountId),
@@ -301,13 +302,23 @@ export default async function DashboardHome({
                       const health = brainByProperty.get(p.id) ?? 0;
                       const items = itemsByProperty.get(p.id) ?? 0;
                       const tier = health >= 70 ? 'var(--teal)' : health >= 40 ? 'var(--iris)' : 'var(--coral)';
+                      const address = cardAddress(p);
                       return (
                         <Link key={p.id} href={`/dashboard/properties/${p.id}`} className="card card-interactive rise-in dash-prop-card">
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.5rem' }}>
                             <strong style={{ fontSize: '1.02rem' }}>{p.display_name}</strong>
                             <span className={`badge ${p.status === 'live' ? 'badge-teal' : 'badge-coral'}`}>{p.status}</span>
                           </div>
-                          <div className="muted" style={{ fontSize: '.85rem', marginBottom: '.9rem' }}>/{p.slug}</div>
+                          {/* Same treatment as the Properties tab: the main address sits
+                              where the /slug link used to, falling back to city/region
+                              until a street address is captured. */}
+                          {address ? (
+                            <div className="muted" style={{ fontSize: '.85rem', marginBottom: '.9rem' }}>{address}</div>
+                          ) : (
+                            (p.city || p.region) && (
+                              <div className="faint" style={{ fontSize: '.8rem', marginBottom: '.9rem' }}>{[p.city, p.region].filter(Boolean).join(', ')}</div>
+                            )
+                          )}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.4rem' }}>
                             <span className="faint" style={{ fontSize: '.76rem' }}>
                               {items} knowledge item{items === 1 ? '' : 's'}
