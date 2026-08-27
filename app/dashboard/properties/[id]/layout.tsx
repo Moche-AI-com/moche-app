@@ -25,13 +25,10 @@ export default async function PropertyWorkspaceLayout({
 
   return (
     <section>
-      <Link
-        href="/dashboard/properties"
-        className="muted"
-        style={{ display: 'inline-flex', alignItems: 'center', minHeight: '2.75rem', fontSize: '.88rem', textDecoration: 'none' }}
-      >
-        ← All properties
-      </Link>
+      {/* Wayfinding lives in the workspace breadcrumb rendered by
+          PropertyWorkspaceNav (Properties / name / current section) — the
+          back-to-properties link that used to sit here duplicated the
+          breadcrumb's first crumb. */}
 
       {/* Grid styles live in globals.css (.property-workspace-header /
           .property-workspace-main) — class-driven so the 860px mobile collapse

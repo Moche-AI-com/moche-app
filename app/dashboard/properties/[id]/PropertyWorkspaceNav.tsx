@@ -2,8 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  Brain,
+  CalendarDays,
+  LayoutDashboard,
+  MapPin,
+  Settings,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react';
 
-export type PropertySectionKey = 'overview' | 'stays' | 'local' | 'extras' | 'settings';
+export type PropertySectionKey = 'overview' | 'brain' | 'stays' | 'local' | 'extras' | 'settings';
 
 export interface PropertySection {
   key: PropertySectionKey;
@@ -13,10 +22,22 @@ export interface PropertySection {
 
 const SECTION_LABELS: Record<PropertySectionKey, string> = {
   overview: 'Overview',
+  brain: 'Manage Brain',
   stays: 'Stays',
   local: 'Local Recs',
   extras: 'Extras',
   settings: 'Configuration',
+};
+
+/* Icons are presentational only, so they live outside the pure nav model —
+   propertySections() stays serializable for its unit tests. */
+const SECTION_ICONS: Record<PropertySectionKey, LucideIcon> = {
+  overview: LayoutDashboard,
+  brain: Brain,
+  stays: CalendarDays,
+  local: MapPin,
+  extras: Sparkles,
+  settings: Settings,
 };
 
 /** Pure nav model shared by the property workspace and its unit tests. */
@@ -24,6 +45,11 @@ export function propertySections(propertyId: string, canEditProperty: boolean): 
   const base = `/dashboard/properties/${propertyId}`;
   const sections: PropertySection[] = [
     { key: 'overview', label: SECTION_LABELS.overview, href: base },
+    // Manage Brain is deliberately ungated: every role with property access can
+    // open the Brain (the page downgrades itself to read-only for roles without
+    // brain-edit capability), and the header's brain-health card has always
+    // linked there for everyone.
+    { key: 'brain', label: SECTION_LABELS.brain, href: `${base}/brain` },
     { key: 'stays', label: SECTION_LABELS.stays, href: `${base}/stays` },
     { key: 'local', label: SECTION_LABELS.local, href: `${base}/local` },
   ];
@@ -57,7 +83,7 @@ export function propertySectionLabel(pathname: string, propertyId: string): stri
     return SECTION_LABELS.local;
   }
   if (path.startsWith(`${base}/extras`)) return SECTION_LABELS.extras;
-  if (path.startsWith(`${base}/brain`)) return 'Brain';
+  if (path.startsWith(`${base}/brain`)) return SECTION_LABELS.brain;
   if (path.startsWith(`${base}/welcome-card`)) return 'Welcome card';
   if (path.startsWith(`${base}/settings`) || path.startsWith(`${base}/appliances`)) {
     return SECTION_LABELS.settings;
@@ -95,36 +121,26 @@ export function PropertyWorkspaceNav({
         <div className="property-workspace-nav-links">
           {sections.map((section) => {
             const active = isPropertySectionActive(pathname, section, propertyId);
+            const Icon = SECTION_ICONS[section.key];
             return (
               <Link
                 key={section.key}
                 href={section.href}
                 aria-current={active ? 'page' : undefined}
-                className={active ? 'active' : undefined}
+                className={`property-workspace-nav-link${active ? ' is-active' : ''}`}
               >
-                {section.label}
+                <span className="property-workspace-nav-icon" aria-hidden>
+                  <Icon size={16} />
+                </span>
+                <span>{section.label}</span>
               </Link>
             );
           })}
         </div>
       </nav>
-      {/* The workspace shell grid (.property-workspace-header / -main) lives in
-          globals.css: those elements render in the parent layout, and scoped
-          styled-jsx could never match them — the mobile collapse was dead code
-          until it moved there. */}
-      <style jsx>{`
-        .property-workspace-breadcrumb { grid-column: 1 / -1; display: flex; align-items: center; min-height: 2.75rem; gap: .45rem; font-size: .82rem; color: var(--text-muted); }
-        .property-workspace-breadcrumb a { color: inherit; text-decoration: none; min-height: 2.75rem; display: inline-flex; align-items: center; }
-        .property-workspace-breadcrumb strong { color: var(--text); font-weight: 650; }
-        .property-workspace-nav { min-width: 0; }
-        .property-workspace-nav-links { display: flex; flex-direction: column; gap: .25rem; }
-        .property-workspace-nav-links a { display: flex; align-items: center; min-height: 2.35rem; padding: .45rem .65rem; border-radius: 10px; color: var(--text-muted); text-decoration: none; font-size: .9rem; }
-        .property-workspace-nav-links a:hover, .property-workspace-nav-links a.active { color: var(--text); background: rgba(255,255,255,.07); }
-        @media (max-width: 860px) {
-          .property-workspace-nav { overflow-x: auto; padding-bottom: .2rem; scrollbar-width: thin; }
-          .property-workspace-nav-links { flex-direction: row; min-width: max-content; }
-        }
-      `}</style>
+      {/* All rail + breadcrumb styling lives in globals.css. styled-jsx is not
+          wired up in this App Router build, so the scoped <style jsx> block
+          that used to sit here never applied and the rail rendered unstyled. */}
     </>
   );
 }
