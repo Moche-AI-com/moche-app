@@ -8,12 +8,15 @@ import { SubmitButton } from '@/components/FormFeedback';
 import { DELETE_CONFIRMATION_WORD } from '@/lib/properties/delete-confirmation';
 
 /**
- * Permanent-delete affordance for a property.
+ * Permanent-delete affordance for a property, rendered at the bottom of the
+ * property's Configuration page.
  *
- * Deliberately NOT sitting next to Archive in the header controls. Archive is
- * reversible and lives with the other status buttons; this is the one action in
- * the property that cannot be undone, so it sits at the very bottom of the page
- * behind its own confirmation, where a host has to go looking for it.
+ * Deliberately NOT sitting next to Archive in the header controls, and no
+ * longer on the overview page either: Archive is reversible and lives with
+ * the other status buttons, while this is the one action in the property
+ * that cannot be undone. It sits inside Configuration — a surface only
+ * property editors can open — at the very bottom, behind its own
+ * confirmation, where a host has to go looking for it.
  *
  * The typed word is a misclick guard, not a security control — the server action
  * re-checks both permission and the typed word, and reads the required word from
@@ -48,7 +51,7 @@ export function DangerZone({ propertyId, propertyName }: { propertyId: string; p
   }, [open]);
 
   return (
-    <div className="card" style={{ padding: '1.5rem', marginTop: '1.25rem', borderColor: 'var(--coral)' }}>
+    <div className="card" style={{ padding: '1.5rem', marginTop: 0, borderColor: 'var(--coral)' }}>
       <h2 style={{ fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '.45rem', marginBottom: '.5rem' }}>
         <AlertTriangle size={16} aria-hidden style={{ color: 'var(--coral)' }} />
         Delete this property

@@ -2041,3 +2041,181 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   .um-role-card, .um-switch-row, .um-switch, .um-switch-thumb, .um-dialog-close { transition: none; }
   .um-role-card:hover { transform: none; }
 }
+
+/* ============================================================
+   Property workspace — icon nav rail, breadcrumb, overview tiles
+   The rail and breadcrumb styles used to ship inside
+   PropertyWorkspaceNav as a scoped <style jsx> block, but styled-jsx is
+   not wired up in this App Router build (see the same note on the .um-*
+   rules above), so the left nav rendered as unstyled bare links. They
+   live here now, class-driven like every other dashboard surface.
+   ============================================================ */
+.property-workspace-breadcrumb {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  gap: .45rem;
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+.property-workspace-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition: color var(--tr);
+}
+.property-workspace-breadcrumb a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.property-workspace-breadcrumb strong { color: var(--text); font-weight: 650; }
+
+.property-workspace-nav { min-width: 0; }
+.property-workspace-nav-links { display: flex; flex-direction: column; gap: .2rem; }
+
+/* Rail item: icon chip + label. Hover gets three stacked affordances —
+   background tint, icon colour shift, and a 2px slide — so the row reads as
+   clickable; the active section gets a teal inset rail (the same "you are
+   here" pattern as .profile-nav-link.is-active) instead of a colour flood. */
+.property-workspace-nav-link {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-height: 2.75rem;
+  padding: .45rem .65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: .9rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--tr), background var(--tr), border-color var(--tr), transform var(--tr);
+}
+.property-workspace-nav-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  transition: color var(--tr), border-color var(--tr), transform var(--tr);
+}
+.property-workspace-nav-link:hover,
+.property-workspace-nav-link:focus-visible {
+  color: var(--text);
+  background: var(--surface-2);
+  transform: translateX(2px);
+}
+.property-workspace-nav-link:hover .property-workspace-nav-icon,
+.property-workspace-nav-link:focus-visible .property-workspace-nav-icon {
+  color: var(--teal);
+  border-color: color-mix(in srgb, var(--teal) 45%, var(--border));
+  transform: scale(1.06);
+}
+.property-workspace-nav-link.is-active {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--surface-2);
+  border-color: var(--border);
+  box-shadow: inset 3px 0 0 0 var(--teal);
+}
+.property-workspace-nav-link.is-active .property-workspace-nav-icon {
+  color: var(--teal);
+  border-color: color-mix(in srgb, var(--teal) 45%, var(--border));
+}
+
+@media (min-width: 860px) {
+  /* Keep the rail in view while long workspace pages (Brain, Configuration)
+     scroll past it. */
+  .property-workspace-nav { position: sticky; top: 1rem; }
+}
+
+@media (max-width: 859px) {
+  /* Phones get a horizontally scrollable chip row instead of a second column;
+     a cut-off chip reads as scrollable. The slide-on-hover is dropped: there
+     is no hover on touch. */
+  .property-workspace-nav { overflow-x: auto; padding-bottom: .2rem; scrollbar-width: thin; }
+  .property-workspace-nav-links { flex-direction: row; min-width: max-content; }
+  .property-workspace-nav-link { white-space: nowrap; }
+  .property-workspace-nav-link:hover { transform: none; }
+}
+
+/* Overview tiles. Lift + glow come from .card-interactive and the staggered
+   entrance from .rise-in; these classes add the tile's own structure — icon
+   chip, value, and an arrow that slides in on hover (the same reveal pattern
+   as .dash-feed-arrow). */
+.prop-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.prop-tile { display: block; padding: 1.1rem; min-height: 8.5rem; }
+.prop-tile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.prop-tile-title {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-faint);
+  padding-top: .35rem;
+}
+.prop-tile-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--teal);
+  transition: transform var(--tr);
+}
+.prop-tile:hover .prop-tile-icon { transform: scale(1.08); }
+/* Attention state (open escalations): the icon goes coral, matching
+   .dash-metric-attn on the home dashboard. */
+.prop-tile-attn .prop-tile-icon { color: var(--coral); }
+.prop-tile-value { font-size: 1.3rem; font-weight: 600; margin: .45rem 0 .2rem; }
+.prop-tile-sub { font-size: .8rem; }
+.prop-tile-arrow {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  color: var(--teal);
+  opacity: 0;
+  transform: translate(-3px, 3px);
+  transition: opacity var(--tr), transform var(--tr);
+}
+.prop-tile:hover .prop-tile-arrow,
+.prop-tile:focus-visible .prop-tile-arrow { opacity: 1; transform: none; }
+
+/* The Needs-attention chips are links; give them the same hover language as
+   the tiles instead of the static badge treatment. */
+a.badge-lg { transition: border-color var(--tr), color var(--tr), transform var(--tr); }
+a.badge-lg:hover { border-color: var(--teal); color: var(--text); transform: translateY(-1px); }
+a.badge-lg.badge-coral:hover { border-color: var(--coral); color: var(--coral); }
+
+/* Reduced motion: state changes (colours, the active rail, the arrow) stay;
+   every movement goes. */
+@media (prefers-reduced-motion: reduce) {
+  .property-workspace-breadcrumb a,
+  .property-workspace-nav-link,
+  .property-workspace-nav-icon,
+  .prop-tile-icon,
+  .prop-tile-arrow,
+  a.badge-lg { transition: none; }
+  .property-workspace-nav-link:hover,
+  .property-workspace-nav-link:focus-visible,
+  .property-workspace-nav-link:hover .property-workspace-nav-icon,
+  .property-workspace-nav-link:focus-visible .property-workspace-nav-icon,
+  .prop-tile:hover .prop-tile-icon,
+  a.badge-lg:hover { transform: none; }
+  .prop-tile-arrow { opacity: 1; transform: none; }
+}

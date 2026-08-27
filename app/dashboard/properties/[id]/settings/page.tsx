@@ -7,6 +7,7 @@ import { DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { SettingsForms } from './SettingsForms';
 import { PropertyLinkMinter } from '../PropertyLinkMinter';
 import { ChatPermissionsPanel } from '../guest-chat/ChatPermissionsPanel';
+import { DangerZone } from '../DangerZone';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,6 +83,14 @@ export default async function PropertySettingsPage({ params }: { params: Promise
           permissions server-side on every read and write. */}
       <div style={{ marginTop: '1.5rem' }}>
         <ChatPermissionsPanel propertyId={property.id} />
+      </div>
+
+      {/* Permanent delete lives here, at the very bottom of Configuration: the
+          overview stays focused on day-to-day work, and the one irreversible
+          action sits inside the only surface gated to property editors (this
+          page returns early above for everyone else). */}
+      <div style={{ marginTop: '1.5rem' }}>
+        <DangerZone propertyId={property.id} propertyName={property.display_name} />
       </div>
     </div>
   );

@@ -1,9 +1,18 @@
 import Link from 'next/link';
+import {
+  ArrowRight,
+  Brain,
+  CalendarDays,
+  LifeBuoy,
+  MapPin,
+  Settings,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth, gapPrompts } from '@/lib/brain/health';
 import { ListingImportKickoff } from './ListingImportKickoff';
-import { DangerZone } from './DangerZone';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +63,7 @@ export default async function PropertyDetailPage({
         <ListingImportKickoff propertyId={property.id} listingUrl={listingImportUrl} />
       )}
 
-      <section className="card" style={{ padding: '1rem 1.1rem', marginBottom: '1.25rem' }} aria-labelledby="needs-attention-heading">
+      <section className="card rise-in" style={{ padding: '1rem 1.1rem', marginBottom: '1.25rem' }} aria-labelledby="needs-attention-heading">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
           <div>
             <h2 id="needs-attention-heading" style={{ fontSize: '1rem', margin: 0 }}>Needs attention</h2>
@@ -78,29 +87,58 @@ export default async function PropertyDetailPage({
         )}
       </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-        <Tile href={`/dashboard/properties/${property.id}/brain`} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
-        <Tile href={`/dashboard/properties/${property.id}/stays`} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
-        <Tile href={`/dashboard/properties/${property.id}/stays`} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" />
-        {(can.editProperty || can.editBrain) && (
-          <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras requested" value={`${openExtras ?? 0} open`} sub="Guest requests to arrange" />
-        )}
-        <Tile href={`/dashboard/properties/${property.id}/local`} title="Local" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
-        {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/extras`} title="Extras" value="Manage" sub="Add-ons guests can request" />}
-        {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} title="Settings" value="Configure" sub="Branding, tone, modules" />}
-      </div>
+      {/* One tile per job-to-be-done. The old grid had a pair of Extras tiles
+          pointing at the same place; that duplicate is merged. Escalations
+          still deep-links into the merged Stays tab, where guest conversations
+          live — it earns its own tile because the open count is an attention
+          metric, not navigation. */}
+      <section aria-labelledby="property-workspace-heading">
+        <h2 id="property-workspace-heading" className="sr-only">Workspace</h2>
+        <div className="prop-tile-grid">
+          <Tile href={`/dashboard/properties/${property.id}/brain`} icon={Brain} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
+          <Tile href={`/dashboard/properties/${property.id}/stays`} icon={CalendarDays} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
+          <Tile href={`/dashboard/properties/${property.id}/stays`} icon={LifeBuoy} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" attention={(openEsc ?? 0) > 0} />
+          {(can.editProperty || can.editBrain) && (
+            <Tile href={`/dashboard/properties/${property.id}/extras`} icon={Sparkles} title="Extras" value={`${openExtras ?? 0} open`} sub="Add-ons guests can request" />
+          )}
+          <Tile href={`/dashboard/properties/${property.id}/local`} icon={MapPin} title="Local Recs" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
+          {can.editProperty && <Tile href={`/dashboard/properties/${property.id}/settings`} icon={Settings} title="Configuration" value="Configure" sub="Branding, tone, modules" />}
+        </div>
+      </section>
 
-      {can.editProperty && <DangerZone propertyId={property.id} propertyName={property.display_name} />}
+      {/* Permanent delete moved to the bottom of Configuration — the only
+          surface gated to property editors — so this page stays focused on
+          day-to-day work. See settings/page.tsx for the DangerZone. */}
     </div>
   );
 }
 
-function Tile({ href, title, value, sub }: { href: string; title: string; value: string; sub: string }) {
+function Tile({
+  href,
+  icon: Icon,
+  title,
+  value,
+  sub,
+  attention = false,
+}: {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  value: string;
+  sub: string;
+  attention?: boolean;
+}) {
   return (
-    <Link href={href} className="card card-interactive rise-in" style={{ padding: '1.1rem', display: 'block', minHeight: '8.5rem' }}>
-      <div className="faint" style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.05em' }}>{title}</div>
-      <div style={{ fontSize: '1.3rem', fontWeight: 600, margin: '.2rem 0' }}>{value}</div>
-      <div className="muted" style={{ fontSize: '.8rem' }}>{sub}</div>
+    <Link href={href} className={`card card-interactive rise-in prop-tile${attention ? ' prop-tile-attn' : ''}`}>
+      <div className="prop-tile-head">
+        <span className="prop-tile-title">{title}</span>
+        <span className="prop-tile-icon" aria-hidden>
+          <Icon size={17} />
+        </span>
+      </div>
+      <div className="prop-tile-value">{value}</div>
+      <div className="prop-tile-sub muted">{sub}</div>
+      <ArrowRight size={15} className="prop-tile-arrow" aria-hidden />
     </Link>
   );
 }
