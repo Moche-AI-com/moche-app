@@ -42,11 +42,12 @@ export default async function ServiceRequestsPage({
     const [{ data: tickets }, { data: contactRows }, activeRes, pastRes] = await Promise.all([
       // edited_* / assigned_profile_id land in database.types.ts on the next
       // `supabase gen types` run; until then this query opts out of column
-      // typechecking.
+      // typechecking. safety_flags is included so the Edit report dialog can
+      // round-trip it without wiping the column on save.
       (supabase as any)
         .from('service_requests')
         .select(
-          'id, property_id, description, service_type, status, urgency, resolution_notes, created_at, archived_at, location_note, likely_causes, suggested_parts, access_instructions, guest_availability, summary, media_urls, interview_status, assigned_contact_id, assigned_profile_id, edited_summary, edited_details',
+          'id, property_id, description, service_type, status, urgency, resolution_notes, created_at, archived_at, location_note, likely_causes, suggested_parts, safety_flags, access_instructions, guest_availability, summary, media_urls, interview_status, assigned_contact_id, assigned_profile_id, edited_summary, edited_details',
         )
         .in('property_id', queryPropIds)
         .eq('lifecycle_status', lifecycleStatusFor(view))

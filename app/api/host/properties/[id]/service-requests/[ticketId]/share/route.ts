@@ -120,7 +120,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       : await sendServiceReportShare({
           channel: 'sms',
           contact: payload.to[0],
-          subject: buildServiceReportFallbackSubject(),
           text: payload.message,
         });
 
