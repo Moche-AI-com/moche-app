@@ -176,14 +176,14 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
       {causes.length > 0 && (
         <section className="report-section">
           <h2>Likely causes</h2>
-          <ul>{causes.map((c, i) => <li key={i}>{c}</li>)}</ul>}
+          <ul>{causes.map((c, i) => <li key={i}>{c}</li>)}</ul>
         </section>
       )}
 
       {parts.length > 0 && (
         <section className="report-section">
           <h2>Suggested parts and tools</h2>
-          <ul>{parts.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+          <ul>{parts.map((p, i) => <li key={i}>{p}</li>)}</ul>
         </section>
       )}
 
