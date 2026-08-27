@@ -30,6 +30,7 @@ export interface ServiceTicket {
   location_note: string | null;
   likely_causes: unknown;
   suggested_parts: unknown;
+  safety_flags: unknown;
   access_instructions: string | null;
   guest_availability: string | null;
   summary: string | null;

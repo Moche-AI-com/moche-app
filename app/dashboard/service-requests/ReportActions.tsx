@@ -4,12 +4,20 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Pencil, Printer, Smartphone, UserRoundPlus, X } from 'lucide-react';
+import { ChipInput, isValidEmail } from '@/components/FormFeedback';
 import {
   buildServiceReportSms,
   buildServiceReportText,
   shareContactReady,
   type ShareReportInput,
 } from '@/lib/service-requests/share-report';
+import {
+  SERVICE_TYPE_OPTIONS,
+  URGENCY_OPTIONS,
+  emailSubjectPrefill,
+  fromLines,
+  toLines,
+} from '@/lib/service-requests/report-fields';
 
 // The contact shape this panel needs. Structurally compatible with the
 // dashboard's PropertyContactOption and with the single-contact array the
@@ -30,6 +38,11 @@ export interface ReportActionMember {
   email: string | null;
 }
 
+// The ticket fields ReportActions reads. The Edit Report dialog works on the
+// whole report — type, urgency, headline, details, the context fields, and the
+// jsonb lists — so every consumer (Service tab card, printable report page)
+// passes the full row through. Field helpers live in
+// lib/service-requests/report-fields.ts.
 export interface ReportActionTicket {
   id: string;
   property_id: string;
@@ -42,6 +55,27 @@ export interface ReportActionTicket {
   created_at: string;
   assigned_contact_id: string | null;
   assigned_profile_id: string | null;
+  location_note?: string | null;
+  access_instructions?: string | null;
+  guest_availability?: string | null;
+  resolution_notes?: string | null;
+  likely_causes?: unknown;
+  suggested_parts?: unknown;
+  safety_flags?: unknown;
+}
+
+export interface ReportEditPatch {
+  service_type: string;
+  urgency: string;
+  edited_summary: string | null;
+  edited_details: string | null;
+  location_note: string | null;
+  access_instructions: string | null;
+  guest_availability: string | null;
+  resolution_notes: string | null;
+  likely_causes: string[];
+  suggested_parts: string[];
+  safety_flags: string[];
 }
 
 interface ShareRow {
@@ -63,8 +97,9 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
-// Icon-only action buttons (Email / Text / Print): no text label by design —
-// the tooltip (title) and aria-label carry the meaning on hover / for AT.
+// Icon-only share buttons (Email / Text / Print). Icons are sized identically
+// and the square hit areas are equal, so the row reads as one consistent
+// family; the tooltip (title) and aria-label carry the meaning.
 const ICON_BUTTON_STYLE = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -76,9 +111,9 @@ const ICON_BUTTON_STYLE = {
 
 // One action row for a service request: Edit report, Assign (teammate), then
 // the icon-only Email / Text / Print buttons. Rendered on the Service tab's
-// ticket card and on the printable report page. The share dialog previews the
-// exact message because it reuses the same pure builder the API route sends
-// through (lib/service-requests/share-report.ts).
+// ticket card and at the foot of the printable report page. The compose dialog
+// previews the exact starting message because it reuses the same pure builder
+// the API route defaults to (lib/service-requests/share-report.ts).
 export function ReportActions({
   ticket,
   propertyName,
@@ -96,7 +131,7 @@ export function ReportActions({
   canManage: boolean;
   /** 'link' opens the printable report in a new tab; 'native' calls window.print(). */
   printMode?: 'link' | 'native';
-  onEdited?: (patch: { edited_summary: string | null; edited_details: string | null }) => void;
+  onEdited?: (patch: ReportEditPatch) => void;
   onAssigned?: (profileId: string | null) => void;
 }) {
   const router = useRouter();
@@ -124,10 +159,10 @@ export function ReportActions({
         {canManage && (
           <>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('edit')} data-testid="button-edit-report">
-              <Pencil size={13} aria-hidden /> Edit report
+              <Pencil size={14} aria-hidden /> Edit report
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('assign')} data-testid="button-assign-report">
-              <UserRoundPlus size={13} aria-hidden /> Assign
+              <UserRoundPlus size={14} aria-hidden /> Assign
             </button>
             <button
               type="button"
@@ -233,7 +268,8 @@ function DialogShell({
   title: string;
   onClose: () => void;
   children: React.ReactNode;
-  wide?: boolean;
+  /** Widen the dialog card; 'full' is the compose view's two-column sheet. */
+  wide?: boolean | 'full';
 }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -259,8 +295,8 @@ function DialogShell({
       <div
         className="card"
         style={{
-          width: '100%', maxWidth: wide ? '34rem' : '28rem',
-          maxHeight: '85vh', overflowY: 'auto',
+          width: '100%', maxWidth: wide === 'full' ? '62rem' : wide ? '34rem' : '28rem',
+          maxHeight: '90vh', overflowY: 'auto',
           padding: '1.1rem 1.2rem', display: 'flex', flexDirection: 'column', gap: '.7rem',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -291,10 +327,19 @@ function EditReportDialog({
 }: {
   ticket: ReportActionTicket;
   onClose: () => void;
-  onSaved: (patch: { edited_summary: string | null; edited_details: string | null }) => void;
+  onSaved: (patch: ReportEditPatch) => void;
 }) {
+  const [serviceType, setServiceType] = useState(ticket.service_type);
+  const [urgency, setUrgency] = useState(ticket.urgency);
   const [summary, setSummary] = useState(ticket.edited_summary ?? ticket.summary ?? '');
   const [details, setDetails] = useState(ticket.edited_details ?? ticket.description ?? '');
+  const [location, setLocation] = useState(ticket.location_note ?? '');
+  const [access, setAccess] = useState(ticket.access_instructions ?? '');
+  const [availability, setAvailability] = useState(ticket.guest_availability ?? '');
+  const [resolution, setResolution] = useState(ticket.resolution_notes ?? '');
+  const [causes, setCauses] = useState(toLines(ticket.likely_causes));
+  const [parts, setParts] = useState(toLines(ticket.suggested_parts));
+  const [flags, setFlags] = useState(toLines(ticket.safety_flags));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -306,24 +351,65 @@ function EditReportDialog({
       const res = await fetch(`/api/host/properties/${ticket.property_id}/service-requests/${ticket.id}/report`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ editedSummary: summary, editedDetails: details }),
+        body: JSON.stringify({
+          serviceType,
+          urgency,
+          editedSummary: summary,
+          editedDetails: details,
+          locationNote: location,
+          accessInstructions: access,
+          guestAvailability: availability,
+          resolutionNotes: resolution,
+          likelyCauses: fromLines(causes),
+          suggestedParts: fromLines(parts),
+          safetyFlags: fromLines(flags),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not save the edited report.');
-      onSaved({ edited_summary: json.editedSummary ?? null, edited_details: json.editedDetails ?? null });
+      onSaved({
+        service_type: serviceType,
+        urgency,
+        edited_summary: json.editedSummary ?? null,
+        edited_details: json.editedDetails ?? null,
+        location_note: location.trim() || null,
+        access_instructions: access.trim() || null,
+        guest_availability: availability.trim() || null,
+        resolution_notes: resolution.trim() || null,
+        likely_causes: fromLines(causes),
+        suggested_parts: fromLines(parts),
+        safety_flags: fromLines(flags),
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.');
       setBusy(false);
     }
   }
 
+  const fieldLabel: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' };
+
   return (
-    <DialogShell title="Edit report" onClose={onClose}>
+    <DialogShell title="Edit report" onClose={onClose} wide>
       <p className="faint" style={{ margin: 0, fontSize: '.8rem' }}>
         This is the wording that gets printed, emailed, or texted. The guest’s original report is never
-        overwritten — clear both fields and save to revert to it.
+        overwritten — clear the headline and details and save to revert to it. Type, urgency, and the context
+        fields update the report itself.
       </p>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))', gap: '.6rem' }}>
+        <label style={fieldLabel}>
+          Type
+          <select className="select" value={serviceType} onChange={(e) => setServiceType(e.target.value)} disabled={busy} data-testid="select-edit-type" style={{ minHeight: 44 }}>
+            {SERVICE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <label style={fieldLabel}>
+          Urgency
+          <select className="select" value={urgency} onChange={(e) => setUrgency(e.target.value)} disabled={busy} data-testid="select-edit-urgency" style={{ minHeight: 44 }}>
+            {URGENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+      </div>
+      <label style={fieldLabel}>
         Headline
         <input
           className="input"
@@ -335,7 +421,7 @@ function EditReportDialog({
           style={{ minHeight: 44 }}
         />
       </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>
+      <label style={fieldLabel}>
         Details
         <textarea
           className="input"
@@ -346,6 +432,36 @@ function EditReportDialog({
           disabled={busy}
           data-testid="input-edit-details"
         />
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '.6rem' }}>
+        <label style={fieldLabel}>
+          Location on the property
+          <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={300} disabled={busy} data-testid="input-edit-location" style={{ minHeight: 44 }} />
+        </label>
+        <label style={fieldLabel}>
+          Guest availability
+          <input className="input" value={availability} onChange={(e) => setAvailability(e.target.value)} maxLength={300} disabled={busy} data-testid="input-edit-availability" style={{ minHeight: 44 }} />
+        </label>
+      </div>
+      <label style={fieldLabel}>
+        Access instructions
+        <textarea className="input" rows={2} value={access} onChange={(e) => setAccess(e.target.value)} maxLength={1000} disabled={busy} data-testid="input-edit-access" />
+      </label>
+      <label style={fieldLabel}>
+        Likely causes (one per line)
+        <textarea className="input" rows={3} value={causes} onChange={(e) => setCauses(e.target.value)} maxLength={2000} disabled={busy} data-testid="input-edit-causes" />
+      </label>
+      <label style={fieldLabel}>
+        Suggested parts and tools (one per line)
+        <textarea className="input" rows={3} value={parts} onChange={(e) => setParts(e.target.value)} maxLength={2000} disabled={busy} data-testid="input-edit-parts" />
+      </label>
+      <label style={fieldLabel}>
+        Safety flags (one per line)
+        <textarea className="input" rows={2} value={flags} onChange={(e) => setFlags(e.target.value)} maxLength={1000} disabled={busy} data-testid="input-edit-flags" />
+      </label>
+      <label style={fieldLabel}>
+        Resolution
+        <textarea className="input" rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} maxLength={1000} disabled={busy} placeholder="What was completed or resolved?" data-testid="input-edit-resolution" />
       </label>
       {error && <span className="badge badge-coral">{error}</span>}
       <div style={{ display: 'flex', gap: '.4rem', justifyContent: 'flex-end' }}>
@@ -438,6 +554,12 @@ function AssignDialog({
   );
 }
 
+// Compose view: recipient fields on the left (chip inputs for email — an
+// address becomes a chip only once it validates), the message preview on the
+// right, prefilled from the same builders the API defaults to. The host can
+// edit the subject/message before sending; what is sent is snapshotted to
+// service_report_shares. Editing the report itself stays one click away —
+// closing this dialog lands back on the action row with Edit report.
 function ShareReportDialog({
   channel,
   ticket,
@@ -451,7 +573,19 @@ function ShareReportDialog({
   contactName: string;
   onClose: () => void;
 }) {
-  const [destination, setDestination] = useState('');
+  const prefill = useMemo(
+    () => ({ summary: (input.summary ?? '').trim() || null, serviceType: input.serviceType, propertyName: input.propertyName }),
+    [input],
+  );
+  const defaultBody = useMemo(
+    () => (channel === 'email' ? buildServiceReportText(input) : buildServiceReportSms(input)),
+    [channel, input],
+  );
+
+  const [to, setTo] = useState<string[]>([]);
+  const [cc, setCc] = useState<string[]>([]);
+  const [subject, setSubject] = useState(() => emailSubjectPrefill(prefill));
+  const [message, setMessage] = useState(defaultBody);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -470,30 +604,34 @@ function ShareReportDialog({
     };
   }, [ticket.property_id, ticket.id, sent]);
 
-  // Same builder the server sends through — what the host sees here is exactly
-  // what leaves the platform.
-  const preview = useMemo(
-    () => (channel === 'email' ? buildServiceReportText(input) : buildServiceReportSms(input)),
-    [channel, input],
-  );
+  const emailProblem = (raw: string): string | null =>
+    isValidEmail(raw) ? null : 'Enter a valid email address before adding it.';
+  const phoneProblem = (raw: string): string | null => {
+    const digits = raw.replace(/\D/g, '');
+    return digits.length >= 7 && digits.length <= 15 ? null : 'Enter a valid phone number before adding it.';
+  };
 
-  const destinationOk =
-    channel === 'email' ? destination.includes('@') : destination.replace(/\D/g, '').length >= 7;
+  const emailReady = to.length > 0 && subject.trim().length > 0 && message.trim().length > 0;
+  const smsReady = to.length === 1 && message.trim().length > 0;
+  const canSend = channel === 'email' ? emailReady : smsReady;
 
   async function send() {
-    if (busy || !destinationOk) return;
+    if (busy || !canSend) return;
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/host/properties/${ticket.property_id}/service-requests/${ticket.id}/share`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ channel, destination }),
+        body: JSON.stringify(
+          channel === 'email'
+            ? { channel, to, cc, subject: subject.trim(), message: message.trim() }
+            : { channel, to, message: message.trim() },
+        ),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not send the report.');
       setSent(true);
-      setDestination('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
@@ -501,58 +639,116 @@ function ShareReportDialog({
     }
   }
 
+  const previewHeader =
+    channel === 'email'
+      ? [`To: ${to.join(', ') || '—'}`, cc.length ? `CC: ${cc.join(', ')}` : null, `Subject: ${subject || '—'}`]
+          .filter(Boolean)
+          .join('\n')
+      : `To: ${to[0] ?? '—'}`;
+
   return (
-    <DialogShell title={channel === 'email' ? 'Email report' : 'Text report'} onClose={onClose} wide>
+    <DialogShell title={channel === 'email' ? 'Email report' : 'Text report'} onClose={onClose} wide="full">
       <p className="faint" style={{ margin: 0, fontSize: '.8rem' }}>
-        This sends the share-safe report below — the intake details and a follow-up line pointing to{' '}
-        {contactName}. No guest details, access info, or property internals are included.
+        This sends the share-safe report on the right — the intake details and a follow-up line pointing to{' '}
+        {contactName}. No guest details, access info, or property internals are included unless you add them.
+        The message starts from the standard template; edit it before sending if you need to.
       </p>
-      <pre
-        style={{
-          margin: 0, padding: '.75rem', fontSize: '.78rem', whiteSpace: 'pre-wrap',
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
-          maxHeight: '16rem', overflowY: 'auto',
-        }}
-        data-testid="share-preview"
-      >
-        {preview}
-      </pre>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>
-        {channel === 'email' ? 'Send to email' : 'Send to phone number'}
-        <input
-          className="input"
-          type={channel === 'email' ? 'email' : 'tel'}
-          value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-          placeholder={channel === 'email' ? 'name@example.com' : '+1 555 123 4567'}
-          disabled={busy}
-          data-testid="input-share-destination"
-          style={{ minHeight: 44 }}
-        />
-      </label>
-      {error && <span className="badge badge-coral">{error}</span>}
-      {sent && <span className="badge badge-teal">Sent. The recipient only sees the report above.</span>}
-      <div style={{ display: 'flex', gap: '.4rem', justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          onClick={send}
-          disabled={busy || !destinationOk}
-          data-testid="button-share-send"
-        >
-          {busy ? 'Sending…' : channel === 'email' ? 'Send email' : 'Send text'}
-        </button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 22rem), 1fr))', gap: '1rem', alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.8rem', minWidth: 0 }}>
+          {channel === 'email' && (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>
+              Subject
+              <input
+                className="input"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                maxLength={200}
+                disabled={busy}
+                data-testid="input-share-subject"
+                style={{ minHeight: 44 }}
+              />
+            </label>
+          )}
+          <ChipInput
+            id="share-to"
+            label={channel === 'email' ? 'To' : 'Send to phone number'}
+            hint={channel === 'sms' ? 'One number per send.' : 'Press Enter or Add after each address.'}
+            values={to}
+            onChange={(next) => setTo(channel === 'sms' ? next.slice(-1) : next)}
+            validate={channel === 'email' ? emailProblem : phoneProblem}
+            placeholder={channel === 'email' ? 'name@example.com' : '+1 555 123 4567'}
+            inputType={channel === 'email' ? 'email' : 'tel'}
+            addLabel="Add"
+            testId="input-share-to"
+            disabled={busy}
+          />
+          {channel === 'email' && (
+            <ChipInput
+              id="share-cc"
+              label="CC"
+              hint="Optional — same validation as To."
+              values={cc}
+              onChange={setCc}
+              validate={emailProblem}
+              placeholder="name@example.com"
+              inputType="email"
+              addLabel="Add"
+              testId="input-share-cc"
+              disabled={busy}
+            />
+          )}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.82rem' }}>
+            Message
+            <textarea
+              className="input"
+              rows={channel === 'email' ? 9 : 5}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={channel === 'email' ? 4000 : 1600}
+              disabled={busy}
+              data-testid="input-share-message"
+            />
+          </label>
+          {error && <span className="badge badge-coral">{error}</span>}
+          {sent && <span className="badge badge-teal">Sent. The recipient only sees the message on the right.</span>}
+          <div style={{ display: 'flex', gap: '.4rem', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={send}
+              disabled={busy || !canSend || sent}
+              data-testid="button-share-send"
+            >
+              {busy ? 'Sending…' : channel === 'email' ? 'Send email' : 'Send text'}
+            </button>
+          </div>
+          {history.length > 0 && (
+            <p className="faint" style={{ margin: 0, fontSize: '.75rem' }}>
+              Recent sends:{' '}
+              {history
+                .slice(0, 5)
+                .map((h) => `${h.channel === 'email' ? 'Email' : 'Text'} ••••${h.destinationLast4 ?? ''} · ${h.status} · ${timeAgo(h.createdAt)}`)
+                .join('  ·  ')}
+            </p>
+          )}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p className="label" style={{ marginBottom: '.35rem' }}>What the recipient gets</p>
+          <pre
+            style={{
+              margin: 0, padding: '.85rem', fontSize: '.78rem', whiteSpace: 'pre-wrap',
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
+              maxHeight: '26rem', overflowY: 'auto',
+            }}
+            data-testid="share-preview"
+          >
+            {previewHeader}
+            {'\n\n'}
+            {message}
+          </pre>
+        </div>
       </div>
-      {history.length > 0 && (
-        <p className="faint" style={{ margin: 0, fontSize: '.75rem' }}>
-          Recent sends:{' '}
-          {history
-            .slice(0, 5)
-            .map((h) => `${h.channel === 'email' ? 'Email' : 'Text'} ••••${h.destinationLast4 ?? ''} · ${h.status} · ${timeAgo(h.createdAt)}`)
-            .join('  ·  ')}
-        </p>
-      )}
     </DialogShell>
   );
 }
