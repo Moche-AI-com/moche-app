@@ -41,7 +41,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const identityIds = [...new Set(rows.map((row) => row.guest_identity_id).filter(Boolean))];
 
   const [staysResult, sessionsResult, identitiesResult, messagesResult, escalationsResult, extrasResult] = await Promise.all([
-    stayIds.length ? db.from('stays').select('id, guest_display_name, status, check_in, check_out').in('id', stayIds) : Promise.resolve({ data: [] }),
+    // lifecycle_status rides along so the Property Inbox can bucket threads into
+    // Active stays / Past stays without a second round trip.
+    stayIds.length ? db.from('stays').select('id, guest_display_name, status, check_in, check_out, lifecycle_status').in('id', stayIds) : Promise.resolve({ data: [] }),
     sessionIds.length ? db.from('guest_access_sessions').select('id, guest_contact, notification_consent, registered_at').in('id', sessionIds) : Promise.resolve({ data: [] }),
     identityIds.length ? db.from('guest_identities').select('id, first_name, last_name, display_name, contact_last4').in('id', identityIds) : Promise.resolve({ data: [] }),
     conversationIds.length ? db.from('messages').select('id, conversation_id, role, content, created_at, message_kind, escalation_id').in('conversation_id', conversationIds).order('created_at', { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
@@ -97,6 +99,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       guestName: guestNameFor(conversation, stay, identity),
       guestContactLast4: identity?.contact_last4 ?? null,
       stayStatus: stay?.status ?? null,
+      stayLifecycle: stay?.lifecycle_status ?? null,
       checkIn: stay?.check_in ?? null,
       checkOut: stay?.check_out ?? null,
       channel: conversation.channel,

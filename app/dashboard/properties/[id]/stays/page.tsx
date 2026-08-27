@@ -80,9 +80,6 @@ export default async function StaysPage({
   }
 
   const canManage = access.can.replyGuests || access.isOwner;
-  // Same permission shape the guest-chat page used for announcements; the chat
-  // surface lives inside this tab. Team chat permissions moved to Settings.
-  const canAnnounce = access.isOwner || (access.member as any)?.can_send_announcements === true;
   // Deep links (notifications, legacy /guest-chat redirect) arrive as ?stay=<id>.
   const initialStayId = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
 
@@ -92,7 +89,7 @@ export default async function StaysPage({
       <p className="muted" style={{ fontSize: '.9rem', margin: '0 0 1.25rem' }}>
         {view === 'past'
           ? 'Completed and revoked stays. Their guest links no longer work.'
-          : 'Upcoming and in-progress stays. Select a stay to manage its access code, guests, and conversations.'}
+          : 'Upcoming and in-progress stays. Select a stay to manage its access code and guests — guest chats live in the Property Inbox.'}
       </p>
 
       <LifecycleToggle
@@ -106,7 +103,6 @@ export default async function StaysPage({
       <StaysManager
         propertyId={(await params).id}
         canManage={canManage}
-        canAnnounce={canAnnounce}
         initialStayId={initialStayId}
         stays={(stays ?? []).map((s) => ({
           id: s.id,

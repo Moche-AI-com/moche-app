@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useFormState } from 'react-dom';
+import Link from 'next/link';
 import { Mail, MessageSquareText, Send } from 'lucide-react';
 import { createStayAction, revokeStayAction, type StayActionState } from './actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
-import { GuestChatInbox } from '../guest-chat/GuestChatInbox';
 import { StayGuestsManager } from '../guest-chat/StayGuestsManager';
 import { portalCodeStatus } from '@/lib/guest/portal-status';
 import { STATUS_BADGE } from '@/lib/constants';
@@ -29,19 +29,18 @@ const PORTAL_TONE: Record<string, string> = { active: 'var(--teal)', expired: 'v
 export function StaysManager({
   propertyId,
   canManage,
-  canAnnounce,
   initialStayId,
   stays,
 }: {
   propertyId: string;
   canManage: boolean;
-  canAnnounce: boolean;
   initialStayId: string | null;
   stays: Stay[];
 }) {
   const [showForm, setShowForm] = useState(false);
-  // Selection drives the detail pane: a stay id, 'all' for the property-wide
-  // inbox, or null for list-only. Deep links arrive via ?stay=<id>.
+  // Selection drives the detail pane: a stay id, or null for list-only. Deep
+  // links arrive via ?stay=<id>. Property-wide messaging lives in the Property
+  // Inbox — the first card links out to it.
   const [selected, setSelected] = useState<string | null>(initialStayId);
   const selectedStay = stays.find((s) => s.id === selected) ?? null;
   // portalCodeStatus takes a non-null PortalCodeState — guard the optional chain.
@@ -74,21 +73,19 @@ export function StaysManager({
       ) : (
         <div className={`stays-shell${selected ? ' has-selection' : ''}`}>
           <div className="stay-list">
-            <div
-              className={`card stay-card${selected === 'all' ? ' is-selected' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => toggle('all')}
-              onKeyDown={(event) => selectOnKey(event, 'all')}
+            <Link
+              href={`/dashboard/properties/${propertyId}/inbox`}
+              className="card stay-card card-interactive"
+              style={{ textDecoration: 'none' }}
               data-testid="card-stay-all"
             >
               <div>
-                <strong>All conversations</strong>
+                <strong>Property Inbox</strong>
                 <p className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
-                  Every guest thread for this property in one inbox.
+                  Every guest thread for this property — active and past stays — in one inbox.
                 </p>
               </div>
-            </div>
+            </Link>
 
             {stays.map((s) => {
               const portalState = s.portal ? portalCodeStatus(s.portal) : null;
@@ -140,56 +137,64 @@ export function StaysManager({
             })}
           </div>
 
-          {selected && (
+          {selectedStay && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
-              {selectedStay && (
-                <>
-                  <div className="card" style={{ padding: '1rem' }}>
-                    <h2 style={{ fontSize: '1rem', margin: '0 0 .6rem' }}>Stay access code</h2>
-                    <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .6rem' }}>
-                      One code covers every guest on this stay. Guests enter it once per device, then their session is remembered.
+              {/* Messaging moved out of the stay card: conversations live in the
+                  Property Inbox. This card is the deep link into the party's
+                  threads; access codes and sharing stay here, with the stay. */}
+              <div className="card" style={{ padding: '1rem' }}>
+                <h2 style={{ fontSize: '1rem', margin: '0 0 .4rem' }}>Guest chat</h2>
+                <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .65rem' }}>
+                  Messages for {selectedStay.guestDisplayName} live in the Property Inbox.
+                </p>
+                <Link
+                  href={`/dashboard/properties/${propertyId}/inbox?stay=${selectedStay.id}`}
+                  className="btn btn-primary btn-sm"
+                  data-testid={`view-chat-${selectedStay.id}`}
+                >
+                  <MessageSquareText size={14} aria-hidden /> View current guest’s chat
+                </Link>
+              </div>
+
+              <div className="card" style={{ padding: '1rem' }}>
+                <h2 style={{ fontSize: '1rem', margin: '0 0 .6rem' }}>Stay access code</h2>
+                <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .6rem' }}>
+                  One code covers every guest on this stay. Guests enter it once per device, then their session is remembered.
+                </p>
+                {selectedStay.portal ? (
+                  <div>
+                    <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .5rem' }}>
+                      <span style={{ color: PORTAL_TONE[portalCodeStatus(selectedStay.portal)], fontWeight: 600 }}>
+                        {portalCodeStatus(selectedStay.portal)}
+                      </span>
+                      {selectedStay.portal.codeExpiresAt ? ` · code expires ${fmt(selectedStay.portal.codeExpiresAt)}` : ''}
                     </p>
-                    {selectedStay.portal ? (
-                      <div>
-                        <p className="faint" style={{ fontSize: '.8rem', margin: '0 0 .5rem' }}>
-                          <span style={{ color: PORTAL_TONE[portalCodeStatus(selectedStay.portal)], fontWeight: 600 }}>
-                            {portalCodeStatus(selectedStay.portal)}
-                          </span>
-                          {selectedStay.portal.codeExpiresAt ? ` · code expires ${fmt(selectedStay.portal.codeExpiresAt)}` : ''}
-                        </p>
-                        {selectedStay.portal.code ? (
-                          <div className="portal-code-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
-                            <div>
-                              <div className="faint" style={{ fontSize: '.65rem' }}>Access code</div>
-                              <div className="portal-code" style={{ fontSize: '1.3rem' }} data-testid={`portal-code-${selectedStay.id}`}>{selectedStay.portal.code}</div>
-                            </div>
-                            <CopyCodeButton code={selectedStay.portal.code} />
-                          </div>
-                        ) : (
-                          <p className="faint" style={{ fontSize: '.72rem', margin: '0 0 .5rem' }}>
-                            This code was minted before codes became re-viewable, so it shows masked. Regenerate to issue a fresh, visible code.
-                          </p>
-                        )}
-                        <PortalCodeRegenerator propertyId={propertyId} stayId={selectedStay.id} linkId={selectedStay.portal.linkId} />
+                    {selectedStay.portal.code ? (
+                      <div className="portal-code-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
+                        <div>
+                          <div className="faint" style={{ fontSize: '.65rem' }}>Access code</div>
+                          <div className="portal-code" style={{ fontSize: '1.3rem' }} data-testid={`portal-code-${selectedStay.id}`}>{selectedStay.portal.code}</div>
+                        </div>
+                        <CopyCodeButton code={selectedStay.portal.code} />
                       </div>
                     ) : (
-                      // Stays created before auto-mint keep the manual minter as fallback.
-                      <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                      <p className="faint" style={{ fontSize: '.72rem', margin: '0 0 .5rem' }}>
+                        This code was minted before codes became re-viewable, so it shows masked. Regenerate to issue a fresh, visible code.
+                      </p>
                     )}
+                    <PortalCodeRegenerator propertyId={propertyId} stayId={selectedStay.id} linkId={selectedStay.portal.linkId} />
                   </div>
-                  <ShareStayPanel
-                    propertyId={propertyId}
-                    stayId={selectedStay.id}
-                    enabled={Boolean(selectedStay.portal?.code) && selectedPortalState === 'active'}
-                  />
-                  <StayGuestsManager propertyId={propertyId} stayId={selectedStay.id} />
-                </>
-              )}
-              <GuestChatInbox
+                ) : (
+                  // Stays created before auto-mint keep the manual minter as fallback.
+                  <StayLinkMinter propertyId={propertyId} stayId={selectedStay.id} />
+                )}
+              </div>
+              <ShareStayPanel
                 propertyId={propertyId}
-                stayId={selected === 'all' ? null : selected}
-                canAnnounce={canAnnounce}
+                stayId={selectedStay.id}
+                enabled={Boolean(selectedStay.portal?.code) && selectedPortalState === 'active'}
               />
+              <StayGuestsManager propertyId={propertyId} stayId={selectedStay.id} />
             </div>
           )}
         </div>

@@ -79,7 +79,7 @@ export default async function PropertyWorkspaceLayout({
       </header>
 
       <div className="property-workspace-main">
-        <PropertyWorkspaceNav propertyId={property.id} propertyName={property.display_name} canEditProperty={can.editProperty} />
+        <PropertyWorkspaceNav propertyId={property.id} propertyName={property.display_name} canEditProperty={can.editProperty} canReplyGuests={can.replyGuests} />
         <div style={{ minWidth: 0 }}>{children}</div>
       </div>
     </section>

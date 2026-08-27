@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-// Guest chat merged into the Stays tab so stay management and that stay's
-// conversation live in one view. Preserve the ?stay= deep-link param.
+// Guest chat lives in the Property Inbox now — one page holding every
+// conversation for the property, with Active/Past stay filtering. Preserve the
+// ?stay= deep-link param: it narrows the inbox to that party.
 export default async function GuestChatPage({
   params,
   searchParams,
@@ -13,5 +14,5 @@ export default async function GuestChatPage({
 }) {
   const propertyId = (await params).id;
   const stay = (await searchParams)?.stay;
-  redirect(`/dashboard/properties/${propertyId}/stays${stay ? `?stay=${encodeURIComponent(stay)}` : ''}`);
+  redirect(`/dashboard/properties/${propertyId}/inbox${stay ? `?stay=${encodeURIComponent(stay)}` : ''}`);
 }

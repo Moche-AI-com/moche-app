@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Brain,
   CalendarDays,
+  Inbox,
   LayoutDashboard,
   MapPin,
   Settings,
@@ -12,7 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-export type PropertySectionKey = 'overview' | 'brain' | 'stays' | 'local' | 'extras' | 'settings';
+export type PropertySectionKey = 'overview' | 'brain' | 'stays' | 'inbox' | 'local' | 'extras' | 'settings';
 
 export interface PropertySection {
   key: PropertySectionKey;
@@ -24,6 +25,7 @@ const SECTION_LABELS: Record<PropertySectionKey, string> = {
   overview: 'Overview',
   brain: 'Manage Brain',
   stays: 'Stays',
+  inbox: 'Inbox',
   local: 'Local Recs',
   extras: 'Extras',
   settings: 'Configuration',
@@ -35,13 +37,14 @@ const SECTION_ICONS: Record<PropertySectionKey, LucideIcon> = {
   overview: LayoutDashboard,
   brain: Brain,
   stays: CalendarDays,
+  inbox: Inbox,
   local: MapPin,
   extras: Sparkles,
   settings: Settings,
 };
 
 /** Pure nav model shared by the property workspace and its unit tests. */
-export function propertySections(propertyId: string, canEditProperty: boolean): PropertySection[] {
+export function propertySections(propertyId: string, canEditProperty: boolean, canReplyGuests = false): PropertySection[] {
   const base = `/dashboard/properties/${propertyId}`;
   const sections: PropertySection[] = [
     { key: 'overview', label: SECTION_LABELS.overview, href: base },
@@ -51,8 +54,15 @@ export function propertySections(propertyId: string, canEditProperty: boolean): 
     // linked there for everyone.
     { key: 'brain', label: SECTION_LABELS.brain, href: `${base}/brain` },
     { key: 'stays', label: SECTION_LABELS.stays, href: `${base}/stays` },
-    { key: 'local', label: SECTION_LABELS.local, href: `${base}/local` },
   ];
+
+  // The Inbox is for roles that answer guests — the page and the guest-chats
+  // API enforce the same gate, so hiding the entry just keeps the rail honest.
+  if (canReplyGuests) {
+    sections.push({ key: 'inbox', label: SECTION_LABELS.inbox, href: `${base}/inbox` });
+  }
+
+  sections.push({ key: 'local', label: SECTION_LABELS.local, href: `${base}/local` });
 
   if (canEditProperty) {
     sections.push(
@@ -72,9 +82,9 @@ export function propertySectionLabel(pathname: string, propertyId: string): stri
   const path = cleanPath(pathname);
   const base = `/dashboard/properties/${propertyId}`;
   if (path === base) return SECTION_LABELS.overview;
-  // Guest chat and the legacy escalations route both merged into the Stays tab;
-  // their old paths still resolve to the Stays label while the redirects stand.
-  if (path.startsWith(`${base}/stays`) || path.startsWith(`${base}/guest-chat`) || path.startsWith(`${base}/escalations`)) return SECTION_LABELS.stays;
+  // The legacy escalations route merged into the Stays tab; its old path still
+  // resolves to the Stays label while the redirect stands.
+  if (path.startsWith(`${base}/stays`) || path.startsWith(`${base}/escalations`)) return SECTION_LABELS.stays;
   if (
     path.startsWith(`${base}/local`) ||
     path.startsWith(`${base}/nearby`) ||
@@ -84,6 +94,8 @@ export function propertySectionLabel(pathname: string, propertyId: string): stri
   }
   if (path.startsWith(`${base}/extras`)) return SECTION_LABELS.extras;
   if (path.startsWith(`${base}/brain`)) return SECTION_LABELS.brain;
+  // Guest chat moved again — out of the Stays tab and into the Property Inbox.
+  if (path.startsWith(`${base}/inbox`) || path.startsWith(`${base}/guest-chat`)) return SECTION_LABELS.inbox;
   if (path.startsWith(`${base}/welcome-card`)) return 'Welcome card';
   if (path.startsWith(`${base}/settings`) || path.startsWith(`${base}/appliances`)) {
     return SECTION_LABELS.settings;
@@ -99,13 +111,15 @@ export function PropertyWorkspaceNav({
   propertyId,
   propertyName,
   canEditProperty,
+  canReplyGuests,
 }: {
   propertyId: string;
   propertyName: string;
   canEditProperty: boolean;
+  canReplyGuests: boolean;
 }) {
   const pathname = usePathname();
-  const sections = propertySections(propertyId, canEditProperty);
+  const sections = propertySections(propertyId, canEditProperty, canReplyGuests);
   const currentLabel = propertySectionLabel(pathname, propertyId);
 
   return (
