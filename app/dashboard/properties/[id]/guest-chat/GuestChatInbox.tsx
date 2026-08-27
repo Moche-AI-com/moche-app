@@ -19,6 +19,7 @@ type Thread = {
   guestName: string;
   guestContactLast4: string | null;
   stayStatus: string | null;
+  stayLifecycle: string | null;
   checkIn: string | null;
   checkOut: string | null;
   channel: string;
@@ -47,10 +48,23 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'G';
 }
 
-// Conversation list for the merged Stays tab. Threads open as their own full
-// page (stays/[stayId]/conversations/[conversationId]) — there is deliberately
-// no inline popout, which removes the squeezed/cut-off thread pane entirely.
-export function GuestChatInbox({ propertyId, stayId, canAnnounce }: { propertyId: string; stayId: string | null; canAnnounce: boolean }) {
+// The property's guest conversation list, shared by the Property Inbox page and
+// (stay-scoped) the stays deep links. Threads open as their own full page
+// (stays/[stayId]/conversations/[conversationId]) — there is deliberately no
+// inline popout, which removes the squeezed/cut-off thread pane entirely.
+export function GuestChatInbox({
+  propertyId,
+  stayId,
+  canAnnounce,
+  view = 'active',
+}: {
+  propertyId: string;
+  stayId: string | null;
+  canAnnounce: boolean;
+  /** Stay-lifecycle bucket ('active' | 'archived') from the Inbox page's
+      Active/Past toggle. A single-stay deep link bypasses it. */
+  view?: string;
+}) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [loadingThreads, setLoadingThreads] = useState(true);
@@ -68,12 +82,16 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce }: { propertyId
   const totalExtras = threads.reduce((sum, thread) => sum + thread.extrasCount, 0);
   const visibleThreads = useMemo(
     () => threads.filter((thread) => {
+      // The Active/Past switch scopes by the stay's lifecycle; a single-stay
+      // deep link (?stay=) bypasses it — the host asked for that exact stay.
+      // Threads with no stay (property-level chats) read as active.
+      if (!stayId && (thread.stayLifecycle ?? 'active') !== view) return false;
       if (filter === 'unread') return thread.unreadCount > 0;
       if (filter === 'escalations') return thread.pinned;
       if (filter === 'extras') return thread.extrasCount > 0;
       return true;
     }),
-    [threads, filter],
+    [threads, filter, stayId, view],
   );
 
   const loadThreads = useCallback(async () => {
@@ -223,7 +241,11 @@ export function GuestChatInbox({ propertyId, stayId, canAnnounce }: { propertyId
           ) : visibleThreads.length === 0 ? (
             <p className="muted" style={{ padding: '.5rem' }}>
               {filter === 'all'
-                ? 'No guest chats yet for this stay.'
+                ? stayId
+                  ? 'No guest chats yet for this stay.'
+                  : view === 'archived'
+                    ? 'No conversations from past stays.'
+                    : 'No guest chats yet for this property.'
                 : filter === 'unread'
                   ? 'Nothing unread.'
                   : filter === 'extras'

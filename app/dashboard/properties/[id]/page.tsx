@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Brain,
+  CalendarCheck,
   CalendarDays,
   Check,
   LifeBuoy,
@@ -11,10 +12,12 @@ import {
   QrCode,
   Settings,
   Sparkles,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { computeBrainHealth, gapPrompts } from '@/lib/brain/health';
 import { ListingImportKickoff } from './ListingImportKickoff';
 import { CopyPortalLink } from './CopyPortalLink';
@@ -34,6 +37,10 @@ export default async function PropertyDetailPage({
   const { property, can } = access;
   const supabase = createClient();
 
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   const [
     { data: items },
     { count: stayCount },
@@ -42,6 +49,8 @@ export default async function PropertyDetailPage({
     { count: discoveredCount },
     { count: openExtras },
     { data: inboxRows },
+    { count: openService },
+    { count: arrivalsWeek },
   ] = await Promise.all([
     supabase.from('brain_items').select('category, status, deleted_at, visibility').eq('property_id', property.id),
     supabase.from('stays').select('id', { count: 'exact', head: true }).eq('property_id', property.id).is('deleted_at', null),
@@ -49,9 +58,11 @@ export default async function PropertyDetailPage({
     supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('approved', true).eq('hidden', false).is('deleted_at', null),
     supabase.from('nearby_places').select('id', { count: 'exact', head: true }).eq('property_id', property.id).eq('hidden', false),
     supabase.from('extras_orders').select('id', { count: 'exact', head: true }).eq('property_id', property.id).not('fulfillment_status', 'in', '("fulfilled","declined","canceled","expired","refunded")'),
-    // The Inbox card previews the newest few open escalations; the full list
-    // lives in the Stays tab, where the conversations are.
-    supabase.from('escalations').select('id, question, created_at').eq('property_id', property.id).eq('status', 'open').order('created_at', { ascending: false }).limit(3),
+    // The Inbox card previews the newest few open escalations; stay_id and
+    // conversation_id feed the sender/party join below and the thread link.
+    supabase.from('escalations').select('id, question, created_at, stay_id, conversation_id').eq('property_id', property.id).eq('status', 'open').order('created_at', { ascending: false }).limit(3),
+    supabase.from('service_requests').select('id', { count: 'exact', head: true }).eq('property_id', property.id).in('status', ['new', 'acknowledged', 'in_progress']),
+    supabase.from('stays').select('id', { count: 'exact', head: true }).eq('property_id', property.id).is('deleted_at', null).eq('lifecycle_status', 'active').gte('check_in', today).lte('check_in', nextWeek),
   ]);
 
   const health = computeBrainHealth(items ?? []);
@@ -75,6 +86,25 @@ export default async function PropertyDetailPage({
   const needsAttention = (openEsc ?? 0) + health.gaps.length;
   const inbox = inboxRows ?? [];
 
+  // Sender + party labels for the Inbox rows. The host is already authorized by
+  // requirePropertyAccess above; the join path mirrors the guest-chats API,
+  // which reads the same tables through the service role.
+  const escStayIds = [...new Set(inbox.map((esc) => esc.stay_id).filter((v): v is string => Boolean(v)))];
+  const escConvoIds = [...new Set(inbox.map((esc) => esc.conversation_id).filter((v): v is string => Boolean(v)))];
+  const admin = createAdminClient();
+  const db = admin as any;
+  const [{ data: escStays }, { data: escConvos }] = await Promise.all([
+    escStayIds.length ? supabase.from('stays').select('id, guest_display_name').in('id', escStayIds) : Promise.resolve({ data: [] }),
+    escConvoIds.length ? db.from('conversations').select('id, guest_identity_id').in('id', escConvoIds) : Promise.resolve({ data: [] }),
+  ]);
+  const identityIds = [...new Set(((escConvos ?? []) as any[]).map((c) => c.guest_identity_id).filter(Boolean))];
+  const { data: escIdentities } = identityIds.length
+    ? await db.from('guest_identities').select('id, first_name, display_name').in('id', identityIds)
+    : { data: [] };
+  const partyByStayId = new Map<string, string>((escStays ?? []).map((s) => [s.id, s.guest_display_name]));
+  const identityByConvoId = new Map<string, string | null>(((escConvos ?? []) as any[]).map((c) => [c.id, c.guest_identity_id]));
+  const nameByIdentityId = new Map<string, string>(((escIdentities ?? []) as any[]).map((g) => [g.id, g.first_name || g.display_name]));
+
   return (
     <div>
       {listingImportUrl && can.editBrain && (
@@ -97,7 +127,7 @@ export default async function PropertyDetailPage({
           </span>
           {needsAttention > 0 && (
             <div className="dash-attn-chips">
-              <Link href={`${base}/stays`} className="dash-attn-chip dash-attn-chip-link">
+              <Link href={`${base}/inbox`} className="dash-attn-chip dash-attn-chip-link">
                 <strong>{openEsc ?? 0}</strong> open escalation{openEsc === 1 ? '' : 's'}
               </Link>
               <Link href={`${base}/brain`} className="dash-attn-chip dash-attn-chip-link">
@@ -113,25 +143,28 @@ export default async function PropertyDetailPage({
         </div>
       </div>
 
-      {/* One tile per job-to-be-done. Escalations deep-links into the merged
-          Stays tab — it earns its own tile because the open count is an
-          attention metric, not navigation. */}
+      {/* One tile per job-to-be-done. Escalations deep-links into the Property
+          Inbox — it earns its own tile because the open count is an attention
+          metric, not navigation. Configuration stays last. */}
       <section aria-labelledby="property-workspace-heading">
         <h2 id="property-workspace-heading" className="sr-only">Workspace</h2>
         <div className="prop-tile-grid" style={{ marginBottom: '1.25rem' }}>
           <Tile href={`${base}/brain`} icon={Brain} title="Brain" value={`${health.totalItems} items`} sub="Knowledge base" />
           <Tile href={`${base}/stays`} icon={CalendarDays} title="Stays" value={`${stayCount ?? 0}`} sub="Guest bookings" />
-          <Tile href={`${base}/stays`} icon={LifeBuoy} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" attention={(openEsc ?? 0) > 0} />
+          <Tile href={`${base}/inbox`} icon={LifeBuoy} title="Escalations" value={`${openEsc ?? 0} open`} sub="Guest questions & issues" attention={(openEsc ?? 0) > 0} />
           {(can.editProperty || can.editBrain) && (
             <Tile href={`${base}/extras`} icon={Sparkles} title="Extras" value={`${openExtras ?? 0} open`} sub="Add-ons guests can request" />
           )}
           <Tile href={`${base}/local`} icon={MapPin} title="Local Recs" value={localCount > 0 ? `${localCount} places` : 'Set up'} sub="What your concierge recommends" />
+          <Tile href="/dashboard/service-requests" icon={Wrench} title="Service" value={`${openService ?? 0} open`} sub="Maintenance requests" attention={(openService ?? 0) > 0} />
+          <Tile href={`${base}/stays`} icon={CalendarCheck} title="Arrivals" value={`${arrivalsWeek ?? 0} this week`} sub="Check-ins in the next 7 days" />
           {can.editProperty && <Tile href={`${base}/settings`} icon={Settings} title="Configuration" value="Configure" sub="Branding, tone, modules" />}
         </div>
       </section>
 
       <div className="prop-duo">
-        {/* Property Inbox: the newest open guest questions, one tap into Stays. */}
+        {/* Property Inbox: the newest open guest questions. A row opens the
+            chat thread itself; the footer opens the full Property Inbox page. */}
         <section className="card prop-panel rise-in" aria-labelledby="property-inbox-heading">
           <div className="prop-panel-head">
             <h2 id="property-inbox-heading">
@@ -141,27 +174,36 @@ export default async function PropertyDetailPage({
           </div>
           {inbox.length > 0 ? (
             <div className="dash-feed">
-              {inbox.map((esc) => (
-                <Link key={esc.id} href={`${base}/stays`} className="dash-feed-link">
-                  <span className="dash-feed-icon" aria-hidden>
-                    <LifeBuoy size={14} />
-                  </span>
-                  <span className="dash-feed-main">
-                    <span className="dash-feed-detail" style={{ color: 'var(--text)', fontWeight: 600 }}>
-                      {esc.question || 'Guest question'}
+              {inbox.map((esc) => {
+                const party = esc.stay_id ? partyByStayId.get(esc.stay_id) : undefined;
+                const identityId = esc.conversation_id ? identityByConvoId.get(esc.conversation_id) : undefined;
+                const firstName = identityId ? nameByIdentityId.get(identityId) : undefined;
+                const meta = [firstName, party, dayFormat.format(new Date(esc.created_at))].filter(Boolean).join(' | ');
+                const href = esc.stay_id && esc.conversation_id
+                  ? `${base}/stays/${esc.stay_id}/conversations/${esc.conversation_id}`
+                  : `${base}/inbox`;
+                return (
+                  <Link key={esc.id} href={href} className="dash-feed-link">
+                    <span className="dash-feed-icon" aria-hidden>
+                      <LifeBuoy size={14} />
                     </span>
-                    <span className="dash-feed-meta">Opened {dayFormat.format(new Date(esc.created_at))} · Awaiting a reply</span>
-                  </span>
-                  <ArrowRight size={14} className="dash-feed-arrow" aria-hidden />
-                </Link>
-              ))}
+                    <span className="dash-feed-main">
+                      <span className="dash-feed-detail" style={{ color: 'var(--text)', fontWeight: 600 }}>
+                        {esc.question || 'Guest question'}
+                      </span>
+                      <span className="dash-feed-meta">{meta}</span>
+                    </span>
+                    <span className="btn btn-ghost btn-sm" style={{ flexShrink: 0, alignSelf: 'center' }}>Open thread</span>
+                  </Link>
+                );
+              })}
             </div>
           ) : (
             <p className="muted" style={{ fontSize: '.85rem', margin: 0, lineHeight: 1.5 }}>
               No open guest questions. Anything the concierge cannot answer lands here first.
             </p>
           )}
-          <Link href={`${base}/stays`} className="dash-panel-link">Open inbox →</Link>
+          <Link href={`${base}/inbox`} className="dash-panel-link">Open inbox →</Link>
         </section>
 
         {/* Guest access: the stable portal link plus the QR/print entry point.
