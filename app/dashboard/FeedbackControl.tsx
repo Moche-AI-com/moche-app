@@ -9,8 +9,7 @@ import { submitHostFeedbackAction, type HostFeedbackState } from './feedback-act
 // Add-on — a small, non-intrusive "Feedback" launcher pinned to the dashboard footer.
 // Opens a compact popover with a 1-5 rating + optional note. Never a blocking modal;
 // writes a private product_feedback row (source='host') for owner-only analytics.
-// The root carries .feedback-control purely as the print stylesheet's hook: this
-// launcher is product chrome, so it must never land on a printed report.
+// The feedback-control class excludes it from report printouts (globals.css print block).
 export function FeedbackControl() {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(0);

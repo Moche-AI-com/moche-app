@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireSession, getPropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, hasServiceRole } from '@/lib/supabase/admin';
+import { DomeMark } from '@/components/Logo';
 import { ReportActions } from '@/app/dashboard/service-requests/ReportActions';
 
 export const dynamic = 'force-dynamic';
@@ -116,16 +117,23 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
     ['Closed', fmt(t.archived_at)],
     ['Edited by host', fmt(t.edited_at)],
     ['Location', t.location_note ?? null],
-    ['Assigned to', contact ? [contact.name, contact.label].filter(Boolean).join(' \u00b7 ') || contact.contact_type : null],
+    ['Assigned to', contact ? [contact.name, contact.label].filter(Boolean).join(' · ') || contact.contact_type : null],
     ['Assigned user', assignedMemberName],
   ];
 
   return (
     <div className="report-sheet">
+      {/* Print-only letterhead: the sheet reads as a Moche-AI document when it
+          leaves the app — on paper, in a PDF, in an email attachment. */}
+      <div className="report-print-brand" aria-hidden>
+        <DomeMark size={22} variant="mono" />
+        <span>Moche-AI</span>
+      </div>
+
       {/* The sheet reads top-to-bottom as the report itself: header, facts,
           then the narrative sections. Working controls (Edit, Assign, Email,
-          Text, Print) live at the foot so the top stays clean when the page
-          is shared on screen or printed. */}
+          Text, Print) live at the foot so the top stays a client-facing
+          document on screen and on paper. */}
       <header className="report-head">
         <p className="report-kicker">Service report</p>
         <h1 className="report-title">
@@ -193,10 +201,10 @@ export default async function ServiceRequestReportPage({ params }: { params: Pro
           <ol className="report-timeline">
             {timeline.map((entry, i) => (
               <li key={i}>
-                <span className="report-timeline-when">{fmt(entry.at) ?? '\u2014'}</span>
+                <span className="report-timeline-when">{fmt(entry.at) ?? '—'}</span>
                 <span>
                   {entry.status ? <strong>{STATUS_LABEL[entry.status] ?? entry.status}</strong> : null}
-                  {entry.note ? `${entry.status ? ' \u00b7 ' : ''}${entry.note}` : null}
+                  {entry.note ? `${entry.status ? ' · ' : ''}${entry.note}` : null}
                 </span>
               </li>
             ))}
