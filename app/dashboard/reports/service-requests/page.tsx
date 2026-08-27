@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { fmtDateInTz } from '@/lib/reports/format';
+import type { Database } from '@/lib/database.types';
 import { ServiceRequestsReport, type ServiceReportRow } from './ServiceRequestsReport';
 
 export const dynamic = 'force-dynamic';
@@ -12,10 +13,33 @@ export const dynamic = 'force-dynamic';
 // line says when the cap bites.
 const ROW_CAP = 500;
 
+type ServiceStatus = Database['public']['Enums']['service_status'];
+type ServiceType = Database['public']['Enums']['service_type'];
+
+// Only terminal statuses are offered as filters — the grid only shows archived
+// rows, and those are always resolved or closed.
+const STATUS_OPTIONS: readonly ServiceStatus[] = ['resolved', 'closed'];
+const TYPE_OPTIONS: readonly ServiceType[] = [
+  'maintenance',
+  'cleaning',
+  'information',
+  'safety',
+  'emergency',
+  'other',
+];
+
 const STATUS_LABEL: Record<string, string> = {
   resolved: 'Resolved',
   closed: 'Closed',
-  completed: 'Completed',
+};
+
+const TYPE_LABEL: Record<ServiceType, string> = {
+  maintenance: 'Maintenance',
+  cleaning: 'Cleaning',
+  information: 'Information',
+  safety: 'Safety',
+  emergency: 'Emergency',
+  other: 'Other',
 };
 
 function humanizeToken(value: string | null | undefined): string {
@@ -71,10 +95,12 @@ export default async function ServiceReportsPage({
   const scopeIds = activeProperty ? [activeProperty] : propList.map((p) => p.id);
 
   // Top filters ride the URL; grid layout state never does (see Past stays).
+  // Enum filters are narrowed to the generated union types — a plain string
+  // fails typecheck against them.
   const from = sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : null;
   const to = sp.to && /^\d{4}-\d{2}-\d{2}$/.test(sp.to) ? sp.to : null;
-  const status = typeof sp.status === 'string' && sp.status ? sp.status : null;
-  const type = typeof sp.type === 'string' && sp.type ? sp.type : null;
+  const status = STATUS_OPTIONS.includes(sp.status as ServiceStatus) ? (sp.status as ServiceStatus) : null;
+  const type = TYPE_OPTIONS.includes(sp.type as ServiceType) ? (sp.type as ServiceType) : null;
 
   let rows: ServiceReportRow[] = [];
   let totalCount = 0;
@@ -114,7 +140,7 @@ export default async function ServiceReportsPage({
     `Property: ${activeProperty ? propNames.get(activeProperty) ?? 'Property' : 'All properties'}`,
     `Requested: ${from ?? 'any'} \u2192 ${to ?? 'any'}`,
     `Status: ${status ? STATUS_LABEL[status] ?? humanizeToken(status) : 'All'}`,
-    `Type: ${type ? humanizeToken(type) : 'All'}`,
+    `Type: ${type ? TYPE_LABEL[type] : 'All'}`,
   ].join(' \u00b7 ');
 
   return (
@@ -130,8 +156,9 @@ export default async function ServiceReportsPage({
         </h1>
         <p className="muted" style={{ fontSize: '.9rem', margin: '.35rem 0 0' }}>
           Every resolved service request as a spreadsheet: sort any column, drag columns into the order you want,
-          filter by summary, property, or type, then print or export exactly what you see. Open any row's Report
-          link for the full printable record. Refreshing the page restores the default view.
+          filter by summary, property, or type, then print or export exactly what you see. The first column opens
+          the full printable record for a contractor, an owner, or your own files. Refreshing the page restores
+          the default view.
         </p>
       </div>
 
@@ -166,21 +193,22 @@ export default async function ServiceReportsPage({
           Status
           <select className="select" name="status" defaultValue={status ?? ''} style={{ minHeight: 40, width: 'auto' }}>
             <option value="">All</option>
-            <option value="resolved">Resolved</option>
-            <option value="closed">Closed</option>
-            <option value="completed">Completed</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s] ?? humanizeToken(s)}
+              </option>
+            ))}
           </select>
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', fontSize: '.78rem', fontWeight: 600 }} className="muted">
           Type
           <select className="select" name="type" defaultValue={type ?? ''} style={{ minHeight: 40, width: 'auto' }}>
             <option value="">All</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="cleaning">Cleaning</option>
-            <option value="information">Information</option>
-            <option value="safety">Safety</option>
-            <option value="emergency">Emergency</option>
-            <option value="other">Other</option>
+            {TYPE_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {TYPE_LABEL[t]}
+              </option>
+            ))}
           </select>
         </label>
         <button type="submit" className="btn btn-primary btn-sm" data-testid="service-filters-apply">

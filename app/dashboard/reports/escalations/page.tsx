@@ -4,17 +4,24 @@ import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
 import { fmtDateInTz } from '@/lib/reports/format';
+import type { Database } from '@/lib/database.types';
 import { EscalationsReport, type EscalationReportRow } from './EscalationsReport';
 
 export const dynamic = 'force-dynamic';
 
 const ROW_CAP = 500;
 
+type EscalationStatus = Database['public']['Enums']['escalation_status'];
+
+// Anything but 'open' is archived history. 'closed' is not a stored value —
+// closing maps to the other terminal statuses — but a stale enum entry costs
+// nothing in the fallback.
+const STATUS_OPTIONS: readonly EscalationStatus[] = ['resolved', 'answered', 'dismissed'];
+
 const STATUS_LABEL: Record<string, string> = {
   resolved: 'Handled',
   answered: 'Answered',
   dismissed: 'Cancelled',
-  closed: 'Closed',
 };
 
 function humanizeToken(value: string | null | undefined): string {
@@ -67,7 +74,10 @@ export default async function HandledEscalationsReportPage({
 
   const from = sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : null;
   const to = sp.to && /^\d{4}-\d{2}-\d{2}$/.test(sp.to) ? sp.to : null;
-  const status = typeof sp.status === 'string' && sp.status ? sp.status : null;
+  // Narrow to the escalation_status union — a plain string fails typecheck.
+  const status = STATUS_OPTIONS.includes(sp.status as EscalationStatus)
+    ? (sp.status as EscalationStatus)
+    : null;
 
   let rows: EscalationReportRow[] = [];
   let totalCount = 0;
@@ -89,19 +99,6 @@ export default async function HandledEscalationsReportPage({
     const { data: escData, count } = await query;
     totalCount = count ?? 0;
     const escalations = (escData ?? []) as EscalationRow[];
-    const escIds = escalations.map((e) => e.id);
-
-    // Thread lengths: one round trip, grouped in memory — the hub's pattern.
-    const convoCounts = new Map<string, number>();
-    if (escIds.length > 0) {
-      const { data: convRows } = await supabase
-        .from('conversations')
-        .select('id, escalation_id')
-        .in('escalation_id', escIds);
-      for (const c of convRows ?? []) {
-        if (c.escalation_id) convoCounts.set(c.escalation_id, (convoCounts.get(c.escalation_id) ?? 0) + 1);
-      }
-    }
 
     rows = escalations.map((e) => ({
       id: e.id,
@@ -113,7 +110,9 @@ export default async function HandledEscalationsReportPage({
       handled: fmtDateInTz(e.responded_at, propTimezones.get(e.property_id)),
       askedTs: new Date(e.created_at).getTime(),
       handledTs: e.responded_at ? new Date(e.responded_at).getTime() : 0,
-      conversations: (e.conversation_id ? 1 : 0) + (convoCounts.get(e.id) ?? 0),
+      // conversations has no escalation back-reference; the link lives on the
+      // escalation row itself, so a thread count is exactly "has a thread".
+      conversations: e.conversation_id ? 1 : 0,
     }));
   }
 
@@ -173,9 +172,11 @@ export default async function HandledEscalationsReportPage({
           Status
           <select className="select" name="status" defaultValue={status ?? ''} style={{ minHeight: 40, width: 'auto' }}>
             <option value="">All</option>
-            <option value="resolved">Handled</option>
-            <option value="answered">Answered</option>
-            <option value="dismissed">Cancelled</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s] ?? humanizeToken(s)}
+              </option>
+            ))}
           </select>
         </label>
         <button type="submit" className="btn btn-primary btn-sm" data-testid="escalations-filters-apply">

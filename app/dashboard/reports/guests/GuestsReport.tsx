@@ -45,7 +45,7 @@ export function GuestsReport({
       printSubtitle={printSubtitle}
       defaultSort={[{ id: 'added', desc: true }]}
       totalCount={totalCount}
-      emptyMessage="No guests match this view. Guests appear here when they register through a property's portal."
+      emptyMessage="No guests match this view. Guests appear here after they register through a property portal."
     />
   );
 }
