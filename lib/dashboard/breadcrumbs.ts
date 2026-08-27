@@ -45,6 +45,19 @@ const SEGMENT_LABELS: Record<string, string> = {
   billing: 'Billing',
 };
 
+/**
+ * Ancestor paths that exist only to group a dynamic child have no page of
+ * their own, so linking to them 404s. The crumb still renders (the reader
+ * needs the grouping), just pointing at the working surface instead.
+ * `/dashboard/reports/service-request/[id]` is the one case today: "Service
+ * report" links to the Service tab, where a host going back from a report
+ * expects to land. Add a key here before letting any other grouping segment
+ * render a href.
+ */
+const HREF_OVERRIDES: Record<string, string> = {
+  '/dashboard/reports/service-request': '/dashboard/service-requests',
+};
+
 function titleCase(segment: string): string {
   const words = segment.replace(/[-_]+/g, ' ').trim();
   if (!words) return segment;
@@ -70,9 +83,10 @@ export interface BreadcrumbOptions {
  * home page is noise, and the acceptance criterion only asks for breadcrumbs on
  * non-top-level pages.
  *
- * Every crumb except the last is a link, and each href is the literal ancestor
- * path, so a deep link works on its own with no dependence on how the guest got
- * there.
+ * Every crumb except the last is a link whose href is the literal ancestor
+ * path, except where HREF_OVERRIDES repoints a grouping segment to the working
+ * surface (a deep link still works on its own with no dependence on how the
+ * guest got there).
  */
 export function buildBreadcrumbs(pathname: string, options: BreadcrumbOptions = {}): Crumb[] {
   const clean = (pathname || '').split(/[?#]/)[0];
@@ -97,7 +111,7 @@ export function buildBreadcrumbs(pathname: string, options: BreadcrumbOptions = 
       label = segmentLabel(segment);
     }
 
-    crumbs.push({ label, href: isLast ? null : href });
+    crumbs.push({ label, href: isLast ? null : HREF_OVERRIDES[href] ?? href });
   }
 
   return crumbs;
