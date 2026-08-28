@@ -1,0 +1,1 @@
+create index if not exists property_place_recommendations_approved_by_idx on public.property_place_recommendations (approved_by);
