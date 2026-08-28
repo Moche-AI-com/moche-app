@@ -67,7 +67,16 @@ describe('normalizeProposedValue — brain_item', () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value).toEqual({
-        title: 'Listing', text: body, category: 'core', visibility: 'guest', sourceUrl: null,
+        title: 'Listing',
+        text: body,
+        category: 'core',
+        visibility: 'guest',
+        sourceUrl: null,
+        // Routing fields (2026-08-28): present on every normalized value, null when
+        // the draft made no routing claim.
+        section: null,
+        featureId: null,
+        replacesItemId: null,
       });
     }
   });
@@ -109,6 +118,65 @@ describe('normalizeProposedValue — brain_item', () => {
   it('drops an over-long source url instead of storing it', () => {
     const r = normalizeProposedValue(field, { title: 'T', text: body, sourceUrl: `https://x.com/${'a'.repeat(2100)}` });
     if (r.ok) expect((r.value as { sourceUrl: string | null }).sourceUrl).toBeNull();
+  });
+});
+
+// 2026-08-28: updates carry their destination — a canonical section, optionally a
+// custom feature, and an add-vs-replace decision made at draft time. All three are
+// validated here so a misroute is a loud review error, never a silent misfile.
+describe('normalizeProposedValue — routing fields', () => {
+  const field = PROPOSABLE_FIELDS['brain.listing_summary'];
+  const body = 'A two bedroom apartment with a balcony and parking on site.';
+
+  it('carries a canonical section and derives the storage bucket from it', () => {
+    const r = normalizeProposedValue(field, { title: 'T', text: body, category: 'core', section: 'connectivity' });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const v = r.value as { section: string | null; category: string };
+      expect(v.section).toBe('connectivity');
+      // The bucket follows the section, not the model's free choice — the two can
+      // never disagree.
+      expect(v.category).toBe('core');
+    }
+  });
+
+  it('rejects a section the taxonomy does not know', () => {
+    const r = normalizeProposedValue(field, { title: 'T', text: body, section: 'attic' });
+    expect(r).toEqual({ ok: false, error: 'That section is not one this Brain has.' });
+  });
+
+  it('rejects a malformed feature or replacement target', () => {
+    expect(normalizeProposedValue(field, { title: 'T', text: body, featureId: 'not-a-uuid' }).ok).toBe(false);
+    expect(normalizeProposedValue(field, { title: 'T', text: body, replacesItemId: 'nope' }).ok).toBe(false);
+  });
+
+  it('a feature target implies the amenities section and its storage bucket', () => {
+    const r = normalizeProposedValue(field, {
+      title: 'T',
+      text: body,
+      featureId: '123e4567-e89b-42d3-a456-426614174000',
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const v = r.value as { section: string | null; featureId: string | null; category: string };
+      expect(v.featureId).toBe('123e4567-e89b-42d3-a456-426614174000');
+      expect(v.section).toBe('amenities');
+      expect(v.category).toBe('appliances');
+    }
+  });
+
+  it('carries a replacement target through unchanged', () => {
+    const r = normalizeProposedValue(field, {
+      title: 'T',
+      text: body,
+      replacesItemId: '123e4567-e89b-42d3-a456-426614174000',
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect((r.value as { replacesItemId: string | null }).replacesItemId).toBe(
+        '123e4567-e89b-42d3-a456-426614174000',
+      );
+    }
   });
 });
 

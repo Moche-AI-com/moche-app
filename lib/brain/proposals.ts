@@ -15,6 +15,7 @@
 import type { Database } from '@/lib/database.types';
 import { TONE_PRESET_IDS, type TonePresetId } from '@/lib/constants';
 import { REGISTRY_FIELDS, type RegistryField } from '@/lib/brain/completeness';
+import { isBrainSection, storageCategoryFor } from '@/lib/brain/taxonomy';
 
 export type ProposedUpdateStatus = Database['public']['Enums']['proposed_update_status'];
 
@@ -174,6 +175,21 @@ export interface BrainItemProposal {
   category: Database['public']['Enums']['brain_category'];
   visibility: Database['public']['Enums']['brain_visibility'];
   sourceUrl?: string | null;
+  /**
+   * Canonical section (registry domain id) this entry files under. Validated
+   * against the taxonomy at BOTH boundaries (draft + approval) — a misroute
+   * fails the review loudly instead of silently filing into the wrong bucket.
+   */
+  section?: string | null;
+  /** Custom feature target (Spaces & features). Ownership is verified at apply time. */
+  featureId?: string | null;
+  /**
+   * Set when this proposal REPLACES an existing brain item rather than adding a
+   * new one — the add/replace decision is made when the update is drafted (by the
+   * brain_ops-tier routing call) and carried here so approval is a deterministic
+   * apply, never a second judgement.
+   */
+  replacesItemId?: string | null;
 }
 
 export type NormalizeResult =
@@ -195,6 +211,10 @@ function asBrainCategory(v: unknown): BrainCategoryValue {
 
 const MAX_BRAIN_TEXT = 20000;
 
+// Feature and replacement targets are uuid references carried through a jsonb
+// value — shape-check them here; ownership is verified at apply time.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Validates and canonicalizes a value against its field's contract.
  *
@@ -215,12 +235,40 @@ export function normalizeProposedValue(field: ProposableField, raw: unknown): No
     if (title.length > 200) return { ok: false, error: 'Titles are limited to 200 characters.' };
     if (text.length < 20) return { ok: false, error: 'There is not enough content here to save.' };
     if (text.length > MAX_BRAIN_TEXT) return { ok: false, error: 'That entry is too long to save.' };
-    const category = asBrainCategory(v.category);
+
+    // Routing fields (2026-08-28 directive). An update lands in a precise place —
+    // a canonical section, optionally a custom feature, and either as a new entry
+    // or an in-place replacement of an existing one. Each is validated here so a
+    // bad route is a review error the host can see, not a silent misfile.
+    let section: string | null = null;
+    if (typeof v.section === 'string' && v.section.trim()) {
+      const s = v.section.trim();
+      if (!isBrainSection(s)) return { ok: false, error: 'That section is not one this Brain has.' };
+      section = s;
+    }
+    let featureId: string | null = null;
+    if (typeof v.featureId === 'string' && v.featureId.trim()) {
+      const f = v.featureId.trim();
+      if (!UUID_RE.test(f)) return { ok: false, error: 'That feature target is not valid.' };
+      featureId = f;
+      // A feature target implies its coarse section, so retrieval and display agree.
+      section = 'amenities';
+    }
+    let replacesItemId: string | null = null;
+    if (typeof v.replacesItemId === 'string' && v.replacesItemId.trim()) {
+      const r = v.replacesItemId.trim();
+      if (!UUID_RE.test(r)) return { ok: false, error: 'That replacement target is not valid.' };
+      replacesItemId = r;
+    }
+
+    // The storage bucket follows the routing decision, not the model's free choice:
+    // a precise section implies its bucket, so the two can never disagree.
+    const category = section ? storageCategoryFor(section) : asBrainCategory(v.category);
     const visibility = v.visibility === 'internal' ? 'internal' : 'guest';
     const sourceUrl = typeof v.sourceUrl === 'string' && v.sourceUrl.length <= 2000 ? v.sourceUrl : null;
     return {
       ok: true,
-      value: { title, text, category, visibility, sourceUrl } satisfies BrainItemProposal,
+      value: { title, text, category, visibility, sourceUrl, section, featureId, replacesItemId } satisfies BrainItemProposal,
     };
   }
 

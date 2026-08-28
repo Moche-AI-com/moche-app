@@ -18,9 +18,14 @@ export interface ApplianceState {
 // ---------------------------------------------------------------------------
 // C2 — Appliance auto-lookup.
 // Host types a make/model (e.g. "Keurig K-Elite", "GE Profile dishwasher
-// PDT715SYNFS"). One gpt-4o-mini call returns concise, guest-safe operating +
+// PDT715SYNFS"). One brain_ops-tier call returns concise, guest-safe operating +
 // troubleshooting Q&A, which we ingest as a guest-visible brain_item so the
 // concierge can answer appliance questions. Host can add their own notes.
+//
+// Tier rationale (2026-08-28): the generated text becomes canonical Brain content
+// after host review, so it runs on the strong, no-downgrade brain_ops tier rather
+// than 'general' — wrong appliance instructions are a guest-safety problem, not
+// just a quality one.
 // ---------------------------------------------------------------------------
 
 const SYSTEM = `You write short, practical guest-facing help for household appliances in a short-term rental.
@@ -52,7 +57,7 @@ export async function lookupApplianceAction(
         { role: 'user', content: `Appliance: ${model}` },
       ],
       { temperature: 0.3, maxTokens: 700 },
-      { task: 'general' },
+      { task: 'brain_ops' },
     );
   } catch (e) {
     log.warn('appliance_lookup_failed', { error: String(e) });

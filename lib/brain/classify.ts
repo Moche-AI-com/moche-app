@@ -62,7 +62,11 @@ export async function classifyBrainAnswer(input: {
         },
       ],
       { temperature: 0, maxTokens: 200 },
-      { task: 'classification' },
+      // Brain management, not guest traffic: this routes a host's answer into the Brain
+      // taxonomy, so it runs on the strong brain_ops tier (2026-08-28 directive). A
+      // misroute from the cheap classification tier misfiles knowledge the concierge
+      // then grounds on, and one misfiled answer pollutes every future guest reply.
+      { task: 'brain_ops' },
     );
 
     const text = result.text.trim();

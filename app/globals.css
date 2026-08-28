@@ -481,7 +481,8 @@
   .profile-menu-trigger-active { border-color: var(--teal); color: var(--teal); }
   .profile-menu-trigger-active .profile-menu-avatar { color: var(--teal); border-color: var(--teal); }
   .profile-menu-avatar {
-    display: inline-grid; place-items: center; flex-shrink: 0;
+    display: inline-grid; place-items: center;
+    flex-shrink: 0;
     width: 26px; height: 26px; border-radius: 9999px;
     background: var(--surface-2); border: 1px solid var(--border);
     color: var(--text-muted);
@@ -526,7 +527,7 @@
   }
   .profile-menu-switch-thumb {
     position: absolute; top: 2px; left: 2px;
-    width: 14px; height: 14px; border-radius: 999px;
+    width: 14px; height: 14px; border-radius: 9999px;
     background: var(--text-muted);
     transition: transform var(--tr), background var(--tr);
   }
@@ -700,9 +701,10 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 
 /* Grouped knowledge list — each category collapses into its own card so a
    property with 40+ items reads as ~8 scannable sections instead of one
-   long scroll of identical-looking cards. */
+   long scroll of identical-looking cards. scroll-margin-top keeps a card
+   clear of the page chrome when the Coverage Map scrolls it into view. */
 .brain-groups { display: flex; flex-direction: column; gap: .85rem; }
-.brain-group { padding: 1rem 1.15rem; }
+.brain-group { padding: 1rem 1.15rem; scroll-margin-top: 5rem; }
 .brain-group-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .brain-group-heading { display: flex; align-items: center; gap: .5rem; min-width: 0; }
 .brain-group-heading h3 { font-size: .95rem; margin: 0; font-family: var(--font-display); }
@@ -731,8 +733,17 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 .brain-group-actions { display: flex; align-items: center; gap: .35rem; flex-shrink: 0; }
 .brain-group-blurb { font-size: .75rem; margin: .55rem 0 0; max-width: 68ch; }
 
+/* Navigation target flash: a Coverage Map click scrolls a section into view and
+   this one-shot pulse identifies it. Border + shadow only — no movement — so the
+   reduced-motion override below can swap it for a static highlight. */
+.brain-group.is-flashed { animation: brain-flash 1.6s var(--ease-out); }
+@keyframes brain-flash {
+  0% { border-color: var(--teal); box-shadow: 0 0 0 4px var(--glow-teal); }
+  100% { border-color: var(--border); box-shadow: var(--shadow-md); }
+}
+
 /* Empty sections collapse into one chip row rather than ten placeholder cards. */
-.brain-empty-sections { border-style: dashed; }
+.brain-empty-sections { border-style: dashed; scroll-margin-top: 5rem; }
 .brain-empty-heading { font-size: .95rem; margin: 0; font-family: var(--font-display); }
 .brain-empty-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
 .brain-empty-chip {
@@ -757,9 +768,11 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
 .enhance-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .35rem; }
 
 /* ============================================================
-   Coverage Map — the orientation surface at the top of the Brain page.
-   Hover-only by contract (§4/§9): nodes get visual feedback and a live
-   read-out, and deliberately no click, href, or focus affordance.
+   Coverage Map — the orientation + navigation surface at the top of the
+   Brain page. As of the 2026-08-28 directive the map spins slowly on its
+   own, pauses while hovered or focused, and clicks navigate into the Brain
+   manager (hub → section, gap dot → the form that closes the gap).
+   Editing still never happens inside the graph.
    ============================================================ */
 .coverage-map { padding: 1.25rem; }
 .coverage-map-toggle {
@@ -783,13 +796,38 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
    SVG origin. Transform and opacity only — the CSS `r` property is not supported in
    Firefox or Safari, so animating the radius would silently do nothing there. */
 .coverage-node {
-  cursor: default;
+  cursor: pointer;
   transform-box: fill-box;
   transform-origin: center;
   transition: transform .16s ease-out, opacity .16s ease-out;
 }
 .coverage-node.is-active { transform: scale(1.6); }
-.coverage-hub { cursor: default; transition: stroke .16s ease-out; }
+.coverage-hub { cursor: pointer; transition: stroke .16s ease-out; }
+
+/* Slow idle rotation. The cluster layer orbits the view-box centre; hub labels
+   counter-rotate around their own centres (fill-box) so text stays upright while
+   orbiting. Pausing on hover/focus is not just polish — it is what makes a moving
+   map inspectable and clickable. */
+.coverage-spin {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: coverage-spin 90s linear infinite;
+}
+.coverage-spin-rev {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: coverage-spin-rev 90s linear infinite;
+}
+@keyframes coverage-spin { to { transform: rotate(360deg); } }
+@keyframes coverage-spin-rev { to { transform: rotate(-360deg); } }
+.coverage-map-canvas:hover .coverage-spin,
+.coverage-map-canvas:hover .coverage-spin-rev,
+.coverage-map-canvas:focus-within .coverage-spin,
+.coverage-map-canvas:focus-within .coverage-spin-rev {
+  animation-play-state: paused;
+}
+/* Keyboard focus on a hub reads as a stronger ring: SVG outlines are unreliable. */
+.coverage-hub:focus-visible { outline: none; stroke: var(--teal); stroke-width: 2.5; }
 
 /* Reserved height: the read-out appears and disappears on hover, and a box that
    collapses when empty would make the legend below it jump. */
@@ -835,11 +873,14 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
   .dash-tab::after { transition: none; }
   .dash-tab:hover, .dash-tab:active { transform: none; }
   .rise-in { animation: none; opacity: 1; }
-  /* Coverage Map keeps its meaning (colour, dimming, the live read-out) but drops
-     every animated transition. Node growth is the only movement here and it is
-     purely decorative reinforcement of the read-out. */
+  /* Coverage Map: the spin stops entirely and every animated transition drops;
+     colour, dimming, and the live read-out keep the meaning. The navigation
+     flash becomes a static highlight so a graph click still identifies its
+     target without any motion. */
   .coverage-cluster, .coverage-node, .coverage-hub { transition: none !important; }
   .coverage-node.is-active { transform: none; }
+  .coverage-spin, .coverage-spin-rev { animation: none !important; }
+  .brain-group.is-flashed { animation: none; border-color: var(--teal); }
   /* The profile menu keeps its state changes (chevron, switch) but drops movement. */
   .profile-menu-trigger, .profile-menu-item, .profile-menu-chevron,
   .profile-menu-switch, .profile-menu-switch-thumb { transition: none; }
@@ -878,7 +919,8 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
 }
 .dash-newbtn:active { transform: translateY(0); }
 .dash-newbtn-icon {
-  display: inline-grid; place-items: center; flex-shrink: 0;
+  display: inline-grid; place-items: center;
+  flex-shrink: 0;
   width: 22px; height: 22px; border-radius: 7px;
   background: rgba(4,18,26,.14);
 }
@@ -1141,8 +1183,7 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
   font-family: var(--font-display); font-size: 1.55rem; font-weight: 700; line-height: 1;
 }
 .dash-chart-stat-lbl {
-  font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
-  color: var(--text-muted); font-weight: 600;
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600;
 }
 .dash-chart-wrap { position: relative; }
 .dash-chart { display: block; width: 100%; height: 120px; overflow: visible; }
@@ -2183,8 +2224,7 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   padding-top: .35rem;
 }
 .prop-tile-icon {
-  display: inline-grid;
-  place-items: center;
+  display: inline-grid; place-items: center;
   flex-shrink: 0;
   width: 34px; height: 34px;
   border-radius: 10px;

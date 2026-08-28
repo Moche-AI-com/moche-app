@@ -11,7 +11,7 @@ import { getAIProvider } from '@/lib/ai';
 import { chunkText } from '@/lib/ingest/chunk';
 import { bumpBrainVersion } from '@/lib/brain/cache';
 import { upsertNormalizedNode } from '@/lib/normalizer';
-import { isBrainSection, storageCategoryFor } from '@/lib/brain/taxonomy';
+import { isBrainSection, parseFeatureSectionId, storageCategoryFor } from '@/lib/brain/taxonomy';
 import type { Database } from '@/lib/database.types';
 
 export interface BrainActionState {
@@ -21,20 +21,34 @@ export interface BrainActionState {
 
 /**
  * The unified Brain manager files knowledge by section (the registry taxonomy the host
- * reads), not by `brain_category` (the storage enum). Translate here so the section id
- * never has to be understood by the client and the enum never has to be understood by
- * the host.
+ * reads), not by `brain_category` (the storage enum). Both are written: `section`
+ * persists the precise destination — the BRAIN-SECTIONS migration
+ * (20260823141718_brain_sections) is applied in production — and `category` keeps the
+ * retrieval RPC and legacy readers working.
  *
- * The `section` column added by supabase-migrations-BRAIN-SECTIONS.sql is deliberately
- * NOT written yet: that migration is unapplied, so a write would fail against production.
- * Until the pipeline applies it, the section round-trips through the category map, which
- * is exactly what `resolveSection` reads back. Writing `section` is the first change in
- * the follow-up once the migration lands.
+ * The old stopgap wrote only the category, and four sections (Connectivity, Access &
+ * security, Space details, Parking) share the `core` bucket — so "file this under
+ * Connectivity" silently reappeared under Space details on the next load. That is why
+ * the section is now persisted on every save.
+ *
+ * A `feature:<id>` destination (Spaces & features, 2026-08-28) stores under the
+ * amenities bucket plus brain_items.feature_id — the feature link carries the precise
+ * routing, the canonical section stays a truthful coarse grouping.
  */
 function categoryFromForm(formData: FormData): string {
   const section = String(formData.get('section') ?? '');
+  if (parseFeatureSectionId(section)) return storageCategoryFor('amenities');
   if (isBrainSection(section)) return storageCategoryFor(section);
   return String(formData.get('category') ?? '');
+}
+
+/** The canonical section to persist for a feature target, or the posted section, or
+    null when the form posted nothing recognisable (e.g. a legacy client posting only a
+    category) — in which case the column is left alone. */
+function sectionFromForm(formData: FormData): string | null {
+  const section = String(formData.get('section') ?? '');
+  if (parseFeatureSectionId(section)) return 'amenities';
+  return isBrainSection(section) ? section : null;
 }
 
 // Create or update a manual Brain item. After saving, (re)build its chunks + embeddings
@@ -58,21 +72,43 @@ export async function saveBrainItemAction(
     return { error: parsed.error.issues[0]?.message ?? 'Please check the fields and try again.' };
   }
   const d = parsed.data;
+  const section = sectionFromForm(formData);
+  const featureId = parseFeatureSectionId(String(formData.get('section') ?? ''));
   const ctx = await requireSession();
   const supabase = createClient();
 
+  // A feature target must reference one of this property's active features — the id
+  // travels through a form field, so validate rather than trust it.
+  if (featureId) {
+    const { data: featureRow } = await supabase
+      .from('property_features')
+      .select('id')
+      .eq('id', featureId)
+      .eq('property_id', propertyId)
+      .is('archived_at', null)
+      .maybeSingle();
+    if (!featureRow) return { error: 'That feature no longer exists — pick a section.' };
+  }
+
   let savedId = itemId;
   if (itemId) {
+    // Cast: the generated types predate brain_items.section/feature_id (regenerate
+    // database.types to drop the cast); the columns exist in production.
+    // feature_id is always written on update: moving an item from a feature back to a
+    // canonical section must clear the link, not leave it stale.
+    const updatePayload = {
+      title: d.title,
+      body: d.body || null,
+      category: d.category,
+      visibility: d.visibility,
+      status: 'ready',
+      updated_at: new Date().toISOString(),
+      feature_id: featureId,
+      ...(section ? { section } : {}),
+    };
     const { error } = await supabase
       .from('brain_items')
-      .update({
-        title: d.title,
-        body: d.body || null,
-        category: d.category,
-        visibility: d.visibility,
-        status: 'ready',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload as never)
       .eq('id', itemId)
       .eq('property_id', propertyId);
     if (error) {
@@ -80,18 +116,21 @@ export async function saveBrainItemAction(
       return { error: 'Could not save the item.' };
     }
   } else {
+    const insertPayload = {
+      property_id: propertyId,
+      title: d.title,
+      body: d.body || null,
+      category: d.category,
+      visibility: d.visibility,
+      source_type: 'manual_entry',
+      status: 'ready',
+      created_by: ctx.user.id,
+      ...(section ? { section } : {}),
+      ...(featureId ? { feature_id: featureId } : {}),
+    };
     const { data: created, error } = await supabase
       .from('brain_items')
-      .insert({
-        property_id: propertyId,
-        title: d.title,
-        body: d.body || null,
-        category: d.category,
-        visibility: d.visibility,
-        source_type: 'manual_entry',
-        status: 'ready',
-        created_by: ctx.user.id,
-      })
+      .insert(insertPayload as never)
       .select('id')
       .single();
     if (error || !created) {

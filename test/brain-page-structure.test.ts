@@ -3,8 +3,13 @@
 // These assert the §9 non-goals of the Brain rebuild directly against the source, in the
 // same style as test/dashboard-cards.test.ts and test/escalation-inbox-routes.test.ts.
 // They exist because each non-goal is a thing that was true, got removed, and would be
-// easy to reintroduce by accident — a click handler on a Coverage Map node, a second
-// completeness number, a "Next questions" list, a Local Recs link back in the sidebar.
+// easy to reintroduce by accident — a second editing surface, a second completeness
+// number, a "Next questions" list, a Local Recs link back in the sidebar.
+//
+// 2026-08-28 amendment: the Coverage Map is no longer hover-only — the owner directive
+// made it spin and navigate. The guard below changed accordingly: what is still
+// forbidden is the graph becoming an EDITING surface (no save/delete actions, no
+// links, no router). Navigation via the shared goto event is now required instead.
 //
 // They are deliberately structural rather than behavioural: the failure mode being
 // guarded is "someone adds it back", which a render test would not catch unless it
@@ -68,25 +73,34 @@ describe('Brain page structure', () => {
     expect(page).not.toContain('health.categories');
     expect(page).not.toContain('computeCardHealth');
   });
+
+  it('offers the Spaces & features panel, the custom-section surface', () => {
+    expect(page).toContain('<FeaturesPanel');
+  });
 });
 
-describe('Coverage Map is hover-only', () => {
-  it('registers hover handlers and no click, key, or navigation handler', () => {
+describe('Coverage Map navigates but never edits', () => {
+  it('registers hover handlers for the read-out', () => {
     expect(coverageMap).toContain('onMouseEnter');
     expect(coverageMap).toContain('onMouseLeave');
-    expect(coverageMap).not.toContain('onClick={() => setHover');
-    // The only onClick permitted is the section expand/collapse toggle.
-    const clicks = coverageMap.match(/onClick=/g) ?? [];
-    expect(clicks).toHaveLength(1);
-    expect(coverageMap).toContain('onClick={() => setOpen(');
   });
 
-  it('gives nodes no interactive affordance', () => {
-    expect(coverageMap).not.toContain('href');
-    expect(coverageMap).not.toContain('tabIndex');
-    expect(coverageMap).not.toContain('role="button"');
+  it('navigates via the shared goto event and nothing else', () => {
+    expect(coverageMap).toContain('BRAIN_GOTO_EVENT');
+    // Navigation is the only side effect permitted: no save/delete action may be
+    // reachable from the graph — those live behind the manager's forms, with their
+    // guardrails. No links, no router: the map never leaves the page.
+    expect(coverageMap).not.toContain('saveBrainItemAction');
+    expect(coverageMap).not.toContain('deleteBrainItemAction');
     expect(coverageMap).not.toContain('useRouter');
     expect(coverageMap).not.toContain('next/link');
+    expect(coverageMap).not.toContain('href');
+  });
+
+  it('keeps hubs keyboard-accessible', () => {
+    expect(coverageMap).toContain('role="button"');
+    expect(coverageMap).toContain('tabIndex={0}');
+    expect(coverageMap).toContain('onKeyDown');
   });
 
   it('is expanded on open so it is informative rather than a header', () => {
@@ -121,5 +135,10 @@ describe('Brain consistency', () => {
   it('edits knowledge in place rather than in one form at the top of the page', () => {
     expect(manager).toContain('brain-item is-editing');
     expect(manager).toContain('inline');
+  });
+
+  it('files knowledge under features as well as sections', () => {
+    expect(manager).toContain('featureSectionId');
+    expect(manager).toContain('Spaces & features');
   });
 });

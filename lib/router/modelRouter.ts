@@ -17,13 +17,21 @@ export { redactPII };
 // Coarse task taxonomy used to decide how a completion should be routed. Each task
 // maps to a cost/quality-appropriate model tier (see modelForTask) and to whether the
 // external route is eligible at all (see shouldRouteExternally).
-export type TaskType = 'extraction' | 'concierge' | 'classification' | 'general';
+//
+// `brain_ops` (2026-08-28) covers brain management: routing knowledge to the right
+// section, cleanup/normalization, and AI-update merge decisions. The owner directive
+// is that this work runs on the most reliable configured model, so like `extraction`
+// it has no cheaper in-router fallback.
+export type TaskType = 'extraction' | 'brain_ops' | 'concierge' | 'classification' | 'general';
 
 // Classify a unit of work from a short caller-supplied hint. Purely heuristic and
 // side-effect free; it never calls a model. Callers that already know the task type
 // can pass it straight through to routedCompletion instead.
 export function classifyTask(hint: string): TaskType {
   const h = hint.toLowerCase();
+  // Brain management first: hints like "normalize + route into the brain" must not be
+  // claimed by the cheaper extraction/classification patterns below.
+  if (/\b(brain|knowledge base|proposal|section routing)\b/.test(h)) return 'brain_ops';
   if (/\b(normali[sz]e|extract|structur|json|schema)\b/.test(h)) return 'extraction';
   if (/\b(concierge|guest|answer|chat|reply)\b/.test(h)) return 'concierge';
   if (/\b(classif|intent|categor|label)\b/.test(h)) return 'classification';
@@ -47,6 +55,7 @@ export type RouterEnv = Pick<
   | 'openrouterModel'
   | 'openrouterBaseUrl'
   | 'openrouterModelExtraction'
+  | 'openrouterModelBrainOps'
   | 'openrouterModelClassification'
   | 'openrouterModelConcierge'
   | 'openrouterModelGeneral'
@@ -61,6 +70,8 @@ export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string
   switch (task) {
     case 'extraction':
       return env.openrouterModelExtraction;
+    case 'brain_ops':
+      return env.openrouterModelBrainOps;
     case 'classification':
       return env.openrouterModelClassification;
     case 'concierge':
@@ -84,6 +95,11 @@ const TASK_FALLBACKS: Record<TaskType, readonly string[]> = {
   // into guest-facing truth, so if the strong tier is unavailable the request fails
   // and the caller surfaces a try-again / manual-entry path instead.
   extraction: [],
+  // Brain ops shares extraction's no-downgrade rule, for the same reason: its output
+  // (section routing, normalized knowledge, update-merge decisions) becomes canonical
+  // Brain content after host review. A cheap-tier misroute misfiles knowledge the
+  // concierge then grounds on, degrading every future guest answer.
+  brain_ops: [],
   classification: ['openai/gpt-4o-mini'],
   concierge: ['openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
   general: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
@@ -109,7 +125,9 @@ export function modelChainForTask(task: TaskType, env: RouterEnv = serverEnv): s
 //   - concierge   → only when explicitly enabled; guest-facing answers stay in-house
 //                   by default so we never send guest conversations to a third party
 //                   without an intentional opt-in.
-//   - other tasks → eligible as soon as a key is present.
+//   - other tasks → eligible as soon as a key is present. Brain-ops payloads are
+//                   host-authored knowledge, and the external path still gets PII
+//                   redaction + the ZDR provider restriction + the residual-PII check.
 export function shouldRouteExternally(task: TaskType, env: RouterEnv = serverEnv): boolean {
   if (!env.openrouterApiKey) return false;
   if (task === 'concierge') return env.openrouterConciergeEnabled;
