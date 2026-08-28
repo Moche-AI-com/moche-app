@@ -2409,6 +2409,55 @@ export type Database = {
           },
         ]
       }
+      notification_digest_queue: {
+        Row: {
+          created_at: string
+          host_account_id: string
+          id: string
+          notification_id: string
+          profile_id: string
+          sent_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          host_account_id: string
+          id?: string
+          notification_id: string
+          profile_id: string
+          sent_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          host_account_id?: string
+          id?: string
+          notification_id?: string
+          profile_id?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_digest_queue_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_digest_queue_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_digest_queue_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_preferences: {
         Row: {
           category: string
@@ -2456,6 +2505,55 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_property_mutes: {
+        Row: {
+          category: string
+          created_at: string
+          host_account_id: string
+          id: string
+          profile_id: string
+          property_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          host_account_id: string
+          id?: string
+          profile_id: string
+          property_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          host_account_id?: string
+          id?: string
+          profile_id?: string
+          property_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_property_mutes_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_property_mutes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_property_mutes_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
         ]
@@ -2681,6 +2779,7 @@ export type Database = {
           created_at: string
           deletion_requested_at: string | null
           email: string
+          email_digest_enabled: boolean
           full_name: string | null
           id: string
           is_admin: boolean
@@ -2699,6 +2798,7 @@ export type Database = {
           created_at?: string
           deletion_requested_at?: string | null
           email: string
+          email_digest_enabled?: boolean
           full_name?: string | null
           id: string
           is_admin?: boolean
@@ -2717,6 +2817,7 @@ export type Database = {
           created_at?: string
           deletion_requested_at?: string | null
           email?: string
+          email_digest_enabled?: boolean
           full_name?: string | null
           id?: string
           is_admin?: boolean
@@ -2782,7 +2883,7 @@ export type Database = {
           published_at?: string | null
           purged_at?: string | null
           region?: string | null
-          slug: string
+          slug?: string
           status?: Database["public"]["Enums"]["property_status"]
           timezone?: string
           updated_at?: string
