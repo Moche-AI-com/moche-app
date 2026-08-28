@@ -18,6 +18,11 @@ import {
   normalizeProposedValue,
   type BrainItemProposal,
 } from '@/lib/brain/proposals';
+// reindexBrainItem lives in the Brain page's action module today. It is an async
+// export (legal for a 'use server' file) and is imported here rather than
+// duplicated: a replace-apply must rebuild chunks + embeddings exactly the way a
+// manual save does, or the two paths drift.
+import { reindexBrainItem } from '@/app/dashboard/properties/[id]/brain/actions';
 import { log } from '@/lib/log';
 
 type PropertiesUpdate = Database['public']['Tables']['properties']['Update'];
@@ -57,6 +62,58 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
   try {
     if (field.kind === 'brain_item') {
       const v = normalized.value as BrainItemProposal;
+
+      // A feature link is property-scoped data arriving via a queue row: verify the
+      // feature belongs to this property and is active before writing it, in either
+      // path below.
+      if (v.featureId) {
+        const { data: featureRow } = await admin
+          .from('property_features')
+          .select('id')
+          .eq('id', v.featureId)
+          .eq('property_id', input.propertyId)
+          .is('archived_at', null)
+          .maybeSingle();
+        if (!featureRow) return { ok: false, error: 'The feature this targets no longer exists.' };
+      }
+
+      // REPLACE path (2026-08-28): update the existing entry in place and reindex
+      // it, so an approved correction never becomes a second copy the concierge
+      // can retrieve twice. The add/replace decision was made when the update was
+      // drafted and is carried on the value — approval here is deterministic.
+      if (v.replacesItemId) {
+        const { data: target } = await admin
+          .from('brain_items')
+          .select('id')
+          .eq('id', v.replacesItemId)
+          .eq('property_id', input.propertyId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (!target) return { ok: false, error: 'The entry this update replaces no longer exists.' };
+
+        const { error } = await admin
+          .from('brain_items')
+          .update({
+            title: v.title,
+            body: v.text,
+            category: v.category,
+            section: v.section,
+            feature_id: v.featureId,
+            visibility: v.visibility,
+            status: 'ready',
+            updated_at: new Date().toISOString(),
+          } as never)
+          .eq('id', target.id)
+          .eq('property_id', input.propertyId);
+        if (error) throw error;
+
+        await reindexBrainItem(input.propertyId, target.id, v.title, v.text, v.visibility, v.category);
+        return { ok: true, targetType: 'brain_item', targetId: target.id };
+      }
+
+      // ADD path: ingest as a new entry, then stamp the routing decision on the
+      // row — ingestText predates the section/feature columns, so the precise
+      // destination is written here.
       const result = await ingestText(admin, {
         propertyId: input.propertyId,
         title: v.title,
@@ -68,6 +125,14 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
         sourceUrl: v.sourceUrl ?? input.sourceRef ?? null,
         createdBy: input.actorProfileId,
       });
+      if (v.section || v.featureId) {
+        const { error } = await admin
+          .from('brain_items')
+          .update({ section: v.section, feature_id: v.featureId } as never)
+          .eq('id', result.brainItemId)
+          .eq('property_id', input.propertyId);
+        if (error) throw error;
+      }
       return { ok: true, targetType: 'brain_item', targetId: result.brainItemId };
     }
 
