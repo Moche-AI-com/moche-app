@@ -168,3 +168,92 @@ export function fieldsInSection(sectionId: string): RegistryField[] {
 export function sectionRoutingGuide(): string {
   return BRAIN_SECTIONS.map((s) => `- ${s.id}: ${s.blurb}`).join('\n');
 }
+
+/* --------------------------------------------------------------------------
+   Spaces & features (2026-08-28 directive)
+   Custom per-property sections. Not registry domains and never scored: they
+   exist so hosts (and approved AI proposals) can teach the concierge about
+   things the fixed taxonomy does not model — a shed, a dock, an EV charger.
+   A feature is created with the three structured inputs the concierge needs
+   (where it is, whether guests may use it, notes) and knowledge files under
+   it via brain_items.feature_id.
+   -------------------------------------------------------------------------- */
+
+export interface FeatureCatalogEntry {
+  /** Stable key, stored on property_features.catalog_key. Lowercase slug. */
+  key: string;
+  label: string;
+  /** One line of guidance shown as the chip's tooltip: what knowledge belongs here. */
+  hint: string;
+}
+
+// The "+ Add" picker catalog, roughly ordered by how often guests ask. The search
+// box makes the tail cheap to reach, so this list can grow without UI changes.
+// Freeform ("Something else") lives in the picker UI, not here.
+export const FEATURE_CATALOG: readonly FeatureCatalogEntry[] = [
+  { key: 'pool', label: 'Pool', hint: 'Hours, rules, heating, towels' },
+  { key: 'hot_tub', label: 'Hot tub', hint: 'Controls, cover, safety' },
+  { key: 'grill', label: 'Grill / BBQ', hint: 'Fuel, lighting it, where the tools live' },
+  { key: 'ev_charger', label: 'EV charger', hint: 'Connector type, how to start a charge, cost' },
+  { key: 'fireplace', label: 'Fireplace', hint: 'Gas or wood, how to light it, the flue' },
+  { key: 'fire_pit', label: 'Fire pit', hint: 'Rules, wood supply, burn bans' },
+  { key: 'deck_patio', label: 'Deck / patio', hint: 'Furniture, umbrella, outdoor lights' },
+  { key: 'garden', label: 'Garden / yard', hint: 'Play areas, boundaries, watering' },
+  { key: 'game_room', label: 'Game room', hint: 'Consoles, board games, controls' },
+  { key: 'gym', label: 'Gym / fitness', hint: 'Equipment, hours, access' },
+  { key: 'sauna', label: 'Sauna', hint: 'How to heat it, session rules' },
+  { key: 'bikes', label: 'Bikes', hint: 'Where they are, locks, helmets' },
+  { key: 'beach_gear', label: 'Beach gear', hint: 'Chairs, umbrella, wagon, passes' },
+  { key: 'kayaks', label: 'Kayaks / water gear', hint: 'Launch spot, life jackets, rules' },
+  { key: 'dock', label: 'Dock / waterfront', hint: 'Access, safety, boats' },
+  { key: 'workspace', label: 'Workspace', hint: 'Desk, monitor, office chair' },
+  { key: 'crib_kids', label: 'Crib / kid gear', hint: 'Crib, high chair, outlet covers' },
+  { key: 'shed', label: 'Shed / storage', hint: 'What guests may use, what stays locked' },
+];
+
+export type FeatureGuestAccess = 'yes' | 'supervised' | 'no';
+
+export interface PropertyFeature {
+  id: string;
+  label: string;
+  catalogKey: string | null;
+  location: string | null;
+  guestAccess: FeatureGuestAccess;
+  notes: string | null;
+  createdVia: 'host' | 'ai';
+}
+
+/** Pseudo section id for a feature, used in the manager's section select and the AI
+    routing guide. Prefixed so it can never collide with a registry domain id. */
+export const FEATURE_SECTION_PREFIX = 'feature:';
+
+export function featureSectionId(featureId: string): string {
+  return `${FEATURE_SECTION_PREFIX}${featureId}`;
+}
+
+export function parseFeatureSectionId(value: string): string | null {
+  if (!value.startsWith(FEATURE_SECTION_PREFIX)) return null;
+  const id = value.slice(FEATURE_SECTION_PREFIX.length);
+  return id.length > 0 ? id : null;
+}
+
+const FEATURE_ACCESS_COPY: Record<FeatureGuestAccess, string> = {
+  yes: 'guests may use it',
+  supervised: 'guests may use it only with the host’s OK or supervision',
+  no: 'not for guest use',
+};
+
+/**
+ * Feature lines appended to the section routing guide, so extraction and update
+ * merging can file feature knowledge precisely instead of stuffing it into
+ * `amenities`. Empty string for a property with no features, so callers can
+ * concatenate unconditionally.
+ */
+export function featureRoutingGuide(features: readonly PropertyFeature[]): string {
+  return features
+    .map(
+      (f) =>
+        `- ${featureSectionId(f.id)}: ${f.label} — feature at this property (${FEATURE_ACCESS_COPY[f.guestAccess]})`,
+    )
+    .join('\n');
+}

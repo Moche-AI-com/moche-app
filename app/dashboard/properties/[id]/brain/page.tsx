@@ -16,9 +16,9 @@
 //     round-trips its section. Also removed: an unused property_settings query whose
 //     only selected column (confidence_threshold) was never read on this page.
 //
-// Layout order is deliberate: Coverage Map first (orientation + navigation), then the
-// score and the question queue (what to do), then the manager (doing it), then intake
-// panels.
+// Layout order is deliberate: Coverage Map first (orientation + navigation), then
+// Spaces & features and the manager (the doing surfaces), then the sidebar's score,
+// question queue, and intake panels.
 
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
@@ -34,12 +34,13 @@ import {
 import { loadCompleteness } from '@/lib/brain/values';
 import { serverEnv } from '@/lib/env';
 import { buildCoverageMap } from '@/lib/brain/coverage';
-import { BRAIN_SECTIONS, resolveSection, sectionLabel } from '@/lib/brain/taxonomy';
+import { BRAIN_SECTIONS, resolveSection, sectionLabel, type PropertyFeature } from '@/lib/brain/taxonomy';
 import type { Database } from '@/lib/database.types';
 import { CompletenessPanel } from './CompletenessPanel';
 import { CoverageMap } from './CoverageMap';
 import { ImportProvenancePanel } from './ImportProvenancePanel';
 import { BrainManager } from './BrainManager';
+import { FeaturesPanel } from './FeaturesPanel';
 import { EnhanceBrainPanel, type EnhanceQuestion } from './EnhanceBrainPanel';
 import { IngestPanel } from './IngestPanel';
 import { AppliancePanel } from './AppliancePanel';
@@ -61,10 +62,11 @@ export default async function BrainPage({
     { data: items },
     { count: pendingReviews },
     { data: requirementStatuses },
+    { data: featureRows },
   ] = await Promise.all([
     supabase
       .from('brain_items')
-      .select('id, title, body, category, section, visibility, status, source_type, updated_at, deleted_at')
+      .select('id, title, body, category, section, feature_id, visibility, status, source_type, updated_at, deleted_at')
       .eq('property_id', propertyId)
       .is('deleted_at', null)
       .order('category', { ascending: true })
@@ -73,16 +75,34 @@ export default async function BrainPage({
     // queue is untouched is not actually reviewed.
     supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('status', 'pending'),
     supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', propertyId),
+    // Active (non-archived) features: the property's custom sections.
+    supabase
+      .from('property_features')
+      .select('id, label, catalog_key, location, guest_access, notes, created_via')
+      .eq('property_id', propertyId)
+      .is('archived_at', null)
+      .order('created_at', { ascending: true }),
   ]);
 
-  // The generated row type predates brain_items.section; narrow it here once rather
-  // than casting at each use. (Regenerating database.types makes this precise.)
+  // The generated row type predates brain_items.section/feature_id; narrow it here
+  // once rather than casting at each use. (Regenerating database.types makes this
+  // precise.)
   type BrainRowsTable = Database['public']['Tables']['brain_items']['Row'];
   type BrainRow = Pick<
     BrainRowsTable,
     'id' | 'title' | 'body' | 'category' | 'visibility' | 'status' | 'source_type' | 'deleted_at'
-  > & { section?: string | null };
+  > & { section?: string | null; feature_id?: string | null };
   const rows = (items ?? []) as unknown as BrainRow[];
+
+  const features: PropertyFeature[] = (featureRows ?? []).map((f) => ({
+    id: f.id,
+    label: f.label,
+    catalogKey: f.catalog_key,
+    location: f.location,
+    guestAccess: f.guest_access as PropertyFeature['guestAccess'],
+    notes: f.notes,
+    createdVia: f.created_via as PropertyFeature['createdVia'],
+  }));
 
   const health = computeBrainHealth(
     rows.map((i) => ({
@@ -164,16 +184,23 @@ export default async function BrainPage({
 
       <div className="brain-shell">
         <div id="brain-editor" style={{ scrollMarginTop: '1rem' }}>
+          <FeaturesPanel
+            propertyId={propertyId}
+            canEdit={access.can.editBrain}
+            features={features}
+          />
           <BrainManager
             propertyId={propertyId}
             canEdit={access.can.editBrain}
             sections={sections}
+            features={features}
             editItemId={searchParams.edit}
             items={rows.map((i) => ({
               id: i.id,
               title: i.title,
               body: i.body ?? '',
               section: resolveSection({ section: i.section ?? null, category: i.category }),
+              featureId: i.feature_id ?? null,
               visibility: i.visibility,
               status: i.status,
               sourceType: i.source_type,
