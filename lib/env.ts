@@ -102,6 +102,13 @@ export const serverEnv = {
   // open-weight Llama; concierge (guest-facing) uses a stronger model but is gated OFF.
   openrouterModelExtraction:
     process.env.OPENROUTER_MODEL_EXTRACTION ?? 'openai/gpt-4o',
+  // Brain management: section routing, knowledge cleanup/normalization, and AI-update
+  // merge decisions (2026-08-28 directive). Shares extraction's no-silent-downgrade
+  // policy — its output becomes canonical Brain content after host review, and a
+  // cheap-tier misroute misfiles knowledge the concierge then grounds on. An unset
+  // tier lands on the strong default, never on the cheap legacy slug.
+  openrouterModelBrainOps:
+    process.env.OPENROUTER_MODEL_BRAIN_OPS ?? 'openai/gpt-4o',
   openrouterModelClassification:
     process.env.OPENROUTER_MODEL_CLASSIFICATION ?? 'meta-llama/llama-3.1-8b-instruct',
   // Gemini 2.5 Flash: verified available under our Zero-Data-Retention provider
