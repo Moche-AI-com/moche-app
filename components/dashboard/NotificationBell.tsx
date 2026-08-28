@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, CheckCheck, MessageCircle, Gauge, Info } from 'lucide-react';
+import { Bell, CheckCheck, MessageCircle, MessageSquare, Wrench, ShoppingBag, CreditCard, Star, Gauge, Info, ArrowRight } from 'lucide-react';
 import { markNotificationReadAction, markAllNotificationsReadAction } from '@/app/dashboard/notifications/actions';
 
 export interface NotificationItem {
@@ -16,9 +16,17 @@ export interface NotificationItem {
   created_at: string;
 }
 
+// One glanceable glyph per notification_kind. Human-readable labels live in
+// lib/notifications/categories (the single source of truth) — the bell only
+// needs icons.
 const KIND_ICON: Record<string, typeof MessageCircle> = {
   escalation: MessageCircle,
-  service_request: Gauge,
+  host_message: MessageSquare,
+  maintenance: Wrench,
+  extras: ShoppingBag,
+  billing: CreditCard,
+  review_nudge: Star,
+  ingestion_failure: Gauge,
   system: Info,
 };
 
@@ -36,6 +44,13 @@ function timeAgo(iso: string): string {
 // inline, lets a host clear one or all with a single click, and only falls back
 // to the full /dashboard/notifications page for history beyond that. Replaces
 // the old "badge that just links to a flat list" pattern.
+//
+// Every linked item also carries an explicit "View notification" anchor under
+// its text. The row stays a real <button> and the link is a real <a> —
+// siblings, never nested — so keyboard focus order, the dialog focus trap, and
+// open-in-new-tab all behave. The row click still marks-read + navigates as
+// before; the anchor exists for discoverability and for anyone who expects a
+// visible target.
 export function NotificationBell({ unread: initialUnread, items: initialItems }: { unread: number; items: NotificationItem[] }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(initialItems);
@@ -103,21 +118,25 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
     };
   }, [open]);
 
-  function handleItemClick(item: NotificationItem) {
-    if (!item.read_at) {
-      // Optimistic update, rolled back if the server rejects it so the UI never
-      // claims a notification was read when it wasn't.
-      setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n)));
-      setUnread((u) => Math.max(0, u - 1));
-      startTransition(() => {
-        void markNotificationReadAction(item.id).then((res) => {
-          if (!res?.ok) {
-            setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: null } : n)));
-            setUnread((u) => u + 1);
-          }
-        });
+  // Single mark-read path shared by the row button and the View link, so the
+  // two never disagree. Optimistic, rolled back if the server rejects it, so
+  // the UI never claims a notification was read when it wasn't.
+  function markRead(item: NotificationItem) {
+    if (item.read_at) return;
+    setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n)));
+    setUnread((u) => Math.max(0, u - 1));
+    startTransition(() => {
+      void markNotificationReadAction(item.id).then((res) => {
+        if (!res?.ok) {
+          setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: null } : n)));
+          setUnread((u) => u + 1);
+        }
       });
-    }
+    });
+  }
+
+  function handleItemClick(item: NotificationItem) {
+    markRead(item);
     setOpen(false);
     if (item.link) router.push(item.link);
   }
@@ -203,35 +222,66 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
                 const Icon = KIND_ICON[item.kind] ?? Info;
                 const isUnread = !item.read_at;
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => handleItemClick(item)}
-                    data-testid={`notification-item-${item.id}`}
-                    className="notification-row"
+                    className="notification-row-wrap"
                     style={{
-                      // Unread rows need a tint that reads against the .card surface
-                      // (--surface-2 is the card background, so it was invisible) plus
-                      // a teal rail matching the /dashboard/notifications page.
+                      // The unread tint + teal rail moved from the row button to
+                      // this wrapper, so the View link reads as part of the same
+                      // notification rather than as separate chrome below it.
                       borderLeft: isUnread ? '3px solid var(--teal)' : '3px solid transparent',
                       background: isUnread ? 'color-mix(in srgb, var(--teal) 8%, transparent)' : 'transparent',
                     }}
                   >
-                    <span className="notification-row-icon" style={{ color: isUnread ? 'var(--teal)' : 'var(--text-muted)' }}>
-                      <Icon size={15} aria-hidden />
-                    </span>
-                    <span className="notification-row-text">
-                      <span className="notification-row-title" style={{ fontWeight: isUnread ? 600 : 500 }}>{item.title}</span>
-                      {item.body && (
-                        <span
-                          className="muted notification-row-body"
-                        >
-                          {item.body}
-                        </span>
-                      )}
-                    </span>
-                    <span className="faint notification-row-time">{timeAgo(item.created_at)}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleItemClick(item)}
+                      data-testid={`notification-item-${item.id}`}
+                      className="notification-row"
+                      title={item.link ? 'Open this notification' : 'Mark as read'}
+                    >
+                      <span className="notification-row-icon" style={{ color: isUnread ? 'var(--teal)' : 'var(--text-muted)' }}>
+                        <Icon size={15} aria-hidden />
+                      </span>
+                      <span className="notification-row-text">
+                        <span className="notification-row-title" style={{ fontWeight: isUnread ? 600 : 500 }}>{item.title}</span>
+                        {item.body && (
+                          <span
+                            className="muted notification-row-body"
+                          >
+                            {item.body}
+                          </span>
+                        )}
+                      </span>
+                      <span className="faint notification-row-time">{timeAgo(item.created_at)}</span>
+                    </button>
+                    {item.link ? (
+                      <Link
+                        href={item.link}
+                        onClick={() => {
+                          markRead(item);
+                          setOpen(false);
+                        }}
+                        className="notification-view-link"
+                        data-testid={`notification-view-${item.id}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '.25rem',
+                          width: 'fit-content',
+                          // Tucks the link under the title, aligned with the text
+                          // column rather than the icon column.
+                          margin: '-.15rem .75rem .5rem 2.15rem',
+                          fontSize: '.76rem',
+                          fontWeight: 600,
+                          color: 'var(--teal)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        View notification <ArrowRight size={12} aria-hidden />
+                      </Link>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>

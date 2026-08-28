@@ -84,7 +84,6 @@ async function getOrCreateHostConversation(admin: ReturnType<typeof createAdminC
     })
     .select('id, title, guest_session_id, guest_identity_id, host_read_at, guest_read_at')
     .single();
-
   if (error) throw error;
   return data as NonNullable<Awaited<ReturnType<typeof findHostConversation>>>;
 }
@@ -250,9 +249,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     reopened = (waiting?.length ?? 0) > 0;
   }
 
+  // Guest chat messages get their own always-on kind ('host_message') instead
+  // of overloading 'system', so hosts can never unsubscribe from the direct
+  // guest line and 'system' stays reserved for security/platform alerts.
+  // Reopened escalations keep the 'escalation' kind and its SMS fan-out path.
   await notify(admin, {
     hostAccountId: property.host_account_id,
-    kind: reopened ? 'escalation' : 'system',
+    kind: reopened ? 'escalation' : 'host_message',
     title: reopened ? `Escalation reopened at ${property.display_name}` : `New guest message at ${property.display_name}`,
     body: reopened
       ? `${session.guestDisplayName} replied in Host Chat — an escalation needs another look.`
