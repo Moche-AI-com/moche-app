@@ -1,28 +1,38 @@
 'use client';
 
-import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { KeyRound } from 'lucide-react';
+import type { PortalT } from '@/lib/guest/portal-strings';
 
 const CODE_LENGTH = 4;
 
-// Step 1 of the portal: one 4-digit stay code shared by the whole party. Once a
-// guest is in, their session on this device is their saved account — they only
-// re-enter the code (and their details) on a different browser. Legacy per-guest
-// PINs minted before the merge still verify through the guest-code endpoint first.
+// Step 1 of the portal — the guest's first impression. The shared 4-digit party
+// code auto-submits on the fourth digit; a rejected code shakes, keeps the
+// digits, and re-arms the moment any digit is edited. Every device that clears
+// this step gets its own session and then identifies itself ("Who's
+// joining?"), so each member of the party ends up with their own concierge —
+// the code only ever proves you're WITH the party, never WHO you are. Legacy
+// per-guest PINs minted before the merge still verify through the guest-code
+// endpoint first, then the legacy stay-link endpoint.
 export function CodeEntry(props: {
   slug: string;
   accessToken: string | null;
+  propertyName: string;
+  t: PortalT;
   onVerified: (registered: boolean, guestName: string | null) => void;
 }) {
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
-  const [phone, setPhone] = useState('');
-  const [needsPhone, setNeedsPhone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shakeKey, setShakeKey] = useState(0);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+  const lastSubmitted = useRef<string | null>(null);
   const code = digits.join('');
+  const { t } = props;
 
   function setDigit(index: number, value: string) {
     const digit = value.replace(/\D/g, '').slice(-1);
+    setError(null);
     setDigits((current) => current.map((item, i) => (i === index ? digit : item)));
     if (digit && index < CODE_LENGTH - 1) inputsRef.current[index + 1]?.focus();
   }
@@ -35,35 +45,30 @@ export function CodeEntry(props: {
     event.preventDefault();
     const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, CODE_LENGTH);
     if (!pasted) return;
+    setError(null);
     setDigits(Array.from({ length: CODE_LENGTH }, (_, index) => pasted[index] ?? ''));
     inputsRef.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
   }
 
-  async function submit() {
-    if (code.length !== CODE_LENGTH || busy || (needsPhone && !phone.trim())) return;
+  const submit = useCallback(async () => {
+    if (code.length !== CODE_LENGTH || busy) return;
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/guest/${props.slug}/auth/guest-code`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code, phone: needsPhone ? phone.trim() : undefined }),
+        body: JSON.stringify({ code }),
       });
       const json = await res.json().catch(() => ({}));
-      if (res.ok && json.requiresPhoneConfirm === true) {
-        setNeedsPhone(true);
-        setError(null);
-        return;
-      }
       if (res.ok && json.ok) {
         props.onVerified(json.registered === true, typeof json.guestName === 'string' ? json.guestName : null);
         return;
       }
 
-      // The shared stay code verifies through the original stay-link endpoint.
-      // (Legacy order preserved: per-guest PINs win first so a PIN entry never
-      // burns the link's attempt counter.)
-      if (!needsPhone && res.status === 400) {
+      // Legacy fallback: per-guest PINs and token-link codes minted before the
+      // party-code merge verify through the original stay-link endpoint.
+      if (res.status === 400) {
         const legacy = await fetch(`/api/guest/${props.slug}/auth/code`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -76,17 +81,31 @@ export function CodeEntry(props: {
         }
       }
 
-      setError(json.error || 'That code does not match this stay. Check with your host and try again.');
+      setError(t('codeError'));
+      setShakeKey((current) => current + 1);
     } finally {
       setBusy(false);
     }
-  }
+  }, [code, busy, props, t]);
+
+  // Auto-submit as soon as the fourth digit lands. A rejected code re-arms the
+  // moment the guest edits any digit (the code no longer matches lastSubmitted),
+  // so there is no stuck state and no extra tap needed.
+  useEffect(() => {
+    if (code.length === CODE_LENGTH && !busy && lastSubmitted.current !== code) {
+      lastSubmitted.current = code;
+      void submit();
+    }
+  }, [code, busy, submit]);
 
   return (
     <section aria-label="Guest verification">
-      <h2 className="gp-step-title">Enter your stay code</h2>
-      <p className="gp-step-sub">The 4-digit code your host shared for this stay — everyone in your party uses the same one.</p>
-      <div className="gp-code-row">
+      <div className="gp-kicker">
+        <KeyRound size={13} aria-hidden /> {t('codeKicker')}
+      </div>
+      <h2 className="gp-step-title">{t('codeTitle', { property: props.propertyName })}</h2>
+      <p className="gp-step-sub">{t('codeSub')}</p>
+      <div className={shakeKey > 0 ? 'gp-code-row gp-shake' : 'gp-code-row'} key={shakeKey}>
         {digits.map((digit, index) => (
           <input
             key={index}
@@ -95,6 +114,7 @@ export function CodeEntry(props: {
             value={digit}
             inputMode="numeric"
             autoComplete={index === 0 ? 'one-time-code' : 'off'}
+            autoFocus={index === 0}
             aria-label={`Digit ${index + 1}`}
             onChange={(event) => setDigit(index, event.target.value)}
             onKeyDown={(event) => onKeyDown(index, event)}
@@ -102,32 +122,19 @@ export function CodeEntry(props: {
           />
         ))}
       </div>
-
-      {needsPhone && (
-        <div className="gp-field" style={{ marginTop: '1rem' }}>
-          <label htmlFor="guest-phone-confirm" className="gp-label">
-            Confirm your phone number
-          </label>
-          <input
-            id="guest-phone-confirm"
-            className="gp-input"
-            type="tel"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            placeholder="Mobile number"
-          />
-          <p className="gp-muted" style={{ fontSize: '.82rem', marginTop: 6 }}>This keeps your saved guest session attached to the right person on this device.</p>
-        </div>
-      )}
+      <p className="gp-code-hint">{t('codeHint')}</p>
 
       {error && <div className="gp-error" role="alert">{error}</div>}
       <button
         type="button"
         className="gp-btn gp-btn-primary"
-        onClick={() => void submit()}
-        disabled={busy || code.length !== CODE_LENGTH || (needsPhone && !phone.trim())}
+        onClick={() => {
+          lastSubmitted.current = code;
+          void submit();
+        }}
+        disabled={busy || code.length !== CODE_LENGTH}
       >
-        {busy ? 'Checking…' : needsPhone ? 'Confirm and continue' : 'Continue'}
+        {busy ? t('checking') : t('continue')}
       </button>
     </section>
   );

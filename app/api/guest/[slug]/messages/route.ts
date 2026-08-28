@@ -5,11 +5,18 @@ import { getGuestSession } from '@/lib/guest/session';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Guest polling endpoint: returns messages in the guest's conversation, optionally only
-// those newer than `after` (ISO timestamp). Used by the portal to surface host replies
-// live and drive the two-way chat continuation. Scoped strictly to the session's own
-// stay/property; guests are unauthenticated to Postgres so all reads go through the
-// service-role client with explicit stay/property filters.
+// Guest polling endpoint: returns messages in the guest's OWN concierge
+// conversation, optionally only those newer than `after` (ISO timestamp).
+//
+// Party access redesign 2026-08-28: the concierge conversation is scoped to the
+// session (stay + channel=ai_concierge + guest_session_id), matching host chat.
+// Each member of the party has a private Q&A history on their own device
+// instead of one shared stay-wide thread. Legacy stay-scoped conversations
+// (guest_session_id NULL) simply never match these queries.
+//
+// Scoped strictly to the session's own stay/property; guests are
+// unauthenticated to Postgres so all reads go through the service-role client
+// with explicit stay/property/session filters.
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Session expired.' }, { status: 401 });
@@ -25,11 +32,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
 
-  const { data: conv } = await admin
+  const { data: conv } = await (admin as any)
     .from('conversations')
     .select('id')
     .eq('stay_id', session.stayId)
     .eq('property_id', session.propertyId)
+    .eq('channel', 'ai_concierge')
+    .eq('guest_session_id', session.sessionId)
     .maybeSingle();
   if (!conv) return NextResponse.json({ messages: [] });
   const conversationId = (conv as { id: string }).id;

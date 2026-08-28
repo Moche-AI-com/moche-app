@@ -93,8 +93,6 @@ export const PORTAL_CSS = `
   transition: border-color 0.15s ease;
 }
 .gp-icon-btn:hover { border-color: var(--gp-primary); }
-.gp-hero { width: 100%; height: 160px; object-fit: cover; border-radius: 16px; margin-bottom: 16px; border: 1px solid var(--gp-border); }
-.gp-hero-compact { width: 100%; height: 56px; object-fit: cover; border-radius: 12px; margin: -6px 0 14px; border: 1px solid var(--gp-border); }
 .gp-main { flex: 1; display: flex; flex-direction: column; }
 .gp-footer { text-align: center; font-size: 0.75rem; color: var(--gp-faint); padding-top: 24px; }
 
@@ -119,8 +117,8 @@ export const PORTAL_CSS = `
 .gp-field-error { color: var(--gp-danger-text); font-size: 0.82rem; margin-top: 5px; }
 
 .gp-code-row { display: flex; gap: 10px; justify-content: center; margin: 18px 0 8px; }
-.gp-code-box { width: 58px; height: 68px; text-align: center; font-size: 1.9rem; font-weight: 700; background: var(--gp-surface-2); border: 1.5px solid var(--gp-border-strong); border-radius: 14px; color: var(--gp-text); outline: none; }
-.gp-code-box:focus { border-color: var(--gp-primary); }
+.gp-code-box { width: 58px; height: 68px; text-align: center; font-size: 1.9rem; font-weight: 700; background: var(--gp-surface-2); border: 1.5px solid var(--gp-border-strong); border-radius: 14px; color: var(--gp-text); outline: none; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.gp-code-box:focus { border-color: var(--gp-primary); box-shadow: 0 0 0 3px var(--gp-primary-soft); }
 .gp-error { background: var(--gp-danger-bg); border: 1px solid var(--gp-danger-border); color: var(--gp-danger-text); border-radius: 12px; padding: 11px 14px; font-size: 0.9rem; margin: 12px 0; }
 
 .gp-consent { display: flex; gap: 10px; align-items: flex-start; background: var(--gp-surface-2); border: 1px solid var(--gp-border); border-radius: 12px; padding: 13px 14px; margin: 0; cursor: pointer; }
@@ -194,9 +192,6 @@ export const PORTAL_CSS = `
 
 .gp-input-row { display: flex; gap: 8px; padding-top: 4px; }
 .gp-input-row .gp-input { flex: 1; }
-.gp-send { width: 50px; flex-shrink: 0; border: none; border-radius: 12px; background: var(--gp-primary); color: var(--gp-on-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.gp-send:disabled { opacity: 0.5; }
-.gp-send-accent { background: var(--gp-accent); color: var(--gp-on-accent); }
 
 .gp-empty { text-align: center; padding: 40px 20px; color: var(--gp-muted); font-size: 0.95rem; line-height: 1.5; }
 .gp-confirm { text-align: center; padding: 28px 18px; }
@@ -259,6 +254,61 @@ export const PORTAL_CSS = `
 
 .gp-spin { animation: gp-spin 1s linear infinite; }
 @keyframes gp-spin { to { transform: rotate(360deg); } }
+
+/* -------------------------------------------------------------------------
+   Party access + UX overhaul (2026-08-28). Everything below is additive or
+   intentionally overrides an earlier rule (later wins at equal specificity).
+   ------------------------------------------------------------------------- */
+
+/* Step transitions: every portal screen fades and rises in on mount (the shell
+   keys the wrapper by step), so navigation feels continuous instead of a swap. */
+.gp-step { animation: gp-step-in .28s ease both; display: flex; flex-direction: column; flex: 1; }
+@keyframes gp-step-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* Property hero. Entry steps get the 16:9 cover with a scrim + name overlay;
+   a broken/expired host image swaps to a branded monogram tile instead of a
+   broken-image icon. Workflow screens get the slim banner (image only). */
+.gp-hero { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 250px; border-radius: 20px; overflow: hidden; margin-bottom: 18px; border: 1px solid var(--gp-border); background: var(--gp-art-bg); }
+.gp-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.gp-hero-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-portal-serif), Georgia, serif; font-size: 3rem; font-weight: 600; color: var(--gp-icon); letter-spacing: 0.04em; }
+.gp-hero-scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,9,8,0) 42%, rgba(5,9,8,0.66) 100%); }
+.gp-hero-caption { position: absolute; left: 16px; right: 16px; bottom: 12px; color: #ffffff; text-shadow: 0 1px 10px rgba(0,0,0,0.5); }
+.gp-hero-name { font-family: var(--font-portal-serif), Georgia, serif; font-size: 1.55rem; font-weight: 600; line-height: 1.15; }
+.gp-hero-loc { font-size: 0.85rem; opacity: 0.92; margin-top: 2px; }
+.gp-hero-compact { position: relative; width: 100%; height: 44px; border-radius: 12px; overflow: hidden; margin: -4px 0 12px; border: 1px solid var(--gp-border); background: var(--gp-art-bg); }
+.gp-hero-compact img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.gp-kicker { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gp-icon); margin-bottom: 6px; }
+.gp-code-hint { font-size: 0.82rem; color: var(--gp-faint); text-align: center; margin: 10px 0 4px; }
+.gp-shake { animation: gp-shake 0.3s ease; }
+@keyframes gp-shake { 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-3px); } }
+
+/* Menu + assistant cards stagger in on entry instead of flash-appearing. */
+.gp-menu-card, .gp-assist-card { animation: gp-rise 0.35s ease both; }
+
+/* Chat: messages rise in gently (only newly mounted rows animate — React keys
+   keep existing rows stable across polls). The composer is a floating pill
+   pinned to the bottom safe-area with a circular service-bell send button. */
+.gp-msg-row { animation: gp-rise 0.25s ease both; }
+.gp-chat-list .gp-bubble { animation: gp-rise 0.25s ease both; }
+@keyframes gp-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.gp-typing { display: inline-flex; gap: 5px; align-items: center; }
+.gp-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--gp-faint); animation: gp-dot 1.1s infinite ease-in-out; }
+.gp-typing span:nth-child(2) { animation-delay: 0.15s; }
+.gp-typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes gp-dot { 0%, 80%, 100% { opacity: 0.35; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.gp-composer { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 6px; background: var(--gp-surface); border: 1px solid var(--gp-border-strong); border-radius: 26px; padding: 6px 6px 6px 16px; margin-top: 0.85rem; box-shadow: 0 10px 28px rgba(0,0,0,0.28); z-index: 5; }
+.gp-composer:focus-within { border-color: var(--gp-primary); }
+.gp-composer textarea { flex: 1; min-width: 0; background: transparent; border: none; outline: none; resize: none; color: var(--gp-text); font-family: inherit; font-size: 1rem; line-height: 1.4; max-height: 140px; padding: 10px 0; }
+.gp-composer textarea::placeholder { color: var(--gp-faint); }
+.gp-send { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; border: none; background: var(--gp-primary); color: var(--gp-on-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.12s ease, opacity 0.15s ease; }
+.gp-send:not(:disabled):active { transform: scale(0.92); }
+.gp-send:disabled { opacity: 0.45; }
+.gp-send-accent { background: var(--gp-accent); color: var(--gp-on-accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gp-step, .gp-msg-row, .gp-menu-card, .gp-assist-card, .gp-chat-list .gp-bubble, .gp-typing span, .gp-shake { animation: none !important; }
+}
 `;
 
 // ---------------------------------------------------------------------------

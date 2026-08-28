@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, ConciergeBell, Loader2, Search, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { AiDisclosure } from '@/components/AiDisclosure';
 import { linkify } from '@/lib/guest/linkify';
+import type { PortalT } from '@/lib/guest/portal-strings';
 import { CardArt } from './CardArt';
 
 type ChatMsg = {
@@ -32,31 +33,36 @@ type Appliance = {
   locationNote: string | null;
 };
 
-const FALLBACK_CARDS: AssistantCard[] = [
-  {
-    key: 'wifi', title: 'Wi-Fi', description: 'Network and connection help.', prompt: 'What is the Wi-Fi network and password?',
-    prompts: ['What is the Wi-Fi network name?', 'What is the Wi-Fi password?', 'Where is the Wi-Fi router located?', 'The Wi-Fi is not working — what should I try?'],
-  },
-  {
-    key: 'checkin', title: 'Check-in', description: 'Arrival and access instructions.', prompt: 'What are the check-in instructions?',
-    prompts: ['What time is check-in?', 'How do I get into the property?', 'Is early check-in possible?'],
-  },
-  {
-    key: 'checkout', title: 'Check-out', description: 'Departure steps and timing.', prompt: 'What are the check-out instructions?',
-    prompts: ['What time is check-out?', 'What are the check-out steps?', 'Is late check-out possible?'],
-  },
-  { key: 'local', title: 'Local recommendations', description: 'Approved places, directions, and links.', prompt: 'What local places do you recommend?', prompts: [] },
-];
+// Fallback cards (host preview, or before the Brain-backed cards arrive) are
+// templated through the portal dictionary so the grid switches language with
+// everything else. Server-provided cards keep the host's own wording.
+function fallbackCards(t: PortalT): AssistantCard[] {
+  return [
+    {
+      key: 'wifi', title: t('fbWifiTitle'), description: t('fbWifiDesc'), prompt: t('fbWifiP'),
+      prompts: [t('fbWifiQ1'), t('fbWifiQ2'), t('fbWifiQ3'), t('fbWifiQ4')],
+    },
+    {
+      key: 'checkin', title: t('fbCheckinTitle'), description: t('fbCheckinDesc'), prompt: t('fbCheckinP'),
+      prompts: [t('fbCheckinQ1'), t('fbCheckinQ2'), t('fbCheckinQ3')],
+    },
+    {
+      key: 'checkout', title: t('fbCheckoutTitle'), description: t('fbCheckoutDesc'), prompt: t('fbCheckoutP'),
+      prompts: [t('fbCheckoutQ1'), t('fbCheckoutQ2'), t('fbCheckoutQ3')],
+    },
+    { key: 'local', title: t('fbLocalTitle'), description: t('fbLocalDesc'), prompt: t('fbLocalP'), prompts: [] },
+  ];
+}
 
 // The per-appliance question sheet. Templated from the appliance's display name
 // so any inventory the host saves to the Brain instantly gets a useful sheet.
-function appliancePrompts(a: Appliance): string[] {
+function appliancePrompts(t: PortalT, a: Appliance): string[] {
   return [
-    `How do I use the ${a.name}?`,
-    `Where is the ${a.name} located?`,
-    `How do I turn on the ${a.name}?`,
-    `How do I clean or refill the ${a.name}?`,
-    `The ${a.name} is not working — what should I do?`,
+    t('apUse', { name: a.name }),
+    t('apWhere', { name: a.name }),
+    t('apOn', { name: a.name }),
+    t('apClean', { name: a.name }),
+    t('apBroken', { name: a.name }),
   ];
 }
 
@@ -119,13 +125,15 @@ export function AiChatWorkflow(props: {
   // The guest's portal language (Globe picker). Sent with every message — the
   // concierge replies in it, and any escalation is translated for the host.
   language?: string | null;
+  t: PortalT;
   onBack: () => void;
   onOpenHostChat: () => void;
   onSessionExpired: () => void;
 }) {
   const router = useRouter();
+  const { t } = props;
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [cards, setCards] = useState<AssistantCard[]>(props.hostPreview ? FALLBACK_CARDS : []);
+  const [cards, setCards] = useState<AssistantCard[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,6 +149,13 @@ export function AiChatWorkflow(props: {
   const [hostPinged, setHostPinged] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Host preview cards come from the dictionary so they follow the selected
+  // language like every other surface.
+  useEffect(() => {
+    if (props.hostPreview) setCards(fallbackCards(t));
+  }, [props.hostPreview, t]);
 
   const loadHistory = useCallback(async () => {
     if (props.hostPreview) return;
@@ -171,9 +186,11 @@ export function AiChatWorkflow(props: {
       .catch(() => undefined);
   }, [props.hostPreview, props.slug]);
 
+  // New turns (and the typing indicator) glide to the bottom instead of the
+  // chat jumping.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length]);
+    endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  }, [messages.length, busy]);
 
   const loadAppliances = useCallback(async () => {
     setAppliancesLoading(true);
@@ -186,7 +203,7 @@ export function AiChatWorkflow(props: {
       }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setPickerError(json.error || 'Could not load the appliance list.');
+        setPickerError(json.error || t('askError'));
         setAppliances([]);
         return;
       }
@@ -194,7 +211,7 @@ export function AiChatWorkflow(props: {
     } finally {
       setAppliancesLoading(false);
     }
-  }, [props.slug, props.onSessionExpired]);
+  }, [props.slug, props.onSessionExpired, t]);
 
   async function syncEscalation(question: string, answer: string) {
     if (props.hostPreview) return;
@@ -203,6 +220,13 @@ export function AiChatWorkflow(props: {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ question, answer }),
     }).catch(() => undefined);
+  }
+
+  function growComposer() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }
 
   async function sendMessage(raw: string) {
@@ -214,6 +238,7 @@ export function AiChatWorkflow(props: {
     const userMsg: ChatMsg = { id: crypto.randomUUID(), role: 'user', content: trimmed };
     setMessages((current) => [...current, userMsg]);
     setInput('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';
 
     try {
       const url = props.hostPreview
@@ -230,11 +255,11 @@ export function AiChatWorkflow(props: {
       }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json.error || 'Something went wrong. Please try again.');
+        setError(json.error || t('askError'));
         return;
       }
 
-      const answer = String(json.answer ?? 'I do not have a reliable answer for that.');
+      const answer = String(json.answer ?? t('askError'));
       const escalated = json.escalated === true;
       setMessages((current) => [...current, {
         id: crypto.randomUUID(),
@@ -304,7 +329,7 @@ export function AiChatWorkflow(props: {
       }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setPickerError(json.error || 'Could not notify your host just now.');
+        setPickerError(json.error || t('askError'));
         return;
       }
       setHostPinged(true);
@@ -320,19 +345,19 @@ export function AiChatWorkflow(props: {
   });
 
   return (
-    <section aria-label="Ask a question">
+    <section aria-label={t('askTitle')}>
       <div className="gp-wf-header">
         <button type="button" className="gp-back" onClick={props.onBack}>
-          <ArrowLeft size={16} aria-hidden /> Menu
+          <ArrowLeft size={16} aria-hidden /> {t('menu')}
         </button>
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
         <h2 className="gp-wf-title gp-title-row">
-          <Sparkles size={20} aria-hidden /> Ask a Question
+          <Sparkles size={20} aria-hidden /> {t('askTitle')}
         </h2>
         <p className="gp-muted" style={{ margin: '.35rem 0 0' }}>
-          Get property-safe answers. If the concierge is not confident, it will say so and ping your host instead of guessing.
+          {t('askSub')}
         </p>
       </div>
 
@@ -340,11 +365,12 @@ export function AiChatWorkflow(props: {
 
       {cards.length > 0 && (
         <div className="gp-assist-grid">
-          {cards.map((card) => (
+          {cards.map((card, index) => (
             <button
               key={card.key}
               type="button"
               className="gp-assist-card"
+              style={{ animationDelay: `${index * 60}ms` }}
               onClick={() => openCard(card)}
               disabled={busy}
             >
@@ -360,27 +386,34 @@ export function AiChatWorkflow(props: {
         <div role="status" className="gp-notice">
           <TriangleAlert size={17} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
-            I’m not confident I have the right answer, so I’ve pinged your host. Their reply will appear in Host Chat.
+            {t('askEscNotice')}
             <button type="button" onClick={props.onOpenHostChat} className="gp-msg-link" style={{ marginLeft: '.5rem' }}>
-              Open Host Chat
+              {t('askOpenHostChat')}
             </button>
           </div>
         </div>
       )}
 
       <div aria-live="polite" className="gp-chat-panel">
-        {messages.length === 0 ? (
-          <p className="gp-muted">Choose a card above or ask anything about your stay.</p>
+        {messages.length === 0 && !busy ? (
+          <p className="gp-muted">{t('askEmpty')}</p>
         ) : (
           messages.map((message) => (
             <div key={message.id} className={`gp-msg-row ${message.role === 'user' ? 'gp-msg-row-user' : ''}`}>
               <div className={`gp-msg ${message.role === 'user' ? 'gp-msg-user' : message.role === 'host' ? 'gp-msg-host' : ''}`}>
-                {message.role === 'host' && <div className="gp-msg-tag">Host reply</div>}
+                {message.role === 'host' && <div className="gp-msg-tag">{t('hostReplyTag')}</div>}
                 <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.45 }}><LinkedText text={message.content} /></div>
-                {message.isEmergency && <p className="gp-msg-emergency">If this is an emergency, contact local emergency services first.</p>}
+                {message.isEmergency && <p className="gp-msg-emergency">{t('askEmergency')}</p>}
               </div>
             </div>
           ))
+        )}
+        {busy && (
+          <div className="gp-msg-row">
+            <div className="gp-msg gp-typing" role="status" aria-label={t('askTyping')}>
+              <span /><span /><span />
+            </div>
+          </div>
         )}
         <div ref={endRef} />
       </div>
@@ -392,27 +425,34 @@ export function AiChatWorkflow(props: {
           event.preventDefault();
           void sendMessage(input);
         }}
-        className="gp-input-row"
-        style={{ marginTop: '.85rem' }}
+        className="gp-composer"
       >
-        <label htmlFor="ai-chat-input" className="sr-only">Ask the concierge</label>
+        <label htmlFor="ai-chat-input" className="sr-only">{t('askTitle')}</label>
         <textarea
           id="ai-chat-input"
-          className="gp-input"
+          ref={inputRef}
           value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Ask about Wi-Fi, check-in, trash, local places…"
-          rows={2}
-          style={{ resize: 'vertical' }}
+          rows={1}
+          onChange={(event) => {
+            setInput(event.target.value);
+            growComposer();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void sendMessage(input);
+            }
+          }}
+          placeholder={t('askPlaceholder')}
         />
-        <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label="Ring the service bell">
+        <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label={t('sendMessage')} title={t('sendMessage')}>
           {busy ? <Loader2 size={18} className="gp-spin" aria-hidden /> : <ConciergeBell size={18} aria-hidden />}
         </button>
       </form>
 
       {activeCard && (
         <PortalModal title={activeCard.title} onClose={() => setActiveCard(null)}>
-          <p className="gp-modal-sub">Pick a question — or type your own in the chat below.</p>
+          <p className="gp-modal-sub">{t('askSheetSub')}</p>
           <div className="gp-prompt-list">
             {(activeCard.prompts && activeCard.prompts.length > 0 ? activeCard.prompts : [activeCard.prompt]).map((question) => (
               <button key={question} type="button" className="gp-prompt-item" onClick={() => askFromSheet(question)}>
@@ -425,16 +465,16 @@ export function AiChatWorkflow(props: {
 
       {appliancePickerOpen && (
         <PortalModal
-          title={activeAppliance ? activeAppliance.name : 'Which appliance?'}
+          title={activeAppliance ? activeAppliance.name : t('askAppliances')}
           onClose={() => { setAppliancePickerOpen(false); setActiveAppliance(null); }}
         >
           {activeAppliance ? (
             <>
               <p className="gp-modal-sub">
-                {[activeAppliance.brand, activeAppliance.locationNote].filter(Boolean).join(' · ') || 'Pick a question — or type your own in the chat.'}
+                {[activeAppliance.brand, activeAppliance.locationNote].filter(Boolean).join(' · ') || t('askSheetSub')}
               </p>
               <div className="gp-prompt-list">
-                {appliancePrompts(activeAppliance).map((question) => (
+                {appliancePrompts(t, activeAppliance).map((question) => (
                   <button key={question} type="button" className="gp-prompt-item" onClick={() => askFromSheet(question)}>
                     {question}
                   </button>
@@ -442,7 +482,7 @@ export function AiChatWorkflow(props: {
               </div>
               <div style={{ marginTop: 10 }}>
                 <button type="button" className="gp-msg-link" onClick={() => setActiveAppliance(null)}>
-                  Back to all appliances
+                  {t('askBackToAppliances')}
                 </button>
               </div>
             </>
@@ -455,30 +495,26 @@ export function AiChatWorkflow(props: {
                   style={{ paddingLeft: 34 }}
                   value={applianceQuery}
                   onChange={(event) => setApplianceQuery(event.target.value)}
-                  placeholder="Search appliances…"
-                  aria-label="Search appliances"
+                  placeholder={t('askApplianceSearch')}
+                  aria-label={t('askApplianceSearch')}
                 />
               </div>
 
               {appliancesLoading ? (
-                <p className="gp-muted"><Loader2 size={15} className="gp-spin" aria-hidden /> Loading appliances…</p>
+                <p className="gp-muted"><Loader2 size={15} className="gp-spin" aria-hidden /> {t('askApplianceLoad')}</p>
               ) : appliances !== null && appliances.length === 0 ? (
                 <div>
-                  <p className="gp-modal-sub">
-                    Your host hasn&apos;t listed any appliances for this property yet. Ping them and they can add
-                    them in the Brain — or just ask your question in the chat and the concierge will escalate it
-                    if it doesn&apos;t know.
-                  </p>
+                  <p className="gp-modal-sub">{t('askApplianceEmpty')}</p>
                   {hostPinged ? (
-                    <p className="gp-modal-sub" role="status">Your host has been pinged — their reply will appear in Host Chat.</p>
+                    <p className="gp-modal-sub" role="status">{t('askAppliancePinged')}</p>
                   ) : (
                     <button type="button" className="gp-btn gp-btn-accent" onClick={() => void pingHostForAppliances()} disabled={busy}>
-                      <ConciergeBell size={16} aria-hidden /> Ping the host
+                      <ConciergeBell size={16} aria-hidden /> {t('askAppliancePing')}
                     </button>
                   )}
                 </div>
               ) : filteredAppliances.length === 0 ? (
-                <p className="gp-muted">No appliances match “{applianceQuery}”.</p>
+                <p className="gp-muted">{t('askApplianceNone', { query: applianceQuery })}</p>
               ) : (
                 <div className="gp-picker-list">
                   {filteredAppliances.map((a) => (

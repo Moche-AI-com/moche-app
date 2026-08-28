@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, ConciergeBell, Loader2, TriangleAlert } from 'lucide-react';
 import { linkify } from '@/lib/guest/linkify';
+import type { PortalT } from '@/lib/guest/portal-strings';
 
 type ThreadMsg = {
   id: string;
@@ -41,16 +42,19 @@ function timeLabel(value: string) {
 // escalation thread. Replies stay attached to the escalation so the AI can
 // learn from the exchange instead of re-reading the whole conversation.
 // The send action is the concierge service bell everywhere in the portal — one
-// brand gesture for "ask for help".
+// brand gesture for "ask for help" — now sitting in a floating pill composer
+// with Enter-to-send, like the messaging apps guests already know.
 export function HostChatWorkflow(props: {
   slug: string;
   guestName: string | null;
   // The guest's portal language (Globe picker). Sent with each message so the
   // host receives an auto-translation alongside the original.
   language?: string | null;
+  t: PortalT;
   onBack: () => void;
   onSessionExpired: () => void;
 }) {
+  const { t } = props;
   const [messages, setMessages] = useState<ThreadMsg[]>([]);
   const [input, setInput] = useState('');
   const [replyTo, setReplyTo] = useState<ThreadMsg | null>(null);
@@ -59,6 +63,7 @@ export function HostChatWorkflow(props: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/guest/${props.slug}/host-chat`, { cache: 'no-store' });
@@ -79,7 +84,7 @@ export function HostChatWorkflow(props: {
   }, [load]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [messages.length]);
 
   // Host/system responses attach to their escalation via escalationId and render
@@ -95,6 +100,13 @@ export function HostChatWorkflow(props: {
     }
     return map;
   }, [messages]);
+
+  function growComposer() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+  }
 
   async function send() {
     const message = input.trim();
@@ -118,11 +130,12 @@ export function HostChatWorkflow(props: {
       }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json.error || 'Could not send your message.');
+        setError(json.error || t('hostError'));
         return;
       }
       setInput('');
       setReplyTo(null);
+      if (inputRef.current) inputRef.current.style.height = 'auto';
       if (json.message) setMessages((current) => [...current, json.message]);
     } finally {
       setBusy(false);
@@ -137,14 +150,14 @@ export function HostChatWorkflow(props: {
         <div className={`gp-msg ${mine ? 'gp-msg-user' : ''} ${escalation ? 'gp-msg-escalation' : ''} ${!mine && !escalation ? 'gp-msg-host' : ''}`}>
           {escalation && (
             <div className="gp-msg-tag">
-              <TriangleAlert size={14} aria-hidden /> AI escalation
+              <TriangleAlert size={14} aria-hidden /> {t('hostEscTag')}
             </div>
           )}
           <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.45 }}><LinkedText text={message.content} /></div>
           <div className="gp-msg-meta">
             <span>{timeLabel(message.createdAt)}</span>
             <button type="button" onClick={() => setReplyTo(message)} className="gp-msg-link">
-              Reply
+              {t('reply')}
             </button>
           </div>
         </div>
@@ -153,25 +166,25 @@ export function HostChatWorkflow(props: {
   }
 
   return (
-    <section aria-label="Host chat">
+    <section aria-label={t('hostTitle')}>
       <div className="gp-wf-header">
         <button type="button" className="gp-back" onClick={props.onBack}>
-          <ArrowLeft size={16} aria-hidden /> Menu
+          <ArrowLeft size={16} aria-hidden /> {t('menu')}
         </button>
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <h2 className="gp-wf-title" style={{ margin: 0 }}>Host Chat</h2>
+        <h2 className="gp-wf-title" style={{ margin: 0 }}>{t('hostTitle')}</h2>
         <p className="gp-muted" style={{ margin: '.35rem 0 0' }}>
-          Text your host directly{props.guestName ? `, ${props.guestName}` : ''}. AI escalations also appear here when the concierge needs a human answer.
+          {t('hostSub', { name: props.guestName ? `, ${props.guestName}` : '' })}
         </p>
       </div>
 
       <div aria-live="polite" className="gp-chat-panel" style={{ minHeight: 320, maxHeight: '52vh' }}>
         {loading ? (
-          <p className="gp-muted"><Loader2 size={16} className="gp-spin" aria-hidden /> Loading messages…</p>
+          <p className="gp-muted"><Loader2 size={16} className="gp-spin" aria-hidden /> {t('hostLoading')}</p>
         ) : messages.length === 0 ? (
-          <p className="gp-muted">No messages yet. Send a note and your host will reply here.</p>
+          <p className="gp-muted">{t('hostEmpty')}</p>
         ) : (
           messages.map((message) => {
             // Escalation responses render inside the card under their anchor.
@@ -189,6 +202,7 @@ export function HostChatWorkflow(props: {
                       setOpenCards((current) => ({ ...current, [message.escalationId!]: !current[message.escalationId!] }))
                     }
                     onReply={() => setReplyTo(message)}
+                    t={t}
                   />
                 )}
               </div>
@@ -201,26 +215,37 @@ export function HostChatWorkflow(props: {
       {replyTo && (
         <div className="gp-card" style={{ marginTop: '.75rem', padding: '.65rem .75rem', fontSize: '.85rem' }}>
           {replyTo.escalationId
-            ? `Replying on this escalation — your answer stays attached to that thread: “${replyTo.content.slice(0, 120)}${replyTo.content.length > 120 ? '…' : ''}”`
-            : `Replying to ${replyTo.role === 'host' ? 'host' : 'message'}: “${replyTo.content.slice(0, 120)}${replyTo.content.length > 120 ? '…' : ''}”`}
+            ? t('hostReplyingEsc', { text: `${replyTo.content.slice(0, 120)}${replyTo.content.length > 120 ? '…' : ''}` })
+            : t('hostReplyingTo', {
+                who: replyTo.role === 'host' ? t('hostWhoHost') : t('hostWhoMessage'),
+                text: `${replyTo.content.slice(0, 120)}${replyTo.content.length > 120 ? '…' : ''}`,
+              })}
           <button type="button" onClick={() => setReplyTo(null)} className="gp-msg-link" style={{ marginLeft: '.6rem' }}>
-            Cancel
+            {t('cancel')}
           </button>
         </div>
       )}
 
       {error && <p role="alert" className="gp-alert-text">{error}</p>}
 
-      <div className="gp-input-row" style={{ marginTop: '.85rem' }}>
-        <label htmlFor="host-chat-input" className="sr-only">Message your host</label>
+      <form
+        className="gp-composer"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send();
+        }}
+      >
+        <label htmlFor="host-chat-input" className="sr-only">{t('hostTitle')}</label>
         <textarea
           id="host-chat-input"
-          className="gp-input"
+          ref={inputRef}
           value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Write a message…"
-          rows={2}
-          style={{ resize: 'vertical' }}
+          rows={1}
+          onChange={(event) => {
+            setInput(event.target.value);
+            growComposer();
+          }}
+          placeholder={t('hostPlaceholder')}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
@@ -228,13 +253,13 @@ export function HostChatWorkflow(props: {
             }
           }}
         />
-        <button type="button" className="gp-send" onClick={() => void send()} disabled={busy || !input.trim()} aria-label="Ring the service bell">
+        <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label={t('sendMessage')} title={t('sendMessage')}>
           {busy ? <Loader2 size={18} className="gp-spin" aria-hidden /> : <ConciergeBell size={18} aria-hidden />}
         </button>
-      </div>
+      </form>
 
       <p className="gp-muted" style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontSize: '.8rem', marginTop: '.7rem' }}>
-        <ConciergeBell size={14} aria-hidden /> Host replies arrive here; if you opted in, we’ll also send a neutral text prompt.
+        <ConciergeBell size={14} aria-hidden /> {t('hostNote')}
       </p>
     </section>
   );
@@ -244,7 +269,8 @@ export function HostChatWorkflow(props: {
 // chat stays readable. The highlighted Reply keeps the guest's answer attached
 // to the escalation thread. Colors ride the portal's semantic variables so the
 // card stays readable in both themes.
-function EscalationResponses(props: { replies: ThreadMsg[]; open: boolean; onToggle: () => void; onReply: () => void }) {
+function EscalationResponses(props: { replies: ThreadMsg[]; open: boolean; onToggle: () => void; onReply: () => void; t: PortalT }) {
+  const { t } = props;
   return (
     <div style={{ margin: '-.35rem 0 .7rem', borderRadius: 14, border: '1px solid var(--gp-accent-soft-border)', background: 'var(--gp-accent-soft-bg)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.55rem .75rem' }}>
@@ -255,14 +281,14 @@ function EscalationResponses(props: { replies: ThreadMsg[]; open: boolean; onTog
           style={{ display: 'flex', alignItems: 'center', gap: '.4rem', flex: 1, minWidth: 0, border: 0, background: 'none', color: 'var(--gp-accent-text)', fontWeight: 700, fontSize: '.82rem', cursor: 'pointer', padding: 0, textAlign: 'left' }}
         >
           <ChevronDown size={15} aria-hidden style={{ transform: props.open ? 'rotate(180deg)' : 'none', transition: 'transform .15s ease', flexShrink: 0 }} />
-          Your host replied to this escalation ({props.replies.length})
+          {t('hostEscReplies', { count: props.replies.length })}
         </button>
         <button
           type="button"
           onClick={props.onReply}
           style={{ border: 0, borderRadius: 999, padding: '.4rem .9rem', background: 'var(--gp-accent)', color: 'var(--gp-on-accent)', fontWeight: 700, fontSize: '.8rem', cursor: 'pointer', flexShrink: 0 }}
         >
-          Reply
+          {t('reply')}
         </button>
       </div>
       {props.open && (

@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, ConciergeBell, Loader2, Wrench } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ConciergeBell, Wrench } from 'lucide-react';
+import type { PortalT } from '@/lib/guest/portal-strings';
 
 type Turn = { role: 'guest' | 'assistant'; text: string };
 type Phase = 'idle' | 'in_progress' | 'completed' | 'safety_escalated';
@@ -20,11 +21,15 @@ type SrListRow = {
 // asks the context questions needed for a service report, then files it with a
 // reference number. Duplicates are prevented three ways: resume of any
 // in-progress report, a busy latch on submit, and server-side de-dupe.
+// The interview chat shares the portal's bubble animation + pill composer, so
+// it feels like the same conversation surface as Ask and Host Chat.
 export function MaintenanceWorkflow(props: {
   slug: string;
+  t: PortalT;
   onBack: () => void;
   onSessionExpired: () => void;
 }) {
+  const { t } = props;
   const [phase, setPhase] = useState<Phase>('idle');
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -35,6 +40,7 @@ export function MaintenanceWorkflow(props: {
   const [resumable, setResumable] = useState<SrListRow | null>(null);
   const [checked, setChecked] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // On entry, look for an in-progress report so a guest who left mid-interview
   // resumes it instead of creating a duplicate.
@@ -60,8 +66,9 @@ export function MaintenanceWorkflow(props: {
   }, []);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [turns]);
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [turns, busy]);
 
   const handleTurn = useCallback((json: {
     id?: string;
@@ -73,7 +80,7 @@ export function MaintenanceWorkflow(props: {
   }) => {
     if (json.id) setTicketId(json.id);
     if (json.status === 'safety_escalated') {
-      setTurns((t) => [...t, { role: 'assistant', text: json.guestMessage ?? 'We have flagged this for your host right away.' }]);
+      setTurns((current) => [...current, { role: 'assistant', text: json.guestMessage ?? t('mSafetySub') }]);
       setSummary(null);
       setPhase('safety_escalated');
       setChoices([]);
@@ -85,10 +92,10 @@ export function MaintenanceWorkflow(props: {
       setChoices([]);
       return;
     }
-    if (json.question) setTurns((t) => [...t, { role: 'assistant', text: json.question! }]);
+    if (json.question) setTurns((current) => [...current, { role: 'assistant', text: json.question! }]);
     setChoices(Array.isArray(json.choices) ? json.choices : []);
     setPhase('in_progress');
-  }, []);
+  }, [t]);
 
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -96,7 +103,7 @@ export function MaintenanceWorkflow(props: {
     setBusy(true);
     setInput('');
     setChoices([]);
-    setTurns((t) => [...t, { role: 'guest', text: trimmed }]);
+    setTurns((current) => [...current, { role: 'guest', text: trimmed }]);
     try {
       const url = ticketId
         ? `/api/guest/${props.slug}/service-request/${ticketId}/message`
@@ -111,20 +118,20 @@ export function MaintenanceWorkflow(props: {
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'sr_failed');
       handleTurn(json);
     } catch {
-      setTurns((t) => [...t, { role: 'assistant', text: 'Sorry — something went wrong. Please try again.' }]);
+      setTurns((current) => [...current, { role: 'assistant', text: t('mError') }]);
     } finally {
       setBusy(false);
     }
-  }, [busy, ticketId, props, handleTurn]);
+  }, [busy, ticketId, props, handleTurn, t]);
 
   function resume() {
     if (!resumable) return;
     setTicketId(resumable.id);
     const transcript = Array.isArray(resumable.interview_transcript) ? resumable.interview_transcript : [];
-      const restored: Turn[] = transcript.map((t): Turn => {
-      const row = t as { role?: string; text?: string; content?: string };
-      return { role: row.role === 'guest' ? 'guest' : 'assistant', text: String(row.text ?? row.content ?? '') };
-    }).filter((t) => t.text.length > 0);
+    const restored: Turn[] = transcript.map((row): Turn => {
+      const turn = row as { role?: string; text?: string; content?: string };
+      return { role: turn.role === 'guest' ? 'guest' : 'assistant', text: String(turn.text ?? turn.content ?? '') };
+    }).filter((turn) => turn.text.length > 0);
     setTurns(restored.length > 0 ? restored : [{ role: 'guest', text: resumable.description }]);
     setPhase('in_progress');
   }
@@ -141,41 +148,39 @@ export function MaintenanceWorkflow(props: {
   const reference = ticketId ? `SR-${ticketId.replace(/-/g, '').slice(0, 8).toUpperCase()}` : null;
 
   return (
-    <section aria-label="Report service maintenance" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <section aria-label={t('mTitle')} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <div className="gp-wf-header">
         <button type="button" className="gp-back" onClick={props.onBack}>
-          <ArrowLeft size={16} aria-hidden /> Menu
+          <ArrowLeft size={16} aria-hidden /> {t('menu')}
         </button>
-        <span className="gp-wf-title">Report Maintenance</span>
+        <span className="gp-wf-title">{t('mTitle')}</span>
       </div>
 
       {phase === 'idle' && (
         <>
-          <p className="gp-step-sub">
-            Describe the issue. The AI will first suggest safe things to try, then ask a few quick questions so the team arrives prepared.
-          </p>
+          <p className="gp-step-sub">{t('mSub')}</p>
 
           {checked && resumable ? (
             <div className="gp-card" style={{ marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>You have a report in progress</div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{t('mResumeTitle')}</div>
               <div className="gp-muted" style={{ fontSize: '0.85rem', marginBottom: 10 }}>{resumable.description}</div>
-              <button type="button" className="gp-btn gp-btn-ghost" onClick={resume}>Continue that report</button>
+              <button type="button" className="gp-btn gp-btn-ghost" onClick={resume}>{t('mResumeCta')}</button>
             </div>
           ) : null}
 
-          <form onSubmit={(e) => { e.preventDefault(); void send(input); }}>
+          <form onSubmit={(event) => { event.preventDefault(); void send(input); }}>
             <textarea
               className="gp-textarea"
-              placeholder="e.g. The kitchen sink is leaking under the cabinet…"
+              placeholder={t('mPlaceholder')}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(event) => setInput(event.target.value)}
               disabled={busy}
               maxLength={2000}
-              aria-label="Describe the issue"
+              aria-label={t('mTitle')}
             />
             <div style={{ height: 12 }} />
             <button type="submit" className="gp-btn gp-btn-primary" disabled={busy || !input.trim()}>
-              {busy ? 'Starting…' : 'Start report'}
+              {busy ? t('mStarting') : t('mStart')}
             </button>
           </form>
         </>
@@ -184,35 +189,41 @@ export function MaintenanceWorkflow(props: {
       {phase === 'in_progress' && (
         <>
           <div className="gp-chat-list" ref={listRef} aria-live="polite">
-            {turns.map((t, i) => (
-              <div key={i} className={`gp-bubble ${t.role === 'guest' ? 'gp-bubble-user' : 'gp-bubble-assistant'}`}>
-                {t.role === 'assistant' ? <span className="gp-bubble-tag">Troubleshooting</span> : null}
-                {t.text}
+            {turns.map((turn, index) => (
+              <div key={index} className={`gp-bubble ${turn.role === 'guest' ? 'gp-bubble-user' : 'gp-bubble-assistant'}`}>
+                {turn.role === 'assistant' ? <span className="gp-bubble-tag">{t('mTroubleshooting')}</span> : null}
+                {turn.text}
               </div>
             ))}
-            {busy ? <div className="gp-bubble gp-bubble-assistant"><Loader2 size={16} className="gp-spin" aria-label="Thinking" /></div> : null}
+            {busy ? (
+              <div className="gp-bubble gp-bubble-assistant">
+                <span className="gp-typing" role="status" aria-label={t('loading')}><span /><span /><span /></span>
+              </div>
+            ) : null}
           </div>
 
           {choices.length > 0 ? (
             <div className="gp-chips">
-              {choices.map((c) => (
-                <button key={c} type="button" className="gp-chip" onClick={() => void send(c)} disabled={busy}>{c}</button>
+              {choices.map((choice) => (
+                <button key={choice} type="button" className="gp-chip" onClick={() => void send(choice)} disabled={busy}>{choice}</button>
               ))}
             </div>
           ) : null}
 
-          <form className="gp-input-row" onSubmit={(e) => { e.preventDefault(); void send(input); }}>
+          <form className="gp-composer" onSubmit={(event) => { event.preventDefault(); void send(input); }}>
             <input
               className="gp-input"
+              style={{ background: 'transparent', border: 'none', padding: '10px 0' }}
               type="text"
-              placeholder="Type your answer…"
+              placeholder={t('mAnswerPlaceholder')}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              ref={inputRef}
+              onChange={(event) => setInput(event.target.value)}
               disabled={busy}
               maxLength={2000}
-              aria-label="Answer"
+              aria-label={t('mAnswerPlaceholder')}
             />
-            <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label="Ring the service bell">
+            <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label={t('sendMessage')} title={t('sendMessage')}>
               <ConciergeBell size={18} aria-hidden />
             </button>
           </form>
@@ -223,24 +234,22 @@ export function MaintenanceWorkflow(props: {
         <div className="gp-card gp-confirm">
           <CheckCircle2 size={40} className="gp-confirm-icon" aria-hidden />
           <h2 className="gp-step-title" style={{ marginTop: 0 }}>
-            {phase === 'safety_escalated' ? 'Your host has been alerted' : 'Report submitted'}
+            {phase === 'safety_escalated' ? t('mHostAlerted') : t('mSubmitted')}
           </h2>
           {reference ? (
             <>
-              <div className="gp-muted" style={{ fontSize: '0.85rem' }}>Reference number</div>
+              <div className="gp-muted" style={{ fontSize: '0.85rem' }}>{t('mRefNumber')}</div>
               <div className="gp-ref">{reference}</div>
             </>
           ) : null}
           {summary ? <p className="gp-step-sub" style={{ marginBottom: 8 }}>{summary}</p> : null}
           <p className="gp-step-sub" style={{ marginBottom: 18 }}>
-            {phase === 'safety_escalated'
-              ? 'This was treated as urgent and sent to your host right away.'
-              : 'Your host and the maintenance team have been notified. Quote the reference number if you follow up.'}
+            {phase === 'safety_escalated' ? t('mSafetySub') : t('mDoneSub')}
           </p>
-          <button type="button" className="gp-btn gp-btn-primary" onClick={props.onBack}>Back to menu</button>
+          <button type="button" className="gp-btn gp-btn-primary" onClick={props.onBack}>{t('backToMenu')}</button>
           <div style={{ height: 10 }} />
           <button type="button" className="gp-btn gp-btn-ghost" onClick={reset}>
-            <Wrench size={15} aria-hidden /> Report another issue
+            <Wrench size={15} aria-hidden /> {t('mReportAnother')}
           </button>
         </div>
       )}

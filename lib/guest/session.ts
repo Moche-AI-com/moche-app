@@ -16,6 +16,11 @@ export interface GuestSession {
 // Returns null if missing/expired/revoked, or if the stay is over (checkout + grace).
 // Guests are unauthenticated to Postgres, so this uses the service-role client;
 // all reads are explicitly scoped by the session's own stay_id/property_id.
+//
+// Display name (party access redesign 2026-08-28): the name comes from the
+// SESSION'S registered identity, not the stay record. stays.guest_display_name
+// describes the booking contact — the wrong name for every other member of the
+// party, each of whom now registers their own identity on their own device.
 export async function getGuestSession(): Promise<GuestSession | null> {
   const token = (await cookies()).get(GUEST_SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -25,7 +30,7 @@ export async function getGuestSession(): Promise<GuestSession | null> {
 
   const { data: session } = await admin
     .from('guest_access_sessions')
-    .select('id, stay_id, property_id, status, expires_at, revoked_at')
+    .select('id, stay_id, property_id, status, expires_at, revoked_at, guest_identity_id')
     .eq('session_token_hash', tokenHash)
     .maybeSingle();
   if (!session) return null;
@@ -49,11 +54,25 @@ export async function getGuestSession(): Promise<GuestSession | null> {
     return null;
   }
 
+  let guestDisplayName = stay.guest_display_name;
+  const identityId = (session as { guest_identity_id?: string | null }).guest_identity_id;
+  if (identityId) {
+    const { data: identity } = await (admin as any)
+      .from('guest_identities')
+      .select('display_name, first_name, last_name')
+      .eq('id', identityId)
+      .maybeSingle();
+    if (identity) {
+      const full = [identity.first_name, identity.last_name].filter(Boolean).join(' ').trim();
+      guestDisplayName = full || identity.display_name || guestDisplayName;
+    }
+  }
+
   return {
     sessionId: session.id,
     stayId: stay.id,
     propertyId: stay.property_id,
-    guestDisplayName: stay.guest_display_name,
+    guestDisplayName,
     checkOut: stay.check_out,
   };
 }

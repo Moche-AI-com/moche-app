@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -29,6 +29,7 @@ import {
 import { NEARBY_CATEGORY_LABEL, NEARBY_CATEGORY_LABEL_PLURAL } from '@/lib/local/categories';
 import { formatDistance } from '@/lib/local/distance';
 import type { GuestLocalPlace } from '@/lib/local/canonical';
+import { portalT } from '@/lib/guest/portal-strings';
 import { PORTAL_CSS, usePortalTheme } from '../portalStyles';
 
 // Category → professional line icon (Lucide). Unknown/custom categories fall
@@ -72,7 +73,7 @@ function distanceLabel(place: GuestLocalPlace): string | null {
   return place.distanceNote;
 }
 
-function PlaceCard({ place }: { place: GuestLocalPlace }) {
+function PlaceCard({ place, t }: { place: GuestLocalPlace; t: ReturnType<typeof portalT> }) {
   const Icon = CATEGORY_ICON[place.category] ?? MapPin;
   const distance = distanceLabel(place);
   return (
@@ -83,7 +84,7 @@ function PlaceCard({ place }: { place: GuestLocalPlace }) {
       <div className="gp-place-body">
         <div className="gp-place-title">
           {place.name}
-          {place.isFavorite ? <span className="gp-badge gp-badge-pick">Host pick</span> : null}
+          {place.isFavorite ? <span className="gp-badge gp-badge-pick">{t('lgHostPick')}</span> : null}
         </div>
         <div className="gp-place-meta">
           <span>{categoryLabel(place.category)}</span>
@@ -95,20 +96,20 @@ function PlaceCard({ place }: { place: GuestLocalPlace }) {
           ) : null}
         </div>
         {place.detail ? <p className="gp-place-note">{place.detail}</p> : null}
-        {place.hostNote ? <p className="gp-place-note"><strong>Host note:</strong> {place.hostNote}</p> : null}
+        {place.hostNote ? <p className="gp-place-note"><strong>{t('lgHostNote')}</strong> {place.hostNote}</p> : null}
         {place.address ? <p className="gp-place-addr">{place.address}</p> : null}
         <div className="gp-place-actions">
           <a className="gp-place-link" href={directionsUrl(place)} target="_blank" rel="noopener noreferrer">
-            <Navigation size={13} aria-hidden /> Directions
+            <Navigation size={13} aria-hidden /> {t('lgDirections')}
           </a>
           {place.website ? (
             <a className="gp-place-link" href={place.website} target="_blank" rel="noopener noreferrer">
-              <Globe size={13} aria-hidden /> Website
+              <Globe size={13} aria-hidden /> {t('lgWebsite')}
             </a>
           ) : null}
           {place.phone ? (
             <a className="gp-place-link" href={`tel:${place.phone}`}>
-              <Phone size={13} aria-hidden /> Call
+              <Phone size={13} aria-hidden /> {t('lgCall')}
             </a>
           ) : null}
         </div>
@@ -121,6 +122,11 @@ function PlaceCard({ place }: { place: GuestLocalPlace }) {
 // cafes, parks, golf courses, and more — with the host's own picks pinned on
 // top, category filters, text search, distance in miles, and directions /
 // website / call links per place.
+//
+// Language (2026-08-28): the chrome follows the guest's portal language. The
+// guide is a separate route from the portal shell, so the choice is re-read
+// from the same localStorage key the shell writes (gp-lang) — place content
+// itself stays in the host's own words.
 export function LocalGuide(props: {
   fontClassName: string;
   slug: string;
@@ -134,6 +140,22 @@ export function LocalGuide(props: {
   const { theme, toggleTheme } = usePortalTheme();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('all');
+  const [language, setLanguage] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('gp-lang');
+      if (stored) {
+        setLanguage(stored);
+        return;
+      }
+      if (window.navigator.language) setLanguage(window.navigator.language);
+    } catch {
+      // Private-browsing modes can throw; English stays in effect.
+    }
+  }, []);
+
+  const t = useMemo(() => portalT(language), [language]);
 
   const brandVars = {
     '--gp-primary': props.brandPrimary ?? '#33E6D4',
@@ -162,7 +184,7 @@ export function LocalGuide(props: {
   const favorites = filtering ? [] : filtered.filter((p) => p.isFavorite);
   const rest = filtering ? filtered : filtered.filter((p) => !p.isFavorite);
 
-  const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  const themeLabel = t(theme === 'dark' ? 'themeToLight' : 'themeToDark');
 
   return (
     <div className={`gp-v2 ${theme === 'light' ? 'gp-light' : ''} ${props.fontClassName}`} style={brandVars}>
@@ -190,22 +212,18 @@ export function LocalGuide(props: {
         <main className="gp-main">
           <div className="gp-wf-header">
             <Link href={`/g/${props.slug}`} className="gp-back">
-              <ArrowLeft size={16} aria-hidden /> Portal
+              <ArrowLeft size={16} aria-hidden /> {t('lgBack')}
             </Link>
           </div>
 
-          <h1 className="gp-step-title" style={{ marginTop: 0 }}>Local Guide</h1>
-          <p className="gp-step-sub">
-            Restaurants, cafes, parks, golf and more near {props.propertyName} — with your host&apos;s own picks first.
-          </p>
+          <h1 className="gp-step-title" style={{ marginTop: 0 }}>{t('lgTitle')}</h1>
+          <p className="gp-step-sub">{t('lgSub', { property: props.propertyName })}</p>
 
           {props.places.length === 0 ? (
             <div className="gp-empty">
               <MapPin size={28} aria-hidden style={{ opacity: 0.5, marginBottom: 10 }} />
-              <div>No local places are listed for this stay yet.</div>
-              <div style={{ marginTop: 6, fontSize: '.85rem' }}>
-                Ask the concierge in the portal chat — it can recommend area spots and ping your host for their favorites.
-              </div>
+              <div>{t('lgEmpty')}</div>
+              <div style={{ marginTop: 6, fontSize: '.85rem' }}>{t('lgEmptyHint')}</div>
             </div>
           ) : (
             <>
@@ -216,18 +234,18 @@ export function LocalGuide(props: {
                   style={{ paddingLeft: 34 }}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search places, notes, addresses…"
-                  aria-label="Search local places"
+                  placeholder={t('lgSearch')}
+                  aria-label={t('lgSearch')}
                 />
               </div>
 
-              <div className="gp-filter-bar" role="group" aria-label="Filter by category">
+              <div className="gp-filter-bar" role="group" aria-label={t('lgAllPlaces')}>
                 <button
                   type="button"
                   className={`gp-filter-chip ${category === 'all' ? 'gp-filter-chip-on' : ''}`}
                   onClick={() => setCategory('all')}
                 >
-                  All
+                  {t('lgAll')}
                 </button>
                 {categories.map((cat) => (
                   <button
@@ -243,24 +261,24 @@ export function LocalGuide(props: {
 
               {favorites.length > 0 && (
                 <>
-                  <h2 className="gp-section-title">Host picks</h2>
+                  <h2 className="gp-section-title">{t('lgHostPicks')}</h2>
                   {favorites.map((place) => (
-                    <PlaceCard key={place.id} place={place} />
+                    <PlaceCard key={place.id} place={place} t={t} />
                   ))}
                 </>
               )}
 
-              <h2 className="gp-section-title">{filtering ? 'Matching places' : favorites.length > 0 ? 'More nearby' : 'All places'}</h2>
+              <h2 className="gp-section-title">{filtering ? t('lgMatching') : favorites.length > 0 ? t('lgMore') : t('lgAllPlaces')}</h2>
               {rest.length === 0 ? (
-                <p className="gp-muted">No places match your search.</p>
+                <p className="gp-muted">{t('lgNoMatch')}</p>
               ) : (
-                rest.map((place) => <PlaceCard key={place.id} place={place} />)
+                rest.map((place) => <PlaceCard key={place.id} place={place} t={t} />)
               )}
             </>
           )}
         </main>
 
-        <footer className="gp-footer">Powered by Moche AI</footer>
+        <footer className="gp-footer">{t('poweredBy')}</footer>
       </div>
     </div>
   );
