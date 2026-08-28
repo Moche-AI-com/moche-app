@@ -45,7 +45,7 @@ export default async function GuestPortalPage({
     .eq('slug', slug)
     .is('deleted_at', null)
     .maybeSingle();
-  if (!property || property.status !== 'live') notFound();
+  if (!property) notFound();
 
   // If already verified for THIS property, skip code entry entirely.
   const session = await getGuestSession();
@@ -53,8 +53,12 @@ export default async function GuestPortalPage({
 
   // Host bypass: a logged-in host (owner or co-host) of THIS property can open the
   // portal on any device without the guest gate. Only checked when the visitor
-  // isn't already a verified guest, so guest behavior is unchanged.
+  // isn't already a verified guest, so guest behavior is unchanged. The bypass
+  // also covers DRAFT properties — a host previews before publishing, which is
+  // exactly when testing the concierge matters. Guests still 404 on anything
+  // that is not live.
   const hostAccess = verified ? null : await getPropertyAccess(property.id);
+  if (property.status !== 'live' && !hostAccess) notFound();
   const isHostPreview = !!hostAccess;
 
   // Registration state decides between the registration form and the main menu.
@@ -86,9 +90,11 @@ export default async function GuestPortalPage({
     initialLanguage = typeof lang === 'string' && lang.length > 0 ? lang : null;
   }
 
-  // Extras are loaded server-side only once a session exists (they are stay-scoped).
+  // Extras are loaded server-side once a session exists — and for a host preview,
+  // which has no stay but browses the property's live offers exactly as a guest
+  // would see them.
   let offers: GuestExtraOffer[] = [];
-  if (verified) {
+  if (verified || isHostPreview) {
     const { data } = await admin
       .from('guest_extras')
       .select('id, title, description, details, price_text, cta_label, category, max_quantity, kind, unit_label, option_label, options')
