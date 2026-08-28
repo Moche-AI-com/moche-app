@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -40,7 +40,7 @@ export type Database = {
           kind: string
           latency_ms?: number | null
           model: string
-          prompt_tokens?: number
+          prompt_tokens: number
           property_id?: string | null
           source?: string | null
           total_tokens?: number | null
@@ -386,6 +386,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          feature_id: string | null
           id: string
           ingestion_error: string | null
           property_id: string
@@ -402,6 +403,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          feature_id?: string | null
           id?: string
           ingestion_error?: string | null
           property_id: string
@@ -418,6 +420,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          feature_id?: string | null
           id?: string
           ingestion_error?: string | null
           property_id?: string
@@ -434,6 +437,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brain_items_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "property_features"
             referencedColumns: ["id"]
           },
           {
@@ -545,7 +555,7 @@ export type Database = {
           granted: boolean
           id?: string
           ip_hash?: string | null
-          kind: Database["public"]["Enums"]["consent_kind"]
+          kind?: Database["public"]["Enums"]["consent_kind"]
           profile_id?: string | null
           stay_id?: string | null
         }
@@ -994,7 +1004,7 @@ export type Database = {
           confidence?: number | null
           conflict_with?: string | null
           created_at?: string
-          field_path: string
+          field_path?: string
           id?: string
           label: string
           property_id: string
@@ -1067,7 +1077,7 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
-          actor_type: Database["public"]["Enums"]["extras_order_event_actor"]
+          actor_type?: Database["public"]["Enums"]["extras_order_event_actor"]
           created_at?: string
           from_status?:
             | Database["public"]["Enums"]["extras_fulfillment_status"]
@@ -1183,7 +1193,6 @@ export type Database = {
         Update: {
           archived_at?: string | null
           conversation_id?: string | null
-          created_at?: string
           declined_reason?: string | null
           escalation_id?: string | null
           expires_at?: string | null
@@ -1306,17 +1315,17 @@ export type Database = {
           interview_prompt: string
           label: string
           on_failure_field?: string | null
-          phase?: string[]
-          registry_version?: number
+          phase: string[]
+          registry_version: number
           requires_on_failure?: boolean
           scrape_hint?: string | null
-          sensitivity_tier?: Database["public"]["Enums"]["sensitivity_tier"]
-          storage_column?: string
-          storage_table?: string
+          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
+          storage_column: string
+          storage_table: string
           storage_vault?: boolean
           system_section?: boolean
           ttl_days?: number | null
-          type?: string
+          type: string
         }
         Update: {
           applicability?: string
@@ -1386,7 +1395,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           kind: string
-          max_redemptions?: number
+          max_redemptions: number
           property_id: string
           redemption_count?: number
           require_otp?: boolean
@@ -1402,7 +1411,6 @@ export type Database = {
           code_revoked_at?: string | null
           code_secret_ref?: string | null
           consumed_at?: string | null
-          created_at?: string
           created_by?: string | null
           expires_at?: string | null
           id?: string
@@ -1473,7 +1481,7 @@ export type Database = {
           property_id: string
           registered_at?: string | null
           revoked_at?: string | null
-          session_token_hash?: string
+          session_token_hash: string
           status?: Database["public"]["Enums"]["access_status"]
           stay_guest_id?: string | null
           stay_id: string
@@ -1757,7 +1765,7 @@ export type Database = {
           id?: string
           max_attempts?: number
           phone_last4?: string | null
-          purpose?: string
+          purpose: string
           user_id: string
         }
         Update: {
@@ -1877,7 +1885,7 @@ export type Database = {
           created_by?: string | null
           document_id?: string | null
           id?: string
-          kind: Database["public"]["Enums"]["ingestion_kind"]
+          kind?: Database["public"]["Enums"]["ingestion_kind"]
           last_error?: string | null
           property_id: string
           result?: Json | null
@@ -1945,7 +1953,7 @@ export type Database = {
           document_id?: string | null
           enabled?: boolean
           id?: string
-          kind: Database["public"]["Enums"]["ingestion_source_kind"]
+          kind?: Database["public"]["Enums"]["ingestion_source_kind"]
           label: string
           last_acquired_at?: string | null
           last_status?: string | null
@@ -2087,7 +2095,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          effective_date: string
+          effective_date?: string
           id?: string
           sha256?: string | null
           slug: string
@@ -2137,9 +2145,9 @@ export type Database = {
           host_account_id: string
           id?: string
           invited_by: string
-          property_ids?: string[]
+          property_ids: string[]
           revoked_at?: string | null
-          role: Database["public"]["Enums"]["member_role"]
+          role?: Database["public"]["Enums"]["member_role"]
           token_hash: string
         }
         Update: {
@@ -2351,7 +2359,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
-          category: string
+          category?: string
           created_at?: string
           distance_m?: number | null
           hidden?: boolean
@@ -2472,7 +2480,7 @@ export type Database = {
           created_at?: string
           host_account_id: string
           id?: string
-          kind: Database["public"]["Enums"]["notification_kind"]
+          kind?: Database["public"]["Enums"]["notification_kind"]
           link?: string | null
           property_id?: string | null
           read_at?: string | null
@@ -2632,7 +2640,7 @@ export type Database = {
           page?: string | null
           property_id?: string | null
           rating?: number | null
-          source: string
+          source?: string
         }
         Update: {
           comment?: string | null
@@ -2694,7 +2702,7 @@ export type Database = {
           deletion_requested_at?: string | null
           email: string
           full_name?: string | null
-          id: string
+          id?: string
           is_admin?: boolean
           mfa_ready?: boolean
           phone?: string | null
@@ -2973,7 +2981,7 @@ export type Database = {
           property_id: string
         }
         Insert: {
-          contact_type?: string
+          contact_type: string
           created_at?: string
           email?: string | null
           id?: string
@@ -2999,6 +3007,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "property_contacts_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      property_features: {
+        Row: {
+          archived_at: string | null
+          catalog_key: string | null
+          created_at: string
+          created_by: string | null
+          created_via: string
+          guest_access: string
+          id: string
+          label: string
+          location: string | null
+          notes: string | null
+          property_id: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          catalog_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_via?: string
+          guest_access?: string
+          id?: string
+          label: string
+          location?: string | null
+          notes?: string | null
+          property_id: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          catalog_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_via?: string
+          guest_access?: string
+          id?: string
+          label?: string
+          location?: string | null
+          notes?: string | null
+          property_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_features_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_features_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
@@ -3632,7 +3700,7 @@ export type Database = {
           property_id: string
           sent_by?: string | null
           service_request_id: string
-          status?: string
+          status: string
         }
         Update: {
           body_snapshot?: string
@@ -3980,7 +4048,7 @@ export type Database = {
           id?: string
           property_id: string
           sent_by?: string | null
-          status?: string
+          status: string
           stay_id: string
         }
         Update: {
@@ -4042,6 +4110,7 @@ export type Database = {
             | null
           property_id: string
           status: Database["public"]["Enums"]["stay_status"]
+          stay_reference: string
           updated_at: string
         }
         Insert: {
@@ -4051,7 +4120,7 @@ export type Database = {
           check_out: string
           contact_hash: string
           contact_last4?: string | null
-          contact_type?: string
+          contact_type: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -4066,6 +4135,7 @@ export type Database = {
             | null
           property_id: string
           status?: Database["public"]["Enums"]["stay_status"]
+          stay_reference?: string
           updated_at?: string
         }
         Update: {
@@ -4090,6 +4160,7 @@ export type Database = {
             | null
           property_id?: string
           status?: Database["public"]["Enums"]["stay_status"]
+          stay_reference?: string
           updated_at?: string
         }
         Relationships: [
@@ -4126,7 +4197,7 @@ export type Database = {
         Insert: {
           id: string
           payload?: Json | null
-          processed_at?: string
+          processed_at: string
           type: string
         }
         Update: {
@@ -4569,7 +4640,7 @@ export type CompositeTypes<
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"])
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
