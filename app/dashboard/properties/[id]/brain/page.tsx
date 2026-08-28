@@ -10,9 +10,15 @@
 //     numbers called "coverage" on one page is worse than either alone.
 //   - "Manage local recommendations ->". Local Recs is its own tab (§4, §5).
 //   - "Next questions", replaced by Enhance Brain, which asks and files (§7).
+//   - The brain_items.section probe and its lossy fallback (2026-08-28). The
+//     BRAIN-SECTIONS migration (20260823141718_brain_sections) is applied in production,
+//     so the column always exists: the manager offers the full taxonomy and every save
+//     round-trips its section. Also removed: an unused property_settings query whose
+//     only selected column (confidence_threshold) was never read on this page.
 //
-// Layout order is deliberate: Coverage Map first (orientation), then the score and the
-// question queue (what to do), then the manager (doing it), then intake panels.
+// Layout order is deliberate: Coverage Map first (orientation + navigation), then the
+// score and the question queue (what to do), then the manager (doing it), then intake
+// panels.
 
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
@@ -28,9 +34,8 @@ import {
 import { loadCompleteness } from '@/lib/brain/values';
 import { serverEnv } from '@/lib/env';
 import { buildCoverageMap } from '@/lib/brain/coverage';
-import { BRAIN_SECTIONS, resolveSection, sectionLabel, storageCategoryFor } from '@/lib/brain/taxonomy';
+import { BRAIN_SECTIONS, resolveSection, sectionLabel } from '@/lib/brain/taxonomy';
 import type { Database } from '@/lib/database.types';
-import { brainSectionColumnExists } from '@/lib/brain/section-column';
 import { CompletenessPanel } from './CompletenessPanel';
 import { CoverageMap } from './CoverageMap';
 import { ImportProvenancePanel } from './ImportProvenancePanel';
@@ -52,37 +57,26 @@ export default async function BrainPage({
   const access = await requirePropertyAccess(propertyId);
   const supabase = createClient();
 
-  // Whether brain_items.section exists yet. Until the BRAIN-SECTIONS migration is applied
-  // by the pipeline, grouping falls back to the storage-category map, which is lossy for
-  // the four sections that share the `core` bucket — see lib/brain/section-column.ts.
-  const hasSectionColumn = await brainSectionColumnExists(supabase);
-
   const [
     { data: items },
-    { data: settings },
     { count: pendingReviews },
     { data: requirementStatuses },
   ] = await Promise.all([
     supabase
       .from('brain_items')
-      .select(
-        hasSectionColumn
-          ? 'id, title, body, category, section, visibility, status, source_type, updated_at, deleted_at'
-          : 'id, title, body, category, visibility, status, source_type, updated_at, deleted_at',
-      )
+      .select('id, title, body, category, section, visibility, status, source_type, updated_at, deleted_at')
       .eq('property_id', propertyId)
       .is('deleted_at', null)
       .order('category', { ascending: true })
       .order('updated_at', { ascending: false }),
-    supabase.from('property_settings').select('confidence_threshold').eq('property_id', propertyId).maybeSingle(),
     // Pending AI drafts count toward readiness: a property whose Brain is full but whose
     // queue is untouched is not actually reviewed.
     supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('status', 'pending'),
     supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', propertyId),
   ]);
 
-  // The select list is chosen at runtime by the section-column probe, so the generated
-  // row type does not apply. Narrow it here once rather than casting at each use.
+  // The generated row type predates brain_items.section; narrow it here once rather
+  // than casting at each use. (Regenerating database.types makes this precise.)
   type BrainRowsTable = Database['public']['Tables']['brain_items']['Row'];
   type BrainRow = Pick<
     BrainRowsTable,
@@ -120,21 +114,9 @@ export default async function BrainPage({
     pendingReviews: pendingReviews ?? 0,
   });
 
-  // Which sections a host may file under.
-  //
-  // The full 10-section taxonomy needs brain_items.section to persist the choice. Until
-  // that migration is applied, the only durable field is brain_category, and four
-  // sections (Connectivity, Access & security, Space details, Parking) share the `core`
-  // bucket — so "file this under Connectivity" would silently reappear under Space
-  // details on the next load. Rather than lie about where an item went, offer only the
-  // sections that round-trip through the storage enum unchanged, and say why.
-  const allSections = BRAIN_SECTIONS.map((s) => ({ value: s.id, label: s.label, blurb: s.blurb }));
-  const sections = hasSectionColumn
-    ? allSections
-    : allSections.filter((s) => resolveSection({ section: null, category: storageCategoryFor(s.value) }) === s.value);
-  const sectionNotice = hasSectionColumn
-    ? undefined
-    : 'Some sections are unavailable until a pending database update is applied. Knowledge you add now stays where you put it.';
+  // The full 10-section taxonomy. brain_items.section exists in production, so every
+  // section round-trips: what the host files under is what they read back.
+  const sections = BRAIN_SECTIONS.map((s) => ({ value: s.id, label: s.label, blurb: s.blurb }));
 
   // Enhance Brain queue: heaviest gaps first, blocking ones promoted client-side. Each
   // gap already names its registry domain, which is also its section id, so placement is
@@ -174,7 +156,8 @@ export default async function BrainPage({
         </div>
       )}
 
-      {/* Orientation first, full width. Hover-only: no node is clickable (§4, §9). */}
+      {/* Orientation + navigation first, full width. The map spins until hovered or
+          focused; clicks jump into the manager below (2026-08-28 directive). */}
       <div style={{ marginBottom: '1.25rem' }}>
         <CoverageMap view={coverage} />
       </div>
@@ -185,7 +168,6 @@ export default async function BrainPage({
             propertyId={propertyId}
             canEdit={access.can.editBrain}
             sections={sections}
-            notice={sectionNotice}
             editItemId={searchParams.edit}
             items={rows.map((i) => ({
               id: i.id,

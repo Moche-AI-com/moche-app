@@ -21,20 +21,27 @@ export interface BrainActionState {
 
 /**
  * The unified Brain manager files knowledge by section (the registry taxonomy the host
- * reads), not by `brain_category` (the storage enum). Translate here so the section id
- * never has to be understood by the client and the enum never has to be understood by
- * the host.
+ * reads), not by `brain_category` (the storage enum). Both are written: `section`
+ * persists the precise destination — the BRAIN-SECTIONS migration
+ * (20260823141718_brain_sections) is applied in production — and `category` keeps the
+ * retrieval RPC and legacy readers working.
  *
- * The `section` column added by supabase-migrations-BRAIN-SECTIONS.sql is deliberately
- * NOT written yet: that migration is unapplied, so a write would fail against production.
- * Until the pipeline applies it, the section round-trips through the category map, which
- * is exactly what `resolveSection` reads back. Writing `section` is the first change in
- * the follow-up once the migration lands.
+ * The old stopgap wrote only the category, and four sections (Connectivity, Access &
+ * security, Space details, Parking) share the `core` bucket — so "file this under
+ * Connectivity" silently reappeared under Space details on the next load. That is why
+ * the section is now persisted on every save.
  */
 function categoryFromForm(formData: FormData): string {
   const section = String(formData.get('section') ?? '');
   if (isBrainSection(section)) return storageCategoryFor(section);
   return String(formData.get('category') ?? '');
+}
+
+/** The section to persist, or null when the form posted nothing recognisable (e.g. a
+    legacy client posting only a category) — in which case the column is left alone. */
+function sectionFromForm(formData: FormData): string | null {
+  const section = String(formData.get('section') ?? '');
+  return isBrainSection(section) ? section : null;
 }
 
 // Create or update a manual Brain item. After saving, (re)build its chunks + embeddings
@@ -58,21 +65,26 @@ export async function saveBrainItemAction(
     return { error: parsed.error.issues[0]?.message ?? 'Please check the fields and try again.' };
   }
   const d = parsed.data;
+  const section = sectionFromForm(formData);
   const ctx = await requireSession();
   const supabase = createClient();
 
   let savedId = itemId;
   if (itemId) {
+    // Cast: the generated types predate brain_items.section (regenerate database.types
+    // to drop the cast); the column exists in production.
+    const updatePayload = {
+      title: d.title,
+      body: d.body || null,
+      category: d.category,
+      visibility: d.visibility,
+      status: 'ready',
+      updated_at: new Date().toISOString(),
+      ...(section ? { section } : {}),
+    };
     const { error } = await supabase
       .from('brain_items')
-      .update({
-        title: d.title,
-        body: d.body || null,
-        category: d.category,
-        visibility: d.visibility,
-        status: 'ready',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload as never)
       .eq('id', itemId)
       .eq('property_id', propertyId);
     if (error) {
@@ -80,18 +92,20 @@ export async function saveBrainItemAction(
       return { error: 'Could not save the item.' };
     }
   } else {
+    const insertPayload = {
+      property_id: propertyId,
+      title: d.title,
+      body: d.body || null,
+      category: d.category,
+      visibility: d.visibility,
+      source_type: 'manual_entry',
+      status: 'ready',
+      created_by: ctx.user.id,
+      ...(section ? { section } : {}),
+    };
     const { data: created, error } = await supabase
       .from('brain_items')
-      .insert({
-        property_id: propertyId,
-        title: d.title,
-        body: d.body || null,
-        category: d.category,
-        visibility: d.visibility,
-        source_type: 'manual_entry',
-        status: 'ready',
-        created_by: ctx.user.id,
-      })
+      .insert(insertPayload as never)
       .select('id')
       .single();
     if (error || !created) {

@@ -2,7 +2,7 @@
 
 // The unified Brain manager (§4, §7).
 //
-// Three changes from the version this replaces:
+// Design notes, oldest to newest:
 //   1. One taxonomy. Groups are canonical Brain sections resolved server-side, not raw
 //      `brain_category` values, so the heading a host reads here is the same string used
 //      by the Coverage Map, Import Knowledge, and AI routing.
@@ -11,8 +11,13 @@
 //      scrolled the host away from it and lost their place on save.
 //   3. Empty sections are listed, not rendered as ten empty cards. A host needs to know
 //      a section exists and is unfilled; they do not need ten collapsed placeholders.
+//   4. Graph navigation target (2026-08-28). The Coverage Map spins and its clicks
+//      dispatch `moche:brain-goto`; this component owns the target DOM, so it performs
+//      the work — expand the section if collapsed, open the add-knowledge form when the
+//      click came from a gap dot, flash the target card, and scroll it into view. An
+//      in-progress edit is never disturbed by a navigation click.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormState } from 'react-dom';
 import {
   Wifi, KeyRound, Banknote, Home, Car, Cpu, MapPin, ScrollText, LogOut, Siren, BookOpen,
@@ -21,6 +26,16 @@ import { saveBrainItemAction, deleteBrainItemAction, type BrainActionState } fro
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
 import { CollapseToggle, CollapsibleBody } from '@/components/dashboard/CollapsibleCard';
 import { useCollapsedCards } from '@/lib/dashboard/use-dashboard-ui-state';
+
+/** Event the Coverage Map dispatches when a hub or gap dot is activated. Exported so the
+    map and the manager can never drift on the event name. */
+export const BRAIN_GOTO_EVENT = 'moche:brain-goto';
+export interface BrainGotoDetail {
+  /** Canonical section id to navigate to. */
+  section: string;
+  /** True when the click came from a gap dot: open the add form, not just the section. */
+  openAdd: boolean;
+}
 
 export interface BrainManagerItem {
   id: string;
@@ -61,7 +76,6 @@ export function BrainManager({
   items,
   defaultSection,
   editItemId,
-  notice,
 }: {
   propertyId: string;
   canEdit: boolean;
@@ -69,14 +83,20 @@ export function BrainManager({
   items: BrainManagerItem[];
   defaultSection?: string;
   editItemId?: string;
-  /** Standing caveat about the section list itself, e.g. a pending migration. */
-  notice?: string;
 }) {
   const fallbackSection = defaultSection ?? sections[0]?.value ?? 'space_details';
   // Which row is expanded into an editor, or a section id when adding a new item there.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingIn, setAddingIn] = useState<string | null>(null);
+  // The section card currently flashing as a navigation target, if any.
+  const [flashSection, setFlashSection] = useState<string | null>(null);
   const { isCollapsed, toggle } = useCollapsedCards();
+  // The goto listener reads collapse state through a ref so it can subscribe once per
+  // property instead of re-subscribing on every collapse toggle.
+  const collapsedRef = useRef(isCollapsed);
+  useEffect(() => {
+    collapsedRef.current = isCollapsed;
+  });
 
   const startEdit = (id: string) => {
     setAddingIn(null);
@@ -100,6 +120,45 @@ export function BrainManager({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editItemId]);
+
+  // Graph navigation. The map dispatches; the manager owns the DOM, so it does the
+  // work: expand the target section, open the add form for gap-dot clicks, flash the
+  // card, then scroll. Deliberately does NOT touch editingId — a graph click must never
+  // silently discard an edit the host is halfway through.
+  useEffect(() => {
+    function onGoto(event: Event) {
+      const detail = (event as CustomEvent<BrainGotoDetail>).detail;
+      if (!detail?.section) return;
+      const { section, openAdd } = detail;
+      const key = `brain-${propertyId}-${section}`;
+      if (collapsedRef.current(key)) toggle(key);
+      if (openAdd && canEdit) {
+        setEditingId(null);
+        setAddingIn(section);
+      }
+      setFlashSection(section);
+      // After state flushes: the add form renders at the top (id brain-editor), a filled
+      // section has its own card, an empty one only exists as a chip in the N/A card.
+      window.setTimeout(() => {
+        const target = openAdd
+          ? document.getElementById('brain-editor') ??
+            document.getElementById(`brain-section-${section}`) ??
+            document.getElementById('brain-empty-sections')
+          : document.getElementById(`brain-section-${section}`) ??
+            document.getElementById('brain-empty-sections');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
+    }
+    window.addEventListener(BRAIN_GOTO_EVENT, onGoto);
+    return () => window.removeEventListener(BRAIN_GOTO_EVENT, onGoto);
+  }, [propertyId, canEdit, toggle]);
+
+  // Clear the flash after the pulse finishes (1.6s animation + margin).
+  useEffect(() => {
+    if (!flashSection) return;
+    const t = setTimeout(() => setFlashSection(null), 1800);
+    return () => clearTimeout(t);
+  }, [flashSection]);
 
   const { filled, empty } = useMemo(() => {
     const bySection = new Map<string, BrainManagerItem[]>();
@@ -125,11 +184,6 @@ export function BrainManager({
 
   return (
     <div>
-      {notice && (
-        <div className="alert alert-info" style={{ marginBottom: '1rem' }} data-testid="brain-section-notice">
-          {notice}
-        </div>
-      )}
       {canEdit && addingIn === null && (
         <button
           className="btn btn-primary"
@@ -167,7 +221,11 @@ export function BrainManager({
             const key = `brain-${propertyId}-${group.value}`;
             const collapsed = isCollapsed(key);
             return (
-              <section className="card brain-group" key={group.value}>
+              <section
+                className={`card brain-group${flashSection === group.value ? ' is-flashed' : ''}`}
+                id={`brain-section-${group.value}`}
+                key={group.value}
+              >
                 <div className="brain-group-head">
                   <div className="brain-group-heading">
                     <Icon size={16} aria-hidden style={{ color: 'var(--iris)' }} />
@@ -224,7 +282,11 @@ export function BrainManager({
           })}
 
           {empty.length > 0 && (
-            <section className="card brain-group brain-empty-sections" data-testid="brain-empty-sections">
+            <section
+              className="card brain-group brain-empty-sections"
+              id="brain-empty-sections"
+              data-testid="brain-empty-sections"
+            >
               <h3 className="brain-empty-heading">Nothing filed here yet</h3>
               <p className="faint brain-group-blurb">
                 Your concierge has no answers for these sections. Empty is fine when a section
