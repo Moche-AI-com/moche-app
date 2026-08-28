@@ -98,34 +98,28 @@ function timeAgo(iso: string): string {
 }
 
 // Icon-only share buttons (Email / Text / Print). Icons are sized identically
-// and the hit areas are equal, so the row reads as one consistent family; the
-// tooltip (title) and aria-label carry the meaning. `.btn` supplies the pill
-// (rounded) shape — an earlier version also hung `sr-print-link` on the print
-// button, whose 8px radius was written for a bare anchor on the list rows and
-// squared the button off. Layout belongs to the caller's container.
+// and the square hit areas are equal, so the row reads as one consistent
+// family; the tooltip (title) and aria-label carry the meaning.
 const ICON_BUTTON_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   minWidth: '2.1rem',
   minHeight: '2.1rem',
   padding: '.3rem',
 } as const;
 
-// One action cluster for a service request. Which controls show depends on
-// where it renders:
-//   - Service tab card (layout 'card'): "View report" opens the printable page
-//     (which is also where editing happens); Assign stays on the card; the
-//     share icons sit alongside.
-//   - Report page footer (layout 'page', the default): Edit report + Assign.
-//   - Report page header (layout 'header'): the Email / Text / Print icons,
-//     top-right of the report.
-// The compose dialog previews the exact starting message because it reuses the
-// same pure builder the API route defaults to (lib/service-requests/share-report.ts).
+// One action row for a service request: Edit report, Assign (teammate), then
+// the icon-only Email / Text / Print buttons. Rendered on the Service tab's
+// ticket card and at the foot of the printable report page. The compose dialog
+// previews the exact starting message because it reuses the same pure builder
+// the API route defaults to (lib/service-requests/share-report.ts).
 export function ReportActions({
   ticket,
   propertyName,
   contacts,
   members = [],
   canManage,
-  layout = 'page',
   printMode = 'link',
   onEdited,
   onAssigned,
@@ -135,7 +129,6 @@ export function ReportActions({
   contacts: ReportActionContact[];
   members?: ReportActionMember[];
   canManage: boolean;
-  layout?: 'card' | 'page' | 'header';
   /** 'link' opens the printable report in a new tab; 'native' calls window.print(). */
   printMode?: 'link' | 'native';
   onEdited?: (patch: ReportEditPatch) => void;
@@ -160,108 +153,69 @@ export function ReportActions({
     [ticket, propertyName, assignedContact],
   );
 
-  // Share icons (Email / Text / Print) render for 'card' and 'header'; the
-  // report page's own Print button is the window.print() variant.
-  const showShareIcons = layout !== 'page';
-  const shareIcons = showShareIcons ? (
-    <div style={{ display: 'inline-flex', gap: '.4rem', alignItems: 'center' }}>
-      {canManage && (
-        <>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            style={ICON_BUTTON_STYLE}
-            onClick={() => setOpen('email')}
-            disabled={!ready}
-            title={ready ? 'Email the share-safe report to someone' : 'Assign a contact with a phone or email first'}
-            aria-label={ready ? 'Email the share-safe report' : 'Email report — assign a contact with a phone or email first'}
-            data-testid="button-email-report"
-          >
-            <Mail size={14} aria-hidden />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            style={ICON_BUTTON_STYLE}
-            onClick={() => setOpen('sms')}
-            disabled={!ready}
-            title={ready ? 'Text the share-safe report to someone' : 'Assign a contact with a phone or email first'}
-            aria-label={ready ? 'Text the share-safe report' : 'Text report — assign a contact with a phone or email first'}
-            data-testid="button-text-report"
-          >
-            <Smartphone size={14} aria-hidden />
-          </button>
-        </>
-      )}
-      {printMode === 'link' ? (
-        <Link
-          href={`/dashboard/reports/service-request/${ticket.id}`}
-          target="_blank"
-          rel="noopener"
-          className="btn btn-ghost btn-sm"
-          style={ICON_BUTTON_STYLE}
-          title="Open the printable report"
-          aria-label="Open the printable report"
-          data-testid="service-request-print"
-        >
-          <Printer size={14} aria-hidden />
-        </Link>
-      ) : (
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          style={ICON_BUTTON_STYLE}
-          onClick={() => window.print()}
-          title="Print or save as PDF"
-          aria-label="Print or save as PDF"
-          data-testid="button-print-report"
-        >
-          <Printer size={14} aria-hidden />
-        </button>
-      )}
-    </div>
-  ) : null;
-
-  if (layout === 'header') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '.45rem', alignItems: 'flex-end' }} data-testid="report-actions">
-        {shareIcons}
-        {(open === 'email' || open === 'sms') && assignedContact && (
-          <ShareReportDialog
-            channel={open}
-            ticket={ticket}
-            input={shareInput}
-            contactName={assignedContact.name ?? assignedContact.label ?? 'the assigned contact'}
-            onClose={() => setOpen(null)}
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '.45rem' }} data-testid="report-actions">
       <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {layout === 'card' && (
-          <Link
-            href={`/dashboard/reports/service-request/${ticket.id}`}
-            className="btn btn-ghost btn-sm"
-            data-testid="button-view-report"
-          >
-            View report
-          </Link>
-        )}
-        {canManage && layout === 'page' && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('edit')} data-testid="button-edit-report">
-            <Pencil size={14} aria-hidden /> Edit report
-          </button>
-        )}
         {canManage && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('assign')} data-testid="button-assign-report">
-            <UserRoundPlus size={14} aria-hidden /> Assign
+          <>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('edit')} data-testid="button-edit-report">
+              <Pencil size={14} aria-hidden /> Edit report
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen('assign')} data-testid="button-assign-report">
+              <UserRoundPlus size={14} aria-hidden /> Assign
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={ICON_BUTTON_STYLE}
+              onClick={() => setOpen('email')}
+              disabled={!ready}
+              title={ready ? 'Email the share-safe report to someone' : 'Assign a contact with a phone or email first'}
+              aria-label={ready ? 'Email the share-safe report' : 'Email report — assign a contact with a phone or email first'}
+              data-testid="button-email-report"
+            >
+              <Mail size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={ICON_BUTTON_STYLE}
+              onClick={() => setOpen('sms')}
+              disabled={!ready}
+              title={ready ? 'Text the share-safe report to someone' : 'Assign a contact with a phone or email first'}
+              aria-label={ready ? 'Text the share-safe report' : 'Text report — assign a contact with a phone or email first'}
+              data-testid="button-text-report"
+            >
+              <Smartphone size={14} aria-hidden />
+            </button>
+          </>
+        )}
+        {printMode === 'link' ? (
+          <Link
+            href={`/dashboard/service-requests/${ticket.id}`}
+            target="_blank"
+            rel="noopener"
+            className="btn btn-ghost btn-sm sr-print-link"
+            style={ICON_BUTTON_STYLE}
+            title="Open the printable report"
+            aria-label="Open the printable report"
+            data-testid="service-request-print"
+          >
+            <Printer size={14} aria-hidden />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={ICON_BUTTON_STYLE}
+            onClick={() => window.print()}
+            title="Print or save as PDF"
+            aria-label="Print or save as PDF"
+            data-testid="button-print-report"
+          >
+            <Printer size={14} aria-hidden />
           </button>
         )}
-        {shareIcons}
       </div>
       {canManage && !ready && (
         <p className="faint" style={{ margin: 0, fontSize: '.78rem' }}>
@@ -269,7 +223,7 @@ export function ReportActions({
           reach the hosts through that contact, so a wrong number never exposes anything private.
         </p>
       )}
-      {open === 'edit' && layout === 'page' && (
+      {open === 'edit' && (
         <EditReportDialog
           ticket={ticket}
           onClose={() => setOpen(null)}

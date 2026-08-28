@@ -35,10 +35,11 @@ const columns: ReportGridColumn<ServiceReportRow>[] = [
     accessorKey: 'summary',
     filterFn: 'includesString',
     // First cell carries the per-row detail link (past-stays pattern): the full
-    // printable record for a contractor, an owner, or the host's own files.
+    // printable record for a contractor, an owner, or the host's own files. The
+    // report page lives under the Service tab, not the Reports section.
     cell: ({ row }) => (
       <Link
-        href={`/dashboard/reports/service-request/${row.original.id}`}
+        href={`/dashboard/service-requests/${row.original.id}`}
         className="rg-cell-link"
         style={{ color: 'var(--teal)', fontWeight: 600 }}
         data-testid={`service-report-link-${row.original.id}`}

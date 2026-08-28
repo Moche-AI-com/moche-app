@@ -35,6 +35,13 @@ describe('activeNavHref', () => {
     expect(activeNavHref('/dashboard/properties/abc/local', HREFS)).toBe('/dashboard/properties');
   });
 
+  it('keeps the printable Service Report under the Service tab', () => {
+    // The report page moved out of /dashboard/reports into the Service tab's
+    // own scope: its URL must light Service, never Reports.
+    expect(activeNavHref('/dashboard/service-requests/some-ticket-id', HREFS)).toBe('/dashboard/service-requests');
+    expect(isNavActive('/dashboard/service-requests/some-ticket-id', '/dashboard/reports', HREFS)).toBe(false);
+  });
+
   it('does not match a sibling with a shared prefix string', () => {
     expect(activeNavHref('/dashboard/properties-archive', HREFS)).toBeNull();
   });
@@ -56,7 +63,7 @@ describe('isNavActive', () => {
       '/dashboard/profile',
       '/dashboard/profile/billing',
       '/dashboard/profile/user-management',
-      '/dashboard/reports/service-request/xyz',
+      '/dashboard/service-requests/abc123',
     ];
     for (const p of paths) {
       expect(HREFS.filter((h) => isNavActive(p, h, HREFS))).toHaveLength(1);
