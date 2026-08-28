@@ -4,12 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { Constants } from '../lib/database.types';
 import {
   CATEGORY_FOR_KIND,
+  EMAIL_FANOUT_KINDS,
   NOTIFICATION_CATEGORIES,
+  SMS_FANOUT_KINDS,
+  categorySupportsChannel,
   hiddenKindsForPrefs,
 } from '../lib/notifications/categories';
 
 const migration = readFileSync(
   resolve(process.cwd(), 'supabase', 'migrations', '20260828120000_notification_preferences.sql'),
+  'utf8',
+);
+const matrixMigration = readFileSync(
+  resolve(process.cwd(), 'supabase', 'migrations', '20260828133000_notification_channel_matrix.sql'),
   'utf8',
 );
 const bellSource = readFileSync(resolve(process.cwd(), 'components', 'dashboard', 'NotificationBell.tsx'), 'utf8');
@@ -19,6 +26,7 @@ const prefActionsSource = readFileSync(
   'utf8',
 );
 const notifySource = readFileSync(resolve(process.cwd(), 'lib', 'notify.ts'), 'utf8');
+const typesSource = readFileSync(resolve(process.cwd(), 'lib', 'database.types.ts'), 'utf8');
 
 describe('notification category registry', () => {
   it('maps every notification_kind enum value to exactly one category', () => {
@@ -78,6 +86,41 @@ describe('notification preferences migration access boundaries', () => {
   });
 });
 
+describe('notification channel matrix', () => {
+  it('adds email and text columns with behavior-preserving defaults', () => {
+    expect(matrixMigration).toContain('email_enabled boolean not null default true');
+    expect(matrixMigration).toContain('sms_enabled boolean not null default false');
+  });
+
+  it('reuses the existing row-level policies instead of opening new paths', () => {
+    expect(matrixMigration).not.toContain('create policy');
+    expect(matrixMigration).not.toMatch(/grant[\s\S]{0,120}anon/i);
+  });
+
+  it('types the channel columns on notification_preferences', () => {
+    expect(typesSource).toContain('email_enabled');
+    expect(typesSource).toContain('sms_enabled');
+  });
+
+  it('only offers channels a category can physically send on', () => {
+    expect(categorySupportsChannel('escalations', 'email')).toBe(true);
+    expect(categorySupportsChannel('escalations', 'sms')).toBe(true);
+    expect(categorySupportsChannel('service', 'sms')).toBe(true);
+    expect(categorySupportsChannel('extras', 'email')).toBe(true);
+    expect(categorySupportsChannel('extras', 'sms')).toBe(false);
+    expect(categorySupportsChannel('review_nudges', 'email')).toBe(false);
+    expect(categorySupportsChannel('host_messages', 'email')).toBe(true);
+    expect(categorySupportsChannel('host_messages', 'sms')).toBe(false);
+  });
+
+  it('keeps the fan-out kind sets in their documented shape', () => {
+    expect([...EMAIL_FANOUT_KINDS].sort()).toEqual(
+      ['billing', 'escalation', 'extras', 'host_message', 'maintenance', 'system'].sort(),
+    );
+    expect([...SMS_FANOUT_KINDS].sort()).toEqual(['escalation', 'maintenance'].sort());
+  });
+});
+
 describe('notification UX surfaces', () => {
   it('gives every linked bell item an explicit View notification anchor', () => {
     expect(bellSource).toContain('View notification');
@@ -95,7 +138,13 @@ describe('notification UX surfaces', () => {
     expect(prefActionsSource).toContain('cannot be turned off');
   });
 
-  it('gates notify() fan-out on stored preferences and fails open', () => {
+  it('validates channel + category pairs in the server action', () => {
+    expect(prefActionsSource).toContain('categorySupportsChannel');
+    expect(prefActionsSource).toContain('sms_enabled');
+  });
+
+  it('fans out per member inside notify(), gated per recipient and failing open', () => {
+    expect(notifySource).toContain('loadRecipientContacts');
     expect(notifySource).toContain('notify_fanout_muted');
     expect(notifySource).toContain('notify_pref_read_failed');
   });

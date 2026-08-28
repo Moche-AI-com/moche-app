@@ -2413,28 +2413,34 @@ export type Database = {
         Row: {
           category: string
           created_at: string
+          email_enabled: boolean
           enabled: boolean
           host_account_id: string
           id: string
           profile_id: string
+          sms_enabled: boolean
           updated_at: string
         }
         Insert: {
           category: string
           created_at?: string
+          email_enabled?: boolean
           enabled?: boolean
           host_account_id: string
           id?: string
           profile_id: string
+          sms_enabled?: boolean
           updated_at?: string
         }
         Update: {
           category?: string
           created_at?: string
+          email_enabled?: boolean
           enabled?: boolean
           host_account_id?: string
           id?: string
           profile_id?: string
+          sms_enabled?: boolean
           updated_at?: string
         }
         Relationships: [
