@@ -51,8 +51,22 @@ describe('buildBreadcrumbs', () => {
   it('falls back per parent segment for other id routes', () => {
     expect(buildBreadcrumbs(`/dashboard/escalations/${OTHER}`).map((c) => c.label))
       .toEqual(['Home', 'Escalations', 'Escalation']);
-    expect(buildBreadcrumbs(`/dashboard/reports/service-request/${OTHER}`).map((c) => c.label))
-      .toEqual(['Home', 'Reports', 'Service report', 'Report']);
+    expect(buildBreadcrumbs(`/dashboard/service-requests/${OTHER}`).map((c) => c.label))
+      .toEqual(['Home', 'Service requests', 'Report']);
+  });
+
+  it('routes the Service report trail to the Service tab, never Reports', () => {
+    // Regression: the printable Service Report used to live at
+    // /dashboard/reports/service-request/[id], so its trail read
+    // Home › Reports › Service report › Report and the Reports tab lit up.
+    // The page now lives in the Service tab's own scope.
+    const crumbs = buildBreadcrumbs(`/dashboard/service-requests/${OTHER}`);
+    expect(crumbs).toEqual([
+      { label: 'Home', href: '/dashboard' },
+      { label: 'Service requests', href: '/dashboard/service-requests' },
+      { label: 'Report', href: null },
+    ]);
+    expect(crumbs.some((c) => c.href?.startsWith('/dashboard/reports'))).toBe(false);
   });
 
   it('uses the Enhancements label, never the word upsell', () => {
