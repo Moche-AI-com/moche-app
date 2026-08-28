@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { CheckCheck, ArrowRight } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { hiddenKindsForPrefs, labelForKind } from '@/lib/notifications/categories';
+import { hiddenKindsForPrefs, isMutedForProperty, labelForKind } from '@/lib/notifications/categories';
 import { markAllNotificationsReadFormAction } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -31,10 +31,10 @@ function timeAgo(iso: string): string {
 export default async function NotificationsPage() {
   const ctx = await requireSession();
   const supabase = createClient();
-  const [{ data: items }, { data: prefRows, error: prefError }] = await Promise.all([
+  const [{ data: items }, { data: prefRows, error: prefError }, { data: muteRows, error: muteError }] = await Promise.all([
     supabase
       .from('notifications')
-      .select('id, kind, title, body, link, read_at, created_at')
+      .select('id, kind, title, body, link, read_at, created_at, property_id')
       .eq('host_account_id', ctx.account.id)
       .order('created_at', { ascending: false })
       .limit(100),
@@ -45,14 +45,20 @@ export default async function NotificationsPage() {
       .from('notification_preferences')
       .select('category, enabled')
       .eq('profile_id', ctx.user.id),
+    // This member's per-property mutes. Same fail-open rule.
+    supabase
+      .from('notification_property_mutes')
+      .select('property_id, category')
+      .eq('profile_id', ctx.user.id),
   ]);
 
-  // Unsubscribed categories hide for this viewer only; the account's rows stay
-  // intact. A note under the list says how many were hidden and where to
-  // re-enable them, so a filtered item never just vanishes.
+  // Unsubscribed categories and per-property mutes hide for this viewer only;
+  // the account's rows stay intact. A note under the list says how many were
+  // hidden and where to re-enable them, so a filtered item never just vanishes.
   const hiddenKinds = hiddenKindsForPrefs(prefError ? null : prefRows ?? []);
+  const mutes = muteError ? null : muteRows ?? [];
   const all = items ?? [];
-  const list = all.filter((n) => !hiddenKinds.has(n.kind));
+  const list = all.filter((n) => !hiddenKinds.has(n.kind) && !isMutedForProperty(mutes, n.kind, n.property_id));
   const hiddenCount = all.length - list.length;
   const unreadCount = list.filter((n) => !n.read_at).length;
 

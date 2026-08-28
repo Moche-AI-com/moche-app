@@ -4,11 +4,13 @@ import { describe, expect, it } from 'vitest';
 import { Constants } from '../lib/database.types';
 import {
   CATEGORY_FOR_KIND,
+  DIGEST_ELIGIBLE_CATEGORIES,
   EMAIL_FANOUT_KINDS,
   NOTIFICATION_CATEGORIES,
   SMS_FANOUT_KINDS,
   categorySupportsChannel,
   hiddenKindsForPrefs,
+  isMutedForProperty,
 } from '../lib/notifications/categories';
 
 const migration = readFileSync(
@@ -19,6 +21,10 @@ const matrixMigration = readFileSync(
   resolve(process.cwd(), 'supabase', 'migrations', '20260828133000_notification_channel_matrix.sql'),
   'utf8',
 );
+const mutesDigestMigration = readFileSync(
+  resolve(process.cwd(), 'supabase', 'migrations', '20260828150000_notification_mutes_digest.sql'),
+  'utf8',
+);
 const bellSource = readFileSync(resolve(process.cwd(), 'components', 'dashboard', 'NotificationBell.tsx'), 'utf8');
 const historySource = readFileSync(resolve(process.cwd(), 'app', 'dashboard', 'notifications', 'page.tsx'), 'utf8');
 const prefActionsSource = readFileSync(
@@ -26,6 +32,8 @@ const prefActionsSource = readFileSync(
   'utf8',
 );
 const notifySource = readFileSync(resolve(process.cwd(), 'lib', 'notify.ts'), 'utf8');
+const layoutSource = readFileSync(resolve(process.cwd(), 'app', 'dashboard', 'layout.tsx'), 'utf8');
+const digestTaskSource = readFileSync(resolve(process.cwd(), 'trigger', 'notification-digest.ts'), 'utf8');
 const typesSource = readFileSync(resolve(process.cwd(), 'lib', 'database.types.ts'), 'utf8');
 
 describe('notification category registry', () => {
@@ -118,6 +126,70 @@ describe('notification channel matrix', () => {
       ['billing', 'escalation', 'extras', 'host_message', 'maintenance', 'system'].sort(),
     );
     expect([...SMS_FANOUT_KINDS].sort()).toEqual(['escalation', 'maintenance'].sort());
+  });
+});
+
+describe('per-property mutes + digest migration boundaries', () => {
+  it('scopes mutes to the owning member with membership- and property-checked inserts', () => {
+    expect(mutesDigestMigration).toContain('alter table public.notification_property_mutes enable row level security');
+    expect(mutesDigestMigration).toContain('profile_id = auth.uid()');
+    expect(mutesDigestMigration).toContain('public.is_account_member(host_account_id)');
+    expect(mutesDigestMigration).toContain('p.host_account_id = notification_property_mutes.host_account_id');
+  });
+
+  it('mutes are added and removed, never updated', () => {
+    expect(mutesDigestMigration).not.toMatch(/notification_property_mutes[\s\S]{0,400}for update/i);
+  });
+
+  it('keeps the digest queue service-written and member-readable', () => {
+    expect(mutesDigestMigration).toContain('alter table public.notification_digest_queue enable row level security');
+    expect(mutesDigestMigration).toContain('create policy notif_digest_select');
+    expect(mutesDigestMigration).not.toMatch(/create policy notif_digest_(insert|update|delete)/i);
+  });
+
+  it('adds the profile-level digest switch', () => {
+    expect(mutesDigestMigration).toContain('email_digest_enabled boolean not null default false');
+  });
+});
+
+describe('digest + mutes wiring', () => {
+  it('keeps urgent and always-on paths out of the digest', () => {
+    for (const key of ['host_messages', 'escalations', 'service', 'billing', 'system'] as const) {
+      expect(DIGEST_ELIGIBLE_CATEGORIES.has(key)).toBe(false);
+    }
+    expect([...DIGEST_ELIGIBLE_CATEGORIES].sort()).toEqual(['extras', 'property_brain', 'review_nudges'].sort());
+  });
+
+  it('mutes only match their own property, and never always-on or account-level kinds', () => {
+    const mutes = [{ property_id: 'p1', category: 'extras' }];
+    expect(isMutedForProperty(mutes, 'extras', 'p1')).toBe(true);
+    expect(isMutedForProperty(mutes, 'extras', 'p2')).toBe(false);
+    expect(isMutedForProperty(mutes, 'host_message', 'p1')).toBe(false);
+    expect(isMutedForProperty(null, 'extras', 'p1')).toBe(false);
+  });
+
+  it('gates fan-out on property mutes and queues digests inside notify()', () => {
+    expect(notifySource).toContain('isPropertyMuted');
+    expect(notifySource).toContain('notification_digest_queue');
+    expect(notifySource).toContain('notify_digest_queue_failed');
+  });
+
+  it('filters muted property rows out of the bell feed at read time', () => {
+    expect(layoutSource).toContain('isMutedForProperty');
+    expect(layoutSource).toContain('notification_property_mutes');
+  });
+
+  it('schedules a morning-per-timezone digest with a testable runner', () => {
+    expect(digestTaskSource).toContain('schedules.task');
+    expect(digestTaskSource).toContain('notification-digest');
+    expect(digestTaskSource).toContain('runNotificationDigest');
+    expect(digestTaskSource).toContain('senderFor("digest")');
+  });
+
+  it('exposes the new tables and the digest column in database types', () => {
+    expect(typesSource).toContain('notification_property_mutes');
+    expect(typesSource).toContain('notification_digest_queue');
+    expect(typesSource).toContain('email_digest_enabled');
   });
 });
 
