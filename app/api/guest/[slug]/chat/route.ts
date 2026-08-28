@@ -72,15 +72,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .eq('property_id', session.propertyId)
     .maybeSingle();
 
-  // Get-or-create the conversation for this stay.
+  // Per-guest concierge thread (party access redesign 2026-08-28). The
+  // conversation is scoped to THIS session — stay + channel=ai_concierge +
+  // guest_session_id — so every member of the party gets a private Q&A history
+  // on their own device and the host sees named per-guest threads. Legacy
+  // stay-wide conversations (guest_session_id NULL) never match and are left
+  // untouched for reporting.
+  const { data: sessionRow } = await (admin as any)
+    .from('guest_access_sessions')
+    .select('guest_identity_id')
+    .eq('id', session.sessionId)
+    .maybeSingle();
+  const guestIdentityId = (sessionRow?.guest_identity_id as string | null | undefined) ?? null;
+
   let conversationId: string;
-  const { data: existing } = await admin
-    .from('conversations').select('id').eq('stay_id', session.stayId).eq('property_id', session.propertyId).maybeSingle();
+  const { data: existing } = await (admin as any)
+    .from('conversations')
+    .select('id')
+    .eq('stay_id', session.stayId)
+    .eq('property_id', session.propertyId)
+    .eq('channel', 'ai_concierge')
+    .eq('guest_session_id', session.sessionId)
+    .maybeSingle();
   if (existing) {
-    conversationId = existing.id;
+    conversationId = (existing as { id: string }).id;
   } else {
-    const { data: conv, error } = await admin.from('conversations')
-      .insert({ property_id: session.propertyId, stay_id: session.stayId } as never)
+    const now = new Date().toISOString();
+    const { data: conv, error } = await (admin as any).from('conversations')
+      .insert({
+        property_id: session.propertyId,
+        stay_id: session.stayId,
+        channel: 'ai_concierge',
+        guest_session_id: session.sessionId,
+        guest_identity_id: guestIdentityId,
+        title: `Concierge — ${session.guestDisplayName}`,
+        last_message_at: now,
+      })
       .select('id').single();
     if (error || !conv) return NextResponse.json({ error: 'Could not start the conversation.' }, { status: 500 });
     conversationId = (conv as { id: string }).id;
@@ -172,6 +199,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       conversation_id: conversationId,
       question: translated.text,
       status: 'open',
+      guest_session_id: session.sessionId,
+      guest_identity_id: guestIdentityId,
     } as never).select('id').single();
     const escId = (esc as { id: string } | null)?.id;
 
