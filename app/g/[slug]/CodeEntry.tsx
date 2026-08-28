@@ -14,11 +14,15 @@ const CODE_LENGTH = 4;
 // the code only ever proves you're WITH the party, never WHO you are. Legacy
 // per-guest PINs minted before the merge still verify through the guest-code
 // endpoint first, then the legacy stay-link endpoint.
+//
+// Demo mode (host preview sign-in walkthrough): any code advances, nothing is
+// verified against the server and nothing is saved.
 export function CodeEntry(props: {
   slug: string;
   accessToken: string | null;
   propertyName: string;
   t: PortalT;
+  demo?: boolean;
   onVerified: (registered: boolean, guestName: string | null) => void;
 }) {
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
@@ -55,6 +59,12 @@ export function CodeEntry(props: {
     setBusy(true);
     setError(null);
     try {
+      // Demo mode: the UX of a successful verify with zero network traffic.
+      if (props.demo) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        props.onVerified(false, null);
+        return;
+      }
       const res = await fetch(`/api/guest/${props.slug}/auth/guest-code`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -122,7 +132,7 @@ export function CodeEntry(props: {
           />
         ))}
       </div>
-      <p className="gp-code-hint">{t('codeHint')}</p>
+      <p className="gp-code-hint">{props.demo ? t('demoSigninHint') : t('codeHint')}</p>
 
       {error && <div className="gp-error" role="alert">{error}</div>}
       <button

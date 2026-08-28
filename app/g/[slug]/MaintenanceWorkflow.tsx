@@ -23,15 +23,23 @@ type SrListRow = {
 // in-progress report, a busy latch on submit, and server-side de-dupe.
 // The interview chat shares the portal's bubble animation + pill composer, so
 // it feels like the same conversation surface as Ask and Host Chat.
+//
+// Host preview: the same interview engine runs server-side against a transcript
+// the browser holds — no service_requests row, no host notification. Completion
+// shows a clearly-marked PRV- reference instead of a real one.
 export function MaintenanceWorkflow(props: {
   slug: string;
+  propertyId?: string;
+  hostPreview?: boolean;
   t: PortalT;
   onBack: () => void;
   onSessionExpired: () => void;
 }) {
   const { t } = props;
+  const hostPreview = props.hostPreview === true;
   const [phase, setPhase] = useState<Phase>('idle');
   const [ticketId, setTicketId] = useState<string | null>(null);
+  const [serverRef, setServerRef] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [choices, setChoices] = useState<string[]>([]);
   const [input, setInput] = useState('');
@@ -43,8 +51,13 @@ export function MaintenanceWorkflow(props: {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // On entry, look for an in-progress report so a guest who left mid-interview
-  // resumes it instead of creating a duplicate.
+  // resumes it instead of creating a duplicate. Host preview never resumes —
+  // there is no server-side report to resume.
   useEffect(() => {
+    if (hostPreview) {
+      setChecked(true);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -76,9 +89,11 @@ export function MaintenanceWorkflow(props: {
     question?: string;
     choices?: string[] | null;
     guestMessage?: string;
+    reference?: string;
     report?: { summary?: string };
   }) => {
     if (json.id) setTicketId(json.id);
+    if (typeof json.reference === 'string') setServerRef(json.reference);
     if (json.status === 'safety_escalated') {
       setTurns((current) => [...current, { role: 'assistant', text: json.guestMessage ?? t('mSafetySub') }]);
       setSummary(null);
@@ -105,15 +120,26 @@ export function MaintenanceWorkflow(props: {
     setChoices([]);
     setTurns((current) => [...current, { role: 'guest', text: trimmed }]);
     try {
-      const url = ticketId
-        ? `/api/guest/${props.slug}/service-request/${ticketId}/message`
-        : `/api/guest/${props.slug}/service-request/start`;
+      const url = hostPreview
+        ? `/api/host/properties/${props.propertyId}/preview-service-request`
+        : ticketId
+          ? `/api/guest/${props.slug}/service-request/${ticketId}/message`
+          : `/api/guest/${props.slug}/service-request/start`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify(
+          hostPreview
+            ? {
+                message: trimmed,
+                // The sandbox holds no ticket row; resend the prior turns so the
+                // real interview engine sees the same context it would in production.
+                transcript: turns.map((turn) => ({ role: turn.role, text: turn.text })),
+              }
+            : { message: trimmed },
+        ),
       });
-      if (res.status === 401) { props.onSessionExpired(); return; }
+      if (res.status === 401 && !hostPreview) { props.onSessionExpired(); return; }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'sr_failed');
       handleTurn(json);
@@ -122,7 +148,7 @@ export function MaintenanceWorkflow(props: {
     } finally {
       setBusy(false);
     }
-  }, [busy, ticketId, props, handleTurn, t]);
+  }, [busy, ticketId, turns, hostPreview, props, handleTurn, t]);
 
   function resume() {
     if (!resumable) return;
@@ -139,13 +165,16 @@ export function MaintenanceWorkflow(props: {
   function reset() {
     setPhase('idle');
     setTicketId(null);
+    setServerRef(null);
     setTurns([]);
     setChoices([]);
     setSummary(null);
     setResumable(null);
   }
 
-  const reference = ticketId ? `SR-${ticketId.replace(/-/g, '').slice(0, 8).toUpperCase()}` : null;
+  const reference = hostPreview
+    ? (serverRef ?? 'PRV-PREVIEW')
+    : ticketId ? `SR-${ticketId.replace(/-/g, '').slice(0, 8).toUpperCase()}` : null;
 
   return (
     <section aria-label={t('mTitle')} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>

@@ -27,6 +27,11 @@ const LANG_STORAGE_KEY = 'gp-lang';
 // their own concierge thread, host-chat thread, and extras identity. Returning
 // to the portal on the SAME browser skips both steps via the session cookie.
 //
+// Host preview (2026-08-28): a host of this property sees the portal exactly as
+// a guest would, with every workflow live but sandboxed server-side (nothing is
+// saved or sent). A demo mode also walks the sign-in steps (code → register)
+// with zero network calls, so the entry flow is testable too.
+//
 // Theme: dark luxury is the default; guests can switch to a light theme from
 // the header. The choice persists on the device (localStorage) and every color
 // flows through the semantic variables in portalStyles.ts, so text stays
@@ -63,6 +68,8 @@ export function GuestPortal(props: {
     return 'register';
   });
   const [guestName, setGuestName] = useState<string | null>(props.guestName);
+  // Sign-in demo (host preview only): walk code → register with no network calls.
+  const [demoSignIn, setDemoSignIn] = useState(false);
   const { theme, toggleTheme } = usePortalTheme();
   const [language, setLanguageState] = useState<string | null>(props.initialLanguage);
 
@@ -101,6 +108,14 @@ export function GuestPortal(props: {
   const goMenu = useCallback(() => setStep('menu'), []);
   const goCode = useCallback(() => setStep('code'), []);
   const openHostChat = useCallback(() => setStep('host'), []);
+  const startSignInDemo = useCallback(() => {
+    setDemoSignIn(true);
+    setStep('code');
+  }, []);
+  const exitSignInDemo = useCallback(() => {
+    setDemoSignIn(false);
+    setStep('menu');
+  }, []);
 
   const brandVars = {
     '--gp-primary': props.brandPrimary ?? '#33E6D4',
@@ -152,6 +167,7 @@ export function GuestPortal(props: {
                 accessToken={props.accessToken}
                 propertyName={props.propertyName}
                 t={t}
+                demo={demoSignIn}
                 onVerified={(registered, name) => {
                   if (name) setGuestName(name);
                   setStep(registered ? 'menu' : 'register');
@@ -164,12 +180,22 @@ export function GuestPortal(props: {
                 slug={props.slug}
                 propertyName={props.propertyName}
                 t={t}
+                demo={demoSignIn}
                 onRegistered={(name) => {
                   setGuestName(name);
+                  setDemoSignIn(false);
                   setStep('menu');
                 }}
                 onSessionExpired={goCode}
               />
+            )}
+
+            {demoSignIn && (step === 'code' || step === 'register') && (
+              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <button type="button" className="gp-msg-link" onClick={exitSignInDemo} data-testid="button-exit-signin-demo">
+                  {t('demoBackToPreview')}
+                </button>
+              </div>
             )}
 
             {step === 'menu' && (
@@ -179,6 +205,7 @@ export function GuestPortal(props: {
                 hostPreview={props.hostPreview}
                 t={t}
                 onSelect={(key) => setStep(key)}
+                onPreviewSignIn={startSignInDemo}
               />
             )}
 
@@ -198,6 +225,8 @@ export function GuestPortal(props: {
             {step === 'host' && (
               <HostChatWorkflow
                 slug={props.slug}
+                propertyId={props.propertyId}
+                hostPreview={props.hostPreview}
                 guestName={guestName}
                 language={language}
                 t={t}
@@ -207,12 +236,21 @@ export function GuestPortal(props: {
             )}
 
             {step === 'maintenance' && (
-              <MaintenanceWorkflow slug={props.slug} t={t} onBack={goMenu} onSessionExpired={goCode} />
+              <MaintenanceWorkflow
+                slug={props.slug}
+                propertyId={props.propertyId}
+                hostPreview={props.hostPreview}
+                t={t}
+                onBack={goMenu}
+                onSessionExpired={goCode}
+              />
             )}
 
             {step === 'extras' && (
               <ExtrasWorkflow
                 slug={props.slug}
+                propertyId={props.propertyId}
+                hostPreview={props.hostPreview}
                 offers={props.extrasOffers}
                 guestName={guestName}
                 t={t}
