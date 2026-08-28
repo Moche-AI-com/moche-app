@@ -49,7 +49,7 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
     key: 'notifications',
     label: 'Notifications',
     href: `${BASE}/notifications`,
-    summary: 'Which channels can reach you, and where your history lives.',
+    summary: 'The notification paths that can reach you, channel status, and history.',
     ownerOnly: false,
   },
   {

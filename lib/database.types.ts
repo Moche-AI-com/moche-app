@@ -1306,17 +1306,17 @@ export type Database = {
           interview_prompt: string
           label: string
           on_failure_field?: string | null
-          phase: string[]
-          registry_version: number
+          phase?: string[]
+          registry_version?: number
           requires_on_failure?: boolean
           scrape_hint?: string | null
-          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
-          storage_column: string
-          storage_table: string
+          sensitivity_tier?: Database["public"]["Enums"]["sensitivity_tier"]
+          storage_column?: string
+          storage_table?: string
           storage_vault?: boolean
           system_section?: boolean
           ttl_days?: number | null
-          type: string
+          type?: string
         }
         Update: {
           applicability?: string
@@ -1473,7 +1473,7 @@ export type Database = {
           property_id: string
           registered_at?: string | null
           revoked_at?: string | null
-          session_token_hash: string
+          session_token_hash?: string
           status?: Database["public"]["Enums"]["access_status"]
           stay_guest_id?: string | null
           stay_id: string
@@ -2405,6 +2405,51 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          category: string
+          created_at: string
+          enabled: boolean
+          host_account_id: string
+          id: string
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          enabled?: boolean
+          host_account_id: string
+          id?: string
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          enabled?: boolean
+          host_account_id?: string
+          id?: string
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_host_account_id_fkey"
+            columns: ["host_account_id"]
+            isOneToOne: false
+            referencedRelation: "host_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4364,6 +4409,7 @@ export type Database = {
         | "review_nudge"
         | "system"
         | "extras"
+        | "host_message"
       place_recommendation_status: "suggested" | "approved" | "hidden"
       processing_status: "pending" | "processing" | "ready" | "failed" | "stale"
       property_import_job_status:
@@ -4456,7 +4502,7 @@ export type TablesInsert<
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"])
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
@@ -4481,7 +4527,7 @@ export type TablesUpdate<
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"])
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
@@ -4523,7 +4569,7 @@ export type CompositeTypes<
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof (DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"])
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
@@ -4653,6 +4699,7 @@ export const Constants = {
         "review_nudge",
         "system",
         "extras",
+        "host_message",
       ],
       place_recommendation_status: ["suggested", "approved", "hidden"],
       processing_status: ["pending", "processing", "ready", "failed", "stale"],

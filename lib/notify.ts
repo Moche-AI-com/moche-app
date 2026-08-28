@@ -5,6 +5,7 @@ import { log } from '@/lib/log';
 import { resolveTwilioAuth, serverEnv, publicEnv } from '@/lib/env';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { TRANSACTIONAL_SENDER } from '@/lib/mail/senders';
+import { CATEGORY_FOR_KIND, NOTIFICATION_CATEGORIES } from '@/lib/notifications/categories';
 
 type Client = SupabaseClient<Database>;
 type NotificationKind = Database['public']['Enums']['notification_kind'];
@@ -26,7 +27,9 @@ interface NotifyParams {
 // 'system' added for WS-1 visit-code lockout alerts (repeated failed attempts).
 // 'extras' added for guest enhancement requests — a paid-work signal the host
 // should never miss because it sat silently in a queue.
-const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance', 'billing', 'system', 'extras']);
+// 'host_message' added with the Host Chat kind split: guest messages previously
+// rode 'system', which emails — they keep that reachability on their own kind.
+const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance', 'billing', 'system', 'extras', 'host_message']);
 // Host notification kinds that MAY fan out to SMS (subject to all gates below).
 const SMS_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance']);
 
@@ -126,21 +129,22 @@ export async function sendInternalEmail(subject: string, text: string): Promise<
 async function loadOwnerContact(
   client: Client,
   hostAccountId: string
-): Promise<{ email: string | null; phone: string | null; smsOptIn: boolean; phoneVerifiedAt: string | null } | null> {
+): Promise<{ ownerId: string; email: string | null; phone: string | null; smsOptIn: boolean; phoneVerifiedAt: string | null } | null> {
   const { data: account } = await client
     .from('host_accounts')
     .select('owner_id')
     .eq('id', hostAccountId)
     .maybeSingle();
   if (!account) return null;
+  const ownerId = (account as { owner_id: string }).owner_id;
   const { data: profile } = await client
     .from('profiles')
     .select('email, phone, sms_opt_in, phone_verified_at')
-    .eq('id', (account as { owner_id: string }).owner_id)
+    .eq('id', ownerId)
     .maybeSingle();
   if (!profile) return null;
   const row = profile as { email: string | null; phone: string | null; sms_opt_in: boolean; phone_verified_at: string | null };
-  return { email: row.email, phone: row.phone, smsOptIn: !!row.sms_opt_in, phoneVerifiedAt: row.phone_verified_at };
+  return { ownerId, email: row.email, phone: row.phone, smsOptIn: !!row.sms_opt_in, phoneVerifiedAt: row.phone_verified_at };
 }
 
 // Creates the durable in-app notification row and fans out to email (now) and host SMS
@@ -156,7 +160,10 @@ async function loadOwnerContact(
 //      profiles.phone_verified_at / sms_opt_in are added by supabase-migrations-FEATURE4.sql
 //      and captured through the verified-phone flow in dashboard/profile/security-actions.ts.
 export async function notify(client: Client, p: NotifyParams): Promise<void> {
-  // 1. Durable in-app row (source of truth).
+  // 1. Durable in-app row (source of truth). Always written, even for a
+  //    category the recipient has muted: the bell and history filter at READ
+  //    time, so the account keeps a complete record and a muted member can
+  //    still find the event.
   try {
     await client.from('notifications').insert({
       host_account_id: p.hostAccountId,
@@ -179,7 +186,33 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
   const contact = await loadOwnerContact(client, p.hostAccountId);
   if (!contact) return;
 
-  // 2. Email fan-out (all host notification kinds).
+  // 2. Preference gate (Profile → Notifications). Unsubscribing mutes the
+  //    email/SMS fan-out for that category. Always-on paths (host messages,
+  //    billing, system/security) never reach this check. Any read failure
+  //    fails OPEN — a preferences lookup problem must never silently swallow
+  //    a notification.
+  const category = NOTIFICATION_CATEGORIES.find((c) => c.key === CATEGORY_FOR_KIND[p.kind]);
+  if (category && !category.alwaysOn) {
+    try {
+      const recipientId = p.recipientProfileId ?? contact.ownerId;
+      const { data: pref, error: prefError } = await client
+        .from('notification_preferences')
+        .select('enabled')
+        .eq('profile_id', recipientId)
+        .eq('category', category.key)
+        .maybeSingle();
+      if (prefError) {
+        log.warn('notify_pref_read_failed', { kind: p.kind });
+      } else if (pref && !pref.enabled) {
+        log.info('notify_fanout_muted', { kind: p.kind });
+        return;
+      }
+    } catch {
+      // fail open — see the note above
+    }
+  }
+
+  // 3. Email fan-out (all host notification kinds in EMAIL_KINDS).
   if (wantsEmail && contact.email) {
     const url = p.link ? `${publicEnv.appUrl}${p.link}` : '';
     const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
@@ -187,7 +220,7 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
     await sendHostEmail(contact.email, `Moche-AI: ${p.title}`, text);
   }
 
-  // 3. Host SMS fan-out (escalation + maintenance only, all gates must pass).
+  // 4. Host SMS fan-out (escalation + maintenance only, all gates must pass).
   //    Consent-gated per TCPA: the owner must have a VERIFIED phone AND an active
   //    sms_opt_in. This resolves notify()'s historical TODO(consent).
   if (wantsSmsKind && serverEnv.notifySmsEnabled && contact.phone && contact.smsOptIn && contact.phoneVerifiedAt) {
@@ -340,7 +373,7 @@ export async function notifyGuestOtp(p: { contact: string; code: string; devFall
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: body.toString(),
-      }
+      },
     );
 
     if (!res.ok) {

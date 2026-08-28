@@ -1,15 +1,21 @@
 import Link from 'next/link';
-import { CheckCheck } from 'lucide-react';
+import { CheckCheck, ArrowRight } from 'lucide-react';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
+import { hiddenKindsForPrefs, labelForKind } from '@/lib/notifications/categories';
 import { markAllNotificationsReadFormAction } from './actions';
 
 export const dynamic = 'force-dynamic';
 
+// Badge tone per kind where "needs action soon" should stand out; kinds absent
+// here render the neutral badge. The badge text itself comes from the category
+// registry, so it never shows raw enum text like "ingestion_failure".
 const KIND_BADGE: Record<string, string> = {
   escalation: 'badge-coral',
-  service_request: 'badge-coral',
-  system: '',
+  host_message: 'badge-teal',
+  maintenance: 'badge-coral',
+  extras: 'badge-teal',
+  ingestion_failure: 'badge-coral',
 };
 
 function timeAgo(iso: string): string {
@@ -25,14 +31,29 @@ function timeAgo(iso: string): string {
 export default async function NotificationsPage() {
   const ctx = await requireSession();
   const supabase = createClient();
-  const { data: items } = await supabase
-    .from('notifications')
-    .select('id, kind, title, body, link, read_at, created_at')
-    .eq('host_account_id', ctx.account.id)
-    .order('created_at', { ascending: false })
-    .limit(100);
+  const [{ data: items }, { data: prefRows, error: prefError }] = await Promise.all([
+    supabase
+      .from('notifications')
+      .select('id, kind, title, body, link, read_at, created_at')
+      .eq('host_account_id', ctx.account.id)
+      .order('created_at', { ascending: false })
+      .limit(100),
+    // This member's category preferences (Profile → Notifications). Read
+    // failure (e.g. the preferences migration has not run yet) fails open:
+    // no filtering at all.
+    supabase
+      .from('notification_preferences')
+      .select('category, enabled')
+      .eq('profile_id', ctx.user.id),
+  ]);
 
-  const list = items ?? [];
+  // Unsubscribed categories hide for this viewer only; the account's rows stay
+  // intact. A note under the list says how many were hidden and where to
+  // re-enable them, so a filtered item never just vanishes.
+  const hiddenKinds = hiddenKindsForPrefs(prefError ? null : prefRows ?? []);
+  const all = items ?? [];
+  const list = all.filter((n) => !hiddenKinds.has(n.kind));
+  const hiddenCount = all.length - list.length;
   const unreadCount = list.filter((n) => !n.read_at).length;
 
   return (
@@ -40,7 +61,7 @@ export default async function NotificationsPage() {
       <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Notifications</h1>
-          <p className="muted" style={{ fontSize: '.9rem' }}>Escalations, service requests, and account activity.</p>
+          <p className="muted" style={{ fontSize: '.9rem' }}>Escalations, service requests, guest messages, and account activity.</p>
         </div>
         {unreadCount > 0 && (
           <form action={markAllNotificationsReadFormAction}>
@@ -68,9 +89,19 @@ export default async function NotificationsPage() {
                 <div className="notification-history-content">
                   <div className="notification-history-head">
                     <strong className="notification-history-title">{n.title}</strong>
-                    <span className={`badge ${KIND_BADGE[n.kind] ?? ''}`} style={{ flexShrink: 0 }}>{n.kind}</span>
+                    <span className={`badge ${KIND_BADGE[n.kind] ?? ''}`} style={{ flexShrink: 0 }}>{labelForKind(n.kind)}</span>
                   </div>
                   {n.body ? <p className="muted notification-history-body">{n.body}</p> : null}
+                  {n.link ? (
+                    // Visible, explicit target. The whole card is already the
+                    // anchor, so this is a styled span — never a nested link.
+                    <span
+                      className="notification-view-cta"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', marginTop: '.35rem', fontSize: '.78rem', fontWeight: 600, color: 'var(--teal)' }}
+                    >
+                      View notification <ArrowRight size={12} aria-hidden />
+                    </span>
+                  ) : null}
                 </div>
                 <span className="faint notification-history-time">{timeAgo(n.created_at)}</span>
               </div>
@@ -83,6 +114,13 @@ export default async function NotificationsPage() {
           })}
         </div>
       )}
+
+      {hiddenCount > 0 ? (
+        <p className="faint" style={{ marginTop: '.75rem', fontSize: '.8rem' }}>
+          {hiddenCount} notification{hiddenCount === 1 ? '' : 's'} hidden by your{' '}
+          <Link href="/dashboard/profile/notifications">notification preferences</Link>.
+        </p>
+      ) : null}
     </div>
   );
 }

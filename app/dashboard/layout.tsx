@@ -8,6 +8,7 @@ import { PostHogIdentify } from '@/components/PostHogIdentify';
 import { outstandingReacceptances } from '@/lib/legal/acceptance';
 import { verifyTrustedDeviceValue } from '@/lib/crypto';
 import { TRUSTED_DEVICE_COOKIE } from '@/lib/constants';
+import { hiddenKindsForPrefs } from '@/lib/notifications/categories';
 import { ReacceptanceGate } from './ReacceptanceGate';
 import { FeedbackControl } from './FeedbackControl';
 
@@ -27,12 +28,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const supabase = createClient();
-  const [{ count }, { data: recentNotifications }, outstanding, { data: propertyRows }] = await Promise.all([
+  const [{ data: unreadRows }, { data: recentNotifications }, { data: prefRows, error: prefError }, outstanding, { data: propertyRows }] = await Promise.all([
+    // Unread kinds, not a bare head count: the badge excludes categories this
+    // member unsubscribed from. Bounded at 500 — past that the badge is noise
+    // anyway, and the count stays exact for every realistic account.
     supabase
       .from('notifications')
-      .select('id', { count: 'exact', head: true })
+      .select('kind')
       .eq('host_account_id', ctx.account.id)
-      .is('read_at', null),
+      .is('read_at', null)
+      .limit(500),
     // Feeds the notification bell dropdown — most recent items across all kinds,
     // read or not, so a host can see what they already cleared too.
     supabase
@@ -41,6 +46,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
       .eq('host_account_id', ctx.account.id)
       .order('created_at', { ascending: false })
       .limit(8),
+    // This member's notification preferences (Profile → Notifications). Read
+    // failure (e.g. the preferences migration has not run yet) fails open:
+    // no filtering at all.
+    supabase
+      .from('notification_preferences')
+      .select('category, enabled')
+      .eq('profile_id', ctx.user.id),
     // Re-acceptance gate: which clickwrap docs has this host not accepted at the
     // current version? Resilient to a missing table (returns [] pre-migration).
     outstandingReacceptances(supabase, ctx.user.id),
@@ -50,6 +62,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // properties, so this list stays small.
     supabase.from('properties').select('id, display_name').order('display_name').limit(200),
   ]);
+
+  // Muted categories disappear from the bell and badge for THIS viewer only —
+  // the account's notification rows stay intact for other members and for the
+  // history page's audit trail.
+  const hiddenKinds = hiddenKindsForPrefs(prefError ? null : prefRows ?? []);
+  const visibleNotifications = (recentNotifications ?? []).filter((n) => !hiddenKinds.has(n.kind));
+  const unread = (unreadRows ?? []).filter((n) => !hiddenKinds.has(n.kind)).length;
 
   const propertyNames: Record<string, string> = {};
   for (const row of propertyRows ?? []) {
@@ -61,8 +80,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <PostHogIdentify userId={ctx.user.id} email={ctx.profile.email} />
       {outstanding.length > 0 ? <ReacceptanceGate slugs={outstanding} /> : null}
       <DashboardNav
-        unread={count ?? 0}
-        notifications={recentNotifications ?? []}
+        unread={unread}
+        notifications={visibleNotifications}
         displayName={(ctx.profile.full_name ?? '').trim() || ctx.profile.email}
         isOwner={ctx.account.owner_id === ctx.user.id}
       />
