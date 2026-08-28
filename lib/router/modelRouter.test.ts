@@ -21,6 +21,7 @@ function routerEnv(over: Partial<RouterEnv> = {}): RouterEnv {
     openrouterModel: 'openai/gpt-4o-mini',
     openrouterBaseUrl: 'https://openrouter.ai/api/v1',
     openrouterModelExtraction: 'openai/gpt-4o',
+    openrouterModelBrainOps: 'openai/gpt-4o',
     openrouterModelClassification: 'meta-llama/llama-3.1-8b-instruct',
     openrouterModelConcierge: 'anthropic/claude-haiku-4.5',
     openrouterModelGeneral: 'openai/gpt-4o-mini',
@@ -39,6 +40,10 @@ describe('classifyTask', () => {
     expect(classifyTask('normalize this note into JSON')).toBe('extraction');
     expect(classifyTask('extract the schema')).toBe('extraction');
   });
+  it('detects brain-management hints before cheaper tiers', () => {
+    expect(classifyTask('route this answer into the brain')).toBe('brain_ops');
+    expect(classifyTask('merge proposal for the knowledge base')).toBe('brain_ops');
+  });
   it('detects concierge hints', () => {
     expect(classifyTask('answer the guest chat reply')).toBe('concierge');
   });
@@ -54,6 +59,7 @@ describe('modelForTask', () => {
   const env = routerEnv();
   it('maps each task to its tier model', () => {
     expect(modelForTask('extraction', env)).toBe('openai/gpt-4o');
+    expect(modelForTask('brain_ops', env)).toBe('openai/gpt-4o');
     expect(modelForTask('classification', env)).toBe('meta-llama/llama-3.1-8b-instruct');
     expect(modelForTask('concierge', env)).toBe('anthropic/claude-haiku-4.5');
     expect(modelForTask('general', env)).toBe('openai/gpt-4o-mini');
@@ -62,18 +68,24 @@ describe('modelForTask', () => {
     const custom = routerEnv({ openrouterModelExtraction: 'custom/extract-model' });
     expect(modelForTask('extraction', custom)).toBe('custom/extract-model');
   });
+  it('honors a brain_ops override independently of extraction', () => {
+    const custom = routerEnv({ openrouterModelBrainOps: 'custom/brain-v2' });
+    expect(modelForTask('brain_ops', custom)).toBe('custom/brain-v2');
+    expect(modelForTask('extraction', custom)).toBe('openai/gpt-4o');
+  });
 });
 
 describe('shouldRouteExternally', () => {
   it('is false for every task when no API key is set', () => {
     const env = routerEnv({ openrouterApiKey: '' });
-    for (const t of ['extraction', 'classification', 'concierge', 'general'] as TaskType[]) {
+    for (const t of ['extraction', 'brain_ops', 'classification', 'concierge', 'general'] as TaskType[]) {
       expect(shouldRouteExternally(t, env)).toBe(false);
     }
   });
-  it('routes extraction/classification/general when a key is present', () => {
+  it('routes extraction/brain_ops/classification/general when a key is present', () => {
     const env = routerEnv();
     expect(shouldRouteExternally('extraction', env)).toBe(true);
+    expect(shouldRouteExternally('brain_ops', env)).toBe(true);
     expect(shouldRouteExternally('classification', env)).toBe(true);
     expect(shouldRouteExternally('general', env)).toBe(true);
   });
@@ -231,6 +243,20 @@ describe('routedCompletion', () => {
 
     await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
     expect(lastBody(fetchMock).models).toEqual(['openai/gpt-4o']);
+  });
+
+  // Brain ops shares extraction's no-downgrade rule (2026-08-28 directive): section
+  // routing and merge decisions become canonical Brain content after host review, so
+  // a cheap in-router fallback would silently misfile knowledge.
+  it('routes brain_ops to the strong tier with no lower-tier fallback chain', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
+
+    await routedCompletion(MESSAGES, undefined, { task: 'brain_ops' });
+    const body = lastBody(fetchMock);
+    expect(body.model).toBe('openai/gpt-4o');
+    expect(body.models).toEqual(['openai/gpt-4o']);
   });
 
   it('with key + classification: routes to the llama tier', async () => {
