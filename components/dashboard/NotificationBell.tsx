@@ -256,6 +256,11 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
                       <span className="faint notification-row-time">{timeAgo(item.created_at)}</span>
                     </button>
                     {item.link ? (
+                      // Inside the item's tinted block, directly below the row
+                      // content and ABOVE the divider between items (the divider
+                      // lives on the wrapper — see .notification-row-wrap in
+                      // globals.css), so the link never reads as attached to the
+                      // next notification.
                       <Link
                         href={item.link}
                         onClick={() => {
@@ -264,19 +269,6 @@ export function NotificationBell({ unread: initialUnread, items: initialItems }:
                         }}
                         className="notification-view-link"
                         data-testid={`notification-view-${item.id}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '.25rem',
-                          width: 'fit-content',
-                          // Tucks the link under the title, aligned with the text
-                          // column rather than the icon column.
-                          margin: '-.15rem .75rem .5rem 2.15rem',
-                          fontSize: '.76rem',
-                          fontWeight: 600,
-                          color: 'var(--teal)',
-                          textDecoration: 'none',
-                        }}
                       >
                         View notification <ArrowRight size={12} aria-hidden />
                       </Link>

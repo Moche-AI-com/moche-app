@@ -446,6 +446,21 @@
     font-size: .82rem;
     font-weight: 600;
   }
+  /* A bell item wraps its row button and the per-item "View notification"
+     link. The divider between items lives on the WRAPPER, so the link reads
+     as part of its own notification instead of floating above the next one. */
+  .notification-row-wrap { border-bottom: 1px solid var(--border); }
+  .notification-row-wrap .notification-row { border-bottom: none; }
+  .notification-view-link {
+    display: inline-flex; align-items: center; gap: .25rem;
+    width: fit-content;
+    /* Under the title text column: row padding (1rem) + icon (~15px) + grid
+       gap (.65rem) ≈ 2.6rem. */
+    margin: 0 1rem .55rem 2.6rem;
+    font-size: .76rem; font-weight: 600; color: var(--teal);
+    text-decoration: none;
+  }
+  .notification-view-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 
   /* ---- Account profile menu ---------------------------------------------
      Person-icon + name dropdown that replaced the flat Profile tab and the
@@ -969,7 +984,7 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
 .esc-filter-pill.is-active { background: var(--iris); border-color: var(--iris); color: #fff; }
 .esc-filter-count {
   display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
-  padding: 0 .3rem; border-radius: 9999px; font-size: .68rem; font-weight: 700;
+  padding: 0 .3rem; border-radius: 999px; font-size: .68rem; font-weight: 700;
   background: rgba(255,255,255,.14);
 }
 .esc-filter-pill:not(.is-active) .esc-filter-count.has-open { background: var(--coral); color: #fff; }
@@ -2171,8 +2186,7 @@ a.dash-feed-link:hover .dash-feed-arrow { opacity: 1; transform: none; }
   display: inline-grid;
   place-items: center;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 34px; height: 34px;
   border-radius: 10px;
   background: var(--surface-2);
   color: var(--teal);
