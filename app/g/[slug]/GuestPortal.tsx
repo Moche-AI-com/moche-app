@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { CodeEntry } from './CodeEntry';
 import { RegisterForm } from './RegisterForm';
@@ -11,6 +11,7 @@ import { MaintenanceWorkflow } from './MaintenanceWorkflow';
 import { ExtrasWorkflow, type GuestExtraOffer } from './ExtrasWorkflow';
 import { LanguagePicker } from '@/components/guest/LanguagePicker';
 import { resolveLanguage } from '@/lib/guest/languages';
+import { portalT } from '@/lib/guest/portal-strings';
 import { PORTAL_CSS, usePortalTheme } from './portalStyles';
 
 export type PortalStep = 'code' | 'register' | 'menu' | 'ask' | 'host' | 'maintenance' | 'extras';
@@ -18,8 +19,13 @@ export type PortalStep = 'code' | 'register' | 'menu' | 'ask' | 'host' | 'mainte
 const LANG_STORAGE_KEY = 'gp-lang';
 
 // Enhanced guest portal shell: a step machine covering
-//   code entry → registration → main menu → one of four workflows.
+//   code entry → "Who's joining?" → main menu → one of four workflows.
 // All workflow screens share the chrome defined here (back-to-menu, brand vars).
+//
+// Party access (2026-08-28): the shared stay code proves party membership only.
+// Every new device then identifies itself, so each member of the party gets
+// their own concierge thread, host-chat thread, and extras identity. Returning
+// to the portal on the SAME browser skips both steps via the session cookie.
 //
 // Theme: dark luxury is the default; guests can switch to a light theme from
 // the header. The choice persists on the device (localStorage) and every color
@@ -28,9 +34,10 @@ const LANG_STORAGE_KEY = 'gp-lang';
 //
 // Language: the header Globe sets the guest's language. It is sent with every
 // concierge + host-chat request (the AI replies in it; the host receives an
-// auto-translation), persists on-device, and is restored from the stay record
-// (stays.guest_language) on return visits — the server value wins because it
-// is the one the host's notifications were already translated against.
+// auto-translation), persists on-device, restores from the stay record
+// (stays.guest_language) on return visits — and drives the full UI translation
+// of every card, dropdown, and action via the static dictionary in
+// lib/guest/portal-strings.ts (no runtime translation cost).
 export function GuestPortal(props: {
   fontClassName: string;
   slug: string;
@@ -58,6 +65,10 @@ export function GuestPortal(props: {
   const [guestName, setGuestName] = useState<string | null>(props.guestName);
   const { theme, toggleTheme } = usePortalTheme();
   const [language, setLanguageState] = useState<string | null>(props.initialLanguage);
+
+  // The portal translator: every screen below renders through this. Rebuilt
+  // only when the guest's language changes.
+  const t = useMemo(() => portalT(language), [language]);
 
   // No server-known language yet: fall back to this device's stored choice,
   // then to the browser's language as a first guess (resolveLanguage maps
@@ -98,11 +109,9 @@ export function GuestPortal(props: {
 
   // The host's property photo leads the entry steps AND the main menu; on the
   // workflow screens it collapses to a slim banner so chat space is untouched.
-  // (The condition stays inline: extracting it to a boolean would break TS
-  // narrowing on coverImageUrl at the img below.)
   const showHero = step === 'code' || step === 'register' || step === 'menu';
 
-  const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  const themeLabel = t(theme === 'dark' ? 'themeToLight' : 'themeToDark');
 
   return (
     <div className={`gp-v2 ${theme === 'light' ? 'gp-light' : ''} ${props.fontClassName}`} style={brandVars}>
@@ -121,92 +130,140 @@ export function GuestPortal(props: {
             {props.location ? <div className="gp-property-loc">{props.location}</div> : null}
           </div>
           <div className="gp-header-actions">
-            <LanguagePicker value={language} onChange={setLanguage} />
+            <LanguagePicker value={language} onChange={setLanguage} t={t} />
             <button type="button" className="gp-icon-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>
               {theme === 'dark' ? <Sun size={17} aria-hidden /> : <Moon size={17} aria-hidden />}
             </button>
           </div>
         </header>
 
-        {showHero && props.coverImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={props.coverImageUrl} alt="" className="gp-hero" />
-        ) : null}
-        {!showHero && props.coverImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={props.coverImageUrl} alt="" className="gp-hero-compact" />
-        ) : null}
+        <PortalHero
+          imageUrl={props.coverImageUrl}
+          name={props.propertyName}
+          location={props.location}
+          compact={!showHero}
+        />
 
         <main className="gp-main">
-          {step === 'code' && (
-            <CodeEntry
-              slug={props.slug}
-              accessToken={props.accessToken}
-              onVerified={(registered, name) => {
-                if (name) setGuestName(name);
-                setStep(registered ? 'menu' : 'register');
-              }}
-            />
-          )}
+          <div key={step} className="gp-step">
+            {step === 'code' && (
+              <CodeEntry
+                slug={props.slug}
+                accessToken={props.accessToken}
+                propertyName={props.propertyName}
+                t={t}
+                onVerified={(registered, name) => {
+                  if (name) setGuestName(name);
+                  setStep(registered ? 'menu' : 'register');
+                }}
+              />
+            )}
 
-          {step === 'register' && (
-            <RegisterForm
-              slug={props.slug}
-              propertyName={props.propertyName}
-              onRegistered={(name) => {
-                setGuestName(name);
-                setStep('menu');
-              }}
-              onSessionExpired={goCode}
-            />
-          )}
+            {step === 'register' && (
+              <RegisterForm
+                slug={props.slug}
+                propertyName={props.propertyName}
+                t={t}
+                onRegistered={(name) => {
+                  setGuestName(name);
+                  setStep('menu');
+                }}
+                onSessionExpired={goCode}
+              />
+            )}
 
-          {step === 'menu' && (
-            <MainMenu
-              propertyName={props.propertyName}
-              guestName={guestName}
-              hostPreview={props.hostPreview}
-              onSelect={(key) => setStep(key)}
-            />
-          )}
+            {step === 'menu' && (
+              <MainMenu
+                propertyName={props.propertyName}
+                guestName={guestName}
+                hostPreview={props.hostPreview}
+                t={t}
+                onSelect={(key) => setStep(key)}
+              />
+            )}
 
-          {step === 'ask' && (
-            <AiChatWorkflow
-              slug={props.slug}
-              propertyId={props.propertyId}
-              hostPreview={props.hostPreview}
-              language={language}
-              onBack={goMenu}
-              onOpenHostChat={openHostChat}
-              onSessionExpired={goCode}
-            />
-          )}
+            {step === 'ask' && (
+              <AiChatWorkflow
+                slug={props.slug}
+                propertyId={props.propertyId}
+                hostPreview={props.hostPreview}
+                language={language}
+                t={t}
+                onBack={goMenu}
+                onOpenHostChat={openHostChat}
+                onSessionExpired={goCode}
+              />
+            )}
 
-          {step === 'host' && (
-            <HostChatWorkflow
-              slug={props.slug}
-              guestName={guestName}
-              language={language}
-              onBack={goMenu}
-              onSessionExpired={goCode}
-            />
-          )}
+            {step === 'host' && (
+              <HostChatWorkflow
+                slug={props.slug}
+                guestName={guestName}
+                language={language}
+                t={t}
+                onBack={goMenu}
+                onSessionExpired={goCode}
+              />
+            )}
 
-          {step === 'maintenance' && (
-            <MaintenanceWorkflow slug={props.slug} onBack={goMenu} onSessionExpired={goCode} />
-          )}
+            {step === 'maintenance' && (
+              <MaintenanceWorkflow slug={props.slug} t={t} onBack={goMenu} onSessionExpired={goCode} />
+            )}
 
-          {step === 'extras' && (
-            <ExtrasWorkflow
-              slug={props.slug}
-              offers={props.extrasOffers}
-              onBack={goMenu}
-              onSessionExpired={goCode}
-            />
-          )}
+            {step === 'extras' && (
+              <ExtrasWorkflow
+                slug={props.slug}
+                offers={props.extrasOffers}
+                guestName={guestName}
+                t={t}
+                onBack={goMenu}
+                onSessionExpired={goCode}
+              />
+            )}
+          </div>
         </main>
 
-        <footer className="gp-footer">Powered by Moche AI</footer>
+        <footer className="gp-footer">{t('poweredBy')}</footer>
+      </div>
+    </div>
+  );
+}
+
+function heroInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((word) => word[0]!.toUpperCase()).join('') || '•';
+}
+
+// The host's chosen portal image, presented as a proper cover photo: 16:9 frame,
+// gradient scrim, property name overlay on the entry steps, and a slim banner on
+// workflow screens. If the image is missing or fails to load (expired URL, bad
+// upload), guests see a branded monogram tile instead of a broken-image icon.
+function PortalHero(props: { imageUrl: string | null; name: string; location: string; compact: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = !!props.imageUrl && !failed;
+
+  if (props.compact) {
+    if (!showImage) return null;
+    return (
+      <div className="gp-hero-compact">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={props.imageUrl!} alt="" loading="lazy" onError={() => setFailed(true)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="gp-hero">
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={props.imageUrl!} alt="" className="gp-hero-img" loading="lazy" onError={() => setFailed(true)} />
+      ) : (
+        <div className="gp-hero-fallback" aria-hidden>{heroInitials(props.name)}</div>
+      )}
+      <div className="gp-hero-scrim" aria-hidden />
+      <div className="gp-hero-caption">
+        <div className="gp-hero-name">{props.name}</div>
+        {props.location ? <div className="gp-hero-loc">{props.location}</div> : null}
       </div>
     </div>
   );

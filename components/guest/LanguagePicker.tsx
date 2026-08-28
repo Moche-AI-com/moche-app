@@ -3,21 +3,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Globe, Search, X } from 'lucide-react';
 import { resolveLanguage, searchLanguages } from '@/lib/guest/languages';
+import { portalT, type PortalT } from '@/lib/guest/portal-strings';
 
 // The portal's language picker (the header Globe). The guest picks their
 // language once; the choice rides with every concierge chat and host-chat
-// request, so the AI replies in it and the host receives an auto-translation.
+// request (the AI replies in it; the host receives an auto-translation) AND
+// re-renders the whole portal UI through the static portal-strings dictionary.
 // "Automatic" (the default) means: answer in whatever language the guest
 // writes in. The list, search, and labels come from lib/guest/languages — the
 // single canonical source shared with the server routes.
+//
+// `t` is optional so host-side or legacy usages keep working; without it the
+// picker's own chrome renders in English.
 export function LanguagePicker(props: {
   value: string | null;
   onChange: (code: string | null) => void;
+  t?: PortalT;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const selected = resolveLanguage(props.value);
   const results = useMemo(() => searchLanguages(query), [query]);
+  const t = props.t ?? portalT(null);
 
   useEffect(() => {
     if (!open) return;
@@ -28,7 +35,7 @@ export function LanguagePicker(props: {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const label = selected ? `Language: ${selected.label}` : 'Choose your language';
+  const label = selected ? t('langCurrent', { label: selected.label }) : t('langChoose');
 
   return (
     <>
@@ -51,21 +58,19 @@ export function LanguagePicker(props: {
             className="gp-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Choose your language"
+            aria-label={t('langChoose')}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="gp-modal-head">
               <span className="gp-modal-title">
-                <Globe size={16} aria-hidden /> Language
+                <Globe size={16} aria-hidden /> {t('langTitle')}
               </span>
-              <button type="button" className="gp-icon-btn" onClick={() => setOpen(false)} aria-label="Close">
+              <button type="button" className="gp-icon-btn" onClick={() => setOpen(false)} aria-label={t('close')}>
                 <X size={16} aria-hidden />
               </button>
             </div>
             <div className="gp-modal-body">
-              <p className="gp-modal-sub">
-                The concierge replies in your language, and your host receives a translation of your messages.
-              </p>
+              <p className="gp-modal-sub">{t('langSub')}</p>
               <div className="gp-picker-search" style={{ position: 'relative' }}>
                 <Search
                   size={15}
@@ -77,8 +82,8 @@ export function LanguagePicker(props: {
                   style={{ paddingLeft: 34 }}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search languages…"
-                  aria-label="Search languages"
+                  placeholder={t('langSearch')}
+                  aria-label={t('langSearch')}
                 />
               </div>
               <div className="gp-picker-list">
@@ -91,8 +96,8 @@ export function LanguagePicker(props: {
                   }}
                 >
                   <span style={{ flex: 1 }}>
-                    <span className="gp-picker-item-title">Automatic</span>
-                    <span className="gp-picker-item-sub">Match the language I write in</span>
+                    <span className="gp-picker-item-title">{t('langAuto')}</span>
+                    <span className="gp-picker-item-sub">{t('langAutoSub')}</span>
                   </span>
                   {!selected && <Check size={16} aria-hidden style={{ color: 'var(--gp-icon)' }} />}
                 </button>
@@ -115,7 +120,7 @@ export function LanguagePicker(props: {
                     {selected?.code === lang.code && <Check size={16} aria-hidden style={{ color: 'var(--gp-icon)' }} />}
                   </button>
                 ))}
-                {results.length === 0 && <p className="gp-muted">No languages match “{query}”.</p>}
+                {results.length === 0 && <p className="gp-muted">{t('langNoMatch', { query })}</p>}
               </div>
             </div>
           </div>
