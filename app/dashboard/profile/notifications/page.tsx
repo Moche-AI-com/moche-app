@@ -1,16 +1,16 @@
 import Link from 'next/link';
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { NOTIFICATION_CATEGORIES } from '@/lib/notifications/categories';
+import { NOTIFICATION_CATEGORIES, categorySupportsChannel } from '@/lib/notifications/categories';
 import { NotificationPreferencesForm, type CategoryPreference } from './NotificationPreferencesForm';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Two questions answered on one page:
- *  1. "Which notification paths can reach me?" — the per-category switches.
- *     Host messages, billing, and security alerts stay always on; everything
- *     else is the member's choice.
+ *  1. "Which notification paths can reach me, and on which channel?" — the
+ *     category × channel matrix. Host messages, billing, and security alerts
+ *     stay always on; everything else is the member's choice.
  *  2. "If something urgent happens, does it reach me?" — the channel panel
  *     (email / text / in-app), this page's original job, kept intact below.
  *
@@ -30,28 +30,38 @@ export default async function ProfileNotificationsPage() {
       .is('read_at', null),
     supabase
       .from('notification_preferences')
-      .select('category, enabled')
+      .select('category, enabled, email_enabled, sms_enabled')
       .eq('profile_id', ctx.user.id),
   ]);
 
-  // A missing row means "subscribed" — defaults stay on until a member opts
-  // out, so new members and brand-new categories never silently stop notifying.
-  // A failed read (e.g. the preferences migration has not run yet) fails open
-  // to the same all-on defaults rather than showing everything as off.
-  const saved = new Map<string, boolean>(
-    (prefError ? [] : prefRows ?? []).map((r) => [r.category, r.enabled]),
+  // A missing row means "subscribed with default channels" — in-app + email on,
+  // text off. A failed read (e.g. a preferences migration has not run yet)
+  // fails open to the same defaults rather than showing everything as off.
+  const saved = new Map<string, { enabled: boolean; email: boolean; sms: boolean }>(
+    (prefError ? [] : prefRows ?? []).map((r) => [
+      r.category,
+      { enabled: r.enabled, email: r.email_enabled ?? true, sms: r.sms_enabled ?? false },
+    ]),
   );
-  const categories: CategoryPreference[] = NOTIFICATION_CATEGORIES.map((c) => ({
-    key: c.key,
-    label: c.label,
-    description: c.description,
-    alwaysOn: c.alwaysOn,
-    enabled: c.alwaysOn ? true : saved.get(c.key) ?? true,
-  }));
+  const categories: CategoryPreference[] = NOTIFICATION_CATEGORIES.map((c) => {
+    const row = saved.get(c.key);
+    return {
+      key: c.key,
+      label: c.label,
+      description: c.description,
+      alwaysOn: c.alwaysOn,
+      enabled: c.alwaysOn ? true : row?.enabled ?? true,
+      emailEnabled: c.alwaysOn ? true : row?.email ?? true,
+      smsEnabled: c.alwaysOn ? true : row?.sms ?? false,
+      emailCapable: categorySupportsChannel(c.key, 'email'),
+      smsCapable: categorySupportsChannel(c.key, 'sms'),
+    };
+  });
 
   const phone = ctx.profile.phone;
   const phoneVerified = !!ctx.profile.phone_verified_at;
   const smsOptIn = !!ctx.profile.sms_opt_in;
+  const smsReady = phoneVerified && smsOptIn;
 
   const rows: Array<{ channel: string; state: string; ok: boolean; note: string }> = [
     {
@@ -91,10 +101,10 @@ export default async function ProfileNotificationsPage() {
       <div className="card" style={{ padding: '1.25rem', maxWidth: 620, marginBottom: '1rem' }}>
         <h3 style={{ fontSize: '.95rem', marginTop: 0, marginBottom: '.25rem' }}>Notification paths</h3>
         <p className="faint" style={{ fontSize: '.8rem', marginTop: 0, marginBottom: '1rem' }}>
-          Turned-off paths still land in your notification history — they just stop pinging your
-          bell and inbox.
+          For each path, choose where it reaches you. Turning a path off entirely still lands it in
+          your notification history — it just stops pinging your bell and inbox.
         </p>
-        <NotificationPreferencesForm categories={categories} />
+        <NotificationPreferencesForm categories={categories} smsReady={smsReady} />
       </div>
 
       <div className="card" style={{ padding: '1.25rem', maxWidth: 620 }}>

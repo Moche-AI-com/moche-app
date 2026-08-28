@@ -118,7 +118,12 @@ export function labelForKind(kind: NotificationKind | string): string {
 
 export interface NotificationPreferenceRow {
   category: string;
+  /** In-app master switch (bell, badge, history). */
   enabled: boolean;
+  /** Email channel switch. Missing (pre-matrix row) reads as true. */
+  email_enabled?: boolean;
+  /** Text-message channel switch. Missing reads as false — texts are opt-in. */
+  sms_enabled?: boolean;
 }
 
 /**
@@ -139,4 +144,34 @@ export function hiddenKindsForPrefs(
     for (const kind of category.kinds) hidden.add(kind);
   }
   return hidden;
+}
+
+/**
+ * Fan-out capability by kind — the single source of truth for "can this kind
+ * email/text at all". lib/notify.ts imports these for the sending decision and
+ * the settings UI derives per-category capability from them, so a channel
+ * switch never appears for a path that physically cannot send on that channel.
+ */
+export const EMAIL_FANOUT_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>([
+  'escalation',
+  'maintenance',
+  'billing',
+  'system',
+  'extras',
+  'host_message',
+]);
+
+export const SMS_FANOUT_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>([
+  'escalation',
+  'maintenance',
+]);
+
+export type NotificationChannel = 'in_app' | 'email' | 'sms';
+
+/** True when any kind in the category can fan out on that channel at all. */
+export function categorySupportsChannel(key: NotificationCategoryKey, channel: 'email' | 'sms'): boolean {
+  const category = NOTIFICATION_CATEGORIES.find((c) => c.key === key);
+  if (!category) return false;
+  const kinds = channel === 'email' ? EMAIL_FANOUT_KINDS : SMS_FANOUT_KINDS;
+  return category.kinds.some((k) => kinds.has(k));
 }

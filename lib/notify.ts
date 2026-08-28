@@ -5,7 +5,12 @@ import { log } from '@/lib/log';
 import { resolveTwilioAuth, serverEnv, publicEnv } from '@/lib/env';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { TRANSACTIONAL_SENDER } from '@/lib/mail/senders';
-import { CATEGORY_FOR_KIND, NOTIFICATION_CATEGORIES } from '@/lib/notifications/categories';
+import {
+  CATEGORY_FOR_KIND,
+  EMAIL_FANOUT_KINDS,
+  NOTIFICATION_CATEGORIES,
+  SMS_FANOUT_KINDS,
+} from '@/lib/notifications/categories';
 
 type Client = SupabaseClient<Database>;
 type NotificationKind = Database['public']['Enums']['notification_kind'];
@@ -23,15 +28,11 @@ interface NotifyParams {
   actionUrl?: string;
 }
 
-// Host notification kinds that fan out to email.
-// 'system' added for WS-1 visit-code lockout alerts (repeated failed attempts).
-// 'extras' added for guest enhancement requests — a paid-work signal the host
-// should never miss because it sat silently in a queue.
-// 'host_message' added with the Host Chat kind split: guest messages previously
-// rode 'system', which emails — they keep that reachability on their own kind.
-const EMAIL_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance', 'billing', 'system', 'extras', 'host_message']);
-// Host notification kinds that MAY fan out to SMS (subject to all gates below).
-const SMS_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>(['escalation', 'maintenance']);
+// Which kinds may fan out to email / SMS at all lives in the category registry
+// (EMAIL_FANOUT_KINDS / SMS_FANOUT_KINDS) so the settings UI and this sender can
+// never disagree about whether a channel exists for a path.
+// History: 'system' was added for WS-1 visit-code lockout alerts; 'extras' for
+// guest enhancement requests; 'host_message' came with the Host Chat kind split.
 
 // Every send site below is transactional (escalation, maintenance, billing, system,
 // guest OTP), so it uses the monitored identity. The digest identity lives in
@@ -125,45 +126,109 @@ export async function sendInternalEmail(subject: string, text: string): Promise<
   return sendHostEmail(to, subject, text);
 }
 
-// Loads the host account owner's contact details (email + phone) for fan-out.
-async function loadOwnerContact(
+interface RecipientContact {
+  profileId: string;
+  email: string | null;
+  phone: string | null;
+  smsOptIn: boolean;
+  phoneVerifiedAt: string | null;
+}
+
+type ProfileRow = { id: string; email: string | null; phone: string | null; sms_opt_in: boolean; phone_verified_at: string | null };
+
+function mapRecipient(row: ProfileRow): RecipientContact {
+  return {
+    profileId: row.id,
+    email: row.email,
+    phone: row.phone,
+    smsOptIn: !!row.sms_opt_in,
+    phoneVerifiedAt: row.phone_verified_at,
+  };
+}
+
+// Resolves everyone a notification can reach: a targeted notification
+// (recipientProfileId) goes to that one member; an account-wide one goes to the
+// owner plus every org member. Runs under the service client from server
+// routes, so membership scoping comes from the callers, not RLS.
+async function loadRecipientContacts(
   client: Client,
-  hostAccountId: string
-): Promise<{ ownerId: string; email: string | null; phone: string | null; smsOptIn: boolean; phoneVerifiedAt: string | null } | null> {
+  hostAccountId: string,
+  recipientProfileId: string | null,
+): Promise<RecipientContact[]> {
+  if (recipientProfileId) {
+    const { data: profile } = await client
+      .from('profiles')
+      .select('id, email, phone, sms_opt_in, phone_verified_at')
+      .eq('id', recipientProfileId)
+      .maybeSingle();
+    return profile ? [mapRecipient(profile as unknown as ProfileRow)] : [];
+  }
   const { data: account } = await client
     .from('host_accounts')
     .select('owner_id')
     .eq('id', hostAccountId)
     .maybeSingle();
-  if (!account) return null;
+  if (!account) return [];
   const ownerId = (account as { owner_id: string }).owner_id;
-  const { data: profile } = await client
+  const { data: members } = await client
+    .from('organization_members')
+    .select('profile_id')
+    .eq('host_account_id', hostAccountId);
+  const ids = Array.from(new Set([ownerId, ...((members ?? []) as Array<{ profile_id: string }>).map((m) => m.profile_id)]));
+  if (ids.length === 0) return [];
+  const { data: profiles } = await client
     .from('profiles')
-    .select('email, phone, sms_opt_in, phone_verified_at')
-    .eq('id', ownerId)
-    .maybeSingle();
-  if (!profile) return null;
-  const row = profile as { email: string | null; phone: string | null; sms_opt_in: boolean; phone_verified_at: string | null };
-  return { ownerId, email: row.email, phone: row.phone, smsOptIn: !!row.sms_opt_in, phoneVerifiedAt: row.phone_verified_at };
+    .select('id, email, phone, sms_opt_in, phone_verified_at')
+    .in('id', ids);
+  return ((profiles ?? []) as unknown as ProfileRow[]).map(mapRecipient);
+}
+
+interface CategoryPref {
+  enabled: boolean;
+  email_enabled: boolean;
+  sms_enabled: boolean;
+}
+
+// Loads one member's preference row for one category. No row (or any read
+// failure) returns null = subscribed with default channels: a lookup problem
+// must never silently swallow a notification.
+async function loadCategoryPref(client: Client, profileId: string, categoryKey: string, kind: string): Promise<CategoryPref | null> {
+  try {
+    const { data, error } = await client
+      .from('notification_preferences')
+      .select('enabled, email_enabled, sms_enabled')
+      .eq('profile_id', profileId)
+      .eq('category', categoryKey)
+      .maybeSingle();
+    if (error) {
+      log.warn('notify_pref_read_failed', { kind });
+      return null;
+    }
+    return (data as CategoryPref | null) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // Creates the durable in-app notification row and fans out to email (now) and host SMS
 // (Pro+, behind a feature flag) on a best-effort basis. Fan-out failures NEVER throw —
 // the in-app row is the source of truth and the host dashboard always reflects it.
 //
+// Fan-out is PER MEMBER: a targeted notification (recipientProfileId) reaches only
+// that member; an account-wide one reaches the owner + every org member. Each
+// member's Profile → Notifications preferences gate their own email/text delivery.
+//
 // Host SMS gating requires ALL of:
 //   1. NOTIFY_SMS_ENABLED feature flag on, AND
 //   2. plan entitlement smsEscalation (Pro+), AND
 //   3. valid Twilio config present, AND
-//   4. host owner profile has a non-null phone that is VERIFIED (phone_verified_at) AND
-//      an active TCPA opt-in (sms_opt_in). This resolves the former TODO(consent):
-//      profiles.phone_verified_at / sms_opt_in are added by supabase-migrations-FEATURE4.sql
-//      and captured through the verified-phone flow in dashboard/profile/security-actions.ts.
+//   4. the member has a VERIFIED phone (phone_verified_at) AND an active TCPA
+//      opt-in (sms_opt_in) — captured in dashboard/profile/security-actions.ts — AND
+//   5. the member's per-category text switch is on (sms_enabled, default off).
 export async function notify(client: Client, p: NotifyParams): Promise<void> {
-  // 1. Durable in-app row (source of truth). Always written, even for a
-  //    category the recipient has muted: the bell and history filter at READ
-  //    time, so the account keeps a complete record and a muted member can
-  //    still find the event.
+  // 1. Durable in-app row (source of truth). Always written, even for members
+  //    who muted the category: the bell and history filter at READ time, so the
+  //    account keeps a complete record and a muted member can still find it.
   try {
     await client.from('notifications').insert({
       host_account_id: p.hostAccountId,
@@ -179,57 +244,56 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
     return; // if the durable row failed, skip fan-out
   }
 
-  const wantsEmail = EMAIL_KINDS.has(p.kind);
-  const wantsSmsKind = SMS_KINDS.has(p.kind);
+  const wantsEmail = EMAIL_FANOUT_KINDS.has(p.kind);
+  const wantsSmsKind = SMS_FANOUT_KINDS.has(p.kind);
   if (!wantsEmail && !wantsSmsKind) return;
 
-  const contact = await loadOwnerContact(client, p.hostAccountId);
-  if (!contact) return;
-
-  // 2. Preference gate (Profile → Notifications). Unsubscribing mutes the
-  //    email/SMS fan-out for that category. Always-on paths (host messages,
-  //    billing, system/security) never reach this check. Any read failure
-  //    fails OPEN — a preferences lookup problem must never silently swallow
-  //    a notification.
   const category = NOTIFICATION_CATEGORIES.find((c) => c.key === CATEGORY_FOR_KIND[p.kind]);
-  if (category && !category.alwaysOn) {
-    try {
-      const recipientId = p.recipientProfileId ?? contact.ownerId;
-      const { data: pref, error: prefError } = await client
-        .from('notification_preferences')
-        .select('enabled')
-        .eq('profile_id', recipientId)
-        .eq('category', category.key)
-        .maybeSingle();
-      if (prefError) {
-        log.warn('notify_pref_read_failed', { kind: p.kind });
-      } else if (pref && !pref.enabled) {
+
+  // 2. Resolve recipients (targeted member, or owner + all org members).
+  const recipients = await loadRecipientContacts(client, p.hostAccountId, p.recipientProfileId ?? null);
+  if (recipients.length === 0) return;
+
+  // Entitlements are account-level; resolve once, and only when an SMS could fly.
+  const ent = wantsSmsKind && serverEnv.notifySmsEnabled ? await getEntitlements(client, p.hostAccountId) : null;
+
+  for (const recipient of recipients) {
+    // 3. Preference gate. Always-on paths skip it entirely. A member whose
+    //    master switch is off for the category gets nothing on any channel;
+    //    email/text then honour their per-channel switches (defaults: email on,
+    //    text off).
+    let pref: CategoryPref | null = null;
+    if (category && !category.alwaysOn) {
+      pref = await loadCategoryPref(client, recipient.profileId, category.key, p.kind);
+      if (pref && !pref.enabled) {
         log.info('notify_fanout_muted', { kind: p.kind });
-        return;
+        continue;
       }
-    } catch {
-      // fail open — see the note above
     }
-  }
 
-  // 3. Email fan-out (all host notification kinds in EMAIL_KINDS).
-  if (wantsEmail && contact.email) {
-    const url = p.link ? `${publicEnv.appUrl}${p.link}` : '';
-    const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
-    const text = `${p.body ?? p.title}${action}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
-    await sendHostEmail(contact.email, `Moche-AI: ${p.title}`, text);
-  }
+    // 4. Email to this member.
+    if (wantsEmail && recipient.email && (category?.alwaysOn || !pref || pref.email_enabled)) {
+      const url = p.link ? `${publicEnv.appUrl}${p.link}` : '';
+      const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
+      const text = `${p.body ?? p.title}${action}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
+      await sendHostEmail(recipient.email, `Moche-AI: ${p.title}`, text);
+    }
 
-  // 4. Host SMS fan-out (escalation + maintenance only, all gates must pass).
-  //    Consent-gated per TCPA: the owner must have a VERIFIED phone AND an active
-  //    sms_opt_in. This resolves notify()'s historical TODO(consent).
-  if (wantsSmsKind && serverEnv.notifySmsEnabled && contact.phone && contact.smsOptIn && contact.phoneVerifiedAt) {
-    const ent = await getEntitlements(client, p.hostAccountId);
-    if (ent.smsEscalation && resolveTwilioAuth()) {
+    // 5. Text to this member (escalation + maintenance kinds only, every gate
+    //    above plus their own per-category text switch — TCPA double opt-in).
+    if (
+      wantsSmsKind &&
+      ent?.smsEscalation &&
+      resolveTwilioAuth() &&
+      recipient.phone &&
+      recipient.smsOptIn &&
+      recipient.phoneVerifiedAt &&
+      (category?.alwaysOn || !pref || pref.sms_enabled)
+    ) {
       // Keep it short; never include guest PII beyond the already-truncated title.
       // Append the answer magic link when present so the host can reply from the SMS.
       const msg = p.actionUrl ? `Moche-AI: ${p.title} Answer: ${p.actionUrl}` : `Moche-AI: ${p.title}`;
-      await sendSms(contact.phone, msg);
+      await sendSms(recipient.phone, msg);
     }
   }
 }
