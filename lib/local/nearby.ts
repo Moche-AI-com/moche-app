@@ -9,11 +9,11 @@ import { normalizePlaceName } from '@/lib/local/dedupe';
 // unless a host forces it. Place data is slow-moving, and caching in our own
 // table means guest traffic never fans out to a third-party API.
 export const NEARBY_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
-// Discovery radius: ~5 miles. The old 2 km walkable radius missed exactly the
-// places guests ask about most (golf courses, attractions, beaches). The
-// per-category cap below still bounds the total set, so a dense downtown
-// property cannot flood the guide.
-export const NEARBY_RADIUS_M = 8000;
+// Discovery radius: 10 miles (2026-08-28 directive; was ~5). The wider net captures
+// the places guests actually ask about — beaches, golf, attractions, the good
+// restaurant two towns over — and the per-category cap below still bounds the total
+// set, so a dense downtown property cannot flood the guide.
+export const NEARBY_RADIUS_M = 16093;
 const PER_CATEGORY_LIMIT = 15;
 
 export interface RefreshResult {
