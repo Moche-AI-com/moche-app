@@ -244,7 +244,7 @@ function personaLine(propertyName: string, conciergeName?: string): string {
 }
 
 // Optional per-property instruction layers appended after the persona line. Each is
-// emitted only when set, so the base (master) prompt is unchanged for bare properties.
+// emitted only when set, so a property with no overrides behaves like the base.
 function buildOverlayLayers(cfg: ConciergeConfig): string {
   const parts: string[] = [];
   if (cfg.responseLength === 'concise') {
@@ -583,13 +583,17 @@ function scoreConfidence(chunks: RetrievedChunk[], answer: string, topNodeSimila
 
 export async function answerGuestQuestion(
   admin: Admin,
-  opts: { propertyId: string; propertyName: string; question: string; history: ChatMessage[]; confidenceThreshold?: number; conciergeTone?: string; aiTemperature?: number; source?: string; concierge?: ConciergeConfig },
+  opts: { propertyId: string; propertyName: string; question: string; history: ChatMessage[]; confidenceThreshold?: number; conciergeTone?: string; aiTemperature?: number; source?: string; concierge?: ConciergeConfig; persist?: boolean },
 ): Promise<ConciergeAnswer> {
   const provider = getAIProvider();
   const threshold = opts.confidenceThreshold ?? DEFAULT_CONFIDENCE_THRESHOLD;
   const isEmergency = EMERGENCY_PATTERNS.test(opts.question);
   const startedAt = Date.now();
   const usageSink = { embedModel: provider.embedModel, embedTokens: 0 };
+  // Host-preview calls (persist: false) skip every persistence side effect: no
+  // AI-usage rows and no answer-cache writes, so a host's test question is never
+  // replayed to a real guest. Cache READS stay on — the host sees what guests get.
+  const persist = opts.persist !== false;
 
   // Exact-match answer cache: on a repeat of a previously high-confidence question
   // (same property, same normalized text, same Brain version) return instantly and
@@ -605,7 +609,7 @@ export async function answerGuestQuestion(
   if (!isEmergency && questionNorm.length > 0) {
     const cached = await lookupCachedAnswer(admin, opts.propertyId, questionNorm, brainVersion);
     if (cached) {
-      void logAiUsage(admin, {
+      if (persist) void logAiUsage(admin, {
         propertyId: opts.propertyId,
         kind: 'chat',
         model: 'cache',
@@ -734,7 +738,7 @@ export async function answerGuestQuestion(
   } catch (e) {
     log.warn('generate_failed', { error: String(e) });
     // Still record the embed cost we already incurred for this turn.
-    void logAiUsage(admin, {
+    if (persist) void logAiUsage(admin, {
       propertyId: opts.propertyId,
       kind: 'embed',
       model: usageSink.embedModel,
@@ -792,7 +796,7 @@ export async function answerGuestQuestion(
 
   // Fire-and-forget cost telemetry: one row for the chat turn (prompt+completion) plus
   // the embed tokens spent on retrieval. Never awaited — logging must not slow the guest.
-  void logAiUsage(admin, {
+  if (persist) void logAiUsage(admin, {
     propertyId: opts.propertyId,
     kind: 'chat',
     model,
@@ -805,7 +809,7 @@ export async function answerGuestQuestion(
 
   // Cache write: only confident, non-emergency, non-escalated answers, keyed to the
   // current Brain version so a later bump silently invalidates it. Fire-and-forget.
-  if (!isEmergency && !shouldEscalate && !outputLeaked && confidence >= threshold && questionNorm.length > 0) {
+  if (persist && !isEmergency && !shouldEscalate && !outputLeaked && confidence >= threshold && questionNorm.length > 0) {
     void cacheAnswer(admin, {
       propertyId: opts.propertyId,
       questionNorm,
