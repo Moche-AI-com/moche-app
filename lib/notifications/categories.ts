@@ -175,3 +175,40 @@ export function categorySupportsChannel(key: NotificationCategoryKey, channel: '
   const kinds = channel === 'email' ? EMAIL_FANOUT_KINDS : SMS_FANOUT_KINDS;
   return category.kinds.some((k) => kinds.has(k));
 }
+
+/**
+ * Categories eligible for the daily email digest instead of an instant send.
+ * Urgent and always-on paths are deliberately absent: a guest waiting on a
+ * person, a direct host message, a failed payment, or a security alert must
+ * never wait for tomorrow morning.
+ */
+export const DIGEST_ELIGIBLE_CATEGORIES: ReadonlySet<NotificationCategoryKey> = new Set<NotificationCategoryKey>([
+  'extras',
+  'review_nudges',
+  'property_brain',
+]);
+
+export function isDigestEligible(key: NotificationCategoryKey): boolean {
+  return DIGEST_ELIGIBLE_CATEGORIES.has(key);
+}
+
+export interface PropertyMuteRow {
+  property_id: string;
+  category: string;
+}
+
+/**
+ * True when this viewer muted the kind's category for that specific property.
+ * Always-on categories and account-level (property-less) notifications can
+ * never be muted here. `null` (read failed) fails open: never muted.
+ */
+export function isMutedForProperty(
+  mutes: readonly PropertyMuteRow[] | null,
+  kind: NotificationKind | string,
+  propertyId: string | null,
+): boolean {
+  if (!mutes || !propertyId) return false;
+  const category = categoryForKind(kind);
+  if (!category || category.alwaysOn) return false;
+  return mutes.some((m) => m.property_id === propertyId && m.category === category.key);
+}

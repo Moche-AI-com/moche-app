@@ -10,6 +10,7 @@ import {
   EMAIL_FANOUT_KINDS,
   NOTIFICATION_CATEGORIES,
   SMS_FANOUT_KINDS,
+  isDigestEligible,
 } from '@/lib/notifications/categories';
 
 type Client = SupabaseClient<Database>;
@@ -132,9 +133,17 @@ interface RecipientContact {
   phone: string | null;
   smsOptIn: boolean;
   phoneVerifiedAt: string | null;
+  digestEnabled: boolean;
 }
 
-type ProfileRow = { id: string; email: string | null; phone: string | null; sms_opt_in: boolean; phone_verified_at: string | null };
+type ProfileRow = {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  sms_opt_in: boolean;
+  phone_verified_at: string | null;
+  email_digest_enabled: boolean;
+};
 
 function mapRecipient(row: ProfileRow): RecipientContact {
   return {
@@ -143,6 +152,7 @@ function mapRecipient(row: ProfileRow): RecipientContact {
     phone: row.phone,
     smsOptIn: !!row.sms_opt_in,
     phoneVerifiedAt: row.phone_verified_at,
+    digestEnabled: !!row.email_digest_enabled,
   };
 }
 
@@ -158,7 +168,7 @@ async function loadRecipientContacts(
   if (recipientProfileId) {
     const { data: profile } = await client
       .from('profiles')
-      .select('id, email, phone, sms_opt_in, phone_verified_at')
+      .select('id, email, phone, sms_opt_in, phone_verified_at, email_digest_enabled')
       .eq('id', recipientProfileId)
       .maybeSingle();
     return profile ? [mapRecipient(profile as unknown as ProfileRow)] : [];
@@ -178,7 +188,7 @@ async function loadRecipientContacts(
   if (ids.length === 0) return [];
   const { data: profiles } = await client
     .from('profiles')
-    .select('id, email, phone, sms_opt_in, phone_verified_at')
+    .select('id, email, phone, sms_opt_in, phone_verified_at, email_digest_enabled')
     .in('id', ids);
   return ((profiles ?? []) as unknown as ProfileRow[]).map(mapRecipient);
 }
@@ -210,13 +220,37 @@ async function loadCategoryPref(client: Client, profileId: string, categoryKey: 
   }
 }
 
+// True when this member muted this category for this specific property. Fails
+// open (false) on any read error — a lookup problem must never silently
+// swallow a notification.
+async function isPropertyMuted(client: Client, profileId: string, propertyId: string, categoryKey: string, kind: string): Promise<boolean> {
+  try {
+    const { data, error } = await client
+      .from('notification_property_mutes')
+      .select('id')
+      .eq('profile_id', profileId)
+      .eq('property_id', propertyId)
+      .eq('category', categoryKey)
+      .maybeSingle();
+    if (error) {
+      log.warn('notify_pref_read_failed', { kind });
+      return false;
+    }
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
 // Creates the durable in-app notification row and fans out to email (now) and host SMS
 // (Pro+, behind a feature flag) on a best-effort basis. Fan-out failures NEVER throw —
 // the in-app row is the source of truth and the host dashboard always reflects it.
 //
 // Fan-out is PER MEMBER: a targeted notification (recipientProfileId) reaches only
 // that member; an account-wide one reaches the owner + every org member. Each
-// member's Profile → Notifications preferences gate their own email/text delivery.
+// member's Profile → Notifications preferences gate their own email/text delivery,
+// their per-property mutes suppress matching events, and digest mode defers
+// digest-eligible categories into the morning email (trigger/notification-digest.ts).
 //
 // Host SMS gating requires ALL of:
 //   1. NOTIFY_SMS_ENABLED feature flag on, AND
@@ -229,16 +263,24 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
   // 1. Durable in-app row (source of truth). Always written, even for members
   //    who muted the category: the bell and history filter at READ time, so the
   //    account keeps a complete record and a muted member can still find it.
+  //    The id is captured because digest-mode emails queue by reference.
+  let notificationId: string | null = null;
   try {
-    await client.from('notifications').insert({
-      host_account_id: p.hostAccountId,
-      kind: p.kind,
-      title: p.title,
-      body: p.body ?? null,
-      link: p.link ?? null,
-      property_id: p.propertyId ?? null,
-      recipient_profile_id: p.recipientProfileId ?? null,
-    });
+    const { data: inserted, error: insertError } = await client
+      .from('notifications')
+      .insert({
+        host_account_id: p.hostAccountId,
+        kind: p.kind,
+        title: p.title,
+        body: p.body ?? null,
+        link: p.link ?? null,
+        property_id: p.propertyId ?? null,
+        recipient_profile_id: p.recipientProfileId ?? null,
+      })
+      .select('id')
+      .single();
+    if (insertError) throw insertError;
+    notificationId = (inserted as { id: string } | null)?.id ?? null;
   } catch (e) {
     log.warn('notify_failed', { kind: p.kind, error: String(e) });
     return; // if the durable row failed, skip fan-out
@@ -271,12 +313,43 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
       }
     }
 
-    // 4. Email to this member.
+    // 3b. Property mute gate: a member who muted this path for THIS property
+    //     gets nothing on any channel for the event. Account-level events (no
+    //     property) can never match a mute.
+    if (category && !category.alwaysOn && p.propertyId) {
+      const propertyMuted = await isPropertyMuted(client, recipient.profileId, p.propertyId, category.key, p.kind);
+      if (propertyMuted) {
+        log.info('notify_fanout_muted', { kind: p.kind });
+        continue;
+      }
+    }
+
+    // 4. Email to this member — instantly, or queued into the morning digest
+    //    when the member has digest mode on and the category is digest-eligible
+    //    (extras, review nudges, property knowledge). Urgent and always-on
+    //    paths never digest by construction. A queue write failure falls back
+    //    to an instant send — the email is never lost.
     if (wantsEmail && recipient.email && (category?.alwaysOn || !pref || pref.email_enabled)) {
       const url = p.link ? `${publicEnv.appUrl}${p.link}` : '';
-      const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
-      const text = `${p.body ?? p.title}${action}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
-      await sendHostEmail(recipient.email, `Moche-AI: ${p.title}`, text);
+      if (recipient.digestEnabled && category && !category.alwaysOn && isDigestEligible(category.key) && notificationId) {
+        const { error: queueError } = await client.from('notification_digest_queue').insert({
+          host_account_id: p.hostAccountId,
+          profile_id: recipient.profileId,
+          notification_id: notificationId,
+        });
+        if (queueError) {
+          log.warn('notify_digest_queue_failed', { kind: p.kind });
+          await sendHostEmail(
+            recipient.email,
+            `Moche-AI: ${p.title}`,
+            `${p.body ?? p.title}${url ? `\n\nOpen your dashboard: ${url}` : ''}`,
+          );
+        }
+      } else {
+        const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
+        const text = `${p.body ?? p.title}${action}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
+        await sendHostEmail(recipient.email, `Moche-AI: ${p.title}`, text);
+      }
     }
 
     // 5. Text to this member (escalation + maintenance kinds only, every gate
