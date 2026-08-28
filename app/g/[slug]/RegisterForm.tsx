@@ -10,10 +10,14 @@ import type { PortalT } from '@/lib/guest/portal-strings';
 // the guest to the same identity when they open the portal on another device.
 // Terms are accepted per guest; the SMS opt-in only appears once a phone
 // number is entered (it is meaningless without one).
+//
+// Demo mode (host preview sign-in walkthrough): the form validates natively,
+// then advances without a network call — no identity is registered or saved.
 export function RegisterForm(props: {
   slug: string;
   propertyName: string;
   t: PortalT;
+  demo?: boolean;
   onRegistered: (guestName: string) => void;
   onSessionExpired: () => void;
 }) {
@@ -33,6 +37,10 @@ export function RegisterForm(props: {
     setBusy(true);
     setError(null);
     try {
+      if (props.demo) {
+        props.onRegistered(`${firstName.trim()} ${lastName.trim()}`.trim() || 'Preview Guest');
+        return;
+      }
       const payload = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -78,6 +86,7 @@ export function RegisterForm(props: {
       </div>
       <h2 className="gp-step-title">{t('regTitle')}</h2>
       <p className="gp-step-sub">{t('regSub')}</p>
+      {props.demo && <p className="gp-step-sub">{t('demoSigninHint')}</p>}
       <form onSubmit={submit}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.65rem' }}>
           <div className="gp-field">

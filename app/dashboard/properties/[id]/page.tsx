@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   CalendarDays,
   Check,
+  Eye,
   LifeBuoy,
   MapPin,
   QrCode,
@@ -206,9 +207,9 @@ export default async function PropertyDetailPage({
           <Link href={`${base}/inbox`} className="dash-panel-link">Open inbox →</Link>
         </section>
 
-        {/* Guest access: the stable portal link plus the QR/print entry point.
-            The QR never needs "generating" — the welcome card renders it on
-            demand, and verification at the portal is what protects the stay. */}
+        {/* Guest access: the host's own test path is Preview — the portal opens
+            exactly as a guest sees it, sandboxed so nothing is saved or sent.
+            The copy link + QR stay for sharing with guests. */}
         <section className="card prop-panel rise-in" aria-labelledby="guest-access-heading">
           <div className="prop-panel-head">
             <h2 id="guest-access-heading">
@@ -216,7 +217,7 @@ export default async function PropertyDetailPage({
             </h2>
           </div>
           <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 .9rem', lineHeight: 1.5 }}>
-            Guests scan the portal QR and verify with the contact on their booking — their stay code unlocks the right stay.
+            Guests scan the portal QR and verify with the contact on their booking — their stay code unlocks the right stay. To try it yourself, open the preview: the whole portal works, but nothing you do there is saved or sent.
           </p>
           {portalUrl && (
             <div className="card-2" style={{ padding: '.55rem .75rem', display: 'flex', alignItems: 'center', gap: '.75rem', justifyContent: 'space-between' }}>
@@ -225,7 +226,10 @@ export default async function PropertyDetailPage({
             </div>
           )}
           <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '.9rem' }}>
-            <Link href={`${base}/welcome-card`} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
+            <Link href={`/g/${property.slug}`} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" data-testid="button-preview-guest-portal">
+              <Eye size={15} aria-hidden /> Preview Guest Portal
+            </Link>
+            <Link href={`${base}/welcome-card`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
               <QrCode size={15} aria-hidden /> View QR &amp; print card
             </Link>
           </div>

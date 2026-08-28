@@ -44,8 +44,14 @@ function timeLabel(value: string) {
 // The send action is the concierge service bell everywhere in the portal — one
 // brand gesture for "ask for help" — now sitting in a floating pill composer
 // with Enter-to-send, like the messaging apps guests already know.
+//
+// Host preview: no polling and no real thread. Sends go to the sandbox endpoint
+// (which writes nothing and notifies nobody), and a clearly-marked auto-reply
+// shows how a host response renders in the thread.
 export function HostChatWorkflow(props: {
   slug: string;
+  propertyId?: string;
+  hostPreview?: boolean;
   guestName: string | null;
   // The guest's portal language (Globe picker). Sent with each message so the
   // host receives an auto-translation alongside the original.
@@ -55,17 +61,23 @@ export function HostChatWorkflow(props: {
   onSessionExpired: () => void;
 }) {
   const { t } = props;
+  const hostPreview = props.hostPreview === true;
   const [messages, setMessages] = useState<ThreadMsg[]>([]);
   const [input, setInput] = useState('');
   const [replyTo, setReplyTo] = useState<ThreadMsg | null>(null);
   const [openCards, setOpenCards] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hostPreview);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const load = useCallback(async () => {
+    // Preview has no server thread to load or poll.
+    if (hostPreview) {
+      setLoading(false);
+      return;
+    }
     const res = await fetch(`/api/guest/${props.slug}/host-chat`, { cache: 'no-store' });
     if (res.status === 401) {
       props.onSessionExpired();
@@ -75,13 +87,14 @@ export function HostChatWorkflow(props: {
     const json = await res.json().catch(() => ({}));
     setMessages(Array.isArray(json.messages) ? json.messages : []);
     setLoading(false);
-  }, [props.slug, props.onSessionExpired]);
+  }, [hostPreview, props.slug, props.onSessionExpired]);
 
   useEffect(() => {
+    if (hostPreview) return;
     void load();
     const timer = window.setInterval(() => void load(), 5000);
     return () => window.clearInterval(timer);
-  }, [load]);
+  }, [load, hostPreview]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -114,17 +127,20 @@ export function HostChatWorkflow(props: {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/guest/${props.slug}/host-chat`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          replyToMessageId: replyTo?.id,
-          escalationId: replyTo?.escalationId ?? undefined,
-          language: props.language ?? undefined,
-        }),
-      });
-      if (res.status === 401) {
+      const res = await fetch(
+        hostPreview ? `/api/host/properties/${props.propertyId}/preview-host-chat` : `/api/guest/${props.slug}/host-chat`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            replyToMessageId: replyTo?.id,
+            escalationId: replyTo?.escalationId ?? undefined,
+            language: props.language ?? undefined,
+          }),
+        },
+      );
+      if (res.status === 401 && !hostPreview) {
         props.onSessionExpired();
         return;
       }
@@ -137,6 +153,23 @@ export function HostChatWorkflow(props: {
       setReplyTo(null);
       if (inputRef.current) inputRef.current.style.height = 'auto';
       if (json.message) setMessages((current) => [...current, json.message]);
+      if (hostPreview) {
+        // Show the host how a reply renders, clearly marked as simulated.
+        window.setTimeout(() => {
+          setMessages((current) => [
+            ...current,
+            {
+              id: `preview-reply-${crypto.randomUUID()}`,
+              role: 'host',
+              content: t('hostPreviewAutoReply'),
+              createdAt: new Date().toISOString(),
+              messageKind: 'text',
+              replyToMessageId: null,
+              escalationId: null,
+            },
+          ]);
+        }, 900);
+      }
     } finally {
       setBusy(false);
     }

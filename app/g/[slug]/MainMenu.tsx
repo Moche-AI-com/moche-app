@@ -10,12 +10,18 @@ type MenuKey = Extract<PortalStep, 'ask' | 'host' | 'maintenance' | 'extras'>;
 // distinct workflow. Every card carries the same brand-gradient art tile with
 // its own line glyph, staggers in on entry, and renders in the guest's chosen
 // language via the portal dictionary.
+//
+// Host preview: every card is live — the sandbox endpoints behind them keep the
+// host's actions from being saved or sent. The banner says so, and a second link
+// opens the sign-in demo (code entry → registration) which never touches the
+// network at all.
 export function MainMenu(props: {
   propertyName: string;
   guestName: string | null;
   hostPreview: boolean;
   t: PortalT;
   onSelect: (key: MenuKey) => void;
+  onPreviewSignIn: () => void;
 }) {
   const { t } = props;
   const CARDS: { key: MenuKey; title: string; blurb: string }[] = [
@@ -33,8 +39,13 @@ export function MainMenu(props: {
       <p className="gp-step-sub">{t('menuSub', { property: props.propertyName })}</p>
 
       {props.hostPreview ? (
-        <div className="gp-banner gp-banner-host" role="note">
-          {t('menuHostPreview')}
+        <div style={{ marginBottom: '1rem' }}>
+          <div className="gp-banner gp-banner-host" role="note">
+            {t('menuHostPreview')}
+          </div>
+          <button type="button" className="gp-msg-link" onClick={props.onPreviewSignIn} data-testid="button-preview-signin-flow">
+            {t('menuPreviewSignIn')}
+          </button>
         </div>
       ) : null}
 
@@ -46,7 +57,6 @@ export function MainMenu(props: {
             className="gp-menu-card"
             style={{ animationDelay: `${index * 70}ms` }}
             onClick={() => props.onSelect(key)}
-            disabled={props.hostPreview && key !== 'ask'}
             data-testid={`menu-${key}`}
           >
             <CardArt cardKey={key} />

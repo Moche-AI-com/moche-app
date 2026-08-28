@@ -247,7 +247,17 @@ export function AiChatWorkflow(props: {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, language: props.language ?? undefined }),
+        body: JSON.stringify(
+          props.hostPreview
+            ? {
+                message: trimmed,
+                language: props.language ?? undefined,
+                // The sandbox holds no thread server-side; resend the recent tail so
+                // multi-turn preview conversations keep their context.
+                history: messages.slice(-6).map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
+              }
+            : { message: trimmed, language: props.language ?? undefined },
+        ),
       });
       if (res.status === 401 && !props.hostPreview) {
         props.onSessionExpired();

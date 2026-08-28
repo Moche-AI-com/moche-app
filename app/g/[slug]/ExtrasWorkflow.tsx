@@ -37,8 +37,14 @@ const CATEGORY_KEY: Record<string, string> = {
 // registered name (their own portal, their own identity) so a request is one
 // tap less. All chrome renders through the portal dictionary; host-authored
 // offer titles/descriptions/CTA labels stay in the host's own words.
+//
+// Host preview: the offer catalog is the property's real one, but requesting
+// goes to the sandbox endpoint — no extras_orders row, no host notification.
+// The requests view lists only what this preview session requested, in memory.
 export function ExtrasWorkflow(props: {
   slug: string;
+  propertyId?: string;
+  hostPreview?: boolean;
   offers: GuestExtraOffer[];
   guestName: string | null;
   t: PortalT;
@@ -46,6 +52,7 @@ export function ExtrasWorkflow(props: {
   onSessionExpired: () => void;
 }) {
   const { t } = props;
+  const hostPreview = props.hostPreview === true;
   const [view, setView] = useState<View>('browse');
   const [selected, setSelected] = useState<GuestExtraOffer | null>(null);
   const [variant, setVariant] = useState<string | null>(null);
@@ -60,6 +67,11 @@ export function ExtrasWorkflow(props: {
   const [ordersLoaded, setOrdersLoaded] = useState(false);
 
   const loadOrders = useCallback(async () => {
+    // Preview has no server-side orders; the requests view is local-only.
+    if (hostPreview) {
+      setOrdersLoaded(true);
+      return;
+    }
     try {
       const res = await fetch(`/api/guest/${props.slug}/extras-orders`);
       if (res.status === 401) { props.onSessionExpired(); return; }
@@ -68,7 +80,7 @@ export function ExtrasWorkflow(props: {
       setOrders(Array.isArray(json) ? json : (json.orders ?? []));
       setOrdersLoaded(true);
     } catch { setOrdersLoaded(true); }
-  }, [props.slug, props.onSessionExpired]);
+  }, [hostPreview, props.slug, props.onSessionExpired]);
 
   useEffect(() => { if (view === 'requests') void loadOrders(); }, [view, loadOrders]);
 
@@ -82,11 +94,22 @@ export function ExtrasWorkflow(props: {
     if (!guestName.trim()) { setError(t('xErrName')); return; }
     setBusy(true); setError(null);
     try {
-      const res = await fetch(`/api/guest/${props.slug}/extras-request`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ offerId: selected.id, quantity: selected.kind === 'package' ? undefined : quantity, variant: variant ?? undefined, guestName: guestName.trim(), note: note.trim() || undefined, preferredFor: preferredFor ? new Date(preferredFor).toISOString() : undefined }) });
+      const res = await fetch(
+        hostPreview ? `/api/host/properties/${props.propertyId}/preview-extras-request` : `/api/guest/${props.slug}/extras-request`,
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ offerId: selected.id, quantity: selected.kind === 'package' ? undefined : quantity, variant: variant ?? undefined, guestName: guestName.trim(), note: note.trim() || undefined, preferredFor: preferredFor ? new Date(preferredFor).toISOString() : undefined }) },
+      );
       const json = await res.json().catch(() => ({}));
-      if (res.status === 401) { props.onSessionExpired(); return; }
+      if (res.status === 401 && !hostPreview) { props.onSessionExpired(); return; }
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : t('xErrOption'));
-      setRequestNumber(typeof json.requestNumber === 'string' ? json.requestNumber : null); setView('done');
+      const ref = typeof json.requestNumber === 'string' ? json.requestNumber : null;
+      setRequestNumber(ref);
+      if (hostPreview) {
+        setOrders((current) => [
+          ...current,
+          { id: `preview-${crypto.randomUUID()}`, item_title: selected.title, fulfillment_status: 'requested', request_number: ref ?? undefined, created_at: new Date().toISOString() },
+        ]);
+      }
+      setView('done');
     } catch (err) { setError(err instanceof Error ? err.message : t('xErrOption')); }
     finally { setBusy(false); }
   }
