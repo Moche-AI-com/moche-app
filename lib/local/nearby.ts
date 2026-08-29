@@ -9,12 +9,45 @@ import { normalizePlaceName } from '@/lib/local/dedupe';
 // unless a host forces it. Place data is slow-moving, and caching in our own
 // table means guest traffic never fans out to a third-party API.
 export const NEARBY_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
-// Discovery radius: ~5 miles. The old 2 km walkable radius missed exactly the
-// places guests ask about most (golf courses, attractions, beaches). The
-// per-category cap below still bounds the total set, so a dense downtown
-// property cannot flood the guide.
-export const NEARBY_RADIUS_M = 8000;
+// Discovery radius: 10 miles (2026-08-28 directive; was ~5). The wider net captures
+// the places guests actually ask about — beaches, golf, attractions, the good
+// restaurant two towns over — and the per-category caps below still bound the total
+// set, so a dense downtown property cannot flood the guide.
+export const NEARBY_RADIUS_M = 16093;
 const PER_CATEGORY_LIMIT = 15;
+
+// Per-category write-time caps (2026-08-28). The provider-side perCategoryLimit above
+// bounds what we FETCH; these bound what we STORE, per category, at the 10-mile
+// radius. Food & drink and attractions get the most room — they are what guests ask
+// about; essentials stay small on purpose: the fifth-closest pharmacy is not a
+// recommendation, it's noise. Keys are lib/local/categories.ts NEARBY_CATEGORIES.
+const CATEGORY_CAP: Record<string, number> = {
+  restaurant: 20,
+  tourist_attraction: 20,
+  park: 12,
+  cafe: 12,
+  bar: 10,
+  grocery: 8,
+  bakery: 8,
+  golf_course: 8,
+  convenience_store: 6,
+  pharmacy: 5,
+  hospital: 4,
+  gas_station: 4,
+};
+const CATEGORY_CAP_DEFAULT = 8;
+
+/** Keep at most each category's cap, in the provider's (nearest-first) order. */
+function capPerCategory<T extends { category: string }>(places: T[]): T[] {
+  const counts = new Map<string, number>();
+  return places.filter((p) => {
+    const cap = CATEGORY_CAP[p.category] ?? CATEGORY_CAP_DEFAULT;
+    const seen = counts.get(p.category) ?? 0;
+    if (seen >= cap) return false;
+    counts.set(p.category, seen + 1);
+    return true;
+  });
+}
 
 export interface RefreshResult {
   ok: boolean;
@@ -35,12 +68,14 @@ export async function refreshNearbyPlaces(
     return { ok: false, found: 0, skipped: 'no_coords' };
   }
 
-  const { places, provider } = await geoNearbyPlaces({
+  const fetched = await geoNearbyPlaces({
     lat: coords.lat,
     lng: coords.lng,
     radiusMeters: NEARBY_RADIUS_M,
     perCategoryLimit: PER_CATEGORY_LIMIT,
   });
+  const provider = fetched.provider;
+  const places = capPerCategory(fetched.places);
 
   const admin = createAdminClient();
   const now = new Date().toISOString();

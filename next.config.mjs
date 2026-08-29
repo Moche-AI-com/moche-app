@@ -14,6 +14,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 //   us.i.posthog.com / us-assets.i.posthog.com  — product analytics.
 //   *.supabase.co (https + wss)  — database, auth, and realtime.
 //   fonts.googleapis.com / fonts.gstatic.com / api.fontshare.com  — webfonts.
+//   api.mapbox.com / *.tiles.mapbox.com / events.mapbox.com  — the interactive Local
+//     map (Mapbox GL JS loads from the Mapbox CDN; see local/LocalMap.tsx).
 //   Sentry is NOT listed: browser events are tunnelled through the same-origin
 //     /monitoring rewrite configured below, so it needs no external origin.
 //   img-src allows https: because hosts may paste an external property image URL.
@@ -23,14 +25,14 @@ const CSP_DIRECTIVES = [
   "form-action 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://us-assets.i.posthog.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://us-assets.i.posthog.com https://api.mapbox.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com https://api.mapbox.com",
   "font-src 'self' data: https://fonts.gstatic.com https://api.fontshare.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' https:",
   "worker-src 'self' blob:",
   "frame-src 'self' https://challenges.cloudflare.com",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://challenges.cloudflare.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://challenges.cloudflare.com https://api.mapbox.com https://*.tiles.mapbox.com https://events.mapbox.com",
   'report-uri /api/csp-report',
 ].join('; ');
 

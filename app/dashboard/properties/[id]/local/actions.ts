@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requirePropertyAccess, getUser } from '@/lib/auth/guards';
 import { normalizePlaceAddress, normalizePlaceName } from '@/lib/local/dedupe';
+import { refreshNearbyPlaces } from '@/lib/local/nearby';
+import { geoGeocode } from '@/lib/local/geo';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 
@@ -22,6 +24,48 @@ function tagsFrom(formData: FormData, name: string): string[] {
       .filter(Boolean)
       .slice(0, 12),
   ));
+}
+
+export interface LocalRefreshState {
+  error?: string;
+  ok?: boolean;
+  found?: number;
+}
+
+// "Refresh from map" (2026-08-28): re-run discovery at the 10-mile radius and upsert
+// results. Thin wrapper over the shared lib/local/nearby refresh — host curation
+// (favorites, notes, hides) survives because that upsert only touches
+// discovery-owned columns. Lives here now that /nearby is a redirect.
+export async function refreshLocalPlacesAction(
+  _prev: LocalRefreshState,
+  formData: FormData,
+): Promise<LocalRefreshState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.editBrain) return { error: 'You do not have permission to edit this property.' };
+
+  const p = access.property as { lat: number | null; lng: number | null };
+  if (typeof p.lat !== 'number' || typeof p.lng !== 'number') {
+    return { error: 'Set the property location first (Configuration → Address) so we can find nearby places.' };
+  }
+
+  const result = await refreshNearbyPlaces(propertyId, { lat: p.lat, lng: p.lng });
+  if (!result.ok && result.skipped !== 'no_results') {
+    return { error: 'Could not fetch nearby places right now. Please try again in a moment.' };
+  }
+
+  const user = await getUser();
+  await audit(createAdminClient(), {
+    action: 'local_places.refreshed',
+    actorProfileId: user?.id ?? null,
+    hostAccountId: access.property.host_account_id,
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+  });
+
+  revalidatePath(localPath(propertyId));
+  return { ok: true, found: result.found };
 }
 
 export async function addManualLocalPlaceAction(formData: FormData): Promise<void> {
@@ -78,6 +122,24 @@ export async function addManualLocalPlaceAction(formData: FormData): Promise<voi
   if (error) {
     log.warn('local_manual_recommendation_insert_failed', { propertyId, error: error.message });
     return;
+  }
+
+  // Best-effort geocode so a manual place renders on the interactive map and earns a
+  // directions link (2026-08-28). Never blocks the save: a geocode miss just means
+  // the place is list-only until someone adds coordinates.
+  if (address && placeId) {
+    try {
+      const geo = await geoGeocode(address);
+      if (geo) {
+        await admin
+          .from('places')
+          .update({ lat: geo.lat, lon: geo.lng } as never)
+          .eq('id', placeId)
+          .is('lat', null);
+      }
+    } catch (e) {
+      log.info('local_manual_geocode_skipped', { propertyId, error: String(e) });
+    }
   }
 
   await audit(admin, {

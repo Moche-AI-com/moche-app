@@ -1,17 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, EyeOff, Heart, MapPin, Pencil, Plus, X } from 'lucide-react';
-import { addManualLocalPlaceAction, updateLocalPlaceAction } from './actions';
+import { useFormState, useFormStatus } from 'react-dom';
+import { Check, EyeOff, Heart, MapPin, Pencil, Plus, RefreshCw, X } from 'lucide-react';
+import { addManualLocalPlaceAction, refreshLocalPlacesAction, updateLocalPlaceAction, type LocalRefreshState } from './actions';
 import type { LocalPlaceRow } from '@/lib/local/canonical';
 
 export type { LocalPlaceRow } from '@/lib/local/canonical';
+
+function RefreshButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      className="btn btn-sm"
+      disabled={pending}
+      style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}
+      data-testid="local-refresh"
+    >
+      <RefreshCw size={14} className={pending ? 'spin' : undefined} aria-hidden />
+      {pending ? 'Refreshing…' : 'Refresh from map'}
+    </button>
+  );
+}
 
 function PlaceEditor({ propertyId, place }: { propertyId: string; place: LocalPlaceRow }) {
   const [editing, setEditing] = useState(false);
   const label = place.hostNote ? 'Edit note' : '+ Add note';
   return (
-    <article className="card" style={{ marginBottom: '.75rem', padding: '1rem' }}>
+    <article className="card" style={{ marginBottom: '.75rem', padding: '1rem' }} id={`place-${place.recommendationId}`}>
       <div style={{ display: 'flex', gap: '.75rem', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, display: 'flex', gap: '.45rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -52,15 +69,32 @@ function PlaceEditor({ propertyId, place }: { propertyId: string; place: LocalPl
 
 export function LocalPlaceManager({ propertyId, places, canEdit }: { propertyId: string; places: LocalPlaceRow[]; canEdit: boolean }) {
   const [adding, setAdding] = useState(false);
+  const [refreshState, refreshAction] = useFormState<LocalRefreshState, FormData>(refreshLocalPlacesAction, {});
   if (!canEdit) return null;
   return (
     <section style={{ marginTop: '1.25rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '.75rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '.75rem', flexWrap: 'wrap' }}>
         <h2 style={{ fontSize: '1rem', margin: 0 }}>Manage places</h2>
-        <button type="button" className="btn btn-sm btn-primary" onClick={() => setAdding((value) => !value)} style={{ minHeight: 44 }}>
-          {adding ? <X size={14} aria-hidden /> : <Plus size={14} aria-hidden />} {adding ? 'Close' : 'Add manually'}
-        </button>
+        <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Discovery moved here when /nearby retired (2026-08-28): one refresh
+              re-runs the 10-mile scan without clobbering any curation. */}
+          <form action={refreshAction} style={{ display: 'inline-flex', margin: 0 }}>
+            <input type="hidden" name="propertyId" value={propertyId} />
+            <RefreshButton />
+          </form>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => setAdding((value) => !value)} style={{ minHeight: 44 }}>
+            {adding ? <X size={14} aria-hidden /> : <Plus size={14} aria-hidden />} {adding ? 'Close' : 'Add manually'}
+          </button>
+        </div>
       </div>
+      {refreshState.error && (
+        <p className="alert alert-error" style={{ fontSize: '.82rem', marginBottom: '.75rem' }}>{refreshState.error}</p>
+      )}
+      {refreshState.ok && (
+        <p className="alert alert-success" style={{ fontSize: '.82rem', marginBottom: '.75rem' }}>
+          {refreshState.found === 0 ? 'No new places found nearby.' : `Updated — ${refreshState.found} place(s) nearby.`}
+        </p>
+      )}
       {adding && (
         <form action={addManualLocalPlaceAction} className="card" style={{ marginBottom: '.75rem', padding: '1rem' }}>
           <input type="hidden" name="propertyId" value={propertyId} />
