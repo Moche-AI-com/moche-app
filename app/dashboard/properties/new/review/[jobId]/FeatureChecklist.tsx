@@ -42,7 +42,7 @@ export function FeatureChecklist({ propertyId }: { propertyId: string }) {
       <div style={{ marginTop: '.75rem' }}>
         <p className="faint" style={{ marginTop: 0 }}>
           Tap what applies — pool, grill, EV charger, anything. Each becomes its own section in
-          the property's Brain, so the concierge can answer guest questions about it from day one.
+          the property&apos;s Brain, so the concierge can answer guest questions about it from day one.
           Where it is, house rules for it, and notes are added anytime on the Brain page.
         </p>
         <form action={formAction}>
