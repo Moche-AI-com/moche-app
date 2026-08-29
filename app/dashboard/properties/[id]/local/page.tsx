@@ -3,6 +3,7 @@ import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { LocalPlaceManager } from './LocalPlaceManager';
 import { LocalSearch } from './LocalSearch';
+import { LocalMap } from './LocalMap';
 import { loadCanonicalPlaces } from '@/lib/local/canonical';
 import { localCategoryLabel } from '@/lib/local/merge';
 
@@ -27,6 +28,10 @@ export default async function LocalOverviewPage({ params }: { params: Promise<{ 
   const categories = [...byCategory.entries()].sort(([a], [b]) =>
     localCategoryLabel(a).localeCompare(localCategoryLabel(b)),
   );
+
+  // Property coordinates for the interactive map (2026-08-28).
+  const coords = access.property as { lat?: number | null; lng?: number | null };
+  const hasCoords = typeof coords.lat === 'number' && typeof coords.lng === 'number';
 
   const row = (place: (typeof guestVisible)[number]) => (
     <li key={place.recommendationId} className="report-list-row">
@@ -85,6 +90,14 @@ export default async function LocalOverviewPage({ params }: { params: Promise<{ 
           </div>
         </div>
       </div>
+
+      {/* Interactive map between the stats and the lists (2026-08-28). Degrades to the
+          static preview when the public Mapbox token or the CDN script is unavailable. */}
+      {hasCoords && (
+        <div style={{ marginBottom: '1.25rem' }}>
+          <LocalMap center={{ lat: coords.lat as number, lng: coords.lng as number }} places={places} />
+        </div>
+      )}
 
       {guestVisible.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2rem 1rem' }}>

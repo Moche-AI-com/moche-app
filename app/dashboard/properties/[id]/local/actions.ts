@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requirePropertyAccess, getUser } from '@/lib/auth/guards';
 import { normalizePlaceAddress, normalizePlaceName } from '@/lib/local/dedupe';
 import { refreshNearbyPlaces } from '@/lib/local/nearby';
+import { geoGeocode } from '@/lib/local/geo';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 
@@ -121,6 +122,24 @@ export async function addManualLocalPlaceAction(formData: FormData): Promise<voi
   if (error) {
     log.warn('local_manual_recommendation_insert_failed', { propertyId, error: error.message });
     return;
+  }
+
+  // Best-effort geocode so a manual place renders on the interactive map and earns a
+  // directions link (2026-08-28). Never blocks the save: a geocode miss just means
+  // the place is list-only until someone adds coordinates.
+  if (address && placeId) {
+    try {
+      const geo = await geoGeocode(address);
+      if (geo) {
+        await admin
+          .from('places')
+          .update({ lat: geo.lat, lon: geo.lng } as never)
+          .eq('id', placeId)
+          .is('lat', null);
+      }
+    } catch (e) {
+      log.info('local_manual_geocode_skipped', { propertyId, error: String(e) });
+    }
   }
 
   await audit(admin, {
