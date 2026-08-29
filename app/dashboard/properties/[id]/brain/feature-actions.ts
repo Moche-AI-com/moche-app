@@ -111,6 +111,52 @@ export async function saveFeatureAction(
   return { ok: true };
 }
 
+// Bulk-add from the onboarding checklist (2026-08-28). One tap per catalog entry the
+// host toggled; details come later on the Brain page. Rows insert one at a time so a
+// name the property already has (the partial unique index) skips instead of aborting
+// the batch — revisiting onboarding stays idempotent.
+export async function addFeaturesFromChecklistAction(
+  _prev: FeatureActionState,
+  formData: FormData,
+): Promise<FeatureActionState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.editBrain) return { error: 'You do not have permission to edit this property Brain.' };
+
+  const keys = formData.getAll('keys').map(String);
+  const entries = FEATURE_CATALOG.filter((e) => keys.includes(e.key));
+  if (entries.length === 0) return { ok: true };
+
+  const ctx = await requireSession();
+  const supabase = createClient();
+
+  for (const entry of entries) {
+    const { error } = await supabase
+      .from('property_features')
+      .insert({
+        property_id: propertyId,
+        label: entry.label,
+        catalog_key: entry.key,
+        created_by: ctx.user.id,
+        created_via: 'host',
+      } as never);
+    if (error && error.code === '23505') continue;
+    if (error) log.warn('feature_checklist_insert_failed', { propertyId, key: entry.key, error: error.message });
+  }
+
+  await audit(supabase, {
+    action: 'brain.features.checklist_added',
+    actorProfileId: ctx.user.id,
+    hostAccountId: access.property.host_account_id,
+    propertyId,
+    targetType: 'property',
+    targetId: propertyId,
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}/brain`);
+  return { ok: true };
+}
+
 // Archive, never delete: knowledge filed under the feature keeps its feature_id and
 // stays retrievable by the concierge; the feature disappears from pickers and the
 // routing guide until it is re-added.

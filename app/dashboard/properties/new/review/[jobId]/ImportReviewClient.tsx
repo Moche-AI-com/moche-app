@@ -6,6 +6,7 @@ import type { ImportedReviewGroup } from '@/lib/property-import/extract';
 import { updatePropertyAddressAction } from '../../../actions';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { GapInterview } from './GapInterview';
+import { FeatureChecklist } from './FeatureChecklist';
 
 // Current address/location fields of the draft property, used to pre-fill the
 // address card (and to skip the requirement when it was already captured).
@@ -110,6 +111,9 @@ export function ImportReviewClient({ jobId, propertyId, groups, initialAddress }
       </details>;
     })}
     <GapInterview jobId={jobId} />
+    {/* What this place has — after the gap interview, before the host leaves the
+        review flow (2026-08-28). Taps create Brain feature sections. */}
+    <FeatureChecklist propertyId={propertyId} />
     <div style={{ display: 'flex', gap: '.75rem', alignItems: 'center' }}>
       {addressSaved ? (
         <Link className="button" href={`/dashboard/properties/${propertyId}`}>Continue to property</Link>
