@@ -223,12 +223,28 @@ export const LAUNCH_DATE_LABEL = 'January 1, 2027';
 // no-card-before-launch promise on the same page.
 export const FOUNDING_DISCOUNT_PERCENT = 50;
 export const FOUNDING_DISCOUNT_MONTHS = 12;
-export const FOUNDING_ACCOUNT_CAP = 100;
+export const FOUNDING_ACCOUNT_CAP = 25;
 
-// The 30-day top-tier trial machinery still exists in entitlements and the
-// Stripe webhook and is left intact for post-launch use. It is simply no longer
-// marketed pre-launch, because everything is free until LAUNCH_DATE_ISO.
-export const FOUNDING_TRIAL_DAYS = 30;
+// The live Stripe coupon that actually delivers the founding rate. Checkout
+// attaches it automatically so a founding host never has to know a code exists.
+//
+// The cap above is marketing copy; the binding cap is `max_redemptions` on this
+// coupon in Stripe, which Stripe enforces atomically. Keep the two in step: if
+// FOUNDING_ACCOUNT_CAP changes, a NEW coupon must be created, because Stripe
+// treats `max_redemptions` as immutable after creation.
+//
+// Coupon shape: percent_off 50, duration repeating, duration_in_months 12,
+// max_redemptions 25. A promotion code (FOUNDING50) points at the same coupon
+// and shares its redemption budget, for hosts who arrive with a code in hand.
+export const FOUNDING_COUPON_ID = 'founding-host-50-12mo';
+
+// Trials are no longer granted at checkout: stacking a free month on top of a
+// repeating coupon silently ate one of the 12 discounted months, because Stripe
+// starts a repeating discount's clock when it is applied, not at first payment.
+// The founding offer is the discount alone. This cap is retained only as a
+// defensive default for a `trialing` subscription that reaches the webhook from
+// outside our checkout flow (a hand-made subscription in the Stripe dashboard),
+// so such an account gets a sane property allowance instead of null.
 export const FOUNDING_TRIAL_PROPERTY_LIMIT = 5;
 
 export const SALES_EMAIL = 'hostspark.org@gmail.com';

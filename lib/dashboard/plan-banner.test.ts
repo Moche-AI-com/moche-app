@@ -142,7 +142,7 @@ describe('planBannerFor', () => {
   it('still renders a trial banner when the end date is missing', () => {
     const b = planBannerFor(ent({ trialing: true, active: true, trialEnd: null }), NOW);
     expect(b?.variant).toBe('trial');
-    expect(b?.title).toBe('Founding Member trial');
+    expect(b?.title).toBe('Your plan is in a trial period');
   });
 
   // A trial that has lapsed into read-only must not read as a live trial.

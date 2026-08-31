@@ -37,8 +37,10 @@ export default async function ProfileOverviewPage() {
 
   const planLabel = !ent
     ? null
+    // No new subscription starts on a trial, so this is a defensive label for a
+    // subscription Stripe reports as trialing rather than a state we create.
     : ent.trialing
-      ? 'Founding Member trial'
+      ? 'Trial'
       : ent.planId
         ? PLANS[ent.planId as PlanId].name
         : 'Free tier';

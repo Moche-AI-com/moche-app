@@ -43,6 +43,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     })),
     {
+      // The founding host terms are a public, indexable document, linked from the
+      // founding section on the landing page. It sits outside LEGAL_DOCS because it
+      // summarizes an offer rather than being a governing agreement.
+      url: `${SITE_URL}/founding-terms`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.3,
+    },
+    {
       url: `${SITE_URL}/legal`,
       lastModified: legalIndexLastModified ? new Date(legalIndexLastModified) : new Date(),
       changeFrequency: 'monthly',

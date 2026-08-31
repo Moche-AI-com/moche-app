@@ -272,7 +272,7 @@ Replacement:
 - **Founding Host is the pre-launch signup itself.** No application, no email, no
   card. Signing up before launch makes you a founding host.
 - **The offer is a locked founding rate: 50% off the first 12 months of billing
-  after launch, locked at signup, for the first 100 accounts.** At 50% the
+  after launch, locked at signup, for the first 25 accounts.** At 50% the
   single-property rate is $14.50, still a 95.9% gross margin, so the offer is
   funded out of margin and needs no cross-subsidy.
 - **One CTA, into real onboarding.** Signup leads to profile, then properties,
@@ -280,7 +280,7 @@ Replacement:
   captures the setup work that is the real cost centre, gives us genuine host and
   property data before launch, and turns go-live into a switch flip rather than a
   cold start.
-- **Honest scarcity only.** "The first 100 accounts" is stated without a live
+- **Honest scarcity only.** "The first 25 accounts" is stated without a live
   remaining-spots counter. A real counter would require a database read on a page
   that is currently statically prerendered, and a fake one is not an option.
 
@@ -333,9 +333,8 @@ allowance, because the plan is unmetered.
   add a second code path for no benefit.
 - **Portfolio and Enterprise** are contract-priced and sales-assisted. Checkout
   rejects them by plan id, so a price object would be unreachable.
-- **The founding 50% discount** is not yet a Stripe coupon. Checkout passes
-  `allow_promotion_codes: true`, so the intended mechanism is a promotion code
-  created at launch, once the founding cohort is known.
+- **A `$0` trial price.** The founding offer is a discount, not a trial. See
+  §8 for why the two cannot be stacked.
 
 ### Owner action required
 
@@ -345,7 +344,57 @@ allowance, because the plan is unmetered.
 read for a purchasable plan and can be cleared. Environment variables are
 outside the agent boundary, so this is a manual step in Vercel.
 
-## 8. Decisions, resolved
+## 8. Founding discount and quantity sync (2026-08-31)
+
+### The founding offer is a coupon, not a trial
+
+Live coupon `founding-host-50-12mo`: `percent_off: 50`, `duration: repeating`,
+`duration_in_months: 12`, `max_redemptions: 25`, metadata
+`{program: founding_host, account_cap: "25"}`. Promotion code `FOUNDING50`
+(`promo_1UAau47L7XoO558Mob2i46aJ`) points at it for any manual or campaign use.
+
+Three decisions worth recording:
+
+1. **The cap is enforced by Stripe, not by us.** `max_redemptions: 25` is atomic
+   and needs no counter table, no migration, and no race handling. A DB counter
+   would have had to be read and incremented across a redirect to a hosted page
+   the host might abandon, which is exactly the shape that oversells.
+   `max_redemptions` is **immutable** after creation, so changing the cap means
+   creating a new coupon; a first attempt at 100 was created and deleted (zero
+   redemptions, no promo code attached) when the cap moved to 25.
+2. **The 30-day trial was removed rather than kept alongside the discount.**
+   Stripe starts a repeating coupon's clock when the coupon is *applied*, not when
+   the first charge lands, so a trial in front of the discount silently consumes
+   one of the twelve discounted months. Four marketing surfaces already promised
+   "50% off for 12 months" and none promised a trial, so the trial was the odd one
+   out. It was also uncapped: any new account could take it, indefinitely.
+3. **`discounts` and `allow_promotion_codes` are mutually exclusive** on a
+   Checkout Session. A founding host therefore gets the discount attached for
+   them with no code box; everyone else keeps the code box, so a later campaign
+   still works. Eligibility is `lib/billing/founding.ts` and turns on two facts:
+   the account has never had a subscription (so cancel-and-resubscribe cannot
+   restart the twelve months) and the coupon still has redemptions left. Any
+   error reading the coupon returns `false`, so a Stripe hiccup degrades to full
+   price rather than a failed checkout.
+
+### Quantity follows the portfolio
+
+Per-property pricing only works if the subscription quantity tracks the property
+count. It previously only did at checkout, so a host who added a property was
+billed for their signup-day count forever.
+
+`lib/billing/quantity-sync.ts` closes that. `countBillableProperties` is the one
+definition of a billable property (not deleted, not archived, floor of 1) and is
+now used by checkout as well, so signup and steady state cannot disagree.
+`syncBillableQuantity` is called from every property lifecycle mutation: create,
+clone, listing import, archive, restore, and delete.
+
+It uses `proration_behavior: 'none'`. The next invoice is correct, and the host is
+never surprised by a mid-cycle charge for adding a property. It never throws and
+never writes the `subscriptions` row: the webhook stays the single writer, so
+there is no second source of truth to drift.
+
+## 9. Decisions, resolved
 
 All four rates, the founding offer, the setup fee, and the Portfolio band were
 delegated to the agent and are now locked in `lib/constants.ts`, which is the

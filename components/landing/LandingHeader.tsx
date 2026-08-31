@@ -6,7 +6,7 @@ import styles from './landing.module.css';
 // The Pricing and Gallery anchor links were removed deliberately. On a page
 // this short they only sent people to a section they were going to scroll past
 // anyway, and they crowded the two things the header is actually for: signing
-// in, and starting a trial.
+// in, and starting an account.
 export function LandingHeader() {
   return (
     <header className={styles.header}>
@@ -18,7 +18,7 @@ export function LandingHeader() {
             Sign in
           </Link>
           <Link href="/signup" className={`btn btn-primary btn-sm ${styles.headerBtn}`}>
-            Start free trial
+            Start free today
           </Link>
         </nav>
       </div>

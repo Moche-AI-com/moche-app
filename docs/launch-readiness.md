@@ -161,8 +161,11 @@ webhook, but nothing markets it before launch. It contradicted the no-card
 promise it was printed next to, and it is redundant while every pre-launch
 account is free until January 1, 2027. The Founding Host Program that replaced
 it on the landing page is not a trial at all: signing up before launch locks 50%
-off the first 12 months of billing, capped at the first 100 accounts, with no
-application, no card, and no mailto.
+off the first 12 months of billing, capped at the first 25 accounts, with no
+application, no card, and no mailto. The trial is now gone from checkout too: it
+would have consumed one of the discounted months, because Stripe starts a
+repeating coupon's clock when the coupon is applied rather than when the first
+charge lands.
 
 Guest conversations are unmetered on every plan: there are no allowances and
 no per-conversation fees (the pitch deck has none). The pooled-allowance and

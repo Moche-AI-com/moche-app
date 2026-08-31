@@ -96,7 +96,8 @@ export function FoundingBand() {
             <p className={`muted ${styles.foundingTrial}`}>
               The founding rate is limited to the first {FOUNDING_ACCOUNT_CAP} accounts. After
               your {FOUNDING_DISCOUNT_MONTHS} discounted months you move to standard pricing,
-              and you can cancel at any point before or after launch.
+              and you can cancel at any point before or after launch.{' '}
+              <Link href="/founding-terms">Founding host terms</Link>.
             </p>
           </div>
           <div className={styles.foundingMedia}>

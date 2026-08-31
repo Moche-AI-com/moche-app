@@ -114,6 +114,11 @@ export function planBannerFor(ent: PlanBannerInput, now: Date = new Date()): Pla
     };
   }
 
+  // Defensive path. Checkout no longer grants a trial (the founding offer is a
+  // Stripe coupon instead, see lib/billing/founding.ts), so this only fires for a
+  // subscription Stripe reports as trialing: a legacy row, or one adjusted by hand
+  // in the Stripe dashboard. It stays because such a host still deserves an
+  // explanation of why their concierge will change state on a date.
   if (ent.trialing) {
     const left = daysUntil(ent.trialEnd, now);
     return {
@@ -121,7 +126,7 @@ export function planBannerFor(ent: PlanBannerInput, now: Date = new Date()): Pla
       tone: left !== null && left <= 3 ? 'warn' : 'info',
       title:
         left === null
-          ? 'Founding Member trial'
+          ? 'Your plan is in a trial period'
           : left === 0
             ? 'Your trial ends today'
             : `${pluralize(left, 'day')} left in your trial`,

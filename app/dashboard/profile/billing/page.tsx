@@ -6,8 +6,9 @@ import { getEntitlements, canCreateProperty } from '@/lib/billing/entitlements';
 import {
   PLANS,
   SALES_EMAIL,
-  FOUNDING_TRIAL_DAYS,
-  FOUNDING_TRIAL_PROPERTY_LIMIT,
+  FOUNDING_ACCOUNT_CAP,
+  FOUNDING_DISCOUNT_MONTHS,
+  FOUNDING_DISCOUNT_PERCENT,
   GUIDED_SETUP_USD,
   GUIDED_SETUP_ADDITIONAL_USD,
   HOST_PRICING_BANDS,
@@ -86,12 +87,28 @@ export default async function ProfileBillingPage() {
         </div>
       ) : null}
 
+      {/* The founding offer, stated where the host is about to choose a plan. Shown
+          only before there is a subscription, because that is exactly when checkout
+          will attach it (see lib/billing/founding.ts). Deliberately hedged with "if
+          you are among": the real cap is the Stripe coupon's max_redemptions, so
+          this page cannot promise a seat it does not control. */}
+      {!ent.active ? (
+        <div className="alert alert-info" style={{ marginBottom: '1.5rem' }}>
+          <strong>Founding host rate.</strong> If you are among the first{' '}
+          {FOUNDING_ACCOUNT_CAP} accounts, {FOUNDING_DISCOUNT_PERCENT}% off is applied
+          automatically at checkout and holds for your first {FOUNDING_DISCOUNT_MONTHS} months.
+          There is no code to enter, and you can cancel at any point.
+        </div>
+      ) : null}
+
+      {/* Defensive: no new subscription starts on a trial, but one that Stripe reports
+          as trialing (a legacy row, or a subscription adjusted by hand in the Stripe
+          dashboard) should still explain itself rather than show nothing. */}
       {ent.trialing && ent.trialEnd ? (
         <div className="alert alert-info" style={{ marginBottom: '1.5rem' }}>
-          <strong>Founding Member trial.</strong> Your first {FOUNDING_TRIAL_DAYS} days are $0
-          with top-tier features, up to {FOUNDING_TRIAL_PROPERTY_LIMIT} properties. Your card is
-          already on file, so your plan continues automatically on {formatDate(ent.trialEnd)}. No
-          second checkout, and you can cancel any time before then.
+          <strong>Your plan is in a trial period.</strong> Your card is already on file, so your
+          plan continues automatically on {formatDate(ent.trialEnd)}. No second checkout, and you
+          can cancel any time before then.
         </div>
       ) : null}
 
