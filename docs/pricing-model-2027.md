@@ -239,7 +239,14 @@ is a far smaller change than renaming a union type across all of them.
 `coHosts` and `cloning` are currently derived as `plan.id !== 'starter'`, which
 stays correct without modification: the free tier has neither.
 
-## 5. Concierge Setup, replacing the $149 per-property fee
+## 5. Concierge Setup — withdrawn 2026-08-31
+
+**Not offered.** The owner withdrew the paid setup service before launch, and no
+user-visible surface mentions it. Setup is self serve, free, and described that
+way on the pricing section, the dashboard billing page, the founding host terms
+and the closing CTA. The table below is the historical record of the shape, kept
+because the Stripe prices still exist unreferenced and because a per-account
+structure is what we would reintroduce.
 
 Optional, priced per account rather than per property, and presented as a service
 rather than a pricing tier.

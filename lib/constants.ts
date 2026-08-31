@@ -249,10 +249,20 @@ export const FOUNDING_TRIAL_PROPERTY_LIMIT = 5;
 
 export const SALES_EMAIL = 'hostspark.org@gmail.com';
 
-// Optional Concierge Setup, priced per ACCOUNT rather than per property. The old
-// $149/property fee put a $745 wall in front of a five-property host before they
-// had used the product, and no self-serve competitor publishes a mandatory setup
-// fee at all. Self-service setup stays free and is presented as the default.
+// Concierge Setup pricing, retained but NOT OFFERED. As of 2026-08-31 the owner
+// pulled the paid setup service from the product: no page, plan, terms document
+// or dashboard surface mentions it, and nothing charges it. Setup is self serve,
+// free, and the only thing we tell a host about setup.
+//
+// These values are kept because the Stripe prices still exist (nothing charges
+// them, and they were never wired into checkout) and because the shape of the
+// offer is what we would reintroduce: priced per ACCOUNT rather than per
+// property. The
+// old $149/property fee put a $745 wall in front of a five-property host before
+// they had used the product, and no self-serve competitor publishes a mandatory
+// setup fee at all.
+//
+// Do not wire these into user-visible copy without an explicit owner decision.
 export const GUIDED_SETUP_USD = 199;
 export const GUIDED_SETUP_ADDITIONAL_USD = 49;
 
