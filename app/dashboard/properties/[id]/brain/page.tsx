@@ -15,6 +15,12 @@
 //     so the column always exists: the manager offers the full taxonomy and every save
 //     round-trips its section. Also removed: an unused property_settings query whose
 //     only selected column (confidence_threshold) was never read on this page.
+//   - The Appliance helper card and the legacy readiness engine (2026-08-31).
+//     Appliance management lives on the dedicated Appliances page (verified
+//     inventory + manual sections) — the helper card duplicated it. And the header
+//     rendered two readiness notions: the legacy 8-category label AND the registry
+//     completeness score the publish gate reads. The canonical number wins, and
+//     pending AI reviews now surface as their own count.
 //
 // Layout order is deliberate: Coverage Map first (orientation + navigation), then
 // Spaces & features and the manager (the doing surfaces), then the sidebar's score,
@@ -23,7 +29,6 @@
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth } from '@/lib/brain/health';
-import { computeReadiness } from '@/lib/brain/readiness';
 import {
   APPLICABILITY_LABELS,
   APPLICABILITY_PREDICATES,
@@ -43,7 +48,6 @@ import { BrainManager } from './BrainManager';
 import { FeaturesPanel } from './FeaturesPanel';
 import { EnhanceBrainPanel, type EnhanceQuestion } from './EnhanceBrainPanel';
 import { IngestPanel } from './IngestPanel';
-import { AppliancePanel } from './AppliancePanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +65,6 @@ export default async function BrainPage({
   const [
     { data: items },
     { count: pendingReviews },
-    { data: requirementStatuses },
     { data: featureRows },
   ] = await Promise.all([
     supabase
@@ -71,10 +74,9 @@ export default async function BrainPage({
       .is('deleted_at', null)
       .order('category', { ascending: true })
       .order('updated_at', { ascending: false }),
-    // Pending AI drafts count toward readiness: a property whose Brain is full but whose
-    // queue is untouched is not actually reviewed.
+    // Pending AI drafts surface in the header: a property whose Brain is full but
+    // whose queue is untouched is not actually reviewed.
     supabase.from('proposed_updates').select('id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('status', 'pending'),
-    supabase.from('property_knowledge_requirement_status').select('requirement_key, status').eq('property_id', propertyId),
     // Active (non-archived) features: the property's custom sections.
     supabase
       .from('property_features')
@@ -129,11 +131,6 @@ export default async function BrainPage({
     p_property_id: propertyId,
   });
 
-  const readiness = computeReadiness({
-    statuses: (requirementStatuses ?? []).map((item) => ({ requirementKey: item.requirement_key, status: item.status })),
-    pendingReviews: pendingReviews ?? 0,
-  });
-
   // The full 10-section taxonomy. brain_items.section exists in production, so every
   // section round-trips: what the host files under is what they read back.
   const sections = BRAIN_SECTIONS.map((s) => ({ value: s.id, label: s.label, blurb: s.blurb }));
@@ -159,13 +156,16 @@ export default async function BrainPage({
     domains: completeness.domains,
   });
 
+  const reviewCount = pendingReviews ?? 0;
+
   return (
     <div>
       <div className="brain-page-head">
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Property Brain</h1>
           <p className="faint" style={{ fontSize: '.85rem' }}>
-            {readiness.label} · {completeness.pct}% guest-ready · {health.totalItems} items
+            {completeness.pct}% guest-ready · {health.totalItems} items
+            {reviewCount > 0 && ` · ${reviewCount} to review`}
           </p>
         </div>
       </div>
@@ -270,11 +270,6 @@ export default async function BrainPage({
             </div>
           )}
           {access.can.editBrain && <IngestPanel propertyId={propertyId} />}
-          {access.can.editBrain && (
-            <div style={{ marginTop: '1rem' }}>
-              <AppliancePanel propertyId={propertyId} />
-            </div>
-          )}
         </div>
       </div>
     </div>
