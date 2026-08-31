@@ -2037,7 +2037,7 @@ export type Database = {
           created_by?: string | null
           document_id?: string | null
           id?: string
-          kind?: Database["public"]["Enums"]["ingestion_kind"]
+          kind: Database["public"]["Enums"]["ingestion_kind"]
           last_error?: string | null
           property_id?: string
           result?: Json | null
@@ -2428,7 +2428,7 @@ export type Database = {
           model?: string | null
           property_id?: string
           reply_to_message_id?: string | null
-          role: Database["public"]["Enums"]["conversation_role"]
+          role?: Database["public"]["Enums"]["conversation_role"]
           sources?: Json | null
         }
         Relationships: [
@@ -2559,28 +2559,34 @@ export type Database = {
         Row: {
           category: string
           created_at: string
+          email_enabled: boolean
           enabled: boolean
           host_account_id: string
           id: string
           profile_id: string
+          sms_enabled: boolean
           updated_at: string
         }
         Insert: {
           category: string
           created_at?: string
+          email_enabled?: boolean
           enabled?: boolean
           host_account_id: string
           id?: string
           profile_id: string
+          sms_enabled?: boolean
           updated_at?: string
         }
         Update: {
           category?: string
           created_at?: string
+          email_enabled?: boolean
           enabled?: boolean
           host_account_id?: string
           id?: string
           profile_id?: string
+          sms_enabled?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -3470,7 +3476,7 @@ export type Database = {
           can_view_analytics?: boolean
           created_at?: string
           id?: string
-          profile_id?: string
+          profile_id: string
           property_id?: string
           role?: Database["public"]["Enums"]["member_role"]
         }
