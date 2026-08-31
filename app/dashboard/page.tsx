@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowUpRight, Plus } from 'lucide-react';
-import { requireSession } from '@/lib/auth/guards';
+import { requireSession, isPreLaunch } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { planBannerFor } from '@/lib/dashboard/plan-banner';
@@ -42,8 +42,11 @@ export default async function DashboardHome({
   ]);
 
   // Read-only (lapsed billing) has to win over the free-build message, so the
-  // decision lives in one tested place rather than in the JSX.
-  const planBanner = planBannerFor(ent);
+  // decision lives in one tested place rather than in the JSX. Before launch the
+  // pre-launch message outranks all of them: nothing is billed yet, so every
+  // billing banner would be telling the host to act on something that does not
+  // exist.
+  const planBanner = planBannerFor({ ...ent, preLaunch: isPreLaunch() });
 
   const allPropertyIds = (allProperties ?? []).map((p) => p.id);
   // The property filter is a URL search param (?property=<id>) so it survives a

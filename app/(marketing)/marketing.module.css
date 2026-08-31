@@ -10,12 +10,57 @@
 .doc {
   min-height: 100dvh;
   background: var(--bg);
+  /* `clip`, not `hidden`: the break-out widths below are computed from 100vw,
+     which does not know about a classic desktop scrollbar, so they can exceed the
+     content box by the scrollbar width at a narrow band of viewports. `clip`
+     absorbs that without creating a scroll container, so it cannot break
+     `position: sticky` on the header the way `hidden` would. */
+  overflow-x: clip;
 }
 
+/* Reading column, with a way out of it.
+
+   This was a plain `max-width: 68ch` box, which meant that on a 1440px screen the
+   page was a narrow ribbon of text with roughly two thirds of the viewport empty,
+   and nothing on the page could ever be wider than a paragraph: a card grid or a
+   landscape photograph had to stack single-file inside the measure.
+
+   `.wide` and `.bleed` break out of the column by centring themselves on it with
+   a symmetric negative margin. That is deliberately a margin trick rather than a
+   three-track grid, because the pages wrap their content in `<div class="body">`
+   and a grid would only reach direct children, so every block that wanted room
+   would have to be hoisted out of the prose wrapper it belongs to.
+
+   Measure stays at 68ch rather than a pixel width so the column tracks the font
+   size instead of drifting narrow at large type settings. */
 .docInner {
+  --doc-gutter: clamp(1.25rem, 4vw, 3rem);
+  --doc-wide: 1040px;
+  --doc-bleed: 1320px;
   max-width: 68ch;
   margin: 0 auto;
-  padding: clamp(2.5rem, 6vw, 4.5rem) 1.25rem clamp(3rem, 7vw, 5rem);
+  padding: clamp(2.5rem, 6vw, 4.5rem) var(--doc-gutter) clamp(3rem, 7vw, 5rem);
+}
+
+/* One step out: wide enough for a card grid or a landscape figure to feel like it
+   belongs to the page rather than to the paragraph above it, still narrow enough
+   to read as part of the same document. Collapses to exactly the reading column
+   on phones, where the negative margin resolves to zero. */
+/* The doubled class is load-bearing, not a typo. `.body :where(ul, ol)` sets a
+   `margin` shorthand and is declared later in this file, so at equal specificity
+   it would win and reset the negative inline margin to zero, leaving a 1040px
+   block sitting in a 68ch column and overflowing off the right of the page. */
+.wide.wide {
+  --w: min(var(--doc-wide), calc(100vw - 2 * var(--doc-gutter)));
+  width: var(--w);
+  margin-inline: calc(50% - var(--w) / 2);
+}
+
+/* Wider still. Reserved for the page-opening image. */
+.bleed.bleed {
+  --w: min(var(--doc-bleed), calc(100vw - 2 * var(--doc-gutter)));
+  width: var(--w);
+  margin-inline: calc(50% - var(--w) / 2);
 }
 
 .eyebrow {
@@ -44,44 +89,48 @@
 
 /* Body rhythm. Headings get more space above than below so a section reads as
    attached to its own paragraphs rather than floating between two blocks. */
-.body h2 {
+.body :where(h2) {
   font-size: clamp(1.25rem, 2.8vw, 1.6rem);
   line-height: 1.2;
   letter-spacing: -0.01em;
   margin: 2.75rem 0 0.75rem;
 }
 
-.body h3 {
+.body :where(h3) {
   font-size: 1.05rem;
   margin: 1.85rem 0 0.5rem;
 }
 
-.body p,
-.body li {
+/* Prose element defaults are wrapped in :where() so they contribute no
+   specificity of their own beyond `.body`. Without it, `.body li` (0,1,1) beats a
+   single-class utility like `.cards` (0,1,0), and every card grid nested inside a
+   page's prose wrapper silently inherits the paragraph measure, list indent and
+   list gap instead of its own layout. Any class-based rule now wins, which is the
+   behaviour a component-plus-prose file needs. */
+.body :where(p, li) {
   line-height: 1.65;
   font-size: 0.97rem;
 }
 
-.body p {
+.body :where(p) {
   margin: 0 0 1rem;
 }
 
-.body ul,
-.body ol {
+.body :where(ul, ol) {
   margin: 0 0 1.25rem;
   padding-left: 1.25rem;
   display: grid;
   gap: 0.45rem;
 }
 
-.body a {
+.body :where(a) {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 0.18em;
   text-decoration-thickness: 1px;
 }
 
-.body a:hover {
+.body :where(a):hover {
   text-decoration-thickness: 2px;
 }
 
@@ -115,6 +164,123 @@
 
 .callout p:last-child {
   margin-bottom: 0;
+}
+
+/* Page-opening image. These pages are about physical places and physical stays,
+   and a wall of text with no photograph reads as a policy document rather than as
+   something written by someone who hosts. One per page, directly under the lede,
+   and never a second decorative image mid-article competing with the reading. */
+.hero {
+  /* `margin-block`, never the `margin` shorthand: these blocks also carry `.wide`,
+     whose negative inline margin is what breaks them out of the reading column,
+     and a shorthand declared later in this file would silently reset it to zero. */
+  margin-block: 0 clamp(2rem, 5vw, 3rem);
+}
+
+.heroFrame {
+  position: relative;
+  aspect-ratio: 21 / 9;
+  border-radius: var(--radius-lg, 16px);
+  overflow: hidden;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+}
+
+.heroFrame img {
+  object-fit: cover;
+}
+
+.heroCaption {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-muted, inherit);
+  opacity: 0.8;
+}
+
+@media (max-width: 640px) {
+  .heroFrame {
+    aspect-ratio: 16 / 10;
+  }
+}
+
+/* Small card grid for facts that are a set rather than a sequence. Sits at
+   `.wide` so three cards get real room instead of stacking in a 68ch column. */
+.cards {
+  list-style: none;
+  padding: 0;
+  /* margin-block only; see the note on .hero. */
+  margin-block: clamp(1.5rem, 4vw, 2.25rem);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: clamp(0.85rem, 2vw, 1.15rem);
+}
+
+.cards > li {
+  padding: var(--pad-card, 1rem);
+  background: var(--surface, transparent);
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  border-radius: var(--radius-md, 12px);
+}
+
+.cards h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+
+.cards p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-muted, inherit);
+}
+
+/* Router cards: a title, an explanation, and one action. Used on /support, where
+   the same content was six stacked heading-paragraph-link groups down a narrow
+   column, so a host scanning for their own problem had to read all six in order.
+   Two columns of bounded cards makes it a scan instead of a read. */
+.topics {
+  list-style: none;
+  padding: 0;
+  /* margin-block only; see the note on .hero. */
+  margin-block: clamp(1.5rem, 4vw, 2.25rem);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
+  gap: clamp(0.85rem, 2vw, 1.15rem);
+}
+
+.topics > li {
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad-card, 1rem);
+  background: var(--surface, transparent);
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  border-radius: var(--radius-md, 12px);
+}
+
+.topics h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+
+.topics p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-muted, inherit);
+}
+
+/* The action is pushed to the bottom of the card so every card in a row ends on
+   the same line regardless of how long its explanation runs. */
+/* Selector carries .topics so it beats `.topics p { margin: 0 }` on specificity
+   rather than on !important. */
+.topics .topicAction {
+  margin: auto 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  font-size: 0.88rem;
 }
 
 .steps {
@@ -153,29 +319,45 @@
 }
 
 /* End-of-page conversion band. One per page, and never a second CTA with the
-   same intent higher up. */
+   same intent higher up.
+
+   This was a hairline rule with a sentence and a button crammed into the 68ch
+   measure, which read as a footnote at exactly the point where a host has
+   finished reading and is deciding. A filled panel at full content width gives
+   that decision somewhere to land. Filled surfaces are rationed on these pages
+   (this and the card grids, nothing else) so they still read as emphasis. */
 .ctaBand {
-  margin-top: 3.25rem;
-  padding-top: 1.75rem;
-  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  /* margin-block only; see the note on .hero. */
+  margin-block: clamp(2.5rem, 6vw, 3.5rem) 0;
+  padding: clamp(1.15rem, 3vw, 1.6rem);
+  background: var(--surface, transparent);
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  border-radius: var(--radius-lg, 16px);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1.25rem;
+  gap: 0.9rem 1.5rem;
 }
 
-.ctaBandText {
+.ctaBand .ctaBandText {
   margin: 0;
-  flex: 1 1 18ch;
-  font-size: 0.95rem;
+  flex: 1 1 24ch;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 /* Cross-links between these pages. Internal linking is the whole point: six
-   orphaned pages rank far worse than six pages that reference each other. */
+   orphaned pages rank far worse than six pages that reference each other.
+
+   This was a row of bare underlined labels wrapped tight under the CTA band, so
+   the end of every page read as a footnote and almost nobody continued to a
+   second page. It is now a card grid at `.wide`, with each card carrying the
+   page's own image and its one-line description, so the choice of where to go
+   next is made on substance rather than on a two-word link. */
 .related {
-  margin-top: 2.5rem;
-  display: grid;
-  gap: 0.6rem;
+  margin-top: clamp(2.75rem, 6vw, 4rem);
+  padding-top: clamp(1.75rem, 4vw, 2.5rem);
+  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.22));
 }
 
 .relatedLabel {
@@ -183,25 +365,95 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.7;
-  margin: 0;
+  margin: 0 0 1.15rem;
 }
 
 .relatedList {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 0.75rem;
+  display: grid;
+  /* auto-fit rather than fixed columns: six cards land as 3x2 on a desktop,
+     2x3 on a tablet and a single column on a phone with no breakpoints. */
+  grid-template-columns: repeat(auto-fit, minmax(min(15.5rem, 100%), 1fr));
+  gap: clamp(0.85rem, 2vw, 1.15rem);
 }
 
-.relatedList a {
-  display: inline-block;
-  padding: 0.3rem 0;
-  font-size: 0.9rem;
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
+.relatedCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  text-decoration: none;
   color: inherit;
+  background: var(--surface, transparent);
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+  transition:
+    border-color var(--tr, 180ms) var(--ease-out, ease),
+    transform var(--tr, 180ms) var(--ease-out, ease),
+    box-shadow var(--tr, 180ms) var(--ease-out, ease);
+}
+
+.relatedCard:hover {
+  border-color: var(--teal, currentColor);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md, 0 8px 24px -12px rgba(0, 0, 0, 0.4));
+}
+
+.relatedCard:focus-visible {
+  outline: 2px solid var(--teal, currentColor);
+  outline-offset: 2px;
+}
+
+.relatedThumb {
+  /* Explicit block: `position: static` (the default on a span) makes next/image
+     `fill` measure against the nearest positioned ancestor instead of this frame. */
+  display: block;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+}
+
+.relatedThumb img {
+  object-fit: cover;
+}
+
+.relatedText {
+  padding: 0.85rem 0.95rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1 1 auto;
+}
+
+.relatedName {
+  margin: 0;
+  font-size: 0.97rem;
+  font-weight: 600;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.relatedCard:hover .relatedName {
+  color: var(--teal, inherit);
+}
+
+.relatedDesc {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-muted, inherit);
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .relatedCard,
+  .relatedCard:hover {
+    transform: none;
+  }
 }
 
 .meta {

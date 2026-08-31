@@ -1,138 +1,109 @@
 'use client';
 import Link from 'next/link';
+import { useId, useState } from 'react';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
-import { useState } from 'react';
+import {
+  ANNUAL_MULTIPLIER,
+  FOUNDING_ACCOUNT_CAP,
+  FOUNDING_DISCOUNT_MONTHS,
+  FOUNDING_DISCOUNT_PERCENT,
+  GUIDED_SETUP_ADDITIONAL_USD,
+  GUIDED_SETUP_USD,
+  HOST_PRICING_BANDS,
+  PLANS,
+  SELF_SERVE_PROPERTY_MAX,
+  effectiveRatePerProperty,
+  monthlyTotalForProperties,
+} from '@/lib/constants';
 
-// Per-property self-serve tiers, per the August 2026 pitch deck. The billed grid
-// lives in lib/constants.ts (PLANS); this marketing copy mirrors it by design —
-// the deck's Portfolio ($25-39/property/mo, 10+) and Enterprise (custom) tiers are
-// contract-priced and therefore appear here as the contact-sales note below, not
-// as cards with invented numbers.
+// This section had its own hardcoded copy of the plan grid, which is how the site
+// came to advertise tiers and a setup fee that billing no longer charged. There is
+// now exactly one source of truth: lib/constants.ts. The reasoning behind the
+// numbers, including the competitor pricing they were set against, is in
+// docs/pricing-model-2027.md.
 //
-// Pre-launch (go-live January 1, 2027) these cards exist for transparency, not
-// conversion: no "Most chosen" badge, and the CTA is a soft "Start free". The
-// launch-date line in the intro makes the not-yet-billing state explicit.
-const PLANS = [
-  {
-    name: 'Essentials',
-    slug: 'essentials',
-    pricePerProperty: 29,
-    features: [
-      'Property Brain & guest portal',
-      'Grounded AI Q&A (verified facts)',
-      'Structured requests & escalation',
-      'Host-approved memory updates',
-    ],
-    popular: false,
-  },
-  {
-    name: 'Pro',
-    slug: 'pro',
-    pricePerProperty: 49,
-    features: [
-      'Everything in Essentials',
-      'Learning analytics & insights',
-      'Workflow automation & branding',
-      'Multi-property dashboards',
-    ],
-    popular: true,
-  },
-] as const;
+// Pre-launch (go-live January 1, 2027) these cards exist for transparency rather
+// than conversion. Nothing is billed before launch and no card is collected, so
+// every CTA goes to signup, not to checkout.
 
-const ANNUAL_MULTIPLIER = 10; // 10 months = 2 free
 const MIN_PROPERTIES = 1;
-const MAX_PROPERTIES = 9; // beyond this, Portfolio/Enterprise
+const DEFAULT_PROPERTIES = 3;
 
-const CONTACT_SALES_MAILTO = `mailto:hostspark.org@gmail.com?subject=${encodeURIComponent(
-  'Portfolio or Enterprise pricing',
-)}&body=${encodeURIComponent(
-  'Hi Moche-AI team,\n\nWe manage 10+ properties and would like to discuss Portfolio/Enterprise pricing.\n\n',
-)}`;
+// Half of an odd total is a half-dollar, and `toLocaleString()` renders that as
+// "33.5", which reads as a truncated number rather than a price. Cents appear
+// only when they exist, so whole amounts stay clean.
+function usd(amount: number): string {
+  return Number.isInteger(amount) ? amount.toLocaleString() : amount.toFixed(2);
+}
+
+/** Human label for a band, e.g. "1st property", "2 to 4", "10 to 24". */
+function bandLabel(index: number): string {
+  const band = HOST_PRICING_BANDS[index];
+  const from = index === 0 ? 1 : HOST_PRICING_BANDS[index - 1].upTo + 1;
+  if (from === band.upTo) return from === 1 ? '1st property' : `Property ${from}`;
+  return `Properties ${from} to ${band.upTo}`;
+}
 
 export function Pricing() {
-  const [propertyCount, setPropertyCount] = useState(5);
+  const [propertyCount, setPropertyCount] = useState(DEFAULT_PROPERTIES);
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+  const sliderId = useId();
 
-  const totalMonthly = (planPrice: number) => propertyCount * planPrice;
-  const totalAnnual = (planPrice: number) => totalMonthly(planPrice) * ANNUAL_MULTIPLIER;
+  const free = PLANS.starter;
+  const host = PLANS.pro;
+
+  const monthlyTotal = monthlyTotalForProperties(propertyCount);
+  const displayTotal = billing === 'monthly' ? monthlyTotal : monthlyTotal * ANNUAL_MULTIPLIER;
+  const perProperty = effectiveRatePerProperty(propertyCount);
+  const foundingTotal = Math.round(displayTotal * (1 - FOUNDING_DISCOUNT_PERCENT / 100) * 100) / 100;
+  const atCap = propertyCount >= SELF_SERVE_PROPERTY_MAX;
 
   return (
     <section className={styles.pricing} id="pricing" aria-labelledby="pricing-heading">
       <div className="wrap">
         <Reveal as="h2" id="pricing-heading" className={styles.sectionHeading}>
-          Pricing that scales with your portfolio
+          Pricing that gets cheaper as you grow
         </Reveal>
         <Reveal as="p" delay={60} className={`muted ${styles.pricingIntro}`}>
-          Moche-AI launches January 1, 2027 — early accounts are free until then, and no card is
-          charged before launch. After that it is simple per-property pricing: pay annually for{' '}
-          {ANNUAL_MULTIPLIER}x the monthly rate (that&rsquo;s two months free). No per-conversation
-          fees — unlimited guests and stays.
-          <br />
-          <strong>One-time setup:</strong> $149/property for guided onboarding, or use self-service
-          at no cost.
+          Moche-AI goes live January 1, 2027. Accounts created before then are free until
+          launch and no card is collected. After launch you pay per property, and the rate
+          drops as you add more. Guest messages are unlimited on every paid plan, with no
+          per-conversation charge, because our costs sit in setup rather than in
+          conversations.
         </Reveal>
 
-        {/* Property count slider + billing toggle. Styled inline: the CSS-module classes
-            an earlier iteration referenced were never added to landing.module.css, so the
-            controls rendered unstyled. These styles are self-contained on purpose. */}
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            margin: '1.5rem 0 2rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '.9rem', flexWrap: 'wrap' }}>
-            <label htmlFor="propertyCount" style={{ fontSize: '.9rem', fontWeight: 600 }}>
-              Properties: <span>{propertyCount}</span>
+        <Reveal delay={90} className={styles.pricingControls}>
+          <div className={styles.pricingSlider}>
+            <label htmlFor={sliderId} className={styles.pricingSliderLabel}>
+              Properties
+              <output htmlFor={sliderId} className={styles.pricingSliderValue}>
+                {propertyCount}
+              </output>
             </label>
             <input
-              id="propertyCount"
+              id={sliderId}
               type="range"
               min={MIN_PROPERTIES}
-              max={MAX_PROPERTIES}
+              max={SELF_SERVE_PROPERTY_MAX}
               step={1}
               value={propertyCount}
-              onChange={(e) => setPropertyCount(Number(e.target.value))}
-              aria-label="Number of properties"
-              style={{ width: 180, accentColor: 'var(--teal, #0FA79A)' }}
+              onChange={(event) => setPropertyCount(Number(event.target.value))}
+              className={styles.pricingRange}
             />
-            <span className="faint" style={{ fontSize: '.78rem' }}>
-              {propertyCount >= MAX_PROPERTIES ? 'Managing 10 or more? See Portfolio below.' : 'Per property, per month'}
-            </span>
+            <p className={styles.pricingSliderHint}>
+              {atCap
+                ? `Past ${SELF_SERVE_PROPERTY_MAX} properties, see Portfolio below.`
+                : `Blended rate: $${perProperty.toFixed(2)} per property, per month.`}
+            </p>
           </div>
 
-          <div
-            role="group"
-            aria-label="Billing period"
-            style={{
-              display: 'inline-flex',
-              gap: '.25rem',
-              padding: '.25rem',
-              borderRadius: 999,
-              border: '1px solid var(--border, rgba(20,50,90,.12))',
-              background: 'var(--surface, #fff)',
-            }}
-          >
+          <div className={styles.pricingToggle} role="group" aria-label="Billing period">
             <button
               type="button"
               onClick={() => setBilling('monthly')}
               aria-pressed={billing === 'monthly'}
-              style={{
-                minHeight: 44,
-                padding: '0 1.1rem',
-                borderRadius: 999,
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: '.88rem',
-                background: billing === 'monthly' ? 'var(--teal, #0FA79A)' : 'transparent',
-                color: billing === 'monthly' ? '#04121a' : 'inherit',
-              }}
+              className={styles.pricingToggleButton}
             >
               Monthly
             </button>
@@ -140,79 +111,121 @@ export function Pricing() {
               type="button"
               onClick={() => setBilling('annual')}
               aria-pressed={billing === 'annual'}
-              style={{
-                minHeight: 44,
-                padding: '0 1.1rem',
-                borderRadius: 999,
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: '.88rem',
-                background: billing === 'annual' ? 'var(--teal, #0FA79A)' : 'transparent',
-                color: billing === 'annual' ? '#04121a' : 'inherit',
-              }}
+              className={styles.pricingToggleButton}
             >
-              Annual <span style={{ fontWeight: 500, opacity: 0.8 }}>(save 2 mo)</span>
+              Annual
+              <span className={styles.pricingToggleNote}>2 months free</span>
             </button>
           </div>
-        </div>
+        </Reveal>
 
         <div className={styles.pricingTrack}>
-          {PLANS.map((plan, i) => {
-            const monthlyTotal = totalMonthly(plan.pricePerProperty);
-            const annualTotal = totalAnnual(plan.pricePerProperty);
-            const displayPrice = billing === 'monthly' ? monthlyTotal : annualTotal;
-            const priceLabel = billing === 'monthly' ? '/mo' : '/yr';
+          <Reveal className={styles.pricingPanel}>
+            <div className={styles.pricingRail}>
+              <h3 className={styles.pricingTier}>{free.name}</h3>
+              <p className={styles.pricingPrice}>
+                <span className={styles.pricingAmount}>$0</span>
+                <span className={styles.pricingPer}>forever</span>
+              </p>
+              <p className={styles.pricingProperties}>One property, no card, no time limit</p>
+            </div>
+            <div className={styles.pricingDetail}>
+              <ul className={styles.pricingFacts}>
+                {free.features.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+              <Link href="/signup" className={`btn btn-ghost btn-block ${styles.pricingCta}`}>
+                Start free
+              </Link>
+            </div>
+          </Reveal>
 
-            return (
-              <Reveal
-                key={plan.slug}
-                delay={i * 55}
-                className={styles.pricingPanel}
-              >
-                <div className={styles.pricingRail}>
-                  <h3 className={styles.pricingTier}>{plan.name}</h3>
-                  <p className={styles.pricingPrice}>
-                    <span className={styles.pricingAmount}>${displayPrice}</span>
-                    <span className={styles.pricingPer}>{priceLabel}</span>
-                  </p>
-                  <p className={styles.pricingProperties}>
-                    ${plan.pricePerProperty}/property/mo
-                  </p>
-                </div>
-
-                <div className={styles.pricingDetail}>
-                  <div className={styles.pricingDetailInner}>
-                    <ul className={styles.pricingFacts}>
-                      {plan.features.map((feature) => (
-                        <li key={feature}>{feature}</li>
-                      ))}
-                      <li>Unlimited guests and stays</li>
-                      <li>No per-conversation charges</li>
-                    </ul>
-                    <Link
-                      href="/signup"
-                      className={`btn ${plan.popular ? 'btn-primary' : 'btn-ghost'} btn-block ${styles.pricingCta}`}
-                    >
-                      Start free
-                    </Link>
-                  </div>
-                </div>
-              </Reveal>
-            );
-          })}
+          <Reveal delay={55} className={styles.pricingPanel} data-featured="">
+            <span className={styles.pricingFlag} data-visible="">
+              Most hosts
+            </span>
+            <div className={styles.pricingRail}>
+              <h3 className={styles.pricingTier}>{host.name}</h3>
+              <p className={styles.pricingPrice}>
+                <span className={styles.pricingAmount}>${usd(displayTotal)}</span>
+                <span className={styles.pricingPer}>
+                  {billing === 'monthly' ? '/mo' : '/yr'}
+                </span>
+              </p>
+              <p className={styles.pricingProperties}>
+                {propertyCount === 1
+                  ? 'For 1 property'
+                  : `For ${propertyCount} properties, $${perProperty.toFixed(2)} each`}
+              </p>
+              <p className={styles.pricingFounding}>
+                Founding hosts lock{' '}
+                <strong>
+                  ${usd(foundingTotal)}
+                  {billing === 'monthly' ? '/mo' : '/yr'}
+                </strong>{' '}
+                for the first {FOUNDING_DISCOUNT_MONTHS} months.
+              </p>
+            </div>
+            <div className={styles.pricingDetail}>
+              <ul className={styles.pricingFacts}>
+                {host.features.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+              <Link href="/signup" className={`btn btn-primary btn-block ${styles.pricingCta}`}>
+                Become a founding host
+              </Link>
+            </div>
+          </Reveal>
         </div>
 
-        <Reveal delay={PLANS.length * 55} className={styles.pricingVolume}>
-          <p className={styles.pricingVolumeCopy}>
-            <strong>10+ properties?</strong> Portfolio adds roles, bulk tools, and PMS
-            integrations at volume rates ($25&ndash;39/property/mo, set by contract). Need SSO,
-            an SLA, API access, or white label? Enterprise is custom.
+        {/* The bands are published rather than summarised. A host who is about to add
+            their fifth property should be able to see what it costs before they do it,
+            not discover it on an invoice. */}
+        <Reveal delay={110} className={styles.pricingBands}>
+          <h3 className={styles.pricingBandsTitle}>How the rate steps down</h3>
+          <ul className={styles.pricingBandList}>
+            {HOST_PRICING_BANDS.map((band, index) => (
+              <li key={band.upTo} className={styles.pricingBandItem}>
+                <span className={styles.pricingBandRange}>{bandLabel(index)}</span>
+                <span className={styles.pricingBandRate}>${band.ratePerProperty}</span>
+                <span className={styles.pricingBandUnit}>per property, per month</span>
+              </li>
+            ))}
+          </ul>
+          <p className={styles.pricingBandNote}>
+            Each band prices only the properties inside it, so adding a property never
+            raises what you already pay. At {SELF_SERVE_PROPERTY_MAX} properties the blended
+            rate is ${effectiveRatePerProperty(SELF_SERVE_PROPERTY_MAX).toFixed(2)}.
           </p>
-          <a href={CONTACT_SALES_MAILTO} className={styles.pricingVolumeLink}>
-            Contact sales
-          </a>
         </Reveal>
+
+        <Reveal delay={140} className={styles.pricingVolume}>
+          <p className={styles.pricingVolumeCopy}>
+            <strong>{SELF_SERVE_PROPERTY_MAX + 1} or more properties?</strong>{' '}
+            {PLANS.portfolio.name} adds roles, bulk tools and PMS integrations at volume
+            rates below ${HOST_PRICING_BANDS[HOST_PRICING_BANDS.length - 1].ratePerProperty}
+            /property/mo, set by contract. Need SSO, an SLA, API access or white label?{' '}
+            {PLANS.enterprise.name} is custom.
+          </p>
+          <Link href="/support" className={styles.pricingVolumeLink}>
+            Talk to us
+          </Link>
+        </Reveal>
+
+        <Reveal delay={170} className={styles.pricingSetup}>
+          <p className={styles.pricingSetupCopy}>
+            <strong>Setting up is free and takes about 20 minutes.</strong> If you would
+            rather hand it over, Concierge Setup is ${GUIDED_SETUP_USD} for your first
+            property and ${GUIDED_SETUP_ADDITIONAL_USD} for each one after that, once per
+            account. It is optional, and it is not required to go live.
+          </p>
+        </Reveal>
+
+        <p className={styles.pricingCapNote}>
+          The founding rate is limited to the first {FOUNDING_ACCOUNT_CAP} accounts.
+        </p>
       </div>
     </section>
   );

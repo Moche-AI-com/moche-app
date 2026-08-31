@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_URL, SITE_NAME } from '@/lib/seo';
-import { DocHeader, Related, CtaBand, Sources } from '../../_parts';
+import { DocHeader, Related, CtaBand, Sources, PageHero } from '../../_parts';
+import pool from '@/public/premium/str-gallery-pool-deck.webp';
 import styles from '../../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -69,6 +70,13 @@ export default function GuestCommunicationGuidePage() {
         title="The guest communication guide for short-term rental hosts"
         lede="Guest messaging is the part of hosting that scales worst and gets measured hardest. This guide covers the response rules that actually affect your listing, the questions worth answering before they are asked, and where automation stops being a good idea."
         updated="August 2026"
+      />
+
+      <PageHero
+        src={pool}
+        alt="A pool deck with loungers and folded towels in late afternoon light"
+        caption="The questions a guest asks about a pool deck are the same questions every week: what time it closes, whether the towels in the cupboard are for the pool, where the gate key lives."
+        priority
       />
 
       <div className={styles.body}>
@@ -186,7 +194,9 @@ export default function GuestCommunicationGuidePage() {
           There is a clean line here, and crossing it is how hosts end up with a horror story about a
           bot.
         </p>
-        <table>
+        {/* .wide: a two-column comparison read inside a 68ch measure wraps every cell
+            to three or four lines, which is exactly the shape a table exists to avoid. */}
+        <table className={styles.wide}>
           <thead>
             <tr>
               <th>Message type</th>

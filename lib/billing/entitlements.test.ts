@@ -7,6 +7,11 @@ import {
   SELF_SERVE_PLAN_IDS,
   ANNUAL_MULTIPLIER,
   GUIDED_SETUP_USD,
+  HOST_PRICING_BANDS,
+  SELF_SERVE_PROPERTY_MAX,
+  effectiveRatePerProperty,
+  guidedSetupTotal,
+  monthlyTotalForProperties,
   type PlanId,
 } from '@/lib/constants';
 import type { Database } from '@/lib/database.types';
@@ -46,17 +51,26 @@ describe('plan grid', () => {
     ]);
   });
 
-  it('matches the pitch-deck price points', () => {
-    // Deck (Aug 2026): Essentials $29/property/mo and Pro $49/property/mo, both
-    // self-serve and per-property. Portfolio and Enterprise are contract-priced,
-    // represented as 0 in the grid (never a self-serve checkout amount).
-    expect(PLANS.starter.monthly).toBe(29);
-    expect(PLANS.starter.annual).toBe(290);
-    expect(PLANS.pro.monthly).toBe(49);
-    expect(PLANS.pro.annual).toBe(490);
+  it('matches the published price points', () => {
+    // See docs/pricing-model-2027.md. One free tier, one banded self-serve plan,
+    // two contract tiers. Contract tiers carry 0 so they can never become a
+    // self-serve checkout amount.
+    expect(PLANS.starter.monthly).toBe(0);
+    expect(PLANS.starter.annual).toBe(0);
+    expect(PLANS.pro.monthly).toBe(29);
+    expect(PLANS.pro.annual).toBe(290);
     expect(PLANS.portfolio.monthly).toBe(0);
     expect(PLANS.enterprise.monthly).toBe(0);
-    expect(GUIDED_SETUP_USD).toBe(149);
+    expect(GUIDED_SETUP_USD).toBe(199);
+  });
+
+  it('leaves conversationAllowance unmetered on every tier', () => {
+    // Guest messages are unlimited on every paid plan and there is no
+    // per-conversation charge. Downstream code reads 0 as unmetered, so a
+    // non-zero value here would silently start advertising a cap.
+    for (const id of Object.keys(PLANS) as PlanId[]) {
+      expect(PLANS[id].conversationAllowance).toBe(0);
+    }
   });
 
   it('prices annual at exactly the monthly rate times the multiplier', () => {
@@ -77,18 +91,79 @@ describe('plan grid', () => {
   });
 
   it('starts the contract tiers exactly where self-serve ends, with no gap', () => {
-    // Self-serve tiers are per-property and deliberately cover the same 1-9
-    // band; the contract ladder must continue from there without a gap.
-    expect(PLANS.starter.propertyRange).toEqual([1, 9]);
-    expect(PLANS.pro.propertyRange).toEqual([1, 9]);
-    expect(PLANS.portfolio.propertyRange[0]).toBe(PLANS.starter.propertyRange[1] + 1);
+    // Free is a single property. The Host plan runs to SELF_SERVE_PROPERTY_MAX,
+    // and the contract ladder must continue from there without a gap.
+    expect(PLANS.starter.propertyRange).toEqual([1, 1]);
+    expect(PLANS.pro.propertyRange).toEqual([1, SELF_SERVE_PROPERTY_MAX]);
+    expect(PLANS.portfolio.propertyRange[0]).toBe(PLANS.pro.propertyRange[1] + 1);
     expect(PLANS.enterprise.propertyRange[0]).toBe(PLANS.portfolio.propertyRange[1] + 1);
   });
 
-  it('marks exactly the two contract tiers as not self-serve', () => {
-    expect(SELF_SERVE_PLAN_IDS).toEqual(['starter', 'pro']);
+  it('marks only the Host plan as self-serve', () => {
+    // Free is the absence of a subscription, so it must never be checkout-able:
+    // there is no Stripe object behind it.
+    expect(SELF_SERVE_PLAN_IDS).toEqual(['pro']);
+    expect(PLANS.starter.selfServe).toBe(false);
     expect(PLANS.portfolio.selfServe).toBe(false);
     expect(PLANS.enterprise.selfServe).toBe(false);
+  });
+});
+
+describe('graduated per-property pricing', () => {
+  it('prices each band marginally, matching the published table', () => {
+    // These totals are the ones printed on the pricing page and in
+    // docs/pricing-model-2027.md. If this test changes, that doc must change.
+    const expected: Record<number, number> = {
+      1: 29,
+      2: 48,
+      3: 67,
+      4: 86,
+      5: 100,
+      8: 142,
+      10: 167,
+      15: 222,
+      20: 277,
+      24: 321,
+    };
+    for (const [count, total] of Object.entries(expected)) {
+      expect(monthlyTotalForProperties(Number(count))).toBe(total);
+    }
+  });
+
+  it('never charges less for more properties', () => {
+    for (let n = 1; n < 40; n += 1) {
+      expect(monthlyTotalForProperties(n + 1)).toBeGreaterThan(monthlyTotalForProperties(n));
+    }
+  });
+
+  it('makes the blended rate fall monotonically as a portfolio grows', () => {
+    // This is the whole point of the structure: adding a property must never
+    // raise the effective per-property rate.
+    for (let n = 1; n < SELF_SERVE_PROPERTY_MAX; n += 1) {
+      expect(effectiveRatePerProperty(n + 1)).toBeLessThanOrEqual(effectiveRatePerProperty(n));
+    }
+  });
+
+  it('returns zero for zero, negative and non-finite counts', () => {
+    expect(monthlyTotalForProperties(0)).toBe(0);
+    expect(monthlyTotalForProperties(-3)).toBe(0);
+    expect(monthlyTotalForProperties(Number.NaN)).toBe(0);
+    expect(effectiveRatePerProperty(0)).toBe(0);
+  });
+
+  it('keeps the entry rate on the Host plan equal to the first band', () => {
+    expect(PLANS.pro.monthly).toBe(HOST_PRICING_BANDS[0].ratePerProperty);
+    expect(PLANS.pro.monthly).toBe(monthlyTotalForProperties(1));
+  });
+
+  it('prices Concierge Setup per account, not per property', () => {
+    expect(guidedSetupTotal(1)).toBe(199);
+    expect(guidedSetupTotal(5)).toBe(395);
+    expect(guidedSetupTotal(10)).toBe(640);
+    expect(guidedSetupTotal(0)).toBe(0);
+    // The old model was a flat fee per property. Five properties must now cost
+    // materially less than that, or the change did not achieve its purpose.
+    expect(guidedSetupTotal(5)).toBeLessThan(5 * 149);
   });
 });
 

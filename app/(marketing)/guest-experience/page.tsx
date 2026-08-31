@@ -3,7 +3,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import portal from '@/public/premium/portal-hero.jpg';
-import { DocHeader, Related, CtaBand } from '../_parts';
+import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
+import cottage from '@/public/premium/str-gallery-cliffside-cottage.webp';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -30,6 +31,13 @@ export default function GuestExperiencePage() {
         title="What your guests actually see"
         lede="Before you put a link in front of a paying booking, you should know exactly what is on the other side of it. This is the whole guest path, including the parts that are not frictionless."
         updated="August 2026"
+      />
+
+      <PageHero
+        src={cottage}
+        alt="A cliffside cottage at dusk with warm light in the windows"
+        caption="A cliffside cottage at dusk. What a guest sees when they arrive, and where every question they are about to ask begins."
+        priority
       />
 
       <div className={styles.body}>

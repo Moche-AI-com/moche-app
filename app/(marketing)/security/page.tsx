@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related } from '../_parts';
+import { DocHeader, Related, PageHero } from '../_parts';
+import handoff from '@/public/premium/str-gallery-key-handoff.webp';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -28,6 +29,13 @@ export default function SecurityPage() {
         title="What we do with your data, in plain language"
         lede="You are handing an unfamiliar product the operating details of your properties and the contact details of your guests. This page states what is protected, how, and what we do not yet claim."
         updated="August 2026"
+      />
+
+      <PageHero
+        src={handoff}
+        alt="A set of house keys being handed over at a front door"
+        caption="A set of keys handed over at a door. Access to a property is the thing being protected here, which is why the guest side never has a login to steal."
+        priority
       />
 
       <div className={styles.body}>

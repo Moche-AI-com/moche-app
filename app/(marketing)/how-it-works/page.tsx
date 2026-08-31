@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_URL } from '@/lib/seo';
-import { DocHeader, Related, CtaBand } from '../_parts';
+import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
+import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -74,6 +75,13 @@ export default function HowItWorksPage() {
         updated="August 2026"
       />
 
+      <PageHero
+        src={cabin}
+        alt="The interior of a wood-lined cabin with a stove and soft lamplight"
+        caption="A cabin interior. The thermostat, the wood stove, the router in the cupboard: everything a Property Brain has to know before a guest asks about it."
+        priority
+      />
+
       <div className={styles.body}>
         <h2>The three steps to being live</h2>
         <ol className={styles.steps}>
@@ -108,7 +116,9 @@ export default function HowItWorksPage() {
         <p>
           Chat is the interface, not the product. Six parts do the work:
         </p>
-        <table>
+        {/* .wide: a two-column comparison read inside a 68ch measure wraps every cell
+            to three or four lines, which is exactly the shape a table exists to avoid. */}
+        <table className={styles.wide}>
           <thead>
             <tr>
               <th>Part</th>

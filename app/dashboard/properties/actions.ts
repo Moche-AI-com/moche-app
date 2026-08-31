@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
+import { requireSession, requirePropertyAccess, getSessionContext, isPreLaunch } from '@/lib/auth/guards';
 import { propertyAddressSchema, propertyCreateWithGeoSchema, propertyUpdateSchema, propertySettingsSchema } from '@/lib/validation';
 import { canCreateProperty, getEntitlements } from '@/lib/billing/entitlements';
 import { DEFAULT_HOST_LANGUAGE, resolveLanguage } from '@/lib/guest/languages';
@@ -11,7 +11,7 @@ import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
 import { audit } from '@/lib/audit';
 import { purgeProperty, isDeleteConfirmed, DELETE_CONFIRMATION_WORD } from '@/lib/properties/purge';
-import { DEFAULT_MODULES, RESTRICTED_TOPIC_KEYS, TONE_PRESET_IDS } from '@/lib/constants';
+import { DEFAULT_MODULES, LAUNCH_DATE_LABEL, RESTRICTED_TOPIC_KEYS, TONE_PRESET_IDS } from '@/lib/constants';
 import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
 import { capture } from '@/lib/posthog-server';
@@ -490,6 +490,24 @@ async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft'
   const supabase = createClient();
 
   if (status === 'live') {
+    // The pre-launch gate, and the only thing standing between a pre-launch host
+    // and a real guest.
+    //
+    // Hosts can now build their whole setup before launch (see the note on
+    // requireLaunchAccess in lib/auth/guards.ts). Every guest-facing surface keys
+    // off `properties.status = 'live'`, so refusing that one transition keeps the
+    // guest side shut without a single redirect anywhere else. Founders bypass it
+    // because they have to be able to exercise the live path end to end before
+    // launch day.
+    if (isPreLaunch()) {
+      const ctx = await getSessionContext();
+      if (!ctx?.isFounder) {
+        return {
+          error: `Publishing opens on ${LAUNCH_DATE_LABEL}, when guest links and QR codes switch on. Until then you can build this property and preview the guest portal exactly as a guest will see it.`,
+        };
+      }
+    }
+
     // Publish gates are configurable (see lib/env.ts). Defaults are OFF so a property with
     // required fields alone can go live for demos/testing; the concierge gracefully handles an
     // empty Brain by telling guests it will pass questions to the host. Flip the env flags on

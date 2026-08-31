@@ -1,4 +1,4 @@
-import { PLANS, type PlanId } from '@/lib/constants';
+import { LAUNCH_DATE_LABEL, PLANS, type PlanId } from '@/lib/constants';
 
 /**
  * Plan-state copy for the host dashboard.
@@ -28,9 +28,15 @@ export interface PlanBannerInput {
   trialEnd: string | null;
   propertyLimit: number;
   conversationAllowance: number;
+  /**
+   * True until Moche-AI goes live. Passed in rather than read from the clock so
+   * this stays a pure function and the billing variants remain testable without
+   * time-travelling the whole suite. The dashboard supplies `isPreLaunch()`.
+   */
+  preLaunch?: boolean;
 }
 
-export type PlanBannerVariant = 'read_only' | 'trial' | 'free_build' | 'cap_reached';
+export type PlanBannerVariant = 'pre_launch' | 'read_only' | 'trial' | 'free_build' | 'cap_reached';
 
 export interface PlanBanner {
   variant: PlanBannerVariant;
@@ -77,6 +83,21 @@ export function capsSentence(propertyLimit: number, conversationAllowance: numbe
  * has nothing to act on.
  */
 export function planBannerFor(ent: PlanBannerInput, now: Date = new Date()): PlanBanner | null {
+  // Before launch this outranks every billing banner, because none of them are
+  // true yet: nothing is billed, nothing can lapse, and "choose a plan to publish"
+  // is advice a host cannot act on until publishing exists. Telling them what they
+  // CAN do is the only useful message on the page.
+  if (ent.preLaunch) {
+    return {
+      variant: 'pre_launch',
+      tone: 'info',
+      title: `Building for ${LAUNCH_DATE_LABEL}`,
+      body: 'Add your properties and build each Property Brain now, and preview the guest portal exactly as a guest will see it. Nothing is billed before launch and no card is on file. Publishing, guest links and QR codes switch on at launch, and your founding rate is already attached to this account.',
+      ctaLabel: 'Add a property',
+      ctaHref: '/dashboard/properties/new',
+    };
+  }
+
   // Checked before `active` because a lapsed account is inactive AND read-only,
   // and the read-only message is the one that matters.
   if (ent.isReadOnly) {

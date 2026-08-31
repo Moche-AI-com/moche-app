@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related } from '../_parts';
+import { DocHeader, Related, PageHero } from '../_parts';
+import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -95,6 +96,13 @@ export default function SupportPage() {
         updated="August 2026"
       />
 
+      <PageHero
+        src={kitchen}
+        alt="A tidy rental kitchen with a kettle, counter stools and morning light"
+        caption="A rental kitchen. Most support questions start with an appliance, a code, or a cupboard nobody labelled."
+        priority
+      />
+
       <div className={styles.body}>
         <div className={styles.callout}>
           <p>
@@ -106,19 +114,24 @@ export default function SupportPage() {
         </div>
 
         <h2>Common topics</h2>
-        {TOPICS.map((topic) => (
-          <section key={topic.title}>
-            <h3>{topic.title}</h3>
-            <p>{topic.detail}</p>
-            <p>
-              {'internal' in topic && topic.internal ? (
-                <Link href={topic.href}>{topic.action}</Link>
-              ) : (
-                <a href={topic.href}>{topic.action}</a>
-              )}
-            </p>
-          </section>
-        ))}
+        {/* A grid, not six stacked sections: a host arriving here already knows which
+            of these is their problem, and reading five that are not theirs to find it
+            is the part that made this page feel like work. */}
+        <ul className={`${styles.topics} ${styles.wide}`}>
+          {TOPICS.map((topic) => (
+            <li key={topic.title}>
+              <h3>{topic.title}</h3>
+              <p>{topic.detail}</p>
+              <p className={styles.topicAction}>
+                {'internal' in topic && topic.internal ? (
+                  <Link href={topic.href}>{topic.action}</Link>
+                ) : (
+                  <a href={topic.href}>{topic.action}</a>
+                )}
+              </p>
+            </li>
+          ))}
+        </ul>
 
         <h2>What to include when you write in</h2>
         <p>

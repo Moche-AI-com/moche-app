@@ -179,3 +179,23 @@ describe('getPropertyAccess cross-property isolation', () => {
     });
   });
 });
+
+// The pre-launch flag is the single switch the guest side hangs off (see the note
+// on requireLaunchAccess): a property cannot be set `live` while it is true, and
+// every guest surface requires `live`. Tested against explicit dates rather than
+// the real clock so these assertions do not silently invert on launch day.
+describe('isPreLaunch', () => {
+  it('is true before the launch date', async () => {
+    const { isPreLaunch } = await import('./guards');
+    expect(isPreLaunch(new Date('2026-12-31T23:59:59.000Z'))).toBe(true);
+  });
+
+  it('is false at the launch instant and after', async () => {
+    const { isPreLaunch, LAUNCH_GATE_CUTOFF_ISO } = await import('./guards');
+    const { LAUNCH_DATE_ISO } = await import('@/lib/constants');
+    expect(isPreLaunch(new Date(LAUNCH_DATE_ISO))).toBe(false);
+    expect(isPreLaunch(new Date('2027-06-01T00:00:00.000Z'))).toBe(false);
+    // The old signup cutoff is unrelated to launch and must not be mistaken for it.
+    expect(LAUNCH_GATE_CUTOFF_ISO).not.toBe(LAUNCH_DATE_ISO);
+  });
+});

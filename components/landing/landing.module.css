@@ -881,6 +881,56 @@
   color: var(--teal);
 }
 
+/* The three post-signup steps. Numbered because the order is the point: a
+   visitor is being asked to commit before the product they are buying exists,
+   and the sequence is what makes that reasonable rather than odd. */
+.foundingSteps {
+  list-style: none;
+  margin: 1.6rem 0 0;
+  padding: 1.2rem 0 0;
+  border-top: 1px solid var(--border-strong);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.foundingStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.foundingStepNum {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 9999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--teal-deep);
+}
+
+.foundingStepBody {
+  min-width: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.foundingStepTitle {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.1rem;
+}
+
 .foundingActions {
   display: flex;
   flex-wrap: wrap;
@@ -922,8 +972,18 @@
   object-fit: cover;
 }
 
-/* ---- Pricing ------------------------------------------------------------- */
+/* ---- Pricing -------------------------------------------------------------
+   Two self-serve cards, then the published bands, then the contract row.
 
+   An earlier version rendered six cards behind a hover-to-expand rail, which
+   existed because six equal cards read as a wall of numbers. Collapsing the
+   grid to one free tier and one paid plan removed the problem the interaction
+   was solving, so the interaction went with it: both cards now show everything
+   at all times, on every device and pointer type. Nothing a visitor needs in
+   order to compare is behind a hover.
+
+   The controls below used to be inline-styled because these classes were never
+   written. They are here now. */
 .pricing {
   padding-block: clamp(3rem, 7vw, 5.5rem);
 }
@@ -932,27 +992,120 @@
   max-width: 46rem;
   font-size: 0.95rem;
   line-height: 1.6;
+  text-wrap: pretty;
 }
 
-/* Base state: a plain stacked grid. This is what phones, tablets, and any
-   coarse-pointer device get at every width, and it is the only state that has
-   to work without hover. The expanding rail below is an enhancement on top. */
+/* ---- Pricing: controls --------------------------------------------------- */
+
+.pricingControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.25rem 2rem;
+  margin-block: clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 1.75rem);
+}
+
+.pricingSlider {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.pricingSliderLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.pricingSliderValue {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--teal-deep);
+}
+
+.pricingRange {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin-top: 0.5rem;
+  /* A range input's own hit area is short; padding gives it a 44px target
+     without changing where the track renders. */
+  padding-block: 0.7rem;
+  background: transparent;
+  accent-color: var(--teal);
+  cursor: pointer;
+}
+
+.pricingRange:focus-visible {
+  outline: 2px solid var(--teal-vivid);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.pricingSliderHint {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  min-height: 1.5em;
+}
+
+.pricingToggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.pricingToggleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding-inline: 1.1rem;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--tr), color var(--tr);
+}
+
+.pricingToggleButton[aria-pressed='true'] {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+
+.pricingToggleButton:focus-visible {
+  outline: 2px solid var(--teal-vivid);
+  outline-offset: 2px;
+}
+
+.pricingToggleNote {
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* ---- Pricing: the two cards --------------------------------------------- */
+
 .pricingTrack {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.85rem;
-  margin-top: 2.25rem;
 }
 
-@media (min-width: 560px) {
+@media (min-width: 620px) {
   .pricingTrack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1000px) {
-  .pricingTrack {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
   }
 }
@@ -965,13 +1118,14 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: clamp(1.2rem, 2.2vw, 1.5rem);
+  padding: clamp(1.2rem, 2.2vw, 1.6rem);
   box-shadow: var(--shadow-md);
   min-width: 0;
 }
 
 .pricingPanel[data-featured] {
   border-color: var(--teal);
+  box-shadow: var(--shadow-lg);
 }
 
 .pricingFlag {
@@ -980,7 +1134,7 @@
 
 .pricingFlag[data-visible] {
   display: inline-block;
-  margin-bottom: 0.55rem;
+  align-self: flex-start;
   padding: 0.15rem 0.6rem;
   border-radius: 9999px;
   font-size: 0.66rem;
@@ -1004,15 +1158,18 @@
 .pricingPrice {
   display: flex;
   align-items: baseline;
-  gap: 0.2rem;
+  gap: 0.25rem;
 }
 
 .pricingAmount {
   font-family: var(--font-display);
-  font-size: 2.1rem;
+  font-size: clamp(2.1rem, 4.5vw, 2.6rem);
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1;
+  /* The number changes as the slider moves; reserving the digits stops the
+     card from reflowing under the pointer. */
+  font-variant-numeric: tabular-nums;
 }
 
 .pricingPer,
@@ -1026,17 +1183,33 @@
 
 .pricingProperties {
   font-size: 0.84rem;
-  margin-top: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.pricingFounding {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border-strong);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.pricingFounding strong {
+  color: var(--teal-deep);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .pricingDetail {
-  min-width: 0;
-}
-
-.pricingDetailInner {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  /* Grows to fill the taller card so the CTA below can bottom-align. Pushing
+     this whole block down instead (margin-top: auto) left a visible hole above
+     the shorter card's feature list, which read as a rendering fault. */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .pricingFacts {
@@ -1052,21 +1225,107 @@
 
 .pricingCta {
   min-height: 44px;
+  /* Both cards' buttons sit on the same line regardless of how many facts each
+     one lists. */
+  margin-top: auto;
 }
+
+/* ---- Pricing: published bands ------------------------------------------- */
+
+.pricingBands {
+  margin-top: clamp(1.75rem, 4vw, 2.5rem);
+  padding: clamp(1.2rem, 2.5vw, 1.75rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.pricingBandsTitle {
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 1rem;
+}
+
+.pricingBandList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 520px) {
+  .pricingBandList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .pricingBandList {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+.pricingBandItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.pricingBandRange {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+}
+
+.pricingBandRate {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pricingBandUnit {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+.pricingBandNote {
+  margin-top: 1rem;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 44rem;
+  text-wrap: pretty;
+}
+
+/* ---- Pricing: contract row and setup ----------------------------------- */
 
 .pricingVolume {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.35rem 1rem;
-  margin-top: 1.5rem;
+  margin-top: clamp(1.5rem, 3vw, 2rem);
 }
 
 .pricingVolumeCopy {
   font-size: 0.9rem;
   line-height: 1.55;
   color: var(--text-muted);
-  max-width: 40rem;
+  max-width: 44rem;
+  text-wrap: pretty;
 }
 
 .pricingVolumeCopy strong {
@@ -1091,116 +1350,35 @@
   }
 }
 
-/* ---- Pricing: the expanding rail ----------------------------------------
-   Fine-pointer desktop only. Six equal cards read as a wall of numbers with
-   no route through them; here the recommended tier is open by default and
-   pointing at any tier opens that one while the rest recede, which is the
-   same motion as the reference gallery this was modelled on.
+.pricingSetup {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
 
-   Two things make it safe rather than clever:
-   - The rail (tier name, price, property count) is legible in EVERY panel at
-     all times. Only the supporting facts and the CTA move, so nothing a
-     visitor needs in order to compare plans is behind an interaction.
-   - Keyboard users get the identical behaviour through :focus-within, because
-     the CTA inside each panel is focusable. Tabbing across the row opens each
-     panel in turn.
+.pricingSetupCopy {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 44rem;
+  text-wrap: pretty;
+}
 
-   --on is 0 for a receded panel and 1 for the open one, and every animated
-   value is derived from it. Custom properties do not interpolate, but the
-   properties computed FROM one do, so a single flip animates the width, the
-   opacity, the saturation, and the detail fade together with no duplication.
+.pricingSetupCopy strong {
+  color: var(--text);
+  font-weight: 600;
+}
 
-   This is the one place in the file that animates a layout property
-   (flex-grow). It is deliberate: width IS the effect, and there is no
-   transform that produces it without distorting the type. It is bounded to a
-   single row of six elements on a static marketing page, `contain` stops the
-   work escaping the row, and it never runs on touch. */
-@media (min-width: 1280px) and (hover: hover) and (pointer: fine) {
-  .pricingTrack {
-    display: flex;
-    align-items: stretch;
-    gap: 0.6rem;
-    /* layout only, NOT paint: paint containment would clip the "most chosen"
-       flag, which deliberately sits above the panel's top edge. */
-    contain: layout;
-  }
-
-  .pricingPanel {
-    --on: 0;
-    flex: 1 1 0;
-    flex-grow: calc(1 + 2.4 * var(--on));
-    min-width: 10.25rem;
-    display: grid;
-    grid-template-columns: minmax(0, 8.75rem) minmax(0, 1fr);
-    align-items: start;
-    gap: 0 1.35rem;
-    padding: 1.35rem 1.05rem;
-    box-shadow: none;
-    /* Dim via filter's opacity() rather than the opacity property: .reveal
-       already owns opacity on this element, and setting it here would cancel
-       the scroll entrance and leave the row visible before it is reached. */
-    filter: saturate(calc(0.22 + 0.78 * var(--on))) opacity(calc(0.6 + 0.4 * var(--on)));
-    transition:
-      flex-grow 520ms var(--ease-out),
-      filter 340ms var(--ease-out),
-      box-shadow 340ms var(--ease-out);
-  }
-
-  .pricingPanel[data-featured] {
-    --on: 1;
-  }
-
-  /* Once the pointer is anywhere in the row, the default-open panel gives up
-     its turn -- otherwise two panels would be open at once. */
-  .pricingTrack:hover .pricingPanel[data-featured],
-  .pricingTrack:focus-within .pricingPanel[data-featured] {
-    --on: 0;
-  }
-
-  /* Equal specificity to the rule above, so source order decides: the panel
-     actually being pointed at or focused wins. Keep these last. */
-  .pricingTrack:hover .pricingPanel:hover,
-  .pricingTrack:focus-within .pricingPanel:focus-within {
-    --on: 1;
-  }
-
-  .pricingTrack .pricingPanel:hover,
-  .pricingTrack .pricingPanel:focus-within,
-  .pricingTrack:not(:hover):not(:focus-within) .pricingPanel[data-featured] {
-    box-shadow: var(--shadow-lg);
-  }
-
-  .pricingDetail {
-    overflow: hidden;
-    opacity: var(--on);
-    transition: opacity 300ms var(--ease-out);
-  }
-
-  /* Fixed width so the detail column is CLIPPED as the panel narrows rather
-     than reflowing into a one-word-per-line column on the way. It is at
-     opacity 0 by then, so the clip is never visible. The value is deliberately
-     a little narrower than the open panel's detail column: any wider and the
-     CTA clips, any narrower (or set to a percentage) and the collapsed panels
-     wrap their facts to six lines, which sets the height of the whole row. */
-  .pricingDetailInner {
-    width: 12.5rem;
-  }
-
-  .pricingFlag[data-visible] {
-    position: absolute;
-    top: -0.65rem;
-    left: 1.05rem;
-    margin-bottom: 0;
-  }
-
-  .pricingTier {
-    margin-top: 0.35rem;
-  }
+.pricingCapNote {
+  margin-top: 0.85rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-faint);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pricingPanel,
-  .pricingDetail {
+  .pricingToggleButton,
+  .pricingVolumeLink {
     transition: none;
   }
 }

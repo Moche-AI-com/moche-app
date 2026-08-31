@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, CtaBand } from '../_parts';
+import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
+import beachhouse from '@/public/premium/str-hero-beachhouse.webp';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -30,6 +31,13 @@ export default function AboutPage() {
         title="We built the thing we kept asking other hosts for"
         lede="Moche-AI is an independent guest operations product for short-term rental hosts, built in Somerville, Massachusetts. This page explains where it came from, how we make decisions, and what we will not claim."
         updated="August 2026"
+      />
+
+      <PageHero
+        src={beachhouse}
+        alt="A sunlit beach house living room with linen sofas and open sliding doors"
+        caption="A beach house living room with the afternoon light coming in, the kind of property whose details live in a text message from two summers ago."
+        priority
       />
 
       <div className={styles.body}>

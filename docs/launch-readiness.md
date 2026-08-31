@@ -126,10 +126,22 @@ renders the same numbers.
 
 | Tier | Properties | Price | Channel |
 |---|---|---|---|
-| Essentials | 1-9 | $29/property/mo · $290/property/yr | self-serve |
-| Pro | 1-9 | $49/property/mo · $490/property/yr | self-serve |
-| Portfolio | 10-40 | $25-39/property/mo by contract | sales-assisted |
-| Enterprise | 41+ | custom | sales-assisted |
+| Free | 1 | $0, no card, no expiry | self-serve (no Stripe object) |
+| Host | 1-24 | graduated bands, $29 down to $11/property/mo | self-serve |
+| Portfolio | 25-100 | below $11/property/mo by contract | sales-assisted |
+| Enterprise | 101+ | custom | sales-assisted |
+
+The Host plan is graduated, not flat: property 1 costs $29, properties 2-4 cost
+$19 each, 5-9 cost $14 each, and 10-24 cost $11 each. A ten-property account
+therefore pays $167/mo, a blended $16.70. At the top of the band, 24 properties
+pay $321/mo, a blended $13.38. `monthlyTotalForProperties()` in
+`lib/constants.ts` is the single implementation, and
+`lib/billing/entitlements.test.ts` pins the published totals so the marketing
+page and the biller cannot drift apart. Annual is 10x monthly on every band.
+
+Free is deliberately not a Stripe product. It is the absence of a subscription
+row, which is what `entitlementsFromSubscription(null)` already returned before
+this change, so nothing new enforces it.
 
 Per-property billing is real at checkout: the checkout route sets the Stripe
 line-item quantity to the account's active property count (floor 1, so a new
@@ -143,8 +155,14 @@ quantity automatically. Until that sync ships, a host who outgrows their paid
 quantity hits the property cap and contacts support (or upgrades) — the same
 interaction they had under flat tiers.
 
-The Founding Member trial is unchanged: 30 days at $0 with top-tier features,
-up to 5 properties, card on file up front, once per account.
+The card-required Founding Member trial (30 days, top-tier, up to 5 properties,
+once per account) still exists in `lib/billing/entitlements.ts` and the Stripe
+webhook, but nothing markets it before launch. It contradicted the no-card
+promise it was printed next to, and it is redundant while every pre-launch
+account is free until January 1, 2027. The Founding Host Program that replaced
+it on the landing page is not a trial at all: signing up before launch locks 50%
+off the first 12 months of billing, capped at the first 100 accounts, with no
+application, no card, and no mailto.
 
 Guest conversations are unmetered on every plan: there are no allowances and
 no per-conversation fees (the pitch deck has none). The pooled-allowance and
@@ -153,13 +171,19 @@ plan's `conversationAllowance` is 0, which the usage surfaces read as "do not
 meter". Reintroducing usage pricing would be a deliberate re-pricing decision,
 not a default.
 
-### Guided setup
+### Concierge Setup
 
-The deck's Activation line is back as an arranged service: $149 per property,
-one-time, white-glove onboarding. `GUIDED_SETUP_USD` in `lib/constants.ts` is
-the code-side record of the amount; it is NOT charged in self-serve checkout
-(the previous auto-charged activation fee was removed in 3519beb7 for exactly
-that reason). Selling it means a deliberate checkout add-on, not a flag.
+Concierge Setup is an arranged, optional service priced per ACCOUNT: $199 for
+the first property and $49 for each additional property in the same engagement.
+The previous $149-per-property structure put a $745 wall in front of a
+five-property host before they had used anything, and no self-serve competitor
+in this category publishes a mandatory setup fee at all (see
+`docs/pricing-model-2027.md` for the anchors). The same five-property engagement
+is now $395. `GUIDED_SETUP_USD`, `GUIDED_SETUP_ADDITIONAL_USD`, and
+`guidedSetupTotal()` in `lib/constants.ts` are the code-side record; none of it
+is charged in self-serve checkout (the auto-charged activation fee was removed
+in 3519beb7 for exactly that reason). Selling it means a deliberate checkout
+add-on, not a flag. Self-service setup stays free and is the presented default.
 
 ### Deferred, and why neither blocks launch
 

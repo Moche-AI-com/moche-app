@@ -1,0 +1,203 @@
+/* Pre-launch onboarding launchpad. The page this replaced was one inline-styled
+   card that told a new host to wait about four months, so the only job here is
+   to make the next action obvious and to show that the account is already real. */
+
+.page {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  padding: clamp(1.5rem, 4vw, 3.5rem) 1rem clamp(2.5rem, 5vw, 4rem);
+}
+
+.wrap {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: clamp(1.5rem, 4vw, 2.25rem);
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.title {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 4.5vw, 2.3rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.lede {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text-muted);
+  max-width: 58ch;
+}
+
+.head {
+  margin-bottom: clamp(1.5rem, 4vw, 2rem);
+}
+
+/* Progress readout. A count, not a percentage: "1 of 4" is honest about how
+   much is left, where "25%" invites the host to wonder what the other 75% is. */
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.25rem 0 0;
+}
+
+.progressTrack {
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--chart-track);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--grad);
+  transition: width 300ms var(--ease-out);
+}
+
+.progressText {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.9rem;
+  align-items: start;
+  padding: var(--pad-card);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.stepDone {
+  border-color: color-mix(in srgb, var(--teal) 38%, var(--border));
+  background: color-mix(in srgb, var(--teal) 5%, var(--surface));
+}
+
+/* The one step the host should do next is the only one carrying a filled CTA,
+   so the page never asks them to choose between four equal-weight actions. */
+.stepNext {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.stepMark {
+  grid-row: 1 / span 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepMarkDone {
+  border-color: var(--teal);
+  color: var(--bg);
+  background: var(--teal);
+}
+
+.stepTitle {
+  margin: 0.2rem 0 0.3rem;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+.stepBody {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.stepAction {
+  grid-column: 2;
+  margin-top: 0.9rem;
+}
+
+.note {
+  margin: clamp(1.5rem, 4vw, 2rem) 0 0;
+  padding: var(--pad-card);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.noteTitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.98rem;
+}
+
+.noteBody {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+.noteBody + .noteBody {
+  margin-top: 0.6rem;
+}
+
+.footer {
+  margin: clamp(1.5rem, 4vw, 2rem) 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+
+.footer a {
+  color: inherit;
+}
+
+@media (max-width: 480px) {
+  .step {
+    grid-template-columns: 1fr;
+  }
+
+  .stepMark {
+    grid-row: auto;
+    margin-bottom: 0.35rem;
+  }
+
+  .stepAction {
+    grid-column: 1;
+  }
+}
