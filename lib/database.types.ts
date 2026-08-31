@@ -40,7 +40,7 @@ export type Database = {
           kind: string
           latency_ms?: number | null
           model: string
-          prompt_tokens: number
+          prompt_tokens?: number
           property_id?: string | null
           source?: string | null
           total_tokens?: number | null
@@ -243,6 +243,142 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      appliance_catalog: {
+        Row: {
+          brand: string
+          category: string
+          created_at: string
+          id: string
+          model: string
+          model_aliases: string[]
+          normalized_key: string
+          oem_support_url: string | null
+          status: string
+          times_added: number
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          category: string
+          created_at?: string
+          id?: string
+          model: string
+          model_aliases?: string[]
+          normalized_key: string
+          oem_support_url?: string | null
+          status?: string
+          times_added?: number
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          category?: string
+          created_at?: string
+          id?: string
+          model?: string
+          model_aliases?: string[]
+          normalized_key?: string
+          oem_support_url?: string | null
+          status?: string
+          times_added?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      appliance_catalog_candidates: {
+        Row: {
+          created_at: string
+          id: string
+          normalized_key: string
+          raw_brand: string | null
+          raw_category: string
+          raw_model: string
+          status: string
+          submit_count: number
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          normalized_key: string
+          raw_brand?: string | null
+          raw_category: string
+          raw_model: string
+          status?: string
+          submit_count?: number
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          normalized_key?: string
+          raw_brand?: string | null
+          raw_category?: string
+          raw_model?: string
+          status?: string
+          submit_count?: number
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appliance_catalog_candidates_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      appliance_catalog_knowledge: {
+        Row: {
+          answer: string
+          catalog_id: string
+          content_hash: string
+          created_at: string
+          id: string
+          kind: string
+          question: string
+          source_tier: string
+          source_url: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          answer: string
+          catalog_id: string
+          content_hash: string
+          created_at?: string
+          id?: string
+          kind: string
+          question: string
+          source_tier: string
+          source_url?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          answer?: string
+          catalog_id?: string
+          content_hash?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          question?: string
+          source_tier?: string
+          source_url?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appliance_catalog_knowledge_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "appliance_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       appliance_manual_sections: {
         Row: {
@@ -555,7 +691,7 @@ export type Database = {
           granted: boolean
           id?: string
           ip_hash?: string | null
-          kind?: Database["public"]["Enums"]["consent_kind"]
+          kind: Database["public"]["Enums"]["consent_kind"]
           profile_id?: string | null
           stay_id?: string | null
         }
@@ -1004,7 +1140,7 @@ export type Database = {
           confidence?: number | null
           conflict_with?: string | null
           created_at?: string
-          field_path?: string
+          field_path: string
           id?: string
           label: string
           property_id: string
@@ -1086,7 +1222,7 @@ export type Database = {
           note?: string | null
           order_id: string
           property_id: string
-          to_status: Database["public"]["Enums"]["extras_fulfillment_status"]
+          to_status?: Database["public"]["Enums"]["extras_fulfillment_status"]
         }
         Update: {
           actor_id?: string | null
@@ -1193,6 +1329,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           conversation_id?: string | null
+          created_at?: string
           declined_reason?: string | null
           escalation_id?: string | null
           expires_at?: string | null
@@ -1319,7 +1456,7 @@ export type Database = {
           registry_version: number
           requires_on_failure?: boolean
           scrape_hint?: string | null
-          sensitivity_tier: Database["public"]["Enums"]["sensitivity_tier"]
+          sensitivity_tier?: Database["public"]["Enums"]["sensitivity_tier"]
           storage_column: string
           storage_table: string
           storage_vault?: boolean
@@ -1394,14 +1531,14 @@ export type Database = {
           created_by?: string | null
           expires_at?: string | null
           id?: string
-          kind: string
-          max_redemptions: number
+          kind?: string
+          max_redemptions?: number
           property_id: string
           redemption_count?: number
           require_otp?: boolean
           revoked_at?: string | null
           stay_id?: string | null
-          token_hash: string
+          token_hash?: string
         }
         Update: {
           code_attempt_count?: number
@@ -1411,6 +1548,7 @@ export type Database = {
           code_revoked_at?: string | null
           code_secret_ref?: string | null
           consumed_at?: string | null
+          created_at?: string
           created_by?: string | null
           expires_at?: string | null
           id?: string
@@ -1765,7 +1903,7 @@ export type Database = {
           id?: string
           max_attempts?: number
           phone_last4?: string | null
-          purpose: string
+          purpose?: string
           user_id: string
         }
         Update: {
@@ -1885,7 +2023,7 @@ export type Database = {
           created_by?: string | null
           document_id?: string | null
           id?: string
-          kind?: Database["public"]["Enums"]["ingestion_kind"]
+          kind: Database["public"]["Enums"]["ingestion_kind"]
           last_error?: string | null
           property_id: string
           result?: Json | null
@@ -1899,7 +2037,7 @@ export type Database = {
           created_by?: string | null
           document_id?: string | null
           id?: string
-          kind?: Database["public"]["Enums"]["ingestion_kind"]
+          kind: Database["public"]["Enums"]["ingestion_kind"]
           last_error?: string | null
           property_id?: string
           result?: Json | null
@@ -1953,7 +2091,7 @@ export type Database = {
           document_id?: string | null
           enabled?: boolean
           id?: string
-          kind?: Database["public"]["Enums"]["ingestion_source_kind"]
+          kind: Database["public"]["Enums"]["ingestion_source_kind"]
           label: string
           last_acquired_at?: string | null
           last_status?: string | null
@@ -1968,7 +2106,7 @@ export type Database = {
           document_id?: string | null
           enabled?: boolean
           id?: string
-          kind?: Database["public"]["Enums"]["ingestion_source_kind"]
+          kind: Database["public"]["Enums"]["ingestion_source_kind"]
           label?: string
           last_acquired_at?: string | null
           last_status?: string | null
@@ -2015,9 +2153,9 @@ export type Database = {
           why: string
         }
         Insert: {
-          active?: boolean
+          active: boolean
           category: string
-          created_at?: string
+          created_at: string
           field_paths?: string[]
           key: string
           label: string
@@ -2053,8 +2191,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          accepted_at?: string
-          context?: string
+          accepted_at: string
+          context: string
           document_slug: string
           document_version: string
           host_account_id?: string | null
@@ -2095,7 +2233,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          effective_date?: string
+          effective_date: string
           id?: string
           sha256?: string | null
           slug: string
@@ -2145,9 +2283,9 @@ export type Database = {
           host_account_id: string
           id?: string
           invited_by: string
-          property_ids: string[]
+          property_ids?: string[]
           revoked_at?: string | null
-          role?: Database["public"]["Enums"]["member_role"]
+          role: Database["public"]["Enums"]["member_role"]
           token_hash: string
         }
         Update: {
@@ -2359,7 +2497,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
-          category?: string
+          category: string
           created_at?: string
           distance_m?: number | null
           hidden?: boolean
@@ -2486,7 +2624,7 @@ export type Database = {
           created_at?: string
           host_account_id: string
           id?: string
-          kind?: Database["public"]["Enums"]["notification_kind"]
+          kind: Database["public"]["Enums"]["notification_kind"]
           link?: string | null
           property_id?: string | null
           read_at?: string | null
@@ -2646,7 +2784,7 @@ export type Database = {
           page?: string | null
           property_id?: string | null
           rating?: number | null
-          source?: string
+          source: string
         }
         Update: {
           comment?: string | null
@@ -2835,6 +2973,7 @@ export type Database = {
       property_appliances: {
         Row: {
           brand: string | null
+          catalog_id: string | null
           category: string
           created_at: string
           created_by: string | null
@@ -2852,6 +2991,7 @@ export type Database = {
         }
         Insert: {
           brand?: string | null
+          catalog_id?: string | null
           category: string
           created_at?: string
           created_by?: string | null
@@ -2869,6 +3009,7 @@ export type Database = {
         }
         Update: {
           brand?: string | null
+          catalog_id?: string | null
           category?: string
           created_at?: string
           created_by?: string | null
@@ -2885,6 +3026,13 @@ export type Database = {
           verification_status?: Database["public"]["Enums"]["appliance_verification_status"]
         }
         Relationships: [
+          {
+            foreignKeyName: "property_appliances_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "appliance_catalog"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "property_appliances_created_by_fkey"
             columns: ["created_by"]
@@ -2987,7 +3135,7 @@ export type Database = {
           property_id: string
         }
         Insert: {
-          contact_type: string
+          contact_type?: string
           created_at?: string
           email?: string | null
           id?: string
@@ -3226,7 +3374,7 @@ export type Database = {
           node_type: string
           property_id: string
           source_brain_item_id?: string | null
-          title: string
+          title?: string
           updated_at?: string
         }
         Update: {
@@ -3329,7 +3477,7 @@ export type Database = {
           created_at?: string
           id?: string
           profile_id: string
-          property_id: string
+          property_id?: string
           role?: Database["public"]["Enums"]["member_role"]
         }
         Update: {
@@ -4126,7 +4274,7 @@ export type Database = {
           check_out: string
           contact_hash: string
           contact_last4?: string | null
-          contact_type: string
+          contact_type?: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -4203,7 +4351,7 @@ export type Database = {
         Insert: {
           id: string
           payload?: Json | null
-          processed_at: string
+          processed_at?: string
           type: string
         }
         Update: {
@@ -4629,7 +4777,7 @@ export type Enums<
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"])
     : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
