@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
+import {
+  FOUNDING_ACCOUNT_CAP,
+  FOUNDING_DISCOUNT_MONTHS,
+  FOUNDING_DISCOUNT_PERCENT,
+} from '@/lib/constants';
 
 const MAILTO = 'mailto:hostspark.org@gmail.com';
 
@@ -25,11 +30,13 @@ const SALES_MAILTO = `${MAILTO}?subject=${encodeURIComponent(
 // states the beta incentive plainly next to them.
 //
 // Every incentive below is already promised elsewhere on the page (the hero
-// trial note and the founding band's trial line). Nothing new is offered.
+// pre-launch note and the founding band's perk list). Nothing new is offered,
+// and the numbers come from constants so this can never drift from the offer
+// the checkout actually applies.
 const INCENTIVES = [
   {
-    label: 'One month free',
-    detail: 'On the top tier, up to 5 properties. Card required, cancel any time before it ends.',
+    label: `${FOUNDING_DISCOUNT_PERCENT}% off for ${FOUNDING_DISCOUNT_MONTHS} months`,
+    detail: `Locked in at signup for the first ${FOUNDING_ACCOUNT_CAP} accounts. No card until launch, and you can cancel at any point.`,
   },
   {
     label: 'Prioritized setup',
@@ -59,7 +66,7 @@ export function ClosingCta() {
 
           <Reveal delay={140} className={styles.closingActions}>
             <Link href="/signup" className="btn btn-primary btn-lg">
-              Start free trial
+              Start free today
             </Link>
             <a href={DEMO_MAILTO} className="btn btn-ghost btn-lg">
               Request a demo

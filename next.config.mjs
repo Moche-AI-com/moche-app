@@ -53,6 +53,16 @@ const CSP_ENFORCED_DIRECTIVES = 'upgrade-insecure-requests';
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  async redirects() {
+    return [
+      // /trial-terms described a card-required 30-day trial that the product no
+      // longer offers. The page is now /founding-terms and describes the founding
+      // discount instead. The old path is kept alive because it may have been
+      // shared or indexed, and a 404 on a billing terms page is the worst possible
+      // place to lose someone.
+      { source: '/trial-terms', destination: '/founding-terms', permanent: true },
+    ];
+  },
   async headers() {
     // Baseline security headers applied to all routes.
     // Per-route Cache-Control (private, no-store) for guest/dashboard data is set in handlers.

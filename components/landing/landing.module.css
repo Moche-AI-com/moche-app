@@ -101,7 +101,7 @@
 }
 
 /* Below ~500px the wordmark, the theme toggle, and two buttons cannot all fit
-   on one row without either wrapping the "Start free trial" label or shrinking
+   on one row without either wrapping the "Start free today" label or shrinking
    it below the touch minimum. The mark alone still identifies the brand, and
    the full wordmark is repeated in the footer. */
 @media (max-width: 500px) {

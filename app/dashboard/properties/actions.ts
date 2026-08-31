@@ -11,6 +11,7 @@ import { computeBrainHealth } from '@/lib/brain/health';
 import { slugWithSuffix } from '@/lib/slug';
 import { audit } from '@/lib/audit';
 import { purgeProperty, isDeleteConfirmed, DELETE_CONFIRMATION_WORD } from '@/lib/properties/purge';
+import { syncBillableQuantity } from '@/lib/billing/quantity-sync';
 import { DEFAULT_MODULES, LAUNCH_DATE_LABEL, RESTRICTED_TOPIC_KEYS, TONE_PRESET_IDS } from '@/lib/constants';
 import type { Json } from '@/lib/database.types';
 import { log } from '@/lib/log';
@@ -89,6 +90,12 @@ export async function createPropertyAction(_prev: PropertyFormState, formData: F
 
   // Server-safe analytics: identified by host user id, no property PII beyond its id.
   await capture('property_created', ctx.user.id, { property_id: property.id });
+
+  // Per-property pricing means the new property changes what the account owes.
+  // Awaited before the redirect below, because `redirect()` throws to unwind the
+  // request and anything after it would never run. Never throws, so a Stripe
+  // outage cannot cost the host the property they just created.
+  await syncBillableQuantity(supabase, ctx.account.id);
 
   // Optional listing link (backlog P4-02). Deliberately NOT fetched here: a slow
   // or bot-walled listing page must never delay or fail property creation. The
@@ -562,6 +569,12 @@ async function setStatus(propertyId: string, status: 'live' | 'paused' | 'draft'
   if (error) return { error: 'Could not update the property status.' };
 
   await audit(supabase, { action: `property.${status}`, propertyId, targetType: 'property', targetId: propertyId });
+
+  // Archiving removes a property from the billable count and restoring adds it
+  // back, so both directions have to reach Stripe. The other transitions (live,
+  // paused, draft) leave the count untouched and the sync exits as a no-op.
+  await syncBillableQuantity(supabase, access.property.host_account_id);
+
   revalidatePath(`/dashboard/properties/${propertyId}`);
   revalidatePath('/dashboard/properties');
   // Archived properties are listed under Reports, so both the source and the
@@ -667,6 +680,10 @@ export async function deletePropertyAction(_prev: PropertyFormState, formData: F
 
   await capture('property_purged', access.property.host_account_id, { propertyId });
 
+  // The property is gone, so the account should stop being billed for it from the
+  // next invoice. Before the redirect, which throws.
+  await syncBillableQuantity(supabase, access.property.host_account_id);
+
   revalidatePath('/dashboard/properties');
   revalidatePath('/dashboard/reports');
   revalidatePath('/dashboard');
@@ -762,6 +779,9 @@ export async function clonePropertyAction(formData: FormData): Promise<void> {
     targetType: 'property',
     targetId: sourceId,
   });
+
+  // A clone is a new billable property. Before the redirect, which throws.
+  await syncBillableQuantity(supabase, ctx.account.id);
 
   redirect(`/dashboard/properties/${created.id}`);
 }

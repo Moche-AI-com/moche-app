@@ -8,11 +8,13 @@ import { publicEnv, serverEnv } from '@/lib/env';
 import {
   PLANS,
   SELF_SERVE_PLAN_IDS,
-  FOUNDING_TRIAL_DAYS,
-  FOUNDING_TRIAL_PROPERTY_LIMIT,
-  TOP_TIER_PLAN_ID,
+  FOUNDING_COUPON_ID,
+  FOUNDING_DISCOUNT_MONTHS,
+  FOUNDING_DISCOUNT_PERCENT,
   type PlanId,
 } from '@/lib/constants';
+import { isFoundingCouponRedeemable, isFoundingDiscountEligible } from '@/lib/billing/founding';
+import { countBillableProperties } from '@/lib/billing/quantity-sync';
 import { recordAcceptances } from '@/lib/legal/acceptance';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
@@ -104,11 +106,18 @@ export async function POST(req: Request) {
       .eq('host_account_id', hostAccountId)
       .maybeSingle();
 
-    // The Founding Member offer is one free month on the top tier, once per account.
-    // Anyone who has already had a Stripe subscription has already consumed it, so
-    // the trial is offered only when no subscription id was ever recorded. Without
-    // this check a host could cancel and re-checkout for an unlimited free ride.
-    const isFoundingTrialEligible = !existing?.stripe_subscription_id;
+    // The Founding Host offer is FOUNDING_DISCOUNT_PERCENT off for
+    // FOUNDING_DISCOUNT_MONTHS months, delivered by a live Stripe coupon whose
+    // max_redemptions enforces the account cap. Attached automatically below so a
+    // founding host never has to know a promo code exists.
+    //
+    // Anyone who has already had a subscription has consumed their claim, so the
+    // discount is offered only when no subscription id was ever recorded. Without
+    // that check a host could cancel and re-checkout to restart the 12 months.
+    const foundingDiscount = isFoundingDiscountEligible({
+      hasEverSubscribed: !!existing?.stripe_subscription_id,
+      couponValid: await isFoundingCouponRedeemable(stripe),
+    });
 
     let customerId = existing?.stripe_customer_id ?? null;
     if (!customerId) {
@@ -134,17 +143,10 @@ export async function POST(req: Request) {
 
     // Per-property pricing (pitch-deck model, Aug 2026): self-serve tiers are priced
     // per property per month, so the line-item quantity is the number of active
-    // (non-archived, non-deleted) properties on the account. The floor of 1 lets a
-    // brand-new host start a plan before creating their first property. The webhook
-    // persists this quantity on the subscriptions row; known follow-up: adding a
-    // property mid-plan does not yet update the quantity automatically.
-    const { count: propertyCount } = await supabase
-      .from('properties')
-      .select('id', { count: 'exact', head: true })
-      .eq('host_account_id', hostAccountId)
-      .is('deleted_at', null)
-      .neq('status', 'archived');
-    const quantity = Math.max(1, propertyCount ?? 0);
+    // properties on the account. Shared with lib/billing/quantity-sync.ts, which
+    // keeps this quantity current as properties are added, archived, or deleted, so
+    // the count at signup and the count afterwards can never diverge.
+    const quantity = await countBillableProperties(supabase, hostAccountId);
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -155,32 +157,28 @@ export async function POST(req: Request) {
         metadata: {
           host_account_id: hostAccountId,
           plan: planId,
-          ...(isFoundingTrialEligible
+          ...(foundingDiscount
             ? {
                 founding_member: 'true',
-                trial_grants_plan: TOP_TIER_PLAN_ID,
-                trial_property_limit: String(FOUNDING_TRIAL_PROPERTY_LIMIT),
+                founding_discount_percent: String(FOUNDING_DISCOUNT_PERCENT),
+                founding_discount_months: String(FOUNDING_DISCOUNT_MONTHS),
               }
             : {}),
         },
-        ...(isFoundingTrialEligible
-          ? {
-              trial_period_days: FOUNDING_TRIAL_DAYS,
-              // A card is collected up front (payment_method_collection: 'always'
-              // below), so if it somehow goes missing we cancel rather than leave a
-              // subscription that can never be charged.
-              trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
-            }
-          : {}),
       },
-      // Stripe defaults trials to 'if_required', which would let a host start a free
-      // month with no card and force a second payment step at conversion. Requiring
-      // the card now means the trial converts on its own.
+      // A card is always collected. No trial is granted here, so this only removes
+      // Stripe's 'if_required' shortcut and guarantees the first invoice can be paid.
       payment_method_collection: 'always',
       metadata: { host_account_id: hostAccountId, plan: planId },
       success_url: `${publicEnv.appUrl}/dashboard/profile/billing?status=success`,
       cancel_url: `${publicEnv.appUrl}/dashboard/profile/billing?status=cancelled`,
-      allow_promotion_codes: true,
+      // Stripe rejects a session carrying both `discounts` and
+      // `allow_promotion_codes`, so these are mutually exclusive by necessity.
+      // Founding hosts get the discount applied for them and need no code box;
+      // everyone else keeps the box, so a future campaign code still works.
+      ...(foundingDiscount
+        ? { discounts: [{ coupon: FOUNDING_COUPON_ID }] }
+        : { allow_promotion_codes: true }),
     });
 
     if (!session.url) {
@@ -192,7 +190,7 @@ export async function POST(req: Request) {
       actorProfileId: ctx.user.id,
       hostAccountId,
       targetType: 'subscription',
-      metadata: { plan: planId, interval, quantity, foundingTrial: isFoundingTrialEligible },
+      metadata: { plan: planId, interval, quantity, foundingDiscount },
     });
 
     return NextResponse.json({ url: session.url });

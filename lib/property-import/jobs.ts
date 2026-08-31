@@ -6,6 +6,7 @@ import type { AIMessage } from '@/lib/ai/provider';
 import { DEFAULT_MODULES } from '@/lib/constants';
 import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { slugWithSuffix } from '@/lib/slug';
+import { syncBillableQuantity } from '@/lib/billing/quantity-sync';
 import { routedCompletion } from '@/lib/router/modelRouter';
 import { serverEnv } from '@/lib/env';
 import { IMPORT_ATTESTATION_TEXT } from './attestation';
@@ -124,6 +125,11 @@ export async function runPropertyImportJob(client: Client, input: { jobId: strin
     if (propertyError || !property) throw propertyError ?? new Error('Could not create the draft property.');
     const { error: settingsError } = await client.from('property_settings').insert({ property_id: property.id, modules: DEFAULT_MODULES as unknown as Json });
     if (settingsError) throw settingsError;
+
+    // An imported draft is a billable property like any other, so Stripe has to
+    // learn about it here too. Never throws, so a Stripe outage cannot fail an
+    // import that already produced the property.
+    await syncBillableQuantity(client, input.hostAccountId);
 
     await transition(client, input.jobId, 'awaiting_review', 'Review the imported details before saving them to the Brain', 100, { property_id: property.id });
     return { ok: true as const, propertyId: property.id, draft };
