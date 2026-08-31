@@ -1,12 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import beachhouse from '@/public/premium/str-hero-beachhouse.webp';
-import cottage from '@/public/premium/str-gallery-cliffside-cottage.webp';
-import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
-import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
-import pool from '@/public/premium/str-gallery-pool-deck.webp';
-import handoff from '@/public/premium/str-gallery-key-handoff.webp';
-import portal from '@/public/premium/portal-hero.jpg';
+import { ArrowRight } from 'lucide-react';
+import { HERO_LINKS } from '@/lib/marketing/hero-links';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
 
@@ -14,40 +9,46 @@ import styles from './landing.module.css';
 // headline rather than sitting in a strip beneath it: the copy stays the single
 // focal point and the photography frames it instead of competing with it.
 //
-// The fan is decorative -- aria-hidden, and every alt is empty -- because the
-// same properties are described in the copy and a screen reader gaining seven
-// photo descriptions before the H1 is worse than gaining none.
+// The fan is no longer decorative. It was seven aria-hidden photographs with a
+// hover lift and no destination, which spent the most valuable real estate on the
+// site on nothing and left every public route except /legal orphaned from the
+// homepage. Each frame is now a link, and the centre frame is the signup CTA.
+//
+// Consequences of that change, all deliberate:
+//
+//  - The container is a <nav>, not an aria-hidden <div>. Seven links need to be
+//    announced and grouped, and a screen reader reaching the H1 through a
+//    labelled nav is a normal experience, whereas reaching it through seven
+//    unlabelled images was the reason the fan was hidden in the first place.
+//  - Alt text stays empty. The visible label is the link's accessible name, and
+//    announcing both would read every destination twice. `title` on the frame
+//    carries the longer description for pointer users.
+//  - Every frame has an always-visible label chip. Discoverability cannot depend
+//    on hover: there is no hover on a phone, and a clickable thing that looks
+//    identical to the decorative version it replaced has not been made clickable
+//    in any way a visitor can perceive.
+//
+// Geometry, destinations and crop anchors all live in lib/marketing/hero-links.ts
+// so the sitemap and the footer can consume the same list. `rank` is distance
+// from centre and drives z-order plus the arc's proportions. It no longer hides
+// anything: the old CSS dropped rank 3 under 700px and rank 2 under 430px, which
+// silently removed four of the seven destinations on a phone. Under 700px the arc
+// becomes a grid instead, so all seven stay reachable at every width.
 //
 // Headline is taken verbatim from the approved list: the word "AI" must not
 // appear in the H1 or the subheadline.
-//
-// Geometry is data, not markup: each frame carries its own offset, lift and
-// rotation, and the CSS reads them. `rank` drives responsive culling -- the
-// outermost pair (rank 3) is dropped under 700px, the next pair (rank 2) under
-// 430px, so the arc thins out instead of overlapping into mush.
-//
-// `pos` is the crop anchor. These frames are tall 3:4 windows onto photographs
-// that were not shot for that ratio, and a centred crop of the beach house is
-// two thirds empty sky -- it read as a blank card next to six photographs.
-const FAN = [
-  { src: beachhouse, x: -46, y: 26, rot: -21, rank: 3, pos: '50% 86%' },
-  { src: pool, x: -31, y: 11, rot: -14, rank: 2, pos: '50% 62%' },
-  { src: cabin, x: -16, y: 2, rot: -7, rank: 1, pos: '50% 50%' },
-  { src: portal, x: 0, y: -3, rot: 0, rank: 0, pos: '50% 45%' },
-  { src: cottage, x: 16, y: 2, rot: 7, rank: 1, pos: '50% 55%' },
-  { src: kitchen, x: 31, y: 11, rot: 14, rank: 2, pos: '50% 55%' },
-  { src: handoff, x: 46, y: 26, rot: 21, rank: 3, pos: '50% 50%' },
-] as const;
-
 export function Hero() {
   return (
     <section className={styles.hero}>
-      <div className={styles.heroFan} aria-hidden>
-        {FAN.map((frame, i) => (
-          <div
-            key={i}
+      <nav className={styles.heroFan} aria-label="Explore Moche-AI">
+        {HERO_LINKS.map((frame, i) => (
+          <Link
+            key={frame.href}
+            href={frame.href}
+            title={frame.description}
             className={styles.heroFanFrame}
             data-rank={frame.rank}
+            data-cta={frame.cta ? '' : undefined}
             style={
               {
                 '--fan-x': `${frame.x}%`,
@@ -63,13 +64,21 @@ export function Hero() {
               src={frame.src}
               alt=""
               fill
-              sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 30vw"
+              sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 34vw"
               className={styles.heroFanImage}
               priority={frame.rank < 2}
             />
-          </div>
+            {/* Scrim sits between the photograph and the label. Without it the
+                label's contrast depends on whichever part of the photo happens
+                to be under it, which fails on the pool deck and the kitchen. */}
+            <span className={styles.heroFanScrim} aria-hidden />
+            <span className={styles.heroFanLabel}>
+              {frame.label}
+              {frame.cta ? <ArrowRight size={13} strokeWidth={2.25} aria-hidden /> : null}
+            </span>
+          </Link>
         ))}
-      </div>
+      </nav>
 
       <div className={`wrap ${styles.heroCopy}`}>
         <Reveal as="p" eager className={styles.heroKicker}>
@@ -93,7 +102,8 @@ export function Hero() {
           </a>
         </Reveal>
         <Reveal as="p" eager delay={270} className={styles.heroTrialNote}>
-          Moche-AI launches January 1, 2027. Early accounts are free until then — no charge before launch.
+          Moche-AI launches January 1, 2027. Early accounts are free until then, with no charge before
+          launch.
         </Reveal>
       </div>
     </section>
