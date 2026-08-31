@@ -6,7 +6,7 @@ import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
 import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
 import pool from '@/public/premium/str-gallery-pool-deck.webp';
 import handoff from '@/public/premium/str-gallery-key-handoff.webp';
-import portal from '@/public/premium/portal-hero.jpg';
+import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
 
 /**
  * The seven hero frames, and the single source of truth for the public
@@ -99,13 +99,20 @@ export const HERO_LINKS: readonly HeroLink[] = [
   {
     href: '/signup',
     label: 'Start free',
-    description: 'Create your account. Free until launch, no card required',
-    src: portal,
+    description: 'Create your account and start building. Free until launch, no card',
+    // The concierge bell is the one image in the set that is a metaphor rather
+    // than a place: it says "someone is on the other end of this", which is the
+    // whole promise, and it carries the brand mark inside the photograph. It is
+    // the centre frame, so it is what the eye lands on before the headline.
+    src: conciergeBell,
     x: 0,
     y: -3,
     rot: 0,
     rank: 0,
-    pos: '50% 45%',
+    // Centred rather than 50% 45%: the source is already 3:4, so desktop frames
+    // show it whole, and the mobile CTA band (16 / 7) crops to a horizontal strip
+    // that keeps both the bell and the badge in view at 50%.
+    pos: '50% 50%',
     cta: true,
     noSitemap: true,
   },

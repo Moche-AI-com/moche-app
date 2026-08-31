@@ -151,3 +151,39 @@ describe('planBannerFor', () => {
     expect(b?.variant).toBe('read_only');
   });
 });
+
+describe('planBannerFor pre-launch', () => {
+  it('shows the pre-launch banner instead of the free-build banner', () => {
+    const b = planBannerFor(ent({ preLaunch: true }), NOW);
+    expect(b?.variant).toBe('pre_launch');
+    expect(b?.tone).toBe('info');
+    expect(b?.ctaHref).toBe('/dashboard/properties/new');
+  });
+
+  // Before launch nothing is billed, so a read-only or lapsed state is not a
+  // situation the host can be in yet. The pre-launch message has to win, or the
+  // dashboard tells a founding host to go fix billing that does not exist.
+  it('outranks the read-only banner', () => {
+    const b = planBannerFor(ent({ preLaunch: true, isReadOnly: true, planId: 'pro' }), NOW);
+    expect(b?.variant).toBe('pre_launch');
+  });
+
+  it('outranks the trial banner', () => {
+    const b = planBannerFor(
+      ent({ preLaunch: true, trialing: true, active: true, trialEnd: '2026-08-12T12:00:00.000Z' }),
+      NOW,
+    );
+    expect(b?.variant).toBe('pre_launch');
+  });
+
+  // The flag is opt-in so every existing billing case keeps its old behavior.
+  it('is off by default', () => {
+    expect(planBannerFor(ent(), NOW)?.variant).toBe('free_build');
+  });
+
+  it('never promises a card is on file', () => {
+    const b = planBannerFor(ent({ preLaunch: true }), NOW);
+    expect(b?.body).toMatch(/no card/i);
+    expect(b?.body).not.toMatch(/charged/i);
+  });
+});
