@@ -41,7 +41,7 @@ const FAQS = [
   },
   {
     q: 'How long does setup take?',
-    a: 'Most hosts finish onboarding in 15 to 20 minutes. A completeness score tracks what is still missing and suggests which gaps are worth filling first.',
+    a: 'Setup is self serve, and you can publish with the essentials and keep adding detail afterwards. A completeness score tracks what is still missing and suggests which gaps are worth filling first.',
   },
   {
     q: 'Can I run it alongside a messaging tool I already use?',
@@ -90,8 +90,7 @@ export default function HowItWorksPage() {
             <p>
               The manual, the Wi-Fi details, the appliance quirks, check-in, parking, house rules.
               Upload documents or type them in. A completeness score shows which gaps are worth filling
-              first, so you are not staring at an empty form wondering what matters. Most hosts finish
-              in 15 to 20 minutes.
+              first, so you are not staring at an empty form wondering what matters.
             </p>
           </li>
           <li>

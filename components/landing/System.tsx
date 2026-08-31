@@ -22,7 +22,7 @@ const STEPS = [
     n: '01',
     title: 'Load what you know',
     detail:
-      'Manual, Wi-Fi, quirks, check-in, parking, rules. A completeness score shows the gaps worth filling first. Most hosts finish in 20 minutes.',
+      'Manual, Wi-Fi, quirks, check-in, parking, rules. A completeness score shows the gaps worth filling first, so you are never staring at an empty form.',
   },
   {
     n: '02',

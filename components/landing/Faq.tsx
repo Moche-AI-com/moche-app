@@ -16,7 +16,7 @@ const FAQS = [
   },
   {
     q: 'How long does setup take?',
-    a: 'Most hosts finish onboarding in 15 to 20 minutes, and the portal can be live before the next check-in. A completeness score tracks what is still missing and suggests the gaps worth filling first.',
+    a: 'Setup is self serve. You can publish with the essentials and keep adding detail afterwards, so the portal can be live before your next check-in. A completeness score tracks what is still missing and suggests the gaps worth filling first.',
   },
   {
     q: 'Is this just a chatbot?',

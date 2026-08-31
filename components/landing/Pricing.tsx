@@ -29,6 +29,8 @@ import {
 
 const MIN_PROPERTIES = 1;
 const DEFAULT_PROPERTIES = 3;
+const MONTHS_PER_YEAR = 12;
+const FREE_MONTHS_ON_ANNUAL = MONTHS_PER_YEAR - ANNUAL_MULTIPLIER;
 
 // Half of an odd total is a half-dollar, and `toLocaleString()` renders that as
 // "33.5", which reads as a truncated number rather than a price. Cents appear
@@ -55,6 +57,10 @@ export function Pricing() {
 
   const monthlyTotal = monthlyTotalForProperties(propertyCount);
   const displayTotal = billing === 'monthly' ? monthlyTotal : monthlyTotal * ANNUAL_MULTIPLIER;
+  // Twelve months of the monthly rate, minus the ten months annual actually charges.
+  // Stated as a dollar figure because "save 2 months" is a claim a host has to do
+  // arithmetic to check, and the arithmetic is the whole offer.
+  const annualSaving = monthlyTotal * (MONTHS_PER_YEAR - ANNUAL_MULTIPLIER);
   const perProperty = effectiveRatePerProperty(propertyCount);
   const foundingTotal = Math.round(displayTotal * (1 - FOUNDING_DISCOUNT_PERCENT / 100) * 100) / 100;
   const atCap = propertyCount >= SELF_SERVE_PROPERTY_MAX;
@@ -114,7 +120,9 @@ export function Pricing() {
               className={styles.pricingToggleButton}
             >
               Annual
-              <span className={styles.pricingToggleNote}>2 months free</span>
+              <span className={styles.pricingToggleNote}>
+                {FREE_MONTHS_ON_ANNUAL} months free
+              </span>
             </button>
           </div>
         </Reveal>
@@ -158,6 +166,13 @@ export function Pricing() {
                   ? 'For 1 property'
                   : `For ${propertyCount} properties, $${perProperty.toFixed(2)} each`}
               </p>
+              {billing === 'annual' ? (
+                <p className={styles.pricingSaving}>
+                  Pay annually, get {FREE_MONTHS_ON_ANNUAL} months free. That is{' '}
+                  <strong>${usd(annualSaving)}</strong> less than ${usd(monthlyTotal)} a month
+                  for {MONTHS_PER_YEAR} months.
+                </p>
+              ) : null}
               <p className={styles.pricingFounding}>
                 Founding hosts lock{' '}
                 <strong>
@@ -216,10 +231,10 @@ export function Pricing() {
 
         <Reveal delay={170} className={styles.pricingSetup}>
           <p className={styles.pricingSetupCopy}>
-            <strong>Setting up is free and takes about 20 minutes.</strong> If you would
-            rather hand it over, Concierge Setup is ${GUIDED_SETUP_USD} for your first
-            property and ${GUIDED_SETUP_ADDITIONAL_USD} for each one after that, once per
-            account. It is optional, and it is not required to go live.
+            <strong>Setup is self serve and included.</strong> If you would rather hand it
+            over, Concierge Setup is ${GUIDED_SETUP_USD} for your first property and $
+            {GUIDED_SETUP_ADDITIONAL_USD} for each one after that, once per account. It is
+            optional, and it is not required to go live.
           </p>
         </Reveal>
 

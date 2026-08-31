@@ -199,7 +199,13 @@ export default async function ProfileBillingPage() {
                     : 'Cancel a paid plan to return here.'}
                 </p>
               ) : plan.selfServe ? (
-                <BillingActions mode="checkout" planId={id} isCurrent={isCurrent} configured={billingConfigured} />
+                <BillingActions
+                  mode="checkout"
+                  planId={id}
+                  isCurrent={isCurrent}
+                  configured={billingConfigured}
+                  monthlyTotal={monthlyTotalForProperties(billableProperties)}
+                />
               ) : (
                 <a
                   className="btn btn-secondary"
@@ -226,8 +232,8 @@ export default async function ProfileBillingPage() {
         includes unlimited guests, stays, and conversations, with no per-conversation
         charges. Optional Concierge Setup is ${GUIDED_SETUP_USD} for your first property and
         ${GUIDED_SETUP_ADDITIONAL_USD} for each one after that, one time per account;
-        setting up yourself is always free. Cancel anytime. Annual plans include two months
-        free. Prices in USD.
+        setting up yourself is self serve and included. Cancel anytime. Pay annually and you
+        are billed ten months for twelve, so two months are free. Prices in USD.
       </p>
     </div>
   );

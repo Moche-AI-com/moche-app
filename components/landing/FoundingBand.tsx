@@ -42,7 +42,7 @@ const STEPS = [
   },
   {
     title: 'Add your properties and build the Brain',
-    body: 'About 20 minutes per property. Preview the guest portal exactly as a guest will see it.',
+    body: 'Add each property once, then preview the guest portal exactly as a guest will see it.',
   },
   {
     title: 'We tell you the day we go live',
