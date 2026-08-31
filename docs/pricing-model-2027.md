@@ -267,34 +267,67 @@ Deliberately not offered: free guided setup for founding hosts. That gives away
 the founder's labour, which is the one genuinely scarce and costly input, and the
 brief was explicitly for an offer that is not a hassle on our end.
 
-## 7. Stripe implementation
+## 7. Stripe implementation (done, live mode)
 
-Live mode, account `acct_1TtorM7L7XoO558M`. Create new prices and archive old
-ones; never delete. Each mutation confirmed with the owner before it runs.
+Executed against live account `acct_1TtorM7L7XoO558M` on 2026-08-31. The account
+had zero subscriptions at the time, so archiving the legacy catalogue affected no
+customer. Nothing was deleted; every legacy object is archived and still visible
+in the dashboard for historical reporting.
 
-1. **Host monthly and annual**: one recurring price each with
-   `billing_scheme: tiered`, `tiers_mode: graduated`, quantity set to the
-   property count. Graduated rather than volume, so the bands match §4 exactly.
-2. **Free tier**: no Stripe object. Free is the absence of a subscription, which
-   is how `entitlementsFromSubscription` already treats a null row. No $0
-   subscription is created, which avoids a second code path.
-3. **Concierge Setup**: two one-time prices, $199 first property and $49
-   additional, attached to a new dedicated Services product. The current $149
-   setup price is wrongly attached to the Essentials product and gets archived.
-4. **Archive**: Starter Monthly/Annual ($29/$290), Pro Monthly/Annual ($49/$490),
-   Portfolio per-property ($32), and Guided Setup ($149).
-5. **Fix stale product metadata.** Every product currently carries
-   `property_min` / `property_max` / `conversation_allowance` values that
-   contradict both the app and the marketing: Essentials says 1 property and 50
-   conversations, Pro says 2 to 5 and 200, Portfolio says 16 to 40 and 1,500.
-   These are replaced to match §4, and `tax_behavior` is made consistent.
+### Created
 
-## 8. Open decisions for the owner
+| Object | Id | Detail |
+| --- | --- | --- |
+| Product | `prod_VAuXEZ42YBkJqO` | Moche-AI Host, 1-24 properties |
+| Price | `price_1UAYiJ7L7XoO558MDtjww69g` | Host Monthly, graduated, `moche_host_monthly` |
+| Price | `price_1UAYiP7L7XoO558M6n70D5lU` | Host Annual, graduated, `moche_host_annual` |
+| Product | `prod_VAuXYl8oxWeOKU` | Moche-AI Concierge Setup |
+| Price | `price_1UAYic7L7XoO558MrA0Oojoy` | Setup, first property, $199, `moche_setup_first` |
+| Price | `price_1UAYkr7L7XoO558MOUXjczeJ` | Setup, each additional, $49, `moche_setup_additional` |
 
-1. Confirm the four band rates: $29 / $19 / $14 / $11.
-2. Confirm the founding offer at 50% off 12 months, capped at 100 accounts.
-3. Confirm Concierge Setup at $199 plus $49, and that it stays optional and off
-   the pricing cards.
-4. Confirm the Portfolio target range of $10 to $12 per property/month is
-   acceptable to state publicly, or whether it should read "contact sales" with
-   no number.
+Both Host prices use `billing_scheme: tiered` with `tiers_mode: graduated` and
+`tax_behavior: exclusive`. The tiers are 1 at $29, up to 4 at $19, up to 9 at
+$14, and the remainder at $11, which reproduces §4 exactly at every quantity.
+The checkout route already sets the line-item quantity to the account's active
+property count, so no code change was needed to make the bands apply.
+
+### Archived
+
+Prices `price_1TvkrZ7L7XoO558M7gSRNJlP` ($29), `price_1TvkrZ7L7XoO558MQkq7uaun`
+($290), `price_1U6ZJU7L7XoO558MfHKmidJP` ($49),
+`price_1U6ZKA7L7XoO558Moeuxux6n` ($490), `price_1U6ZMc7L7XoO558MUBNnHrof` ($32
+per property), `price_1U6ZQA7L7XoO558M2cRmhZTD` ($149 setup). Products
+`prod_Uvc5FCVbViB5LE` (Essentials), `prod_Uvc51wGbno5oPm` (Pro),
+`prod_V1BUFyuyaSDad6` (Portfolio).
+
+The stale `property_min` / `property_max` / `conversation_allowance` metadata was
+not corrected in place; those products are archived instead, and the replacement
+Host product carries `property_min: 1`, `property_max: 24` and no conversation
+allowance, because the plan is unmetered.
+
+### Not created, deliberately
+
+- **Free** is the absence of a subscription row, which is how
+  `entitlementsFromSubscription(null)` already behaves. A $0 subscription would
+  add a second code path for no benefit.
+- **Portfolio and Enterprise** are contract-priced and sales-assisted. Checkout
+  rejects them by plan id, so a price object would be unreachable.
+- **The founding 50% discount** is not yet a Stripe coupon. Checkout passes
+  `allow_promotion_codes: true`, so the intended mechanism is a promotion code
+  created at launch, once the founding cohort is known.
+
+### Owner action required
+
+`STRIPE_PRICE_PRO_MONTHLY` and `STRIPE_PRICE_PRO_ANNUAL` must be repointed at
+`price_1UAYiJ7L7XoO558MDtjww69g` and `price_1UAYiP7L7XoO558M6n70D5lU`. The
+`STRIPE_PRICE_STARTER_*` and `STRIPE_PRICE_PORTFOLIO_*` values are no longer
+read for a purchasable plan and can be cleared. Environment variables are
+outside the agent boundary, so this is a manual step in Vercel.
+
+## 8. Decisions, resolved
+
+All four rates, the founding offer, the setup fee, and the Portfolio band were
+delegated to the agent and are now locked in `lib/constants.ts`, which is the
+single source of truth. Portfolio is presented as "contact us" with no public
+per-property number, since a stated range invites a negotiation the product
+cannot yet support.
