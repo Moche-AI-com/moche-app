@@ -31,6 +31,8 @@ function blockedReasonText(reason: string | null): string {
       return 'required answers are missing';
     case 'below_threshold':
       return `the brain score is below the ${COMPLETENESS_SHIP_THRESHOLD}% line`;
+    case 'both':
+      return 'required answers are missing and the score is below the publish line';
     default:
       return reason ?? 'the publish gate is not satisfied';
   }
