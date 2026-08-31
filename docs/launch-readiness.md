@@ -174,9 +174,19 @@ plan's `conversationAllowance` is 0, which the usage surfaces read as "do not
 meter". Reintroducing usage pricing would be a deliberate re-pricing decision,
 not a default.
 
-### Concierge Setup
+### Concierge Setup — withdrawn 2026-08-31, not offered
 
-Concierge Setup is an arranged, optional service priced per ACCOUNT: $199 for
+The owner pulled the paid setup service before launch: "we don't want to offer
+setup just yet." Every user-visible mention is gone (pricing section, dashboard
+billing page, founding host terms, closing CTA), and setup is presented as self
+serve and free with no setup fee anywhere. `GUIDED_SETUP_USD`,
+`GUIDED_SETUP_ADDITIONAL_USD` and `guidedSetupTotal()` survive in
+`lib/constants.ts` as the record of the shape only, with a comment forbidding
+re-use in copy without an owner decision. The two Stripe prices still exist and
+are unreferenced; archiving them is an open owner action.
+
+What the offer was, for the day it comes back: an arranged, optional service
+priced per ACCOUNT, $199 for
 the first property and $49 for each additional property in the same engagement.
 The previous $149-per-property structure put a $745 wall in front of a
 five-property host before they had used anything, and no self-serve competitor

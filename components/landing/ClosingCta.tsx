@@ -39,8 +39,9 @@ const INCENTIVES = [
     detail: `Locked in at signup for the first ${FOUNDING_ACCOUNT_CAP} accounts. No card until launch, and you can cancel at any point.`,
   },
   {
-    label: 'Prioritized setup',
-    detail: 'We load your first property with you, so the brain is answering before your next stay.',
+    label: 'Setup you can finish today',
+    detail:
+      'Add a property, confirm the details, and preview the guest portal. Self serve, with no setup fee.',
   },
   {
     label: 'Support that is a person',
