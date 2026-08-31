@@ -184,6 +184,27 @@ quote-led.
 Annual billing stays at 10x the monthly rate, which is two months free.
 `ANNUAL_MULTIPLIER = 10` is unchanged.
 
+#### "Pay annually, save 2 months" as implemented
+
+The offer is a price, not a coupon. There is no discount object and no promotion
+code behind it: the annual Stripe price simply charges ten months for twelve, at
+every band. Read back from live mode on 2026-08-31, the annual price
+`price_1UAYiP7L7XoO558M6n70D5lU` carries graduated tiers of $290 / $190 / $140 /
+$110 per property per year against the monthly price's $29 / $19 / $14 / $11, so
+the 10x relationship holds inside each band rather than only at the first
+property. `entitlements.test.ts` asserts that relationship at every property count
+from 1 to `SELF_SERVE_PROPERTY_MAX`, so changing a band or the multiplier fails a
+test instead of quietly making the claim false.
+
+Surfaces:
+
+- Landing pricing toggle shows "2 months free" and, when annual is selected, the
+  dollar figure the host avoids versus twelve monthly payments.
+- Dashboard billing cards now offer a monthly/annual choice. Until this change
+  `BillingActions` posted a hardcoded `interval: 'monthly'`, so annual was
+  advertised in copy but unreachable in the only screen that can buy it, even
+  though `/api/stripe/checkout` had accepted `interval: 'annual'` all along.
+
 Collapsing Essentials and Pro into one plan is deliberate. The old split forced a
 feature-gating decision at the exact moment a host is least able to judge which
 tier they need, and it put review nudges and SMS escalation behind a 69% price

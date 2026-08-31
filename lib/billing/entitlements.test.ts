@@ -9,6 +9,7 @@ import {
   GUIDED_SETUP_USD,
   HOST_PRICING_BANDS,
   SELF_SERVE_PROPERTY_MAX,
+  annualTotalForProperties,
   effectiveRatePerProperty,
   guidedSetupTotal,
   monthlyTotalForProperties,
@@ -76,6 +77,22 @@ describe('plan grid', () => {
   it('prices annual at exactly the monthly rate times the multiplier', () => {
     for (const id of SELF_SERVE_PLAN_IDS) {
       expect(PLANS[id].annual).toBe(PLANS[id].monthly * ANNUAL_MULTIPLIER);
+    }
+  });
+
+  // The site tells hosts that paying annually gives them two months free. That is
+  // only true while the multiplier is twelve minus two, and while it holds at every
+  // property count rather than just at one property. Both are asserted so a change
+  // to the bands or the multiplier fails here instead of on the pricing page.
+  it('makes annual billing exactly two months free at every property count', () => {
+    const MONTHS_PER_YEAR = 12;
+    expect(MONTHS_PER_YEAR - ANNUAL_MULTIPLIER).toBe(2);
+
+    for (let count = 1; count <= SELF_SERVE_PROPERTY_MAX; count += 1) {
+      const monthly = monthlyTotalForProperties(count);
+      const annual = annualTotalForProperties(count);
+      expect(annual).toBe(monthly * ANNUAL_MULTIPLIER);
+      expect(monthly * MONTHS_PER_YEAR - annual).toBe(monthly * 2);
     }
   });
 

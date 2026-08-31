@@ -1186,6 +1186,20 @@
   margin-top: 0.35rem;
 }
 
+.pricingSaving {
+  margin-top: 0.5rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.pricingSaving strong {
+  color: var(--teal-deep);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .pricingFounding {
   margin-top: 0.6rem;
   padding-top: 0.6rem;
