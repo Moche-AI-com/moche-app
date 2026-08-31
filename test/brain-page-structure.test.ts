@@ -74,8 +74,19 @@ describe('Brain page structure', () => {
     expect(page).not.toContain('computeCardHealth');
   });
 
-  it('offers the Spaces & features panel, the custom-section surface', () => {
-    expect(page).toContain('<FeaturesPanel');
+  it('links to the Spaces & features surface instead of embedding the panel', () => {
+    // Retired 2026-08-31 (redesign consolidation): the Features panel lives on
+    // /brain/spaces now. What must never come back is a second embedded instance here —
+    // two competing feature lists on one page is worse than either alone.
+    expect(page).not.toContain('<FeaturesPanel');
+    expect(page).toContain('/brain/spaces');
+  });
+
+  it('links to the unified Add-knowledge page instead of a sidebar import widget', () => {
+    // Retired 2026-08-31 (redesign consolidation): /brain/add is the single intake for
+    // writing, files, URLs, and paste, calling the same ingest routes directly.
+    expect(page).not.toContain('IngestPanel');
+    expect(page).toContain('/brain/add');
   });
 });
 
