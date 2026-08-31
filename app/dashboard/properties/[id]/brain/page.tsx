@@ -26,6 +26,7 @@
 // Spaces & features and the manager (the doing surfaces), then the sidebar's score,
 // question queue, and intake panels.
 
+import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { computeBrainHealth } from '@/lib/brain/health';
@@ -160,7 +161,7 @@ export default async function BrainPage({
 
   return (
     <div>
-      <div className="brain-page-head">
+      <div className="brain-page-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Property Brain</h1>
           <p className="faint" style={{ fontSize: '.85rem' }}>
@@ -168,6 +169,14 @@ export default async function BrainPage({
             {reviewCount > 0 && ` · ${reviewCount} to review`}
           </p>
         </div>
+        <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost btn-sm" href={`/dashboard/properties/${propertyId}/brain/spaces`}>
+            Spaces &amp; features
+          </Link>
+          <Link className="btn btn-ghost btn-sm" href={`/dashboard/properties/${propertyId}/brain/go-live`}>
+            Go-live readiness
+          </Link>
+        </nav>
       </div>
 
       {!access.can.editBrain && (
