@@ -21,10 +21,16 @@
 //     rendered two readiness notions: the legacy 8-category label AND the registry
 //     completeness score the publish gate reads. The canonical number wins, and
 //     pending AI reviews now surface as their own count.
+//   - The sidebar IngestPanel and the main-column FeaturesPanel (2026-08-31, redesign
+//     consolidation). Both now live one click away as full surfaces: /brain/add is the
+//     single intake for writing, files, URLs, and paste; /brain/spaces is the single
+//     place to declare what the property has and manage custom sections. Keeping both
+//     panels here meant two competing intake paths and two competing feature lists on
+//     one page. The component files stay in this directory — FeaturesPanel is now the
+//     lower half of /brain/spaces.
 //
-// Layout order is deliberate: Coverage Map first (orientation + navigation), then
-// Spaces & features and the manager (the doing surfaces), then the sidebar's score,
-// question queue, and intake panels.
+// Layout order is deliberate: Coverage Map first (orientation + navigation), then the
+// manager (the doing surface), then the sidebar's score, question queue, and provenance.
 
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
@@ -46,9 +52,7 @@ import { CompletenessPanel } from './CompletenessPanel';
 import { CoverageMap } from './CoverageMap';
 import { ImportProvenancePanel } from './ImportProvenancePanel';
 import { BrainManager } from './BrainManager';
-import { FeaturesPanel } from './FeaturesPanel';
 import { EnhanceBrainPanel, type EnhanceQuestion } from './EnhanceBrainPanel';
-import { IngestPanel } from './IngestPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -196,11 +200,6 @@ export default async function BrainPage({
 
       <div className="brain-shell">
         <div id="brain-editor" style={{ scrollMarginTop: '1rem' }}>
-          <FeaturesPanel
-            propertyId={propertyId}
-            canEdit={access.can.editBrain}
-            features={features}
-          />
           <BrainManager
             propertyId={propertyId}
             canEdit={access.can.editBrain}
@@ -281,7 +280,6 @@ export default async function BrainPage({
               />
             </div>
           )}
-          {access.can.editBrain && <IngestPanel propertyId={propertyId} />}
         </div>
       </div>
     </div>

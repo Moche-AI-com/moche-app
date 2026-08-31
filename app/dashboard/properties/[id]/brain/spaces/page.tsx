@@ -1,14 +1,10 @@
-// Spaces & features (unified) — Manage Brain redesign, slice 2.
+// Spaces & features (unified) — Manage Brain redesign, slices 2 + consolidation.
 //
-// One surface for "what does this place have": the registry applicability
-// predicates (which decide the completeness denominator and the go-live gate)
-// alongside the host's own custom sections. Today this answer is spread across
-// the Completeness panel, the Features panel, and the onboarding checklist;
-// this route is the consolidation target.
-//
-// Additive route — no existing file is modified. All writes run through the
-// existing server actions, so permission checks and audit logging are unchanged.
-// Direct URL: /dashboard/properties/<id>/brain/spaces
+// The single surface for "what does this place have": the registry applicability board
+// (which decides the completeness denominator and the go-live gate) on top, and the
+// full custom-spaces manager (catalog picker, structured inputs, Draft with AI, edit,
+// archive) below it. The Brain page links here from its header; the panels that used
+// to do these jobs inline on the Brain page are retired from it.
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -19,14 +15,15 @@ import {
   APPLICABILITY_PREDICATES,
   REGISTRY_FIELDS,
 } from '@/lib/brain/completeness';
+import { type PropertyFeature } from '@/lib/brain/taxonomy';
+import { FeaturesPanel } from '../FeaturesPanel';
 import { SpacesClient } from './SpacesClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SpacesPage({ params }: { params: Promise<{ id: string }> }) {
   const propertyId = (await params).id;
-  // Redirects unless the signed-in host can access this property.
-  await requirePropertyAccess(propertyId);
+  const access = await requirePropertyAccess(propertyId);
 
   const supabase = createClient();
   const { data: property } = await supabase
@@ -43,8 +40,9 @@ export default async function SpacesPage({ params }: { params: Promise<{ id: str
       .eq('property_id', propertyId),
     supabase
       .from('property_features')
-      .select('id, label, location, guest_access, notes, created_via, archived_at')
+      .select('id, label, catalog_key, location, guest_access, notes, created_via')
       .eq('property_id', propertyId)
+      .is('archived_at', null)
       .order('created_at', { ascending: true }),
   ]);
 
@@ -60,6 +58,16 @@ export default async function SpacesPage({ params }: { params: Promise<{ id: str
     applies: appliesByPredicate.has(p) ? appliesByPredicate.get(p)! : null,
   }));
 
+  const features: PropertyFeature[] = (featureRows ?? []).map((f) => ({
+    id: f.id,
+    label: f.label,
+    catalogKey: f.catalog_key,
+    location: f.location,
+    guestAccess: f.guest_access as PropertyFeature['guestAccess'],
+    notes: f.notes,
+    createdVia: f.created_via as PropertyFeature['createdVia'],
+  }));
+
   return (
     <section style={{ maxWidth: '720px', margin: '0 auto', padding: '1.5rem 1rem 4rem' }}>
       <p style={{ margin: 0 }}>
@@ -72,7 +80,11 @@ export default async function SpacesPage({ params }: { params: Promise<{ id: str
         something the property does not have.
       </p>
 
-      <SpacesClient propertyId={propertyId} predicates={predicates} features={featureRows ?? []} />
+      <SpacesClient propertyId={propertyId} predicates={predicates} />
+
+      <div style={{ marginTop: '2rem' }}>
+        <FeaturesPanel propertyId={propertyId} canEdit={access.can.editBrain} features={features} />
+      </div>
 
       <p style={{ marginTop: '2rem', fontSize: '.85rem', opacity: 0.7 }}>
         <Link href={`/dashboard/properties/${propertyId}/brain/go-live`}>

@@ -1,36 +1,20 @@
 'use client';
 
-// Client half of the unified Spaces & features surface (slice 2).
-// Every write goes through the EXISTING, tested server actions —
-// setApplicabilityAction (completeness-actions.ts) and archiveFeatureAction
-// (feature-actions.ts) — so permission checks (can_edit_property / editBrain),
-// audit logging, and RLS behavior are identical to the current panels.
+// "What this place has" — the registry applicability board (slice 2). This component
+// owns exactly one job: the Yes/No answers that drive the completeness denominator and
+// the go-live gate. Custom spaces are managed by the Features panel directly below on
+// the same page, which is the fuller manager (catalog picker, edit, Draft with AI,
+// archive) — earlier revisions of this client carried a read-only list that duplicated
+// it, and duplication on one page is worse than either surface alone.
 
 import { useActionState } from 'react';
 import { setApplicabilityAction } from '../completeness-actions';
-import { archiveFeatureAction } from '../feature-actions';
 
 export type PredicateRow = {
   predicate: string;
   label: string;
   gatedCount: number;
   applies: boolean | null;
-};
-
-export type FeatureRow = {
-  id: string;
-  label: string;
-  location: string | null;
-  guest_access: string;
-  notes: string | null;
-  created_via: string;
-  archived_at: string | null;
-};
-
-const ACCESS_LABEL: Record<string, string> = {
-  yes: 'Guests can use it',
-  supervised: 'Ask host / supervised',
-  no: 'Host only',
 };
 
 const buttonStyle = {
@@ -45,14 +29,11 @@ const buttonStyle = {
 export function SpacesClient({
   propertyId,
   predicates,
-  features,
 }: {
   propertyId: string;
   predicates: PredicateRow[];
-  features: FeatureRow[];
 }) {
   const [appState, appAction] = useActionState(setApplicabilityAction, {});
-  const activeFeatures = features.filter((f) => !f.archived_at);
 
   return (
     <>
@@ -114,48 +95,6 @@ export function SpacesClient({
           );
         })}
       </ul>
-
-      <h2 style={{ fontSize: '1.05rem', margin: '2rem 0 0.25rem' }}>Your own spaces</h2>
-      <p style={{ margin: 0, opacity: 0.7, fontSize: '.85rem' }}>
-        Custom spaces each become their own brain section. Add them from the Manage Brain page;
-        they are listed and archived here.
-      </p>
-      {activeFeatures.length === 0 ? (
-        <p style={{ opacity: 0.75, fontSize: '.85rem' }}>
-          No custom spaces yet — pool, grill, shed, anything. Each one becomes its own section you
-          can file knowledge under.
-        </p>
-      ) : (
-        <ul style={{ listStyle: 'none', margin: '0.75rem 0 0', padding: 0 }}>
-          {activeFeatures.map((f) => (
-            <li
-              key={f.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                padding: '0.6rem 0',
-                borderBottom: '1px solid rgba(128,128,128,.2)',
-              }}
-            >
-              <span style={{ flex: 1 }}>
-                {f.label}
-                <span style={{ opacity: 0.6, fontSize: '.8rem' }}>
-                  {f.location ? ` · ${f.location}` : ''} ·{' '}
-                  {ACCESS_LABEL[f.guest_access] ?? f.guest_access}
-                </span>
-              </span>
-              <form action={archiveFeatureAction} style={{ display: 'inline' }}>
-                <input type="hidden" name="propertyId" value={propertyId} />
-                <input type="hidden" name="featureId" value={f.id} />
-                <button type="submit" style={buttonStyle}>
-                  Archive
-                </button>
-              </form>
-            </li>
-          ))}
-        </ul>
-      )}
     </>
   );
 }
