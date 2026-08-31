@@ -1,13 +1,19 @@
 'use client';
 
-// Catalog search + one-click add (Manage Brain redesign, slice 4a).
-// Debounced typeahead against /api/properties/<id>/appliance-catalog; picking a result
-// files it through addFromCatalogAction with brand/model carried by the catalog, not
-// retyped. No match -> submit a candidate so the catalog learns from hosts.
+// Catalog search + one-click add (Manage Brain redesign, slice 4a) and the 4b sync
+// entry point. Debounced typeahead against /api/properties/<id>/appliance-catalog;
+// picking a result files it through addFromCatalogAction with brand/model carried by
+// the catalog, not retyped. No match -> submit a candidate so the catalog learns from
+// hosts. CatalogSyncForm sits on a linked appliance's card and pulls shared knowledge
+// into the property's review queue.
 
 import { useEffect, useRef, useState } from 'react';
 import { useFormState } from 'react-dom';
-import { addFromCatalogAction, submitCatalogCandidateAction } from './catalog-actions';
+import {
+  addFromCatalogAction,
+  submitCatalogCandidateAction,
+  pullCatalogKnowledgeAction,
+} from './catalog-actions';
 import type { ApplianceFormState } from './actions';
 
 type CatalogHit = {
@@ -186,6 +192,21 @@ function CandidateSubmit({ propertyId, query }: { propertyId: string; query: str
       <Message state={state} />
       <button className="btn btn-ghost btn-sm" type="submit" style={{ marginTop: '.5rem' }}>
         Submit to the catalog
+      </button>
+    </form>
+  );
+}
+
+/** Slice 4b: on a catalog-linked appliance, pull shared knowledge into the review list. */
+export function CatalogSyncForm({ propertyId, applianceId }: { propertyId: string; applianceId: string }) {
+  const [state, formAction] = useFormState(pullCatalogKnowledgeAction, initialState);
+  return (
+    <form action={formAction} style={{ marginTop: '.75rem' }}>
+      <input type="hidden" name="propertyId" value={propertyId} />
+      <input type="hidden" name="applianceId" value={applianceId} />
+      <Message state={state} />
+      <button className="btn btn-ghost btn-sm" type="submit" data-testid={`button-catalog-sync-${applianceId}`}>
+        Sync shared knowledge from the catalog
       </button>
     </form>
   );

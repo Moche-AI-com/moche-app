@@ -9,6 +9,7 @@ import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { segmentApplianceManual } from '@/lib/property-import/appliance-safety';
 import { createProposal } from '@/lib/brain/proposal-store';
 import { applyProposal } from '@/lib/brain/apply-proposal';
+import { publishApprovedSectionToCatalog } from '@/lib/appliances/publish';
 
 export interface ApplianceFormState { error?: string; success?: string }
 
@@ -84,5 +85,23 @@ export async function approveManualSectionAction(_prev: ApplianceFormState, form
     status: 'satisfied', satisfied_at: now, evidence: { source: 'approved_appliance_manual_section', section_id: section.id }, updated_at: now,
   }, { onConflict: 'property_id,requirement_key' });
   if (readinessError) return { error: 'The section was approved, but appliance readiness could not be updated.' };
+  // Teach the shared catalog (slice 4b): an approved, manual-sourced section on a
+  // catalog-linked appliance becomes reusable knowledge for every future property with
+  // the same model. Runs after the approval succeeded; a catalog hiccup never fails it.
+  const { data: applianceRow } = await admin
+    .from('property_appliances')
+    .select('catalog_id, brand')
+    .eq('id', section.appliance_id)
+    .eq('property_id', propertyId.data)
+    .maybeSingle();
+  if (applianceRow?.catalog_id) {
+    await publishApprovedSectionToCatalog(admin, {
+      catalogId: applianceRow.catalog_id,
+      brand: applianceRow.brand ?? '',
+      sectionTitle: section.section_title,
+      body: section.body,
+      pageRef: section.page_ref,
+    });
+  }
   revalidatePath(`/dashboard/properties/${propertyId.data}/appliances`); return { success: 'Manual section added to the Brain.' };
 }
