@@ -8,8 +8,6 @@ import {
   FOUNDING_ACCOUNT_CAP,
   FOUNDING_DISCOUNT_MONTHS,
   FOUNDING_DISCOUNT_PERCENT,
-  GUIDED_SETUP_ADDITIONAL_USD,
-  GUIDED_SETUP_USD,
   HOST_PRICING_BANDS,
   PLANS,
   SELF_SERVE_PROPERTY_MAX,
@@ -231,10 +229,9 @@ export function Pricing() {
 
         <Reveal delay={170} className={styles.pricingSetup}>
           <p className={styles.pricingSetupCopy}>
-            <strong>Setup is self serve and included.</strong> If you would rather hand it
-            over, Concierge Setup is ${GUIDED_SETUP_USD} for your first property and $
-            {GUIDED_SETUP_ADDITIONAL_USD} for each one after that, once per account. It is
-            optional, and it is not required to go live.
+            <strong>Setup is self serve and included.</strong> You add each property once,
+            confirm the details, and preview the guest portal before anyone sees it. There is
+            no setup fee and nothing to buy before you go live.
           </p>
         </Reveal>
 

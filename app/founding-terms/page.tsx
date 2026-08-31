@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  GUIDED_SETUP_USD,
-  GUIDED_SETUP_ADDITIONAL_USD,
   FOUNDING_ACCOUNT_CAP,
   FOUNDING_DISCOUNT_MONTHS,
   FOUNDING_DISCOUNT_PERCENT,
@@ -94,12 +92,9 @@ export default function FoundingTermsPage() {
           less than the same year paid monthly.
         </p>
         <p>
-          Concierge Setup, where our team builds your Property Brain with you, is optional
-          and charged once per account: {`$${GUIDED_SETUP_USD}`} for your first property and{' '}
-          {`$${GUIDED_SETUP_ADDITIONAL_USD}`} for each additional property in the same
-          engagement. It is arranged separately with our team, and the founding discount
-          applies to subscriptions rather than to setup. Setting up yourself is always
-          included at no cost.
+          Setting up your account is self serve and included at no cost. We do not charge a
+          setup or onboarding fee, and there is nothing to buy other than the subscription
+          described above.
         </p>
 
         <h2>4. How your bill changes with your portfolio</h2>

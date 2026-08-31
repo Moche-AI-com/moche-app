@@ -9,8 +9,6 @@ import {
   FOUNDING_ACCOUNT_CAP,
   FOUNDING_DISCOUNT_MONTHS,
   FOUNDING_DISCOUNT_PERCENT,
-  GUIDED_SETUP_USD,
-  GUIDED_SETUP_ADDITIONAL_USD,
   HOST_PRICING_BANDS,
   effectiveRatePerProperty,
   monthlyTotalForProperties,
@@ -247,9 +245,7 @@ export default async function ProfileBillingPage() {
         {`$${HOST_PRICING_BANDS[HOST_PRICING_BANDS.length - 1].ratePerProperty}`} each in the
         top band. Checkout bills the number of active properties on your account. Every plan
         includes unlimited guests, stays, and conversations, with no per-conversation
-        charges. Optional Concierge Setup is ${GUIDED_SETUP_USD} for your first property and
-        ${GUIDED_SETUP_ADDITIONAL_USD} for each one after that, one time per account;
-        setting up yourself is self serve and included. Cancel anytime. Pay annually and you
+        charges. Setup is self serve and included, with no setup fee. Cancel anytime. Pay annually and you
         are billed ten months for twelve, so two months are free. Prices in USD.
       </p>
     </div>
