@@ -1,5 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import {
+  GUIDED_SETUP_USD,
+  GUIDED_SETUP_ADDITIONAL_USD,
+  FOUNDING_DISCOUNT_MONTHS,
+  FOUNDING_DISCOUNT_PERCENT,
+  HOST_PRICING_BANDS,
+  LAUNCH_DATE_LABEL,
+} from '@/lib/constants';
 
 export const metadata: Metadata = {
   title: 'Trial Terms',
@@ -7,11 +15,13 @@ export const metadata: Metadata = {
     'How the Moche-AI free trial works: what happens after the trial, price, billing, automatic renewal, and how to cancel.',
 };
 
-// Figures below (trial length, property cap) are confirmed against the billing source
-// of truth: FOUNDING_TRIAL_DAYS and FOUNDING_TRIAL_PROPERTY_LIMIT in lib/constants.ts.
-// Post-trial pricing is per property and follows the pitch-deck grid (Essentials
-// $29/property/mo, Pro $49/property/mo; Portfolio and Enterprise by contract). The
-// full authoritative billing policy lives at /legal/refund and /legal/terms.
+// Every figure on this page is read from lib/constants.ts rather than typed here,
+// because a terms page that disagrees with what checkout actually charges is worse
+// than no terms page. The card-required trial described in sections 1 to 5 still
+// exists in the billing code, but nothing markets it before launch: pre-launch
+// accounts are free outright, which section 0 states first so nobody reads the
+// trial rules and concludes we are asking for a card today.
+// The full authoritative billing policy lives at /legal/refund and /legal/terms.
 export default function TrialTermsPage() {
   return (
     <main className="wrap">
@@ -24,6 +34,17 @@ export default function TrialTermsPage() {
           <Link href="/legal/terms">Terms of Service</Link> and{' '}
           <Link href="/legal/refund">Refund &amp; Billing Policy</Link>. If there
           is any conflict, those documents control.
+        </p>
+
+        <h2>0. Before we launch</h2>
+        <p>
+          Until {LAUNCH_DATE_LABEL} there is no trial to start and no card to
+          enter. Accounts created before launch are free, with no expiry date and
+          no charge, and the sections below do not apply to them yet. Founding
+          accounts also keep {FOUNDING_DISCOUNT_PERCENT}% off their first{' '}
+          {FOUNDING_DISCOUNT_MONTHS} months of billing once paid plans begin. See{' '}
+          <Link href="/#pricing">pricing</Link> for the rates that take effect at
+          launch.
         </p>
 
         <h2>1. What the trial includes</h2>
@@ -43,16 +64,25 @@ export default function TrialTermsPage() {
 
         <h2>3. Price</h2>
         <p>
-          The price charged after the trial is the plan price shown at signup
-          and on our pricing page at the time you started the trial, billed per
-          property per month. Applicable taxes may be added at checkout. Prices
-          may change with notice as described in the Terms of Service.
+          The price charged after the trial is the plan price shown at signup and
+          on our pricing page at the time you started the trial. The Host plan is
+          priced in bands by portfolio size, so each property you add is charged
+          at a lower rate than the one before it, starting at{' '}
+          {`$${HOST_PRICING_BANDS[0].ratePerProperty}`} for your first property and
+          falling to{' '}
+          {`$${HOST_PRICING_BANDS[HOST_PRICING_BANDS.length - 1].ratePerProperty}`}{' '}
+          each in the top band. Your bill is the sum of those bands, not a single
+          rate multiplied by your property count. Applicable taxes may be added at
+          checkout. Prices may change with notice as described in the Terms of
+          Service.
         </p>
         <p>
-          Optional guided setup — a white-glove onboarding where our team builds
-          your Property Brain with you — is $149 per property, one time, and is
-          arranged separately with our team. Self-service onboarding is always
-          included at no cost.
+          Concierge Setup, where our team builds your Property Brain with you, is
+          optional and charged once per account:{' '}
+          {`$${GUIDED_SETUP_USD}`} for your first property and{' '}
+          {`$${GUIDED_SETUP_ADDITIONAL_USD}`} for each additional property in the
+          same engagement. It is arranged separately with our team. Setting up
+          yourself is always included at no cost.
         </p>
 
         <h2>4. Billing &amp; automatic renewal</h2>

@@ -4,16 +4,93 @@ export type BrainCategory = Database['public']['Enums']['brain_category'];
 export type PlanId = 'starter' | 'pro' | 'portfolio' | 'enterprise';
 export type BillingInterval = 'monthly' | 'annual';
 
-// Annual billing is 10x the monthly rate, which is two months free. This multiplier
-// is duplicated on the marketing page by design (that file is owned separately); the
-// numbers below are the single source of truth for anything the product enforces.
+// Annual billing is 10x the monthly rate, which is two months free. This file is
+// the single source of truth for pricing. The marketing page used to keep its own
+// duplicate of the plan grid and this multiplier, which is exactly how the site
+// drifted out of sync with billing; it now imports from here instead.
 export const ANNUAL_MULTIPLIER = 10;
+
+export interface PricingBand {
+  /** Inclusive upper bound of this band, counted in properties. */
+  upTo: number;
+  /** Monthly rate charged for each property that falls inside this band. */
+  ratePerProperty: number;
+}
+
+/**
+ * Graduated per-property pricing for the Host plan. Each band prices only the
+ * properties that fall inside it, so the effective rate declines as a portfolio
+ * grows and nobody hits a cliff when they add their fifth or tenth property.
+ *
+ * Rationale and competitive anchors: docs/pricing-model-2027.md. In short, the
+ * old flat $49/property put a 10-property host at $490/month against Host Tools'
+ * published $106, which is where mid-size hosts were lost.
+ */
+export const HOST_PRICING_BANDS: readonly PricingBand[] = [
+  { upTo: 1, ratePerProperty: 29 },
+  { upTo: 4, ratePerProperty: 19 },
+  { upTo: 9, ratePerProperty: 14 },
+  { upTo: 24, ratePerProperty: 11 },
+] as const;
+
+/** Largest portfolio that can buy without talking to sales. */
+export const SELF_SERVE_PROPERTY_MAX = 24;
+
+/**
+ * Monthly total in whole dollars for `count` properties on the Host plan.
+ * Counts above SELF_SERVE_PROPERTY_MAX keep extending at the final band's rate
+ * so the function stays monotonic, but those portfolios are contract-priced and
+ * should not be quoted from this number.
+ */
+export function monthlyTotalForProperties(count: number): number {
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  const properties = Math.floor(count);
+  let total = 0;
+  let priced = 0;
+  for (const band of HOST_PRICING_BANDS) {
+    if (priced >= properties) break;
+    const inBand = Math.min(band.upTo, properties) - priced;
+    if (inBand > 0) {
+      total += inBand * band.ratePerProperty;
+      priced += inBand;
+    }
+  }
+  // Above the last band, extend at that band's rate rather than pricing at zero.
+  if (priced < properties) {
+    const last = HOST_PRICING_BANDS[HOST_PRICING_BANDS.length - 1];
+    total += (properties - priced) * last.ratePerProperty;
+  }
+  return total;
+}
+
+/** Annual total for `count` properties. Ten months for twelve. */
+export function annualTotalForProperties(count: number): number {
+  return monthlyTotalForProperties(count) * ANNUAL_MULTIPLIER;
+}
+
+/**
+ * Blended monthly rate per property, rounded to cents. This is the number that
+ * makes the volume discount legible on the pricing page.
+ */
+export function effectiveRatePerProperty(count: number): number {
+  const properties = Math.floor(count);
+  if (properties <= 0) return 0;
+  return Math.round((monthlyTotalForProperties(properties) / properties) * 100) / 100;
+}
 
 export interface Plan {
   id: PlanId;
   name: string;
+  /**
+   * Monthly price at ONE property, in dollars. For the banded Host plan this is
+   * the entry rate, not the whole bill: use monthlyTotalForProperties() for a
+   * real total. Zero means the tier is free or contract-priced.
+   */
   monthly: number;
+  /** Annual price at one property. Zero means free or contract-priced. */
   annual: number;
+  /** Graduated bands, set only on plans billed per property. */
+  bands?: readonly PricingBand[];
   propertyRange: [number, number];
   propertyLimit: number;
   conversationAllowance: number;
@@ -24,45 +101,65 @@ export interface Plan {
   features: string[];
 }
 
+/**
+ * One free tier, one self-serve paid plan with a graduated rate, two contract
+ * tiers. See docs/pricing-model-2027.md for the model and the competitor data.
+ *
+ * The four PlanId values are deliberately kept and redefined rather than
+ * renamed. `subscriptions.plan` is free text so renaming is possible, but the
+ * ids thread through entitlements, the Stripe price lookup keys, the checkout
+ * route, the dashboard, and the test suite. Redefining meaning in one file is a
+ * much smaller change than renaming a union across all of them.
+ *
+ * `conversationAllowance` stays 0 on every tier, which downstream code reads as
+ * unmetered. Guest messages are unlimited on every paid plan, and there is no
+ * per-conversation charge at any tier. That is a real differentiator: Touch Stay
+ * meters SMS by tier and Guesty charges 1% of every reservation on Lite.
+ */
 export const PLANS: Record<PlanId, Plan> = {
+  // Free is the ABSENCE of a subscription, which is already how
+  // entitlementsFromSubscription treats a null row. No Stripe object exists for
+  // it and selfServe is false, so it can never be checked out.
   starter: {
     id: 'starter',
-    name: 'Essentials',
-    monthly: 29,
-    annual: 290,
-    propertyRange: [1, 9],
-    propertyLimit: 9,
+    name: 'Free',
+    monthly: 0,
+    annual: 0,
+    propertyRange: [1, 1],
+    propertyLimit: 1,
     conversationAllowance: 0,
-    selfServe: true,
+    selfServe: false,
     reviewNudge: false,
     smsEscalation: false,
     conciergeCustomization: false,
     features: [
-      'Property Brain & guest concierge portal',
-      'AI answers grounded in verified property facts',
-      'Structured guest requests & escalation',
-      'QR code + shareable link',
-      'Unlimited guests, stays & conversations',
+      'One property',
+      'Build your Property Brain',
+      'Preview the guest portal exactly as a guest sees it',
+      'Host-approved memory updates',
+      'Go live whenever you are ready',
     ],
   },
   pro: {
     id: 'pro',
-    name: 'Pro',
-    monthly: 49,
-    annual: 490,
-    propertyRange: [1, 9],
-    propertyLimit: 9,
+    name: 'Host',
+    monthly: HOST_PRICING_BANDS[0].ratePerProperty,
+    annual: HOST_PRICING_BANDS[0].ratePerProperty * ANNUAL_MULTIPLIER,
+    bands: HOST_PRICING_BANDS,
+    propertyRange: [1, SELF_SERVE_PROPERTY_MAX],
+    propertyLimit: SELF_SERVE_PROPERTY_MAX,
     conversationAllowance: 0,
     selfServe: true,
     reviewNudge: true,
     smsEscalation: true,
     conciergeCustomization: true,
     features: [
-      'Everything in Essentials',
-      'Learning analytics & insights',
-      'Workflow, branding & concierge controls',
-      'Guest review nudge',
-      'Co-hosts, cloning & SMS escalation',
+      'Live guest concierge, QR code and shareable link',
+      'Answers grounded in your verified property facts',
+      'Structured guest requests, escalation and maintenance triage',
+      'Guest review prompts and owner insight',
+      'Co-hosts, property cloning and SMS escalation',
+      'Unlimited guests, stays and messages',
     ],
   },
   portfolio: {
@@ -70,18 +167,18 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Portfolio',
     monthly: 0,
     annual: 0,
-    propertyRange: [10, 40],
-    propertyLimit: 40,
+    propertyRange: [SELF_SERVE_PROPERTY_MAX + 1, 100],
+    propertyLimit: 100,
     conversationAllowance: 0,
     selfServe: false,
     reviewNudge: true,
     smsEscalation: true,
     conciergeCustomization: true,
     features: [
-      'Everything in Pro',
-      '10 to 40 properties',
-      'Roles, bulk tools & PMS integrations',
-      'Volume pricing, $25-39/property/mo by contract',
+      'Everything in Host',
+      '25 to 100 properties',
+      'Roles, bulk tools and PMS integrations',
+      'Volume rates below $11/property/mo, set by contract',
     ],
   },
   enterprise: {
@@ -89,7 +186,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Enterprise',
     monthly: 0,
     annual: 0,
-    propertyRange: [41, Number.POSITIVE_INFINITY],
+    propertyRange: [101, Number.POSITIVE_INFINITY],
     propertyLimit: Number.MAX_SAFE_INTEGER,
     conversationAllowance: 0,
     selfServe: false,
@@ -98,9 +195,9 @@ export const PLANS: Record<PlanId, Plan> = {
     conciergeCustomization: true,
     features: [
       'Everything in Portfolio',
-      '41+ properties',
-      'SSO, SLA & API access',
-      'White label & custom terms',
+      '100+ properties',
+      'SSO, SLA and API access',
+      'White label and custom terms',
     ],
   },
 };
@@ -111,12 +208,44 @@ export const SELF_SERVE_PLAN_IDS = (Object.keys(PLANS) as PlanId[]).filter(
 
 export const TOP_TIER_PLAN_ID: PlanId = 'portfolio';
 
+// General availability. Before this date every account is free and no card is
+// charged, so nothing on the site may advertise a card-required trial.
+export const LAUNCH_DATE_ISO = '2027-01-01T00:00:00.000Z';
+
+// Written out rather than derived from LAUNCH_DATE_ISO at render time. The ISO
+// value is midnight UTC, so `toLocaleDateString` in a US timezone formats it as
+// December 31 of the previous year, which is the wrong date and the wrong year.
+export const LAUNCH_DATE_LABEL = 'January 1, 2027';
+
+// Founding Host Program. Signing up before launch IS the programme: no
+// application, no email, no card. The offer is a locked rate after launch.
+// Replaces the old card-required 30-day trial, which contradicted the
+// no-card-before-launch promise on the same page.
+export const FOUNDING_DISCOUNT_PERCENT = 50;
+export const FOUNDING_DISCOUNT_MONTHS = 12;
+export const FOUNDING_ACCOUNT_CAP = 100;
+
+// The 30-day top-tier trial machinery still exists in entitlements and the
+// Stripe webhook and is left intact for post-launch use. It is simply no longer
+// marketed pre-launch, because everything is free until LAUNCH_DATE_ISO.
 export const FOUNDING_TRIAL_DAYS = 30;
 export const FOUNDING_TRIAL_PROPERTY_LIMIT = 5;
 
 export const SALES_EMAIL = 'hostspark.org@gmail.com';
 
-export const GUIDED_SETUP_USD = 149;
+// Optional Concierge Setup, priced per ACCOUNT rather than per property. The old
+// $149/property fee put a $745 wall in front of a five-property host before they
+// had used the product, and no self-serve competitor publishes a mandatory setup
+// fee at all. Self-service setup stays free and is presented as the default.
+export const GUIDED_SETUP_USD = 199;
+export const GUIDED_SETUP_ADDITIONAL_USD = 49;
+
+/** Concierge Setup total for `count` properties, in whole dollars. */
+export function guidedSetupTotal(count: number): number {
+  const properties = Math.floor(count);
+  if (properties <= 0) return 0;
+  return GUIDED_SETUP_USD + (properties - 1) * GUIDED_SETUP_ADDITIONAL_USD;
+}
 
 export const CORE_REQUIRED_CATEGORIES: BrainCategory[] = [
   'core',

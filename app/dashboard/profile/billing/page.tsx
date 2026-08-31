@@ -9,6 +9,10 @@ import {
   FOUNDING_TRIAL_DAYS,
   FOUNDING_TRIAL_PROPERTY_LIMIT,
   GUIDED_SETUP_USD,
+  GUIDED_SETUP_ADDITIONAL_USD,
+  HOST_PRICING_BANDS,
+  effectiveRatePerProperty,
+  monthlyTotalForProperties,
   type PlanId,
 } from '@/lib/constants';
 import { serverEnv } from '@/lib/env';
@@ -53,6 +57,9 @@ export default async function ProfileBillingPage() {
   const billingConfigured = !!serverEnv.stripeSecretKey;
   const currentPlan = ent.planId;
   const planIds = Object.keys(PLANS) as PlanId[];
+  // An account with nothing added yet is quoted for one property rather than $0,
+  // which would read as though the plan were free.
+  const billableProperties = Math.max(1, gate.used);
 
   return (
     <div>
@@ -117,6 +124,7 @@ export default async function ProfileBillingPage() {
         {planIds.map((id) => {
           const plan = PLANS[id];
           const isCurrent = currentPlan === id;
+          const isFree = id === 'starter';
           return (
             <div
               key={id}
@@ -131,14 +139,40 @@ export default async function ProfileBillingPage() {
                 <span className="badge badge-teal" style={{ position: 'absolute', top: '1rem', right: '1rem' }}>Current</span>
               ) : null}
               <h2 style={{ fontSize: '1.15rem', marginBottom: '.15rem' }}>{plan.name}</h2>
-              {plan.selfServe ? (
+              {isFree ? (
                 <>
+                  {/* Free is the absence of a subscription, not a product. It has
+                      no Stripe price and no checkout, so it gets neither a
+                      per-property rate nor a Contact sales button: both would be
+                      inviting the owner to buy something that does not exist. */}
                   <p style={{ margin: '0 0 .1rem' }}>
-                    <strong style={{ fontSize: '1.9rem' }}>${plan.monthly}</strong>
-                    <span className="muted" style={{ fontSize: '.85rem' }}>/property/mo</span>
+                    <strong style={{ fontSize: '1.9rem' }}>$0</strong>
+                    <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
                   </p>
                   <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
-                    or ${plan.annual.toLocaleString()}/property/yr &middot; {propertyRangeLabel(plan)}
+                    {propertyRangeLabel(plan)} &middot; no card, no expiry
+                  </p>
+                </>
+              ) : plan.selfServe ? (
+                <>
+                  {/* This card used to print `plan.monthly` as the flat rate for
+                      every property. Under graduated bands that number is only
+                      ever correct for a single-property account, so it showed
+                      the owner of ten properties a figure less than a third of
+                      their real bill. It now prices the portfolio they actually
+                      have. */}
+                  <p style={{ margin: '0 0 .1rem' }}>
+                    <strong style={{ fontSize: '1.9rem' }}>
+                      ${monthlyTotalForProperties(billableProperties).toLocaleString()}
+                    </strong>
+                    <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
+                  </p>
+                  <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
+                    {billableProperties === 1
+                      ? '1 property'
+                      : `${billableProperties} properties`}{' '}
+                    at ${effectiveRatePerProperty(billableProperties)} each on average
+                    &middot; {propertyRangeLabel(plan)}
                   </p>
                 </>
               ) : (
@@ -158,7 +192,13 @@ export default async function ProfileBillingPage() {
                   </li>
                 ))}
               </ul>
-              {plan.selfServe ? (
+              {isFree ? (
+                <p className="faint" style={{ fontSize: '.8rem', margin: 0, minHeight: 44 }}>
+                  {isCurrent
+                    ? 'This is where you are now. Upgrade when you add a second property.'
+                    : 'Cancel a paid plan to return here.'}
+                </p>
+              ) : plan.selfServe ? (
                 <BillingActions mode="checkout" planId={id} isCurrent={isCurrent} configured={billingConfigured} />
               ) : (
                 <a
@@ -179,12 +219,15 @@ export default async function ProfileBillingPage() {
       </p>
 
       <p className="faint" style={{ fontSize: '.78rem', marginTop: '.5rem' }}>
-        Self-serve plans are priced per property: checkout bills the number of active
-        properties on your account at the plan rate. Every plan includes unlimited guests,
-        stays, and conversations — there are no per-conversation charges. Optional guided
-        setup is ${GUIDED_SETUP_USD} per property, one time, arranged with our team;
-        self-service onboarding is always free. Cancel anytime. Annual plans include two
-        months free. Prices in USD.
+        The Host plan is priced in bands, so each property you add costs less than the one
+        before it: {`$${HOST_PRICING_BANDS[0].ratePerProperty}`} for your first, down to{' '}
+        {`$${HOST_PRICING_BANDS[HOST_PRICING_BANDS.length - 1].ratePerProperty}`} each in the
+        top band. Checkout bills the number of active properties on your account. Every plan
+        includes unlimited guests, stays, and conversations, with no per-conversation
+        charges. Optional Concierge Setup is ${GUIDED_SETUP_USD} for your first property and
+        ${GUIDED_SETUP_ADDITIONAL_USD} for each one after that, one time per account;
+        setting up yourself is always free. Cancel anytime. Annual plans include two months
+        free. Prices in USD.
       </p>
     </div>
   );

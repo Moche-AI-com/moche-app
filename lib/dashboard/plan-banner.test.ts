@@ -105,7 +105,7 @@ describe('planBannerFor', () => {
     expect(b?.variant).toBe('read_only');
     expect(b?.tone).toBe('error');
     expect(b?.ctaLabel).toBe('Fix billing');
-    expect(b?.body).toContain('Pro');
+    expect(b?.body).toContain('Host');
     expect(b?.body).toContain('not answering guests');
   });
 

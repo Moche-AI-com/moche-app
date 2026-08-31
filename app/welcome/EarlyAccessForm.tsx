@@ -1,12 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import { PLANS as PLAN_GRID, SELF_SERVE_PROPERTY_MAX, monthlyTotalForProperties } from '@/lib/constants';
 
+// This list used to be a second, hardcoded copy of the plan grid, and it had
+// drifted: it still offered "Essentials $29" and "Pro $49" months after both
+// were retired, and its ids ('essentials') matched nothing in lib/constants.ts.
+// Labels are now derived, and the ids are real PlanIds so a waitlist row can be
+// compared against an actual subscription without a translation table.
 const PLANS = [
-  { id: 'essentials', label: 'Essentials — $29/property/mo' },
-  { id: 'pro', label: 'Pro — $49/property/mo' },
-  { id: 'portfolio', label: 'Portfolio — 10+ properties' },
-  { id: 'enterprise', label: 'Enterprise — 41+ / custom' },
+  { id: 'starter', label: `${PLAN_GRID.starter.name} · 1 property, $0` },
+  {
+    id: 'pro',
+    label: `${PLAN_GRID.pro.name} · from $${monthlyTotalForProperties(1)}/mo, up to ${SELF_SERVE_PROPERTY_MAX} properties`,
+  },
+  { id: 'portfolio', label: `${PLAN_GRID.portfolio.name} · ${PLAN_GRID.portfolio.propertyRange[0]}+ properties, by contract` },
+  { id: 'enterprise', label: `${PLAN_GRID.enterprise.name} · ${PLAN_GRID.enterprise.propertyRange[0]}+ properties, custom` },
   { id: 'not_sure', label: 'Not sure yet' },
 ];
 
