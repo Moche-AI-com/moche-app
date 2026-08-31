@@ -3,6 +3,7 @@
 import { useFormState } from 'react-dom';
 import type { Tables } from '@/lib/database.types';
 import { addApplianceAction, approveManualSectionAction, ingestManualAction, updateApplianceAction, type ApplianceFormState } from './actions';
+import { CatalogSearch } from './CatalogSearch';
 
 type Appliance = Tables<'property_appliances'>;
 type ManualSection = Tables<'appliance_manual_sections'>;
@@ -28,13 +29,12 @@ function ApplianceFields({ appliance, propertyId }: { appliance?: Appliance; pro
     </div>
     <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', marginTop: '.75rem' }}><input name="unknownModel" type="checkbox" defaultChecked={!appliance?.model_number} /> I do not know the exact model number yet</label>
     <p className="faint" style={{ margin: '.4rem 0 0', fontSize: '.8rem' }}>Check the label inside the door, on the back panel, or in the owner paperwork.</p>
-    <p className="faint" style={{ margin: '.4rem 0 0', fontSize: '.8rem' }}>Check the label inside the door, on the back panel, or in the owner paperwork.</p>
   </>;
 }
 
 function AddApplianceForm({ propertyId }: { propertyId: string }) {
   const [state, formAction] = useFormState(addApplianceAction, initialState);
-  return <form action={formAction} className="card" style={{ padding: '1rem' }}><h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Add an appliance</h2><ApplianceFields propertyId={propertyId} /><Message state={state} /><button className="button" type="submit" style={{ marginTop: '1rem' }}>Add appliance</button></form>;
+  return <form action={formAction} className="card" style={{ padding: '1rem' }}><h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Add an appliance manually</h2><ApplianceFields propertyId={propertyId} /><Message state={state} /><button className="button" type="submit" style={{ marginTop: '1rem' }}>Add appliance</button></form>;
 }
 
 function ApplianceEditor({ appliance, propertyId }: { appliance: Appliance; propertyId: string }) {
@@ -68,5 +68,5 @@ function ManualSectionCard({ section, propertyId }: { section: ManualSection; pr
 }
 
 export function ApplianceClient({ propertyId, appliances, sections }: { propertyId: string; appliances: Appliance[]; sections: ManualSection[] }) {
-  return <div style={{ display: 'grid', gap: '1rem', maxWidth: 900 }}><p className="faint">Add every appliance you want the concierge to guide guests on. Exact model numbers unlock manual review; unknown models stay unverified and never receive guessed instructions.</p><AddApplianceForm propertyId={propertyId} /><section><h2 style={{ fontSize: '1.2rem' }}>Inventory</h2>{appliances.length ? <div style={{ display: 'grid', gap: '.75rem' }}>{appliances.map((appliance) => <ApplianceEditor key={appliance.id} appliance={appliance} propertyId={propertyId} />)}</div> : <p className="faint">No appliances yet.</p>}</section><section><h2 style={{ fontSize: '1.2rem' }}>Manual sections awaiting approval</h2>{sections.length ? <div style={{ display: 'grid', gap: '.75rem' }}>{sections.map((section) => <ManualSectionCard key={section.id} section={section} propertyId={propertyId} />)}</div> : <p className="faint">Confirm a matching manual URL to create reviewable sections.</p>}</section></div>;
+  return <div style={{ display: 'grid', gap: '1rem', maxWidth: 900 }}><p className="faint">Add every appliance you want the concierge to guide guests on. Exact model numbers unlock manual review; unknown models stay unverified and never receive guessed instructions.</p><CatalogSearch propertyId={propertyId} /><AddApplianceForm propertyId={propertyId} /><section><h2 style={{ fontSize: '1.2rem' }}>Inventory</h2>{appliances.length ? <div style={{ display: 'grid', gap: '.75rem' }}>{appliances.map((appliance) => <ApplianceEditor key={appliance.id} appliance={appliance} propertyId={propertyId} />)}</div> : <p className="faint">No appliances yet.</p>}</section><section><h2 style={{ fontSize: '1.2rem' }}>Manual sections awaiting approval</h2>{sections.length ? <div style={{ display: 'grid', gap: '.75rem' }}>{sections.map((section) => <ManualSectionCard key={section.id} section={section} propertyId={propertyId} />)}</div> : <p className="faint">Confirm a matching manual URL to create reviewable sections.</p>}</section></div>;
 }
