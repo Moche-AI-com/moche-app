@@ -170,6 +170,9 @@ export default async function BrainPage({
           </p>
         </div>
         <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Link className="btn btn-primary btn-sm" href={`/dashboard/properties/${propertyId}/brain/add`}>
+            + Add knowledge
+          </Link>
           <Link className="btn btn-ghost btn-sm" href={`/dashboard/properties/${propertyId}/brain/spaces`}>
             Spaces &amp; features
           </Link>
