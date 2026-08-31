@@ -30,6 +30,13 @@ import {
 const MIN_PROPERTIES = 1;
 const DEFAULT_PROPERTIES = 3;
 
+// Half of an odd total is a half-dollar, and `toLocaleString()` renders that as
+// "33.5", which reads as a truncated number rather than a price. Cents appear
+// only when they exist, so whole amounts stay clean.
+function usd(amount: number): string {
+  return Number.isInteger(amount) ? amount.toLocaleString() : amount.toFixed(2);
+}
+
 /** Human label for a band, e.g. "1st property", "2 to 4", "10 to 24". */
 function bandLabel(index: number): string {
   const band = HOST_PRICING_BANDS[index];
@@ -141,7 +148,7 @@ export function Pricing() {
             <div className={styles.pricingRail}>
               <h3 className={styles.pricingTier}>{host.name}</h3>
               <p className={styles.pricingPrice}>
-                <span className={styles.pricingAmount}>${displayTotal.toLocaleString()}</span>
+                <span className={styles.pricingAmount}>${usd(displayTotal)}</span>
                 <span className={styles.pricingPer}>
                   {billing === 'monthly' ? '/mo' : '/yr'}
                 </span>
@@ -154,7 +161,7 @@ export function Pricing() {
               <p className={styles.pricingFounding}>
                 Founding hosts lock{' '}
                 <strong>
-                  ${foundingTotal.toLocaleString()}
+                  ${usd(foundingTotal)}
                   {billing === 'monthly' ? '/mo' : '/yr'}
                 </strong>{' '}
                 for the first {FOUNDING_DISCOUNT_MONTHS} months.

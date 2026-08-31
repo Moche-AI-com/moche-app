@@ -1205,9 +1205,10 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  /* Pins the CTA to the bottom so both cards' buttons line up regardless of
-     how many facts each lists. */
-  margin-top: auto;
+  /* Grows to fill the taller card so the CTA below can bottom-align. Pushing
+     this whole block down instead (margin-top: auto) left a visible hole above
+     the shorter card's feature list, which read as a rendering fault. */
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1224,6 +1225,9 @@
 
 .pricingCta {
   min-height: 44px;
+  /* Both cards' buttons sit on the same line regardless of how many facts each
+     one lists. */
+  margin-top: auto;
 }
 
 /* ---- Pricing: published bands ------------------------------------------- */
