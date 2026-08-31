@@ -3,7 +3,7 @@
 import { useFormState } from 'react-dom';
 import type { Tables } from '@/lib/database.types';
 import { addApplianceAction, approveManualSectionAction, ingestManualAction, updateApplianceAction, type ApplianceFormState } from './actions';
-import { CatalogSearch } from './CatalogSearch';
+import { CatalogSearch, CatalogSyncForm } from './CatalogSearch';
 
 type Appliance = Tables<'property_appliances'>;
 type ManualSection = Tables<'appliance_manual_sections'>;
@@ -43,6 +43,7 @@ function ApplianceEditor({ appliance, propertyId }: { appliance: Appliance; prop
     <summary style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: '1rem' }}><span><strong>{appliance.display_name}</strong><span className="faint"> · {appliance.model_number ?? 'Model unverified'}</span></span><span className="badge">{appliance.verification_status.replaceAll('_', ' ')}</span></summary>
     <p className="faint" style={{ margin: '.5rem 0 0', fontSize: '.8rem' }}>Last verified: {appliance.last_verified_at ? new Date(appliance.last_verified_at).toLocaleDateString() : 'Not yet verified'}</p>
     <form action={formAction} style={{ marginTop: '1rem' }}><ApplianceFields appliance={appliance} propertyId={propertyId} /><Message state={state} /><button className="button" type="submit" style={{ marginTop: '1rem' }}>Save appliance</button></form>
+    {appliance.catalog_id ? <CatalogSyncForm propertyId={propertyId} applianceId={appliance.id} /> : null}
     {appliance.model_number ? <ManualImportForm appliance={appliance} propertyId={propertyId} /> : <p className="faint" style={{ marginTop: '1rem' }}>Manual lookup is disabled until the exact model number is confirmed. This appliance can remain saved as unverified.</p>}
   </details>;
 }
