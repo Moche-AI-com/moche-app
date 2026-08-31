@@ -152,6 +152,12 @@
    --fan-y are percentages, so they resolve against .heroFan rather than
    against the frame's own box, which keeps the arc's proportions identical at
    every width instead of drifting with the card size. */
+/* Each frame is an <a>. The link resets matter: a bare anchor here inherits an
+   underline that lands across the photograph, and the default focus outline is
+   clipped away by `overflow: hidden` on the frame itself, so focus is drawn with
+   an inset ring instead. Never `outline: none` without that replacement -- these
+   are seven of the first eight links on the page and they have to be traversable
+   by keyboard. */
 .heroFanFrame {
   position: absolute;
   top: var(--fan-y);
@@ -164,12 +170,49 @@
   box-shadow: var(--shadow-md);
   transform: translate(-50%, 0) rotate(var(--fan-rot));
   z-index: calc(4 - var(--fan-rank, 0));
+  display: block;
+  text-decoration: none;
+  color: #fff;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* The centre frame is upright, largest, and on top: it is the one the eye
-   lands on before it reads the headline underneath. */
+/* The focus ring is a pseudo-element, and it took three tries to get here, so:
+   an outward `outline` is clipped by the `overflow: hidden` on .hero, which the
+   outer frames hang past. An inward one (negative offset) computes correctly but
+   is painted over by the absolutely positioned next/image fill inside the frame,
+   so it is invisible. And box-shadow loses a specificity fight with the hover
+   block further down. A ring drawn as ::after is the last child, so it paints
+   above the photograph, and it clips with the frame instead of the section.
+
+   White, not teal: the CTA frame already carries a 2px teal ring, so a teal
+   focus ring vanishes on exactly the frame most people tab to first. White reads
+   against every photograph in the set; the teal inside it keeps it on-brand. */
+.heroFan .heroFanFrame:focus-visible {
+  outline: none;
+}
+
+.heroFan .heroFanFrame:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: 3px solid #fff;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 5px var(--teal-vivid);
+  pointer-events: none;
+}
+
+/* The centre frame is upright, largest, on top, and the primary action. It is
+   the one the eye lands on before it reads the headline underneath, so it is the
+   one that carries the conversion. */
 .heroFanFrame[data-rank='0'] {
   width: clamp(88px, 13vw, 192px);
+}
+
+.heroFanFrame[data-cta] {
+  box-shadow:
+    0 0 0 2px var(--teal),
+    var(--shadow-lg);
 }
 
 .heroFanImage {
@@ -177,54 +220,139 @@
   object-position: var(--fan-pos, 50% 50%);
 }
 
-/* Under 700px seven frames at a legible size cannot sit side by side without
-   overlapping into an unreadable smear, so the arc thins from the outside in
-   rather than shrinking every frame past the point of being a photograph. */
-@media (max-width: 700px) {
-  .heroFanFrame[data-rank='3'] {
-    display: none;
-  }
-
-  /* The arc gets proportionally taller as it narrows, and the copy stops being
-     pulled up into it: on a phone the headline is three or four lines starting
-     right under the fan, and a few pixels of overlap there reads as a bug
-     rather than as depth. */
-  .heroFan {
-    height: clamp(180px, 46vw, 260px);
-  }
-
-  .heroCopy {
-    margin-top: clamp(0.75rem, 3vw, 1.5rem);
-  }
-
-  .heroFanFrame {
-    width: clamp(78px, 19vw, 122px);
-  }
-
-  .heroFanFrame[data-rank='0'] {
-    width: clamp(90px, 22vw, 140px);
-  }
+/* Contrast floor for the label. Without this the label's legibility depends on
+   whichever part of the photograph happens to sit under it, which fails outright
+   on the pool deck and the kitchen. A bottom-anchored gradient keeps the top two
+   thirds of every photograph untouched. */
+.heroFanScrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.82) 0%,
+    rgba(0, 0, 0, 0.55) 34%,
+    rgba(0, 0, 0, 0) 68%
+  );
 }
 
-@media (max-width: 430px) {
-  .heroFanFrame[data-rank='2'] {
-    display: none;
+/* Always visible, never hover-only. There is no hover on a phone, and a frame
+   that looks exactly like the decorative version it replaced has not been made
+   clickable in any way a visitor can perceive.
+
+   This is also the link's accessible name -- the <Image> carries alt="" -- so it
+   must never be display:none at any width. */
+.heroFanLabel {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22em;
+  padding: 0.4rem 0.3rem 0.45rem;
+  font-size: clamp(0.6rem, 0.82vw, 0.76rem);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.1;
+  text-align: center;
+  color: #fff;
+  /* Two-word labels at the narrowest frame would wrap to two lines and push the
+     second line out of the scrim. */
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.heroFanFrame[data-cta] .heroFanLabel {
+  font-size: clamp(0.66rem, 0.95vw, 0.86rem);
+  padding-bottom: 0.55rem;
+}
+
+.heroFanFrame[data-cta] .heroFanLabel svg {
+  flex: none;
+}
+
+/* Under 700px seven frames at a legible size cannot sit side by side in an arc
+   without overlapping into an unreadable smear.
+
+   The arc previously thinned from the outside in -- rank 3 was hidden under
+   700px and rank 2 under 430px -- which was defensible while the frames were
+   decoration. It is not defensible now that each one is a destination: it would
+   remove four of the seven links, including the whole trust and support side of
+   the set, from every phone. Mobile is where a guest-facing product is evaluated.
+
+   So the arc becomes a grid instead. Same seven frames, same DOM order, no
+   absolute positioning, no transforms, and the CTA spans the full width on the
+   first row where a thumb reaches it first. */
+@media (max-width: 700px) {
+  .heroFan {
+    position: static;
+    height: auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.45rem;
+    padding: 0 1rem;
   }
 
+  /* `relative`, not `static`: next/image with `fill` renders an absolutely
+     positioned <img>, so a static frame would let it resolve against the
+     section instead and blow the photograph up to the full viewport. */
   .heroFanFrame {
-    width: clamp(88px, 26vw, 128px);
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    /* The arc's transform and animation are both keyed to translate(-50%) and
+       would drag every frame a half-width off its grid cell. Both are scoped to
+       min-width: 701px below; these resets are the belt to that braces. */
+    transform: none;
+    animation: none;
+    /* Square, not 3:4. Seven portrait tiles plus the CTA band push the headline
+       more than a screen down on a phone, which buries the thing the page is
+       actually for. Square keeps the whole set and the H1 in one view. */
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
   }
 
-  .heroFanFrame[data-rank='0'] {
-    width: clamp(104px, 31vw, 150px);
+  /* Full-bleed CTA on its own first row: it is the primary action, and on a
+     phone it should not be one of nine equal tiles. */
+  .heroFanFrame[data-cta] {
+    grid-column: 1 / -1;
+    order: -1;
+    aspect-ratio: 16 / 7;
+    width: auto;
+  }
+
+  .heroFanLabel {
+    font-size: 0.72rem;
+    padding: 0.5rem 0.35rem 0.55rem;
+  }
+
+  .heroFanFrame[data-cta] .heroFanLabel {
+    font-size: 0.9rem;
+    padding-bottom: 0.7rem;
+  }
+
+}
+
+/* Two columns plus the CTA band at the narrowest widths. Three tiles inside
+   320px leaves each one about 90px wide, which is below the point where the
+   photograph reads as anything. */
+@media (max-width: 360px) {
+  .heroFan {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
   }
 }
 
 /* The entrance plays from CSS with no JS involved, the same reasoning as the
    [data-eager] reveals in globals.css: the hero is the first screen, and
    gating it on hydration leaves the top of the page visibly empty for a few
-   hundred milliseconds. Frames fan out from a near-centred stack. */
-@media (prefers-reduced-motion: no-preference) {
+   hundred milliseconds. Frames fan out from a near-centred stack.
+
+   Scoped to the arc's own width: both keyframes below resolve to
+   translate(-50%), which is the arc's horizontal centring, and under 701px the
+   frames are grid cells with no centring to undo. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
   .heroFanFrame {
     animation: fanIn 760ms var(--ease-out) backwards;
     animation-delay: calc(40ms + var(--fan-i) * 55ms);
@@ -249,7 +377,7 @@
    each other. Progressive enhancement: browsers without scroll-driven
    animations get the static arc and lose nothing they can name. */
 @supports (animation-timeline: scroll()) {
-  @media (prefers-reduced-motion: no-preference) {
+  @media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
     .heroFanFrame {
       animation:
         fanIn 760ms var(--ease-out) backwards,
@@ -301,7 +429,7 @@
     z-index: 9;
   }
 
-  @media (prefers-reduced-motion: no-preference) {
+  @media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
     .heroFanFrame {
       transition:
         transform 420ms var(--ease-out),
@@ -333,8 +461,17 @@
      would otherwise sit on top of the headline. */
   z-index: 5;
   max-width: 48rem;
-  margin-top: calc(-1 * clamp(0.5rem, 2vw, 2rem));
+  margin-top: clamp(1rem, 4vw, 1.75rem);
   text-align: center;
+}
+
+/* The upward tuck belongs to the arc only. Under 701px the frames are a grid
+   with no outer pair hanging below their box, so pulling the copy up just runs
+   the kicker underneath the bottom row of tiles. */
+@media (min-width: 701px) {
+  .heroCopy {
+    margin-top: calc(-1 * clamp(0.5rem, 2vw, 2rem));
+  }
 }
 
 .heroKicker {
@@ -1403,8 +1540,35 @@
   }
 }
 
+/* Text-link index for the marketing pages. Wraps rather than scrolls, and each
+   link keeps a 44px tap height via padding so two adjacent rows are not one
+   ambiguous strip on a phone. */
+.footerNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 1.25rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.footerNavLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 160ms var(--ease-out);
+}
+
+.footerNavLink:hover {
+  color: var(--text);
+}
+
 .footerLegal {
-  margin-top: 1.1rem;
+  margin-top: 0.4rem;
 }
 
 .footerCopyright {

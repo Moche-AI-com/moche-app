@@ -1,0 +1,240 @@
+/* Shared chrome for the public content routes reached from the hero fan.
+   Deliberately small: these pages reuse the landing header and footer and the
+   global type/colour tokens, so this file only owns the reading column and the
+   handful of blocks the pages actually use (lede, callout, step list, source
+   list, CTA band).
+
+   Measure is capped at 68ch rather than a pixel width so the column tracks the
+   font size instead of drifting narrow at large type settings. */
+
+.doc {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.docInner {
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 4.5rem) 1.25rem clamp(3rem, 7vw, 5rem);
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent, currentColor);
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  font-size: clamp(1.9rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.85rem;
+  text-wrap: balance;
+}
+
+.lede {
+  font-size: clamp(1.02rem, 2.2vw, 1.2rem);
+  line-height: 1.55;
+  margin: 0 0 2.25rem;
+  text-wrap: pretty;
+}
+
+/* Body rhythm. Headings get more space above than below so a section reads as
+   attached to its own paragraphs rather than floating between two blocks. */
+.body h2 {
+  font-size: clamp(1.25rem, 2.8vw, 1.6rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin: 2.75rem 0 0.75rem;
+}
+
+.body h3 {
+  font-size: 1.05rem;
+  margin: 1.85rem 0 0.5rem;
+}
+
+.body p,
+.body li {
+  line-height: 1.65;
+  font-size: 0.97rem;
+}
+
+.body p {
+  margin: 0 0 1rem;
+}
+
+.body ul,
+.body ol {
+  margin: 0 0 1.25rem;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.body a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+.body a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 0.88rem;
+}
+
+.body th,
+.body td {
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.body th {
+  font-weight: 600;
+}
+
+/* Pulled-aside fact block. Left rule rather than a filled card: these pages are
+   long-form reading, and four or five filled boxes down a page turns the
+   emphasis into wallpaper. */
+.callout {
+  border-left: 3px solid var(--accent, currentColor);
+  padding: 0.15rem 0 0.15rem 1rem;
+  margin: 1.75rem 0;
+}
+
+.callout p:last-child {
+  margin-bottom: 0;
+}
+
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0;
+  display: grid;
+  gap: 1.25rem;
+  counter-reset: step;
+}
+
+.steps > li {
+  counter-increment: step;
+  padding-left: 2.6rem;
+  position: relative;
+}
+
+.steps > li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+}
+
+.steps h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.steps p {
+  margin: 0;
+}
+
+/* End-of-page conversion band. One per page, and never a second CTA with the
+   same intent higher up. */
+.ctaBand {
+  margin-top: 3.25rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+}
+
+.ctaBandText {
+  margin: 0;
+  flex: 1 1 18ch;
+  font-size: 0.95rem;
+}
+
+/* Cross-links between these pages. Internal linking is the whole point: six
+   orphaned pages rank far worse than six pages that reference each other. */
+.related {
+  margin-top: 2.5rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.relatedLabel {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin: 0;
+}
+
+.relatedList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+}
+
+.relatedList a {
+  display: inline-block;
+  padding: 0.3rem 0;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  color: inherit;
+}
+
+.meta {
+  font-size: 0.78rem;
+  opacity: 0.7;
+  margin: 0 0 2rem;
+}
+
+/* Sources block. Every external claim on these pages carries a real URL —
+   unattributed statistics are the fastest way to lose the trust the pages
+   exist to build. */
+.sources {
+  margin-top: 2.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+}
+
+.sources h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.6rem;
+}
+
+.sources ol {
+  font-size: 0.83rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.sources a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  overflow-wrap: anywhere;
+}
