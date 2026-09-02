@@ -54,12 +54,15 @@ describe('Brain page structure', () => {
     expect(page).not.toContain('BRAIN_CARDS');
   });
 
-  it('puts the Coverage Map above the two-column shell', () => {
+  it('puts the Coverage Map above the knowledge manager', () => {
+    // 2026-08-31 layout pass: the editor+sidebar shell is gone; the page is one
+    // column, so the invariant that matters is that the orientation map still
+    // precedes the doing surface.
     const mapAt = page.indexOf('<CoverageMap');
-    const shellAt = page.indexOf('className="brain-shell"');
+    const managerAt = page.indexOf('<BrainManager');
     expect(mapAt).toBeGreaterThan(-1);
-    expect(shellAt).toBeGreaterThan(-1);
-    expect(mapAt).toBeLessThan(shellAt);
+    expect(managerAt).toBeGreaterThan(-1);
+    expect(mapAt).toBeLessThan(managerAt);
   });
 
   it('does not link out to Local Recommendations from the Brain sidebar', () => {
@@ -87,6 +90,15 @@ describe('Brain page structure', () => {
     // writing, files, URLs, and paste, calling the same ingest routes directly.
     expect(page).not.toContain('IngestPanel');
     expect(page).toContain('/brain/add');
+  });
+
+  it('retires the sidebar shell: one column, support cards in the grid', () => {
+    // 2026-08-31 layout pass: the editor+sidebar split is retired. The page never
+    // references the old shell classes, and the support cards live in the scoped
+    // grid from the layout module.
+    expect(page).not.toContain('brain-shell');
+    expect(page).not.toContain('brain-sidebar');
+    expect(page).toContain('brain-layout.module.css');
   });
 });
 

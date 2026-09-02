@@ -1,0 +1,130 @@
+/* Scoped layout primitives for the Property Brain page (redesign layout pass).
+   CSS Modules: these classes exist only on the Brain page, so nothing here can
+   leak into another surface, and globals.css is untouched by this slice. The
+   stale global .brain-shell/.brain-sidebar rules are left inert for a deliberate
+   later cleanup rather than edited in place here. */
+
+/* Go-live verdict banner — the publish gate's own answer, full width. */
+.attention {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  padding: 1.15rem var(--pad-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--coral) 10%, transparent) 0%, transparent 60%),
+    var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.attentionReady {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--teal) 9%, transparent) 0%, transparent 60%),
+    var(--surface);
+}
+.attentionBody {
+  min-width: 0;
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.attentionTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.attentionSub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.attentionCta {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* Headline metrics: score, filed answers, review queue. Big tabular numbers on
+   token surfaces; the review tile goes coral-tinted only when there is work. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+.stat {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.statValue {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.statLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.statAttention {
+  border-color: color-mix(in srgb, var(--coral) 40%, var(--border));
+}
+.statAttention .statValue {
+  color: var(--coral);
+}
+
+/* Support cards under the manager: two across on wide screens, one column on
+   phones. auto-fit needs no breakpoint — narrow viewports simply get one column. */
+.supportGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: var(--gap-section);
+  align-items: start;
+  margin-top: var(--gap-section);
+}
+
+@media (max-width: 640px) {
+  .attention {
+    flex-direction: column;
+  }
+  .attentionCta {
+    align-self: stretch;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .stat {
+    padding: 0.7rem 0.75rem;
+  }
+  .statValue {
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 400px) {
+  /* Very narrow phones: metrics stack rather than crunch into unreadable thirds. */
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attention,
+  .stat {
+    transition: none;
+  }
+}

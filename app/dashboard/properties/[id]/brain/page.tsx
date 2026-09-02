@@ -1,4 +1,5 @@
-// The Property Brain page, rebuilt as a single unified surface (§4).
+// The Property Brain page — full-width single-flow layout (redesign layout pass,
+// 2026-08-31).
 //
 // What was removed and why:
 //   - BrainGraph and BrainCards. Three editing entry points (graph node -> ?edit=,
@@ -26,11 +27,16 @@
 //     single intake for writing, files, URLs, and paste; /brain/spaces is the single
 //     place to declare what the property has and manage custom sections. Keeping both
 //     panels here meant two competing intake paths and two competing feature lists on
-//     one page. The component files stay in this directory — FeaturesPanel is now the
-//     lower half of /brain/spaces.
+//     one page.
+//   - The editor + sidebar two-column shell (this pass). The sidebar squeezed the
+//     editor and stranded the support cards on wide screens; on phones it stacked in
+//     an order nobody chose. The page is now one flow: a status strip (go-live verdict
+//     + the three headline numbers), the Coverage Map for orientation, the Brain
+//     Manager full width, then the support cards in a responsive grid. Enhance Brain
+//     needed no change — it already opens closed behind its Start button.
 //
-// Layout order is deliberate: Coverage Map first (orientation + navigation), then the
-// manager (the doing surface), then the sidebar's score, question queue, and provenance.
+// Layout order is deliberate: status strip (can this go live), Coverage Map
+// (orientation + navigation), the manager (the doing surface), then support.
 
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
@@ -53,6 +59,7 @@ import { CoverageMap } from './CoverageMap';
 import { ImportProvenancePanel } from './ImportProvenancePanel';
 import { BrainManager } from './BrainManager';
 import { EnhanceBrainPanel, type EnhanceQuestion } from './EnhanceBrainPanel';
+import layout from './brain-layout.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,6 +169,8 @@ export default async function BrainPage({
   });
 
   const reviewCount = pendingReviews ?? 0;
+  const ready = completeness.canPublish;
+  const mustHaveMissing = completeness.hardBlocksOutstanding.length;
 
   return (
     <div>
@@ -169,8 +178,7 @@ export default async function BrainPage({
         <div>
           <h1 style={{ fontSize: '1.8rem' }}>Property Brain</h1>
           <p className="faint" style={{ fontSize: '.85rem' }}>
-            {completeness.pct}% guest-ready · {health.totalItems} items
-            {reviewCount > 0 && ` · ${reviewCount} to review`}
+            Everything your concierge knows about this place — and what is still missing.
           </p>
         </div>
         <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -192,95 +200,134 @@ export default async function BrainPage({
         </div>
       )}
 
-      {/* Orientation + navigation first, full width. The map spins until hovered or
-          focused; clicks jump into the manager below (2026-08-28 directive). */}
-      <div style={{ marginBottom: '1.25rem' }}>
+      {/* Status strip: the go-live verdict (the publish gate's own answer, so it cannot
+          disagree with enforcement) plus the three numbers a host scans for. */}
+      <div
+        className={`${layout.attention} ${ready ? layout.attentionReady : ''}`}
+        style={{ marginTop: '1.25rem' }}
+        data-ready={ready}
+        data-testid="brain-golive-banner"
+      >
+        <div className={layout.attentionBody}>
+          <span className={layout.attentionTitle}>
+            {ready ? 'Ready to publish' : 'Not ready to publish'}
+          </span>
+          <span className={layout.attentionSub}>
+            {ready
+              ? 'Every must-have answer is in and the score clears the publish line.'
+              : mustHaveMissing > 0
+                ? `${mustHaveMissing} must-have ${mustHaveMissing === 1 ? 'answer' : 'answers'} still missing.`
+                : `The score needs ${COMPLETENESS_SHIP_THRESHOLD}% to publish.`}
+          </span>
+        </div>
+        <Link
+          className={`btn btn-ghost btn-sm ${layout.attentionCta}`}
+          href={`/dashboard/properties/${propertyId}/brain/go-live`}
+        >
+          Go-live checklist
+        </Link>
+      </div>
+
+      <div className={layout.stats} data-testid="brain-stats">
+        <div className={layout.stat}>
+          <span className={layout.statValue}>{completeness.pct}%</span>
+          <span className={layout.statLabel}>guest-ready</span>
+        </div>
+        <div className={layout.stat}>
+          <span className={layout.statValue}>{health.totalItems}</span>
+          <span className={layout.statLabel}>answers filed</span>
+        </div>
+        <div className={`${layout.stat}${reviewCount > 0 ? ` ${layout.statAttention}` : ''}`}>
+          <span className={layout.statValue}>{reviewCount}</span>
+          <span className={layout.statLabel}>to review</span>
+        </div>
+      </div>
+
+      {/* Orientation + navigation: the map spins until hovered or focused; clicks jump
+          into the manager below (2026-08-28 directive). */}
+      <div style={{ marginTop: '1.25rem' }}>
         <CoverageMap view={coverage} />
       </div>
 
-      <div className="brain-shell">
-        <div id="brain-editor" style={{ scrollMarginTop: '1rem' }}>
-          <BrainManager
+      {/* The doing surface gets the full width. */}
+      <div id="brain-editor" style={{ scrollMarginTop: '1rem', marginTop: '1.25rem' }}>
+        <BrainManager
+          propertyId={propertyId}
+          canEdit={access.can.editBrain}
+          sections={sections}
+          features={features}
+          editItemId={searchParams.edit}
+          items={rows.map((i) => ({
+            id: i.id,
+            title: i.title,
+            body: i.body ?? '',
+            section: resolveSection({ section: i.section ?? null, category: i.category }),
+            featureId: i.feature_id ?? null,
+            visibility: i.visibility,
+            status: i.status,
+            sourceType: i.source_type,
+          }))}
+        />
+      </div>
+
+      {/* Support cards: two across on wide screens, one column on phones. Enhance first
+          — answering the queue is how the strip numbers move. */}
+      <div className={layout.supportGrid}>
+        {access.can.editBrain && (
+          <EnhanceBrainPanel
+            propertyId={propertyId}
+            questions={enhanceQuestions}
+            sections={sections}
+          />
+        )}
+        <CompletenessPanel
+          propertyId={propertyId}
+          canEdit={access.can.editBrain}
+          pct={completeness.pct}
+          threshold={COMPLETENESS_SHIP_THRESHOLD}
+          numerator={completeness.numerator}
+          denominator={completeness.denominator}
+          canPublish={completeness.canPublish}
+          blockedReason={completeness.blockedReason}
+          enforced={serverEnv.requireCompletenessToPublish}
+          domains={completeness.domains.map((d) => ({
+            domain: d.domain,
+            label: domainLabel(d.domain),
+            pct: d.pct,
+            weight: d.weight,
+            gapCount: d.gaps.length,
+          }))}
+          hardBlocks={completeness.hardBlocksOutstanding.map((g) => ({
+            fieldId: g.fieldId,
+            label: g.label,
+            domain: g.domain,
+            status: g.status,
+            hardBlock: g.hardBlock,
+            interviewPrompt: g.interviewPrompt,
+          }))}
+          predicates={APPLICABILITY_PREDICATES.map((p) => ({
+            predicate: p,
+            label: APPLICABILITY_LABELS[p] ?? p.replace(/_/g, ' '),
+            applies: predicateAnswers.has(p) ? !!predicateAnswers.get(p) : null,
+            fieldCount: fieldsGatedBy(p).length,
+          }))}
+        />
+        {(importRows ?? []).length > 0 && (
+          <ImportProvenancePanel
             propertyId={propertyId}
             canEdit={access.can.editBrain}
-            sections={sections}
-            features={features}
-            editItemId={searchParams.edit}
-            items={rows.map((i) => ({
-              id: i.id,
-              title: i.title,
-              body: i.body ?? '',
-              section: resolveSection({ section: i.section ?? null, category: i.category }),
-              featureId: i.feature_id ?? null,
-              visibility: i.visibility,
-              status: i.status,
-              sourceType: i.source_type,
+            imports={(importRows ?? []).map((row) => ({
+              jobId: row.job_id,
+              sourceUrl: row.source_url,
+              provider: row.provider,
+              fetchedAt: row.fetched_at,
+              status: row.status,
+              attestedAt: row.ownership_attested_at,
+              attestationText: row.attestation_text,
+              artifactCount: Number(row.artifact_count ?? 0),
             }))}
           />
-        </div>
-        <div className="brain-sidebar">
-          <div style={{ marginBottom: '1rem' }}>
-            <CompletenessPanel
-              propertyId={propertyId}
-              canEdit={access.can.editBrain}
-              pct={completeness.pct}
-              threshold={COMPLETENESS_SHIP_THRESHOLD}
-              numerator={completeness.numerator}
-              denominator={completeness.denominator}
-              canPublish={completeness.canPublish}
-              blockedReason={completeness.blockedReason}
-              enforced={serverEnv.requireCompletenessToPublish}
-              domains={completeness.domains.map((d) => ({
-                domain: d.domain,
-                label: domainLabel(d.domain),
-                pct: d.pct,
-                weight: d.weight,
-                gapCount: d.gaps.length,
-              }))}
-              hardBlocks={completeness.hardBlocksOutstanding.map((g) => ({
-                fieldId: g.fieldId,
-                label: g.label,
-                domain: g.domain,
-                status: g.status,
-                hardBlock: g.hardBlock,
-                interviewPrompt: g.interviewPrompt,
-              }))}
-              predicates={APPLICABILITY_PREDICATES.map((p) => ({
-                predicate: p,
-                label: APPLICABILITY_LABELS[p] ?? p.replace(/_/g, ' '),
-                applies: predicateAnswers.has(p) ? !!predicateAnswers.get(p) : null,
-                fieldCount: fieldsGatedBy(p).length,
-              }))}
-            />
-          </div>
-          {access.can.editBrain && (
-            <div style={{ marginBottom: '1rem' }}>
-              <EnhanceBrainPanel
-                propertyId={propertyId}
-                questions={enhanceQuestions}
-                sections={sections}
-              />
-            </div>
-          )}
-          {(importRows ?? []).length > 0 && (
-            <div style={{ marginBottom: '1rem' }}>
-              <ImportProvenancePanel
-                propertyId={propertyId}
-                canEdit={access.can.editBrain}
-                imports={(importRows ?? []).map((row) => ({
-                  jobId: row.job_id,
-                  sourceUrl: row.source_url,
-                  provider: row.provider,
-                  fetchedAt: row.fetched_at,
-                  status: row.status,
-                  attestedAt: row.ownership_attested_at,
-                  attestationText: row.attestation_text,
-                  artifactCount: Number(row.artifact_count ?? 0),
-                }))}
-              />
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
