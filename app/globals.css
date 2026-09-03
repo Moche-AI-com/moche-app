@@ -684,20 +684,15 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 
 /* ============================================================
    Property Brain — responsive layout
-   The Brain page uses a two-column (editor + sidebar) shell and a
-   two-column knowledge form. These are CSS-class driven so they can
-   collapse on small screens (inline grid styles cannot be overridden
-   by media queries, which caused the scattered mobile layout).
+   The Brain page's knowledge form is CSS-class driven so it can collapse
+   on small screens (inline grid styles cannot be overridden by media
+   queries, which caused the scattered mobile layout). The old editor +
+   sidebar shell (.brain-shell/.brain-sidebar) and the legacy health-hero
+   row were retired with the 2026-08-31 full-width layout rebuild and are
+   deleted here; the page's layout primitives now live scoped in
+   brain-layout.module.css next to the page.
    ============================================================ */
-.brain-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
-}
-.brain-sidebar { position: sticky; top: 1rem; }
 .brain-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-.brain-health-hero-row { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
 
 /* Grouped knowledge list — each category collapses into its own card so a
    property with 40+ items reads as ~8 scannable sections instead of one
@@ -853,17 +848,8 @@ button.brain-empty-chip:hover { border-color: var(--teal); color: var(--text); b
 }
 .coverage-na-note { font-size: .7rem; margin: .5rem 0 0; max-width: 62ch; }
 
-@media (max-width: 900px) {
-  /* Collapse the editor/sidebar shell — sidebar drops below the editor
-     and stops being sticky so it doesn't float awkwardly on phones. */
-  .brain-shell { grid-template-columns: 1fr; gap: 1.25rem; }
-  .brain-sidebar { position: static; top: auto; }
-}
-
 @media (max-width: 560px) {
   .brain-form-grid { grid-template-columns: 1fr; }
-  /* Health hero: let the CTA go full-width under the score + copy */
-  .brain-health-hero-row .btn { width: 100%; }
 }
 
 /* Respect reduced-motion: keep meaning (color/underline) but drop movement */

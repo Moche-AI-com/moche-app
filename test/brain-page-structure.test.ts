@@ -39,6 +39,12 @@ const coverageMap = read('CoverageMap.tsx');
 const completeness = read('CompletenessPanel.tsx');
 const manager = read('BrainManager.tsx');
 
+// The global stylesheet, comments stripped for the same reason as above: the Brain
+// section header records that the retired classes were deleted, and that prose must
+// not trip the guard that keeps them deleted.
+const globals = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
+
 describe('Brain page structure', () => {
   it('renders exactly one knowledge manager and no card or graph surface', () => {
     expect(page).not.toContain('BrainCards');
@@ -99,6 +105,15 @@ describe('Brain page structure', () => {
     expect(page).not.toContain('brain-shell');
     expect(page).not.toContain('brain-sidebar');
     expect(page).toContain('brain-layout.module.css');
+  });
+
+  it('keeps the retired shell rules out of the global stylesheet', () => {
+    // Deleted from app/globals.css in the same cleanup: the two-column shell and
+    // the legacy health-hero row (verified unreferenced repo-wide before removal).
+    // The page's layout primitives live in brain-layout.module.css instead.
+    expect(globals).not.toContain('.brain-shell');
+    expect(globals).not.toContain('.brain-sidebar');
+    expect(globals).not.toContain('.brain-health-hero-row');
   });
 });
 
