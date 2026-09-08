@@ -87,8 +87,7 @@ function renderEarlyAccessEmail(opts: { heading: string; firstName: string }): {
   return { html, text };
 }
 
-// Fire-and-forget by design: callers ignore the boolean and only log, so an
-// email failure never loses a signup.
+// Best-effort transport: callers await this but a false result never loses a signup.
 export async function sendEarlyAccessThanks(params: {
   email: string;
   name?: string | null;
@@ -105,20 +104,21 @@ export async function sendEarlyAccessThanks(params: {
 
     const { Resend } = await import('resend');
     const resend = new Resend(serverEnv.resendApiKey);
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: EMAIL_FROM,
+      replyTo: TRANSACTIONAL_SENDER.replyTo,
       to: params.email,
       subject: 'You are on the Moche-AI early-access list',
       html,
       text,
     });
-    if (error) {
-      log.error('early_access_email_failed', { reason: error.message });
+    if (error || !data?.id) {
+      log.error('early_access_email_failed', {});
       return false;
     }
     return true;
-  } catch (e) {
-    log.error('early_access_email_error', { error: String(e) });
+  } catch {
+    log.error('early_access_email_error', {});
     return false;
   }
 }

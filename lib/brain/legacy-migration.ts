@@ -28,6 +28,7 @@ import type { Database, Json } from '@/lib/database.types';
 import { REGISTRY_FIELDS, type RegistryField } from '@/lib/brain/completeness';
 import { isRegistryProposable, BRAIN_VALUE_PREFIX } from '@/lib/brain/proposals';
 import { log } from '@/lib/log';
+import { wifiInstructionsFromNotes } from '@/lib/guest/wifi-instructions';
 
 type Client = SupabaseClient<Database>;
 
@@ -200,6 +201,22 @@ export function extractCandidates(notes: LegacyNote[]): MigrationCandidate[] {
     }
   }
 
+  // Unlike legacy credentials, explicit location/connection prose is safe to
+  // propose. Conflicts stay gaps; never pick the first of two different places.
+  const wifi = wifiInstructionsFromNotes(notes);
+  for (const [key, fieldId] of [
+    ['location', 'wifi_password_location'], ['instructions', 'wifi_connection_instructions'],
+  ] as const) {
+    const value = wifi[key];
+    const field = registryField(fieldId);
+    if (!value || value.length > MAX_VALUE_LEN || !field || !isRegistryProposable(field)) continue;
+    const source = notes.find((note) => wifiInstructionsFromNotes([note])[key] === value);
+    if (!source) continue;
+    best.set(fieldId, {
+      fieldId, fieldPath: `${BRAIN_VALUE_PREFIX}${fieldId}`, label: field.label,
+      value, confidence: 0.8, sourceItemId: source.id, sourceTitle: source.title,
+    });
+  }
   return [...best.values()].sort((a, b) => a.fieldId.localeCompare(b.fieldId));
 }
 

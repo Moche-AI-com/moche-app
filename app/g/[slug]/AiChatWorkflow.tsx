@@ -7,6 +7,7 @@ import { AiDisclosure } from '@/components/AiDisclosure';
 import { linkify } from '@/lib/guest/linkify';
 import type { PortalT } from '@/lib/guest/portal-strings';
 import { CardArt } from './CardArt';
+import { messageNotificationNotice } from '@/lib/notifications/message-notice';
 
 type ChatMsg = {
   id: string;
@@ -137,7 +138,7 @@ export function AiChatWorkflow(props: {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [escalationNotice, setEscalationNotice] = useState(false);
+  const [escalationNotice, setEscalationNotice] = useState<string | null>(null);
   // Card tap state: a question sheet for the tapped card, or the two-step
   // appliance picker (searchable list → per-appliance question sheet).
   const [activeCard, setActiveCard] = useState<AssistantCard | null>(null);
@@ -146,7 +147,7 @@ export function AiChatWorkflow(props: {
   const [appliancesLoading, setAppliancesLoading] = useState(false);
   const [applianceQuery, setApplianceQuery] = useState('');
   const [activeAppliance, setActiveAppliance] = useState<Appliance | null>(null);
-  const [hostPinged, setHostPinged] = useState(false);
+  const [hostPinged, setHostPinged] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -215,11 +216,21 @@ export function AiChatWorkflow(props: {
 
   async function syncEscalation(question: string, answer: string) {
     if (props.hostPreview) return;
-    await fetch(`/api/guest/${props.slug}/host-chat/sync-escalation`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ question, answer }),
-    }).catch(() => undefined);
+    try {
+      const res = await fetch(`/api/guest/${props.slug}/host-chat/sync-escalation`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question, answer }),
+      });
+      const json = await res.json().catch(() => ({}));
+      setEscalationNotice(res.ok && json.messageStored
+        ? messageNotificationNotice(json.notification?.sms)
+        : res.status === 403
+          ? 'To send this question to your host, open Host Chat and verify your phone with SMS consent. You can keep using the AI concierge without it.'
+          : 'Host handoff could not be confirmed. Check Host Chat before trying again.');
+    } catch {
+      setEscalationNotice('Host handoff could not be confirmed. Check Host Chat before trying again.');
+    }
   }
 
   function growComposer() {
@@ -234,7 +245,7 @@ export function AiChatWorkflow(props: {
     if (!trimmed || busy) return;
     setBusy(true);
     setError(null);
-    setEscalationNotice(false);
+    setEscalationNotice(null);
     const userMsg: ChatMsg = { id: crypto.randomUUID(), role: 'user', content: trimmed };
     setMessages((current) => [...current, userMsg]);
     setInput('');
@@ -279,9 +290,10 @@ export function AiChatWorkflow(props: {
         escalated,
       }]);
       if (escalated) {
-        setEscalationNotice(true);
         void syncEscalation(trimmed, answer);
       }
+    } catch {
+      setError('The response could not be confirmed. Check your conversation before trying again.');
     } finally {
       setBusy(false);
     }
@@ -300,7 +312,7 @@ export function AiChatWorkflow(props: {
     if (card.key === 'appliances' && !props.hostPreview) {
       setActiveAppliance(null);
       setApplianceQuery('');
-      setHostPinged(false);
+      setHostPinged(null);
       setPickerError(null);
       setAppliancePickerOpen(true);
       if (appliances === null && !appliancesLoading) void loadAppliances();
@@ -342,7 +354,10 @@ export function AiChatWorkflow(props: {
         setPickerError(json.error || t('askError'));
         return;
       }
-      setHostPinged(true);
+      if (json.messageStored) setHostPinged(messageNotificationNotice(json.notification?.sms));
+      else setPickerError('The host request could not be confirmed. Check Host Chat before trying again.');
+    } catch {
+      setPickerError('The host request could not be confirmed. Check Host Chat before trying again.');
     } finally {
       setBusy(false);
     }
@@ -396,7 +411,7 @@ export function AiChatWorkflow(props: {
         <div role="status" className="gp-notice">
           <TriangleAlert size={17} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
-            {t('askEscNotice')}
+            {escalationNotice}
             <button type="button" onClick={props.onOpenHostChat} className="gp-msg-link" style={{ marginLeft: '.5rem' }}>
               {t('askOpenHostChat')}
             </button>
@@ -516,7 +531,7 @@ export function AiChatWorkflow(props: {
                 <div>
                   <p className="gp-modal-sub">{t('askApplianceEmpty')}</p>
                   {hostPinged ? (
-                    <p className="gp-modal-sub" role="status">{t('askAppliancePinged')}</p>
+                    <p className="gp-modal-sub" role="status">{hostPinged}</p>
                   ) : (
                     <button type="button" className="gp-btn gp-btn-accent" onClick={() => void pingHostForAppliances()} disabled={busy}>
                       <ConciergeBell size={16} aria-hidden /> {t('askAppliancePing')}

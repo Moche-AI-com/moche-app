@@ -58,7 +58,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     .limit(MAX_PROPERTIES);
 
   if (propError) {
-    log.error('freshness_digest_property_query_failed', { error: propError.message });
+    log.error('freshness_digest_property_query_failed', {});
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 
@@ -75,7 +75,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     .is('superseded_by', null);
 
   if (valueError) {
-    log.error('freshness_digest_value_query_failed', { error: valueError.message });
+    log.error('freshness_digest_value_query_failed', {});
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 
@@ -147,20 +147,20 @@ async function sendDigest(to: string, subject: string, text: string): Promise<bo
   try {
     const { Resend } = await import('resend');
     const resend = new Resend(serverEnv.resendApiKey);
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: UPDATES_SENDER.from,
       replyTo: UPDATES_SENDER.replyTo,
       to,
       subject,
       text,
     });
-    if (error) {
-      log.error('freshness_digest_send_failed', { error: error.message });
+    if (error || !data?.id) {
+      log.error('freshness_digest_send_failed', {});
       return false;
     }
     return true;
-  } catch (e) {
-    log.error('freshness_digest_send_error', { error: String(e) });
+  } catch {
+    log.error('freshness_digest_send_error', {});
     return false;
   }
 }

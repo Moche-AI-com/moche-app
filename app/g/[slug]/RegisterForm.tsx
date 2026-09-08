@@ -24,7 +24,7 @@ export function RegisterForm(props: {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  const [notificationConsent, setNotificationConsent] = useState(true);
+  const [notificationConsent, setNotificationConsent] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,22 +48,11 @@ export function RegisterForm(props: {
         notificationConsent: hasPhone && notificationConsent,
         termsAccepted,
       };
-      let res = await fetch(`/api/guest/${props.slug}/stay-guest/register`, {
+      const res = await fetch(`/api/guest/${props.slug}/stay-guest/register`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (res.status === 401) {
-        props.onSessionExpired();
-        return;
-      }
-      if (res.status === 400) {
-        res = await fetch(`/api/guest/${props.slug}/register`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      }
       if (res.status === 401) {
         props.onSessionExpired();
         return;
@@ -74,6 +63,8 @@ export function RegisterForm(props: {
         return;
       }
       props.onRegistered(`${payload.firstName} ${payload.lastName}`.trim());
+    } catch {
+      setError('Could not confirm registration. Please try again.');
     } finally {
       setBusy(false);
     }

@@ -68,7 +68,7 @@ const SECRET_LINK = String.raw`(?:\s*(?:is|are|was|=|:|-|\u2013|\u2014)\s*|\s+)(
  * and "WiFi network name is X" both have another noun where the value would be; without
  * this the engine redacts the noun and leaves the real value in place.
  */
-const NOT_ANOTHER_LABEL = String.raw`(?!(?:${SECRET_LABEL}|network|ssid|name|number)\b)`;
+const NOT_ANOTHER_LABEL = String.raw`(?!(?:${SECRET_LABEL}|network|ssid|name|number|location|instructions)\b)`;
 
 /** The value itself: quoted, backticked, or a bare non-sentence token. */
 const SECRET_VALUE = String.raw`(?:"[^"\n]{1,64}"|'[^'\n]{1,64}'|\u201c[^\u201d\n]{1,64}\u201d|\`[^\`\n]{1,64}\`|[^\s.,;!?)\]\[]{1,64})`;

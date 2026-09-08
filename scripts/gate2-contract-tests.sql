@@ -78,7 +78,7 @@ GRANT SELECT ON public.properties, public.property_members TO authenticated;
 -- ===========================================================================
 
 SELECT pg_temp.expect_eq(
-  (SELECT count(*)::int FROM public.field_registry), 53,
+  (SELECT count(*)::int FROM public.field_registry), 55,
   'A1 registry materialized with every declared field');
 
 SELECT pg_temp.expect_eq(
@@ -126,6 +126,20 @@ SELECT pg_temp.expect_fail($$
           'host_only','system_internal','{booking}',
           'brain_values','value','x',1,true,2.0)$$,
   'A8 registry rejects a scored system-section field');
+
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.field_registry
+   WHERE field_id IN ('wifi_password_location', 'wifi_connection_instructions')
+     AND type = 'text' AND sensitivity_tier = 'public_guest'
+     AND storage_column = 'value' AND NOT storage_vault), 2,
+  'A9 both Wi-Fi guidance fields are declared guest-safe text');
+
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.field_registry
+   WHERE field_id = 'wifi_password' AND type = 'secret'
+     AND sensitivity_tier = 'stay_scoped_secret' AND storage_vault
+     AND gap_weight = 0 AND NOT hard_block), 1,
+  'A10 legacy Wi-Fi password stays secret but is not collected or scored');
 
 -- ===========================================================================
 -- B. brain_values envelope constraints (as table owner, RLS not yet in play)
@@ -325,6 +339,36 @@ SELECT pg_temp.expect_fail($$
 RESET ROLE;
 
 
+-- Guidance uses the same tenant isolation as all other Brain values. Keep the
+-- existing C-suite's fixture counts untouched; test these two fields separately.
+INSERT INTO public.brain_values
+  (property_id, field_id, value, sensitivity_tier, audience, source)
+VALUES
+  ('11111111-1111-1111-1111-111111111111', 'wifi_password_location',
+   '"On the welcome card in the study."'::jsonb, 'public_guest', 'guest_prearrival', 'host_verified'),
+  ('22222222-2222-2222-2222-222222222222', 'wifi_password_location',
+   '"Inside the desk drawer."'::jsonb, 'public_guest', 'guest_prearrival', 'host_verified');
+
+SET ROLE authenticated;
+SET "test.user_id" = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_values WHERE field_id = 'wifi_password_location'), 1,
+  'D1 positive control: editor sees only their own Wi-Fi location');
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_values WHERE field_id = 'wifi_password_location'
+   AND property_id = '22222222-2222-2222-2222-222222222222'), 0,
+  'D2 foreign property Wi-Fi location is not visible');
+SELECT pg_temp.expect_fail($$
+  INSERT INTO public.brain_values
+    (property_id, field_id, value, sensitivity_tier, audience, source)
+  VALUES ('22222222-2222-2222-2222-222222222222', 'wifi_connection_instructions',
+          '"Choose the guest network."'::jsonb, 'public_guest', 'guest_prearrival', 'host_verified')$$,
+  'D3 editor cannot write connection instructions on a foreign property');
+SET "test.user_id" = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+SELECT pg_temp.expect_eq(
+  (SELECT count(*)::int FROM public.brain_values WHERE field_id = 'wifi_password_location'), 0,
+  'D4 unassigned user cannot read Wi-Fi guidance');
+RESET ROLE;
 
 -- ===========================================================================
 -- E. brain_items.section (supabase-migrations-BRAIN-SECTIONS.sql)

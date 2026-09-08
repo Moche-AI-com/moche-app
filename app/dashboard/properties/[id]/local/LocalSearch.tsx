@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Search, Loader2, MapPin, Star } from 'lucide-react';
 import { formatDistanceApprox } from '@/lib/local/distance';
 import type { LocalSearchResult } from '@/lib/local/search';
+import { validCoordinates } from '@/lib/local/validation';
 
 interface SearchResponse {
   results?: LocalSearchResult[];
@@ -11,6 +12,7 @@ interface SearchResponse {
   usedFallback?: boolean;
   fallbackSkipped?: string;
   error?: string;
+  providerFailed?: boolean;
 }
 
 /**
@@ -21,16 +23,27 @@ interface SearchResponse {
  * consulted; this component only reports what came back, so the local-first rule
  * lives in exactly one place.
  */
-export function LocalSearch({ propertyId }: { propertyId: string }) {
+export function LocalSearch({ propertyId, onSelect, onClear, onAddManual }: {
+  propertyId: string;
+  onSelect?: (result: LocalSearchResult) => void;
+  onClear?: () => void;
+  onAddManual?: () => void;
+}) {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
   const [results, setResults] = useState<LocalSearchResult[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     const trimmed = query.trim();
+    const id = ++requestId.current;
+    onClear?.();
+    setResults([]);
+    setNote(null);
+    setError(null);
     if (trimmed.length < 2) {
       setState('idle');
       setResults([]);
@@ -39,8 +52,8 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
       return;
     }
 
-    const id = ++requestId.current;
     const controller = new AbortController();
+    setState('busy');
     // Debounced so refining a query does not fire a request per keystroke, which
     // is what would push the provider tier into real cost.
     const timer = setTimeout(async () => {
@@ -49,10 +62,10 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
       try {
         const res = await fetch(
           `/api/host/properties/${propertyId}/local/search?q=${encodeURIComponent(trimmed)}`,
-          { signal: controller.signal },
+          { signal: controller.signal, cache: 'no-store' },
         );
         const json = (await res.json()) as SearchResponse;
-        if (id !== requestId.current) return;
+        if (controller.signal.aborted || id !== requestId.current) return;
         if (!res.ok) {
           setState('error');
           setError(json.error ?? 'Search failed. Try again.');
@@ -61,7 +74,7 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
         setResults(json.results ?? []);
         setNote(describe(json));
         setState('done');
-      } catch (e) {
+      } catch {
         if (controller.signal.aborted || id !== requestId.current) return;
         setState('error');
         setError('Search failed. Try again.');
@@ -72,11 +85,11 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, propertyId]);
+  }, [query, propertyId, retry, onClear]);
 
   return (
-    <div className="card" style={{ padding: 'var(--pad-card)', marginBottom: 'var(--gap-section)' }}>
-      <label className="label" htmlFor="local-search">Search this property&apos;s local list</label>
+    <div className="card ph-no-capture" style={{ padding: 'var(--pad-card)', marginBottom: 'var(--gap-section)' }}>
+      <label className="label" htmlFor="local-search">Search saved places & nearby suggestions</label>
       <div style={{ position: 'relative' }}>
         <Search
           size={16}
@@ -91,6 +104,7 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Coffee, pharmacy, a place by name…"
           autoComplete="off"
+          maxLength={120}
           style={{ paddingLeft: '2.1rem', minHeight: 44 }}
         />
       </div>
@@ -108,7 +122,7 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
         )}
 
         {state === 'error' && error && (
-          <div className="alert alert-error" style={{ fontSize: '.85rem' }}>{error}</div>
+          <div role="alert" className="alert alert-error" style={{ fontSize: '.85rem' }}>{error} <button type="button" className="btn btn-sm" onClick={() => setRetry((n) => n + 1)} style={{ minHeight: 44 }}>Retry search</button></div>
         )}
 
         {state === 'done' && results.length === 0 && (
@@ -135,7 +149,7 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
                   </div>
                   <div className="report-list-meta">
                     {r.categoryLabel}
-                    {r.distanceMeters !== null ? formatDistanceApprox(r.distanceMeters) : ''}
+                    {r.distanceMeters !== null ? ` · ${formatDistanceApprox(r.distanceMeters)}` : ''}
                     {r.rating !== null ? ` · ${r.rating.toFixed(1)}★` : ''}
                   </div>
                   {r.detail && (
@@ -149,20 +163,27 @@ export function LocalSearch({ propertyId }: { propertyId: string }) {
                   )}
                   {!r.inLibrary && (
                     <div className="faint" style={{ fontSize: '.78rem', marginTop: '.25rem' }}>
-                      Not in your list yet. Add it from Recommendations to share it with guests.
+                      Temporary Mapbox suggestion. Not saved or shared with guests. Add your own details manually.
                     </div>
                   )}
+                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
+                    {(r.inLibrary || validCoordinates(r.lat, r.lng)) && <button type="button" className="btn btn-sm" style={{ minHeight: 44 }} onClick={() => onSelect?.(r)}>{r.inLibrary ? 'Edit saved place' : 'View on map'}</button>}
+                    {!r.inLibrary && onAddManual && <button type="button" className="btn btn-sm" style={{ minHeight: 44 }} onClick={onAddManual}>Add manually</button>}
+                  </div>
                 </li>
               ))}
             </ul>
+            {results.some((r) => r.source === 'mapbox') && <p className="faint" style={{ fontSize: '.75rem', marginBottom: 0 }}>Search data © <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener noreferrer">Mapbox and its suppliers</a>. Temporary use only.</p>}
           </>
         )}
       </div>
+      {state === 'done' && results.length === 0 && onAddManual && <button type="button" className="btn btn-sm" onClick={onAddManual} style={{ minHeight: 44 }}>Add a place manually</button>}
     </div>
   );
 }
 
 function describe(json: SearchResponse): string | null {
+  if (json.providerFailed) return 'Map suggestions are unavailable right now. Your saved matches are shown; try again shortly.';
   if (json.usedFallback) {
     return json.source === 'hybrid'
       ? 'Fewer than three of your places matched, so map suggestions were added.'

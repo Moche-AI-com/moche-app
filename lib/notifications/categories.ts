@@ -162,6 +162,7 @@ export const EMAIL_FANOUT_KINDS: ReadonlySet<NotificationKind> = new Set<Notific
 ]);
 
 export const SMS_FANOUT_KINDS: ReadonlySet<NotificationKind> = new Set<NotificationKind>([
+  'host_message',
   'escalation',
   'maintenance',
 ]);

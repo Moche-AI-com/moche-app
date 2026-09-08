@@ -1107,6 +1107,80 @@
           "fact": null
         },
         {
+          "id": "urban_studio_no_parking:wifi_connection_instructions:0",
+          "question": "What is the wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_connection_instructions",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi connection instructions.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "urban_studio_no_parking:wifi_connection_instructions:1",
+          "question": "Can you tell me about the wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "needs_host",
+            "reason": "expired",
+            "knowledge_gap": true
+          },
+          "unanswerable": true,
+          "fact": {
+            "fieldId": "wifi_connection_instructions",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi connection instructions.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "urban_studio_no_parking:wifi_connection_instructions:2",
+          "question": "What steps should we follow to connect to Wi-Fi? Refer to the password location; never include the password.",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_connection_instructions",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi connection instructions.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "urban_studio_no_parking:wifi_connection_instructions:3",
+          "question": "wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "needs_host",
+            "reason": "empty",
+            "knowledge_gap": true
+          },
+          "unanswerable": true,
+          "fact": {
+            "fieldId": "wifi_connection_instructions",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
           "id": "urban_studio_no_parking:wifi_network_name:0",
           "question": "What is the wi-Fi network name?",
           "field_id": "wifi_network_name",
@@ -1128,19 +1202,19 @@
           "id": "urban_studio_no_parking:wifi_network_name:1",
           "question": "Can you tell me about the wi-Fi network name?",
           "field_id": "wifi_network_name",
-          "audience": "guest_instay",
+          "audience": "guest_public",
           "access_window_ok": true,
           "expected": {
-            "status": "needs_host",
-            "reason": "expired",
-            "knowledge_gap": true
+            "status": "refused",
+            "reason": "audience_denied",
+            "knowledge_gap": false
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "wifi_network_name",
             "sensitivityTier": "guest_after_verification",
             "value": "Recorded value for Wi-Fi network name.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
         {
@@ -1169,15 +1243,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "wifi_network_name",
             "sensitivityTier": "guest_after_verification",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Wi-Fi network name.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -1202,24 +1276,19 @@
           "id": "urban_studio_no_parking:wifi_password:1",
           "question": "Can you tell me about the wi-Fi password?",
           "field_id": "wifi_password",
-          "audience": "guest_public",
+          "audience": "guest_instay",
           "access_window_ok": true,
           "expected": {
-            "status": "refused",
-            "reason": "audience_denied",
-            "knowledge_gap": false
+            "status": "needs_host",
+            "reason": "absent",
+            "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "wifi_password",
-            "sensitivityTier": "stay_scoped_secret",
-            "value": "Recorded value for Wi-Fi password.",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:wifi_password:2",
-          "question": "What is the Wi-Fi password? It is stored encrypted and never sent to a model.",
+          "question": "Legacy credential field. Do not enter a password; use password location and connection instructions.",
           "field_id": "wifi_password",
           "audience": "guest_instay",
           "access_window_ok": true,
@@ -1240,19 +1309,88 @@
           "question": "wi-Fi password?",
           "field_id": "wifi_password",
           "audience": "guest_instay",
-          "access_window_ok": false,
+          "access_window_ok": true,
           "expected": {
-            "status": "refused",
-            "reason": "access_window_closed",
-            "knowledge_gap": false
+            "status": "needs_host",
+            "reason": "expired",
+            "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "wifi_password",
             "sensitivityTier": "stay_scoped_secret",
             "value": "Recorded value for Wi-Fi password.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "urban_studio_no_parking:wifi_password_location:0",
+          "question": "What is the wi-Fi password location?",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_password_location",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi password location.",
             "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
+        },
+        {
+          "id": "urban_studio_no_parking:wifi_password_location:1",
+          "question": "Can you tell me about the wi-Fi password location?",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "needs_host",
+            "reason": "empty",
+            "knowledge_gap": true
+          },
+          "unanswerable": true,
+          "fact": {
+            "fieldId": "wifi_password_location",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "urban_studio_no_parking:wifi_password_location:2",
+          "question": "Where can we find the Wi-Fi password? Give the exact location. Do not enter the password itself.",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_password_location",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi password location.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "urban_studio_no_parking:wifi_password_location:3",
+          "question": "wi-Fi password location?",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "needs_host",
+            "reason": "absent",
+            "knowledge_gap": true
+          },
+          "unanswerable": true,
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:wifi_speed_tier:0",
@@ -1280,11 +1418,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "wifi_speed_tier",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Internet speed.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:wifi_speed_tier:2",
@@ -1312,16 +1455,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "wifi_speed_tier",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Internet speed.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:wifi_troubleshooting:0",
@@ -1349,15 +1487,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "wifi_troubleshooting",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Wi-Fi troubleshooting / fallback.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -1386,11 +1524,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "wifi_troubleshooting",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:extra_guest_policy:0",
@@ -1418,16 +1561,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "extra_guest_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Extra guest & visitor policy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:extra_guest_policy:2",
@@ -1455,11 +1593,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "extra_guest_policy",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Extra guest & visitor policy.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:quiet_hours:0",
@@ -1487,16 +1630,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "quiet_hours",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Quiet hours.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:quiet_hours:2",
@@ -1524,15 +1662,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "quiet_hours",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Quiet hours.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -1561,11 +1699,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "smoking_policy",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:smoking_policy:2",
@@ -1593,16 +1736,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "smoking_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Smoking policy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:trash_schedule:0",
@@ -1630,11 +1768,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "trash_schedule",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Trash & recycling.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:trash_schedule:2",
@@ -1662,16 +1805,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "trash_schedule",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Trash & recycling.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:area_safety_notes:0",
@@ -1699,15 +1837,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "area_safety_notes",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Area safety notes.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -1736,11 +1874,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "area_safety_notes",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:nearest_grocery:0",
@@ -1768,16 +1911,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "nearest_grocery",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Nearest grocery.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:nearest_grocery:2",
@@ -1805,11 +1943,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "nearest_grocery",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Nearest grocery.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:nearest_pharmacy:0",
@@ -1837,16 +1980,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "nearest_pharmacy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Nearest pharmacy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:nearest_pharmacy:2",
@@ -1874,15 +2012,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "nearest_pharmacy",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Nearest pharmacy.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -1911,11 +2049,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "restaurant_recommendations",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:restaurant_recommendations:2",
@@ -1943,16 +2086,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "restaurant_recommendations",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Restaurant recommendations.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:transit_options:0",
@@ -1980,11 +2118,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "transit_options",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Transit options.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:transit_options:2",
@@ -2012,16 +2155,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "transit_options",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Transit options.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:after_hours_escalation:0",
@@ -2049,15 +2187,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "after_hours_escalation",
             "sensitivityTier": "guest_after_verification",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for After-hours escalation.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -2082,18 +2220,18 @@
           "id": "urban_studio_no_parking:after_hours_escalation:3",
           "question": "after-hours escalation?",
           "field_id": "after_hours_escalation",
-          "audience": "guest_public",
+          "audience": "guest_instay",
           "access_window_ok": true,
           "expected": {
-            "status": "refused",
-            "reason": "audience_denied",
-            "knowledge_gap": false
+            "status": "needs_host",
+            "reason": "empty",
+            "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "after_hours_escalation",
             "sensitivityTier": "guest_after_verification",
-            "value": "Recorded value for After-hours escalation.",
+            "value": "   ",
             "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
@@ -2123,16 +2261,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "appliance_troubleshooting",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Appliance troubleshooting.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:appliance_troubleshooting:2",
@@ -2160,11 +2293,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "appliance_troubleshooting",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Appliance troubleshooting.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:maintenance_emergency_contact:0",
@@ -2192,16 +2330,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "maintenance_emergency_contact",
-            "sensitivityTier": "guest_after_verification",
-            "value": "Recorded value for Maintenance / emergency contact.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:maintenance_emergency_contact:2",
@@ -2229,15 +2362,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "maintenance_emergency_contact",
             "sensitivityTier": "guest_after_verification",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Maintenance / emergency contact.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -2266,11 +2399,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "plumbing_troubleshooting",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:plumbing_troubleshooting:2",
@@ -2298,16 +2436,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "plumbing_troubleshooting",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Plumbing troubleshooting.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:utility_shutoff_locations:0",
@@ -2335,11 +2468,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "utility_shutoff_locations",
+            "sensitivityTier": "host_only",
+            "value": "Recorded value for Utility shutoff locations.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:utility_shutoff_locations:2",
@@ -2367,16 +2505,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "utility_shutoff_locations",
-            "sensitivityTier": "host_only",
-            "value": "Recorded value for Utility shutoff locations.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:parking:0",
@@ -2404,15 +2537,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "parking",
             "sensitivityTier": "guest_after_verification",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Parking type & location.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -2437,18 +2570,18 @@
           "id": "urban_studio_no_parking:parking:3",
           "question": "parking type & location?",
           "field_id": "parking",
-          "audience": "guest_public",
+          "audience": "guest_instay",
           "access_window_ok": true,
           "expected": {
-            "status": "refused",
-            "reason": "audience_denied",
-            "knowledge_gap": false
+            "status": "needs_host",
+            "reason": "empty",
+            "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "parking",
             "sensitivityTier": "guest_after_verification",
-            "value": "Recorded value for Parking type & location.",
+            "value": "   ",
             "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
@@ -2634,16 +2767,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "age_child_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Age & child policy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:age_child_policy:2",
@@ -2671,11 +2799,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "age_child_policy",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Age & child policy.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:deposit_damage_policy:0",
@@ -2703,16 +2836,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "deposit_damage_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Deposit & damage policy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:deposit_damage_policy:2",
@@ -2740,15 +2868,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "deposit_damage_policy",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Deposit & damage policy.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -2777,11 +2905,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "minimum_stay",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:minimum_stay:2",
@@ -2809,16 +2942,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "minimum_stay",
-            "sensitivityTier": "public_guest",
-            "value": "2",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:pet_fee:0",
@@ -2898,11 +3026,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "pet_policy",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Pet policy & fees.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:pet_policy:2",
@@ -2930,16 +3063,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "pet_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Pet policy & fees.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:unexpected_charge_disclosure:0",
@@ -2967,15 +3095,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "unexpected_charge_disclosure",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Additional charges.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -3004,11 +3132,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "unexpected_charge_disclosure",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:bed_configuration:0",
@@ -3036,16 +3169,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "bed_configuration",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Bed count, sizes & configuration.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:bed_configuration:2",
@@ -3073,11 +3201,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "bed_configuration",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Bed count, sizes & configuration.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "urban_studio_no_parking:elevator_stairs:0",
@@ -3209,16 +3342,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "max_occupancy",
-            "sensitivityTier": "public_guest",
-            "value": "2",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "urban_studio_no_parking:max_occupancy:2",
@@ -3246,15 +3374,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "max_occupancy",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "2",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         }
       ]
@@ -3276,8 +3404,10 @@
         "laundry_access",
         "pool_instructions",
         "security_camera_disclosure",
+        "wifi_connection_instructions",
         "wifi_network_name",
-        "wifi_password"
+        "wifi_password",
+        "wifi_password_location"
       ],
       "cases": [
         {
@@ -4332,6 +4462,58 @@
           "fact": null
         },
         {
+          "id": "offgrid_cabin_no_wifi:wifi_connection_instructions:0",
+          "question": "What is the wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
+          "id": "offgrid_cabin_no_wifi:wifi_connection_instructions:1",
+          "question": "Can you tell me about the wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
+          "id": "offgrid_cabin_no_wifi:wifi_connection_instructions:2",
+          "question": "What steps should we follow to connect to Wi-Fi? Refer to the password location; never include the password.",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
+          "id": "offgrid_cabin_no_wifi:wifi_connection_instructions:3",
+          "question": "wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
           "id": "offgrid_cabin_no_wifi:wifi_network_name:0",
           "question": "What is the wi-Fi network name?",
           "field_id": "wifi_network_name",
@@ -4411,7 +4593,7 @@
         },
         {
           "id": "offgrid_cabin_no_wifi:wifi_password:2",
-          "question": "What is the Wi-Fi password? It is stored encrypted and never sent to a model.",
+          "question": "Legacy credential field. Do not enter a password; use password location and connection instructions.",
           "field_id": "wifi_password",
           "audience": "guest_instay",
           "access_window_ok": true,
@@ -4426,6 +4608,58 @@
           "id": "offgrid_cabin_no_wifi:wifi_password:3",
           "question": "wi-Fi password?",
           "field_id": "wifi_password",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
+          "id": "offgrid_cabin_no_wifi:wifi_password_location:0",
+          "question": "What is the wi-Fi password location?",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
+          "id": "offgrid_cabin_no_wifi:wifi_password_location:1",
+          "question": "Can you tell me about the wi-Fi password location?",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
+          "id": "offgrid_cabin_no_wifi:wifi_password_location:2",
+          "question": "Where can we find the Wi-Fi password? Give the exact location. Do not enter the password itself.",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "not_applicable",
+            "reason": "not_applicable",
+            "knowledge_gap": false
+          },
+          "fact": null
+        },
+        {
+          "id": "offgrid_cabin_no_wifi:wifi_password_location:3",
+          "question": "wi-Fi password location?",
+          "field_id": "wifi_password_location",
           "audience": "guest_instay",
           "access_window_ok": true,
           "expected": {
@@ -7602,6 +7836,75 @@
           }
         },
         {
+          "id": "multistory_beach_house:wifi_connection_instructions:0",
+          "question": "What is the wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_connection_instructions",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi connection instructions.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "multistory_beach_house:wifi_connection_instructions:1",
+          "question": "Can you tell me about the wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "needs_host",
+            "reason": "absent",
+            "knowledge_gap": true
+          },
+          "unanswerable": true,
+          "fact": null
+        },
+        {
+          "id": "multistory_beach_house:wifi_connection_instructions:2",
+          "question": "What steps should we follow to connect to Wi-Fi? Refer to the password location; never include the password.",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_connection_instructions",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi connection instructions.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "multistory_beach_house:wifi_connection_instructions:3",
+          "question": "wi-Fi connection instructions?",
+          "field_id": "wifi_connection_instructions",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "needs_host",
+            "reason": "expired",
+            "knowledge_gap": true
+          },
+          "unanswerable": true,
+          "fact": {
+            "fieldId": "wifi_connection_instructions",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi connection instructions.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
+        },
+        {
           "id": "multistory_beach_house:wifi_network_name:0",
           "question": "What is the wi-Fi network name?",
           "field_id": "wifi_network_name",
@@ -7623,20 +7926,15 @@
           "id": "multistory_beach_house:wifi_network_name:1",
           "question": "Can you tell me about the wi-Fi network name?",
           "field_id": "wifi_network_name",
-          "audience": "guest_public",
+          "audience": "guest_instay",
           "access_window_ok": true,
           "expected": {
-            "status": "refused",
-            "reason": "audience_denied",
-            "knowledge_gap": false
+            "status": "needs_host",
+            "reason": "absent",
+            "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "wifi_network_name",
-            "sensitivityTier": "guest_after_verification",
-            "value": "Recorded value for Wi-Fi network name.",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:wifi_network_name:2",
@@ -7701,15 +7999,20 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "wifi_password",
+            "sensitivityTier": "stay_scoped_secret",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:wifi_password:2",
-          "question": "What is the Wi-Fi password? It is stored encrypted and never sent to a model.",
+          "question": "Legacy credential field. Do not enter a password; use password location and connection instructions.",
           "field_id": "wifi_password",
           "audience": "guest_instay",
           "access_window_ok": true,
@@ -7729,6 +8032,43 @@
           "id": "multistory_beach_house:wifi_password:3",
           "question": "wi-Fi password?",
           "field_id": "wifi_password",
+          "audience": "guest_public",
+          "access_window_ok": true,
+          "expected": {
+            "status": "refused",
+            "reason": "audience_denied",
+            "knowledge_gap": false
+          },
+          "unanswerable": true,
+          "fact": {
+            "fieldId": "wifi_password",
+            "sensitivityTier": "stay_scoped_secret",
+            "value": "Recorded value for Wi-Fi password.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "multistory_beach_house:wifi_password_location:0",
+          "question": "What is the wi-Fi password location?",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_password_location",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi password location.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "multistory_beach_house:wifi_password_location:1",
+          "question": "Can you tell me about the wi-Fi password location?",
+          "field_id": "wifi_password_location",
           "audience": "guest_instay",
           "access_window_ok": true,
           "expected": {
@@ -7738,11 +8078,43 @@
           },
           "unanswerable": true,
           "fact": {
-            "fieldId": "wifi_password",
-            "sensitivityTier": "stay_scoped_secret",
-            "value": "Recorded value for Wi-Fi password.",
+            "fieldId": "wifi_password_location",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi password location.",
             "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
+        },
+        {
+          "id": "multistory_beach_house:wifi_password_location:2",
+          "question": "Where can we find the Wi-Fi password? Give the exact location. Do not enter the password itself.",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "answered",
+            "reason": null,
+            "knowledge_gap": false
+          },
+          "fact": {
+            "fieldId": "wifi_password_location",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi password location.",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
+        },
+        {
+          "id": "multistory_beach_house:wifi_password_location:3",
+          "question": "wi-Fi password location?",
+          "field_id": "wifi_password_location",
+          "audience": "guest_instay",
+          "access_window_ok": true,
+          "expected": {
+            "status": "needs_host",
+            "reason": "absent",
+            "knowledge_gap": true
+          },
+          "unanswerable": true,
+          "fact": null
         },
         {
           "id": "multistory_beach_house:wifi_speed_tier:0",
@@ -7770,15 +8142,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "wifi_speed_tier",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Internet speed.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -7807,11 +8179,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "wifi_speed_tier",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:wifi_troubleshooting:0",
@@ -7839,16 +8216,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "wifi_troubleshooting",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Wi-Fi troubleshooting / fallback.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:wifi_troubleshooting:2",
@@ -7876,11 +8248,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "wifi_troubleshooting",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Wi-Fi troubleshooting / fallback.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:extra_guest_policy:0",
@@ -7908,16 +8285,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "extra_guest_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Extra guest & visitor policy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:extra_guest_policy:2",
@@ -7945,15 +8317,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "extra_guest_policy",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Extra guest & visitor policy.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -7982,11 +8354,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "quiet_hours",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:quiet_hours:2",
@@ -8014,16 +8391,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "quiet_hours",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Quiet hours.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:smoking_policy:0",
@@ -8051,11 +8423,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "smoking_policy",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Smoking policy.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:smoking_policy:2",
@@ -8083,16 +8460,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "smoking_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Smoking policy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:trash_schedule:0",
@@ -8120,15 +8492,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "trash_schedule",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Trash & recycling.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -8157,11 +8529,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "trash_schedule",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:area_safety_notes:0",
@@ -8189,16 +8566,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "area_safety_notes",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Area safety notes.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:area_safety_notes:2",
@@ -8226,11 +8598,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "area_safety_notes",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Area safety notes.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:nearest_grocery:0",
@@ -8258,16 +8635,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "nearest_grocery",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Nearest grocery.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:nearest_grocery:2",
@@ -8295,15 +8667,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "nearest_grocery",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Nearest grocery.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -8332,11 +8704,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "nearest_pharmacy",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:nearest_pharmacy:2",
@@ -8364,16 +8741,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "nearest_pharmacy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Nearest pharmacy.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:restaurant_recommendations:0",
@@ -8401,11 +8773,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "restaurant_recommendations",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Restaurant recommendations.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:restaurant_recommendations:2",
@@ -8433,16 +8810,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "restaurant_recommendations",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Restaurant recommendations.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:transit_options:0",
@@ -8470,15 +8842,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "transit_options",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Transit options.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -8507,11 +8879,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "transit_options",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:after_hours_escalation:0",
@@ -8535,19 +8912,19 @@
           "id": "multistory_beach_house:after_hours_escalation:1",
           "question": "Can you tell me about the after-hours escalation?",
           "field_id": "after_hours_escalation",
-          "audience": "guest_instay",
+          "audience": "guest_public",
           "access_window_ok": true,
           "expected": {
-            "status": "needs_host",
-            "reason": "expired",
-            "knowledge_gap": true
+            "status": "refused",
+            "reason": "audience_denied",
+            "knowledge_gap": false
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "after_hours_escalation",
             "sensitivityTier": "guest_after_verification",
             "value": "Recorded value for After-hours escalation.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
         {
@@ -8576,11 +8953,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "after_hours_escalation",
+            "sensitivityTier": "guest_after_verification",
+            "value": "Recorded value for After-hours escalation.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:appliance_troubleshooting:0",
@@ -8608,16 +8990,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "appliance_troubleshooting",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Appliance troubleshooting.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:appliance_troubleshooting:2",
@@ -8645,15 +9022,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "appliance_troubleshooting",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Appliance troubleshooting.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -8678,18 +9055,18 @@
           "id": "multistory_beach_house:maintenance_emergency_contact:1",
           "question": "Can you tell me about the maintenance / emergency contact?",
           "field_id": "maintenance_emergency_contact",
-          "audience": "guest_public",
+          "audience": "guest_instay",
           "access_window_ok": true,
           "expected": {
-            "status": "refused",
-            "reason": "audience_denied",
-            "knowledge_gap": false
+            "status": "needs_host",
+            "reason": "empty",
+            "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "maintenance_emergency_contact",
             "sensitivityTier": "guest_after_verification",
-            "value": "Recorded value for Maintenance / emergency contact.",
+            "value": "   ",
             "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
@@ -8715,19 +9092,19 @@
           "id": "multistory_beach_house:maintenance_emergency_contact:3",
           "question": "maintenance / emergency contact?",
           "field_id": "maintenance_emergency_contact",
-          "audience": "guest_instay",
+          "audience": "guest_public",
           "access_window_ok": true,
           "expected": {
-            "status": "needs_host",
-            "reason": "expired",
-            "knowledge_gap": true
+            "status": "refused",
+            "reason": "audience_denied",
+            "knowledge_gap": false
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "maintenance_emergency_contact",
             "sensitivityTier": "guest_after_verification",
             "value": "Recorded value for Maintenance / emergency contact.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
         {
@@ -8756,11 +9133,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "plumbing_troubleshooting",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Plumbing troubleshooting.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:plumbing_troubleshooting:2",
@@ -8788,16 +9170,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "plumbing_troubleshooting",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Plumbing troubleshooting.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:utility_shutoff_locations:0",
@@ -8825,15 +9202,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "utility_shutoff_locations",
             "sensitivityTier": "host_only",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Utility shutoff locations.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -8858,18 +9235,18 @@
           "id": "multistory_beach_house:utility_shutoff_locations:3",
           "question": "utility shutoff locations?",
           "field_id": "utility_shutoff_locations",
-          "audience": "guest_public",
+          "audience": "staff_ops",
           "access_window_ok": true,
           "expected": {
-            "status": "refused",
-            "reason": "audience_denied",
-            "knowledge_gap": false
+            "status": "needs_host",
+            "reason": "empty",
+            "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "utility_shutoff_locations",
             "sensitivityTier": "host_only",
-            "value": "Recorded value for Utility shutoff locations.",
+            "value": "   ",
             "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
@@ -8895,19 +9272,19 @@
           "id": "multistory_beach_house:parking:1",
           "question": "Can you tell me about the parking type & location?",
           "field_id": "parking",
-          "audience": "guest_instay",
+          "audience": "guest_public",
           "access_window_ok": true,
           "expected": {
-            "status": "needs_host",
-            "reason": "expired",
-            "knowledge_gap": true
+            "status": "refused",
+            "reason": "audience_denied",
+            "knowledge_gap": false
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "parking",
             "sensitivityTier": "guest_after_verification",
             "value": "Recorded value for Parking type & location.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
           }
         },
         {
@@ -8936,11 +9313,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "parking",
+            "sensitivityTier": "guest_after_verification",
+            "value": "Recorded value for Parking type & location.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:parking_access_instructions:0",
@@ -8968,16 +9350,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "parking_access_instructions",
-            "sensitivityTier": "guest_after_verification",
-            "value": "Recorded value for Parking access instructions.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:parking_access_instructions:2",
@@ -9005,15 +9382,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "parking_access_instructions",
             "sensitivityTier": "guest_after_verification",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Parking access instructions.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -9042,11 +9419,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "parking_cost",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:parking_cost:2",
@@ -9074,16 +9456,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "parking_cost",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Parking cost.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:parking_overflow_fallback:0",
@@ -9111,11 +9488,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "parking_overflow_fallback",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Parking fallback.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:parking_overflow_fallback:2",
@@ -9143,16 +9525,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "parking_overflow_fallback",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Parking fallback.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:age_child_policy:0",
@@ -9180,15 +9557,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "age_child_policy",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Age & child policy.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -9217,11 +9594,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "age_child_policy",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:deposit_damage_policy:0",
@@ -9301,16 +9683,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "minimum_stay",
-            "sensitivityTier": "public_guest",
-            "value": "2",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:minimum_stay:2",
@@ -9338,11 +9715,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "minimum_stay",
+            "sensitivityTier": "public_guest",
+            "value": "2",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:pet_fee:0",
@@ -9422,16 +9804,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "pet_policy",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Pet policy & fees.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:pet_policy:2",
@@ -9459,15 +9836,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "pet_policy",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Pet policy & fees.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -9496,11 +9873,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "unexpected_charge_disclosure",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:unexpected_charge_disclosure:2",
@@ -9528,16 +9910,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "unexpected_charge_disclosure",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Additional charges.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:bed_configuration:0",
@@ -9565,11 +9942,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "bed_configuration",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Bed count, sizes & configuration.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:bed_configuration:2",
@@ -9597,16 +9979,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "bed_configuration",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Bed count, sizes & configuration.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:elevator_stairs:0",
@@ -9634,15 +10011,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "elevator_stairs",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "Recorded value for Elevator or stairs.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         },
         {
@@ -9671,11 +10048,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "empty",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "elevator_stairs",
+            "sensitivityTier": "public_guest",
+            "value": "   ",
+            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:floor_number:0",
@@ -9703,16 +10085,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "floor_number",
-            "sensitivityTier": "public_guest",
-            "value": "Recorded value for Floor number.",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:floor_number:2",
@@ -9740,11 +10117,16 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "absent",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": null
+          "fact": {
+            "fieldId": "floor_number",
+            "sensitivityTier": "public_guest",
+            "value": "Recorded value for Floor number.",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
+          }
         },
         {
           "id": "multistory_beach_house:max_occupancy:0",
@@ -9772,16 +10154,11 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "expired",
+            "reason": "absent",
             "knowledge_gap": true
           },
           "unanswerable": true,
-          "fact": {
-            "fieldId": "max_occupancy",
-            "sensitivityTier": "public_guest",
-            "value": "2",
-            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
-          }
+          "fact": null
         },
         {
           "id": "multistory_beach_house:max_occupancy:2",
@@ -9809,15 +10186,15 @@
           "access_window_ok": true,
           "expected": {
             "status": "needs_host",
-            "reason": "empty",
+            "reason": "expired",
             "knowledge_gap": true
           },
           "unanswerable": true,
           "fact": {
             "fieldId": "max_occupancy",
             "sensitivityTier": "public_guest",
-            "value": "   ",
-            "ttlExpiresAt": "2027-06-01T12:00:00.000Z"
+            "value": "2",
+            "ttlExpiresAt": "2026-05-01T12:00:00.000Z"
           }
         }
       ]

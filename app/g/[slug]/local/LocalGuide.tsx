@@ -31,6 +31,7 @@ import { formatDistance } from '@/lib/local/distance';
 import type { GuestLocalPlace } from '@/lib/local/canonical';
 import { portalT } from '@/lib/guest/portal-strings';
 import { PORTAL_CSS, usePortalTheme } from '../portalStyles';
+import { safeWebsite, safePhone, validCoordinates } from '@/lib/local/validation';
 
 // Category → professional line icon (Lucide). Unknown/custom categories fall
 // back to a map pin so host-entered categories still render cleanly.
@@ -61,7 +62,7 @@ function categoryPlural(category: string): string {
 // destination pre-filled (no API key or Google account required — it is a URL,
 // not an API call). Prefers exact coordinates; falls back to name + address.
 function directionsUrl(place: GuestLocalPlace): string {
-  if (typeof place.lat === 'number' && typeof place.lng === 'number') {
+  if (validCoordinates(place.lat, place.lng)) {
     return `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`;
   }
   const q = [place.name, place.address].filter(Boolean).join(' ');
@@ -76,6 +77,8 @@ function distanceLabel(place: GuestLocalPlace): string | null {
 function PlaceCard({ place, t }: { place: GuestLocalPlace; t: ReturnType<typeof portalT> }) {
   const Icon = CATEGORY_ICON[place.category] ?? MapPin;
   const distance = distanceLabel(place);
+  const website = safeWebsite(place.website);
+  const phone = safePhone(place.phone);
   return (
     <article className="gp-place-card">
       <span className="gp-place-icon" aria-hidden>
@@ -102,13 +105,13 @@ function PlaceCard({ place, t }: { place: GuestLocalPlace; t: ReturnType<typeof 
           <a className="gp-place-link" href={directionsUrl(place)} target="_blank" rel="noopener noreferrer">
             <Navigation size={13} aria-hidden /> {t('lgDirections')}
           </a>
-          {place.website ? (
-            <a className="gp-place-link" href={place.website} target="_blank" rel="noopener noreferrer">
+          {website ? (
+            <a className="gp-place-link" href={website} target="_blank" rel="noopener noreferrer">
               <Globe size={13} aria-hidden /> {t('lgWebsite')}
             </a>
           ) : null}
-          {place.phone ? (
-            <a className="gp-place-link" href={`tel:${place.phone}`}>
+          {phone ? (
+            <a className="gp-place-link" href={phone}>
               <Phone size={13} aria-hidden /> {t('lgCall')}
             </a>
           ) : null}
@@ -136,6 +139,7 @@ export function LocalGuide(props: {
   brandAccent: string | null;
   logoUrl: string | null;
   places: GuestLocalPlace[];
+  loadError?: boolean;
 }) {
   const { theme, toggleTheme } = usePortalTheme();
   const [query, setQuery] = useState('');
@@ -172,7 +176,7 @@ export function LocalGuide(props: {
     return props.places.filter((p) => {
       if (category !== 'all' && p.category !== category) return false;
       if (!q) return true;
-      return [p.name, p.address, p.hostNote, p.detail]
+      return [p.name, p.address, p.hostNote, p.detail, p.category, categoryLabel(p.category), categoryPlural(p.category)]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -218,8 +222,9 @@ export function LocalGuide(props: {
 
           <h1 className="gp-step-title" style={{ marginTop: 0 }}>{t('lgTitle')}</h1>
           <p className="gp-step-sub">{t('lgSub', { property: props.propertyName })}</p>
+          {props.loadError && <div role="alert" className="gp-empty">Local recommendations could not be loaded. Please try again in a moment or ask your host.</div>}
 
-          {props.places.length === 0 ? (
+          {props.loadError ? null : props.places.length === 0 ? (
             <div className="gp-empty">
               <MapPin size={28} aria-hidden style={{ opacity: 0.5, marginBottom: 10 }} />
               <div>{t('lgEmpty')}</div>
@@ -244,6 +249,7 @@ export function LocalGuide(props: {
                   type="button"
                   className={`gp-filter-chip ${category === 'all' ? 'gp-filter-chip-on' : ''}`}
                   onClick={() => setCategory('all')}
+                  aria-pressed={category === 'all'}
                 >
                   {t('lgAll')}
                 </button>
@@ -253,6 +259,7 @@ export function LocalGuide(props: {
                     type="button"
                     className={`gp-filter-chip ${category === cat ? 'gp-filter-chip-on' : ''}`}
                     onClick={() => setCategory(cat)}
+                    aria-pressed={category === cat}
                   >
                     {categoryPlural(cat)}
                   </button>
@@ -268,8 +275,8 @@ export function LocalGuide(props: {
                 </>
               )}
 
-              <h2 className="gp-section-title">{filtering ? t('lgMatching') : favorites.length > 0 ? t('lgMore') : t('lgAllPlaces')}</h2>
-              {rest.length === 0 ? (
+              {(filtering || rest.length > 0) && <h2 className="gp-section-title">{filtering ? t('lgMatching') : favorites.length > 0 ? t('lgMore') : t('lgAllPlaces')}</h2>}
+              {rest.length === 0 && filtering ? (
                 <p className="gp-muted">{t('lgNoMatch')}</p>
               ) : (
                 rest.map((place) => <PlaceCard key={place.id} place={place} t={t} />)
@@ -278,7 +285,7 @@ export function LocalGuide(props: {
           )}
         </main>
 
-        <footer className="gp-footer">{t('poweredBy')}</footer>
+        <footer className="gp-footer">{t('poweredBy')} · Place data may include <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>.</footer>
       </div>
     </div>
   );

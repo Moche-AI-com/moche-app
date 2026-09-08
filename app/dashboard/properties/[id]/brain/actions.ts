@@ -12,6 +12,8 @@ import { chunkText } from '@/lib/ingest/chunk';
 import { bumpBrainVersion } from '@/lib/brain/cache';
 import { upsertNormalizedNode } from '@/lib/normalizer';
 import { isBrainSection, parseFeatureSectionId, storageCategoryFor } from '@/lib/brain/taxonomy';
+import { redactCredentials } from '@/lib/brain/redact';
+import { safeWifiInstructions, safeWifiLocation } from '@/lib/guest/wifi-instructions';
 import type { Database } from '@/lib/database.types';
 
 export interface BrainActionState {
@@ -72,6 +74,12 @@ export async function saveBrainItemAction(
     return { error: parsed.error.issues[0]?.message ?? 'Please check the fields and try again.' };
   }
   const d = parsed.data;
+  if (redactCredentials(`${d.title}\n${d.body}`).redactions.length
+    || (/wi[\s-]?fi\s+password\s*$/i.test(d.title))
+    || (/wi[\s-]?fi\s+password location/i.test(d.title) && !safeWifiLocation(d.body))
+    || (/wi[\s-]?fi\s+connection instructions/i.test(d.title) && !safeWifiInstructions(d.body))) {
+    return { error: 'Do not save a password or access credential. Give the exact Wi-Fi password location and connection instructions instead.' };
+  }
   const section = sectionFromForm(formData);
   const featureId = parseFeatureSectionId(String(formData.get('section') ?? ''));
   const ctx = await requireSession();

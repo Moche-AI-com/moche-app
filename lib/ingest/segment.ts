@@ -1,8 +1,8 @@
 import 'server-only';
 
-// Setup imports are allowed to seed an empty Brain, so this boundary is stricter
-// than ordinary summarization: the model may organize source facts but never
-// decide what category vocabulary or storage shape the application accepts.
+// Setup imports produce drafts requiring host approval, even for an empty Brain.
+// The model may organize source facts but never decide what category vocabulary
+// or storage shape the application accepts.
 
 import { routedCompletion } from '@/lib/router/modelRouter';
 import { CATEGORY_HINTS, type BrainCategory } from '@/lib/brain/classify';

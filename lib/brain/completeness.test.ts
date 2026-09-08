@@ -19,15 +19,18 @@ const ALL_IDS = REGISTRY_FIELDS.map((f) => f.field_id);
 const ALL_PREDICATES = [...new Set(REGISTRY_FIELDS.map((f) => f.applicability))];
 
 describe('registry shape (Amendment 001-A.2)', () => {
-  it('exposes exactly the six hard-block fields from Section 5.3', () => {
+  it('keeps six hard blocks while requiring Wi-Fi location rather than its secret', () => {
     expect([...HARD_BLOCK_FIELD_IDS].sort()).toEqual([
       'checkout_time',
       'door_code_or_entry_method',
       'maintenance_emergency_contact',
       'nearest_grocery',
       'parking',
-      'wifi_password',
+      'wifi_password_location',
     ]);
+    expect(scoredSet(ALL_PREDICATES).some((f) => f.field_id === 'wifi_password')).toBe(false);
+    expect(REGISTRY_FIELDS.find((f) => f.field_id === 'wifi_password')?.type).toBe('secret');
+    expect(REGISTRY_FIELDS.find((f) => f.field_id === 'wifi_password_location')?.type).toBe('text');
   });
 
   it('excludes hidden system sections from the scored set', () => {

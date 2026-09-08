@@ -107,6 +107,25 @@ jobs:
           sudo apt-get install -y --no-install-recommends postgresql postgresql-contrib
       - name: Run Gate 2 contract suite
         run: bash scripts/verify-gate2-sql.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Verify actual release rollback, apply, and idempotency
+        run: bash scripts/verify-property-brain-release-sql.sh
+
+  local-recs-ui:
+    name: Local Recs browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test -c test/local-recs-ui/playwright.config.ts
+      - run: npx playwright test -c test/messaging-ui/playwright.config.ts
 
   build:
     name: Production build

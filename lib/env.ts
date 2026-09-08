@@ -60,6 +60,14 @@ export const serverEnv = {
   // routing no-op instead of a policy violation.
   aiBaseUrl: process.env.AI_BASE_URL ?? 'https://openrouter.ai/api/v1',
   aiChatModel: process.env.AI_CHAT_MODEL ?? 'google/gemini-2.5-flash',
+  // High-stakes tasks NEVER inherit AI_CHAT_MODEL or a dev fallback. Bare model
+  // ids for direct OpenAI; provider-qualified ids for the existing router endpoint.
+  aiBrainModel: process.env.AI_BRAIN_MODEL || process.env.AI_BRAIN_LEARNING_MODEL ||
+    ((process.env.AI_BASE_URL ?? 'https://openrouter.ai/api/v1').includes('openrouter.ai') ? 'openai/gpt-4o' : 'gpt-4o'),
+  aiExtractionModel: process.env.AI_EXTRACTION_MODEL || process.env.AI_BRAIN_MODEL ||
+    ((process.env.AI_BASE_URL ?? 'https://openrouter.ai/api/v1').includes('openrouter.ai') ? 'openai/gpt-4o' : 'gpt-4o'),
+  aiConciergeComplexModel: process.env.AI_CONCIERGE_COMPLEX_MODEL ||
+    ((process.env.AI_BASE_URL ?? 'https://openrouter.ai/api/v1').includes('openrouter.ai') ? 'openai/gpt-4o' : 'gpt-4o'),
 
   // Embeddings need their own base URL + key because OpenRouter is a chat-completions
   // router and does not expose an /embeddings endpoint. Chat goes to the router;
@@ -109,6 +117,8 @@ export const serverEnv = {
   // tier lands on the strong default, never on the cheap legacy slug.
   openrouterModelBrainOps:
     process.env.OPENROUTER_MODEL_BRAIN_OPS ?? 'openai/gpt-4o',
+  openrouterModelConciergeComplex:
+    process.env.OPENROUTER_MODEL_CONCIERGE_COMPLEX || 'openai/gpt-4o',
   openrouterModelClassification:
     process.env.OPENROUTER_MODEL_CLASSIFICATION ?? 'meta-llama/llama-3.1-8b-instruct',
   // Gemini 2.5 Flash: verified available under our Zero-Data-Retention provider
@@ -177,6 +187,11 @@ export const serverEnv = {
 
   // Host SMS fan-out master switch (default OFF — see notify() consent TODO before enabling in prod).
   notifySmsEnabled: bool(process.env.NOTIFY_SMS_ENABLED, false),
+  // Every SMS path, including OTP, must explicitly opt in AND run on the real
+  // production deployment. Preview credentials must never enable delivery.
+  smsDeliveryEnabled: process.env.NODE_ENV === 'production'
+    && process.env.VERCEL_ENV === 'production'
+    && bool(process.env.NOTIFY_SMS_ENABLED, false),
 
   // Publish gates.
   //

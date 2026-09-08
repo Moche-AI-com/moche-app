@@ -18,6 +18,13 @@ function mockCtx(attemptNumber: number) {
 }
 
 describe("runPing", () => {
+  it("does not log the caller's freeform message", async () => {
+    const { logger } = await import("@trigger.dev/sdk");
+    vi.mocked(logger.info).mockClear();
+    await runPing({ message: "synthetic-private-message" }, mockCtx(1));
+    expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain("synthetic-private-message");
+  });
+
   it("succeeds on the first attempt when testRetry is not set", async () => {
     const result = await runPing({ message: "hi" }, mockCtx(1));
     expect(result).toMatchObject({ ok: true, attempt: 1 });

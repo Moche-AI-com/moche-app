@@ -61,8 +61,8 @@ type GenerateFn = (messages: ChatMessage[], opts?: GenerateOptions) => Promise<G
 
 // Node normalization is brain management (2026-08-28 directive): its output becomes a
 // canonical knowledge node, so it declares the brain_ops tier — the strong model with
-// no silent in-router downgrade. With no OPENROUTER_API_KEY set this is a no-op and
-// behaves exactly as before (in-house provider).
+// no silent downgrade. Missing/unavailable strong-tier configuration skips the
+// derived node; it must never fall back to a general or development model.
 const brainOpsCompletion: GenerateFn = (messages, opts) =>
   routedCompletion(messages, opts, { task: 'brain_ops' });
 
@@ -87,7 +87,7 @@ export async function normalizeToNode(
     try {
       result = await generate(messages, { temperature: 0, maxTokens: 500 });
     } catch (e) {
-      log.warn('normalizer_generate_failed', { nodeType: input.nodeType, error: String(e) });
+      log.warn('normalizer_generate_failed', { nodeType: input.nodeType, code: 'completion_unavailable' });
       return null;
     }
     const parsed = extractJsonObject(result.text);
@@ -95,6 +95,10 @@ export async function normalizeToNode(
     const validated = schema.safeParse(parsed);
     if (!validated.success) return null;
     const data = validated.data as Record<string, unknown>;
+    if (input.nodeType === 'wifi' && typeof data.password_location === 'string') {
+      const canonical = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!canonical(source).includes(canonical(data.password_location))) return null;
+    }
     const content = renderContent(input.nodeType, data);
     if (!content.trim()) return null;
     return { nodeType: input.nodeType, title: input.title.slice(0, 200), data, content };

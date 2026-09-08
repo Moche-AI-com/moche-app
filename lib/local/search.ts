@@ -18,6 +18,7 @@
 // database and no network.
 
 import { localCategoryLabel, type MergedLocalPlace } from './merge';
+import type { LocalPlaceRow } from './canonical';
 
 /** Below this many local matches, the caller may ask the map provider. */
 export const LOCAL_SEARCH_MIN_RESULTS = 3;
@@ -48,6 +49,9 @@ export interface LocalSearchResult {
   address: string | null;
   /** Relevance score, highest first. Exposed for debugging and for tests. */
   score: number;
+  lat?: number | null;
+  lng?: number | null;
+  status?: LocalPlaceRow['status'];
 }
 
 /** What the host reads on the badge. Never provider jargon. */
@@ -171,6 +175,23 @@ export function searchLocalPlaces(
   return out.sort(compareResults).slice(0, Math.max(0, limit));
 }
 
+/** Search exactly what the current host manager saves, including restorable hidden rows. */
+export function searchCanonicalPlaces(query: string, places: LocalPlaceRow[], limit = LOCAL_SEARCH_MAX_RESULTS): LocalSearchResult[] {
+  return places.flatMap((p): LocalSearchResult[] => {
+    const score = scoreLocalMatch(query, {
+      name: p.name, category: p.category, favorite: p.isFavorite,
+      hostNotes: [p.hostNote, p.address, ...p.tags, ...p.intentTags].filter(Boolean).join(' '),
+    });
+    const source = p.provider === 'manual' ? 'curated' : 'discovered';
+    return score ? [{
+      id: p.recommendationId, name: p.name, category: p.category, categoryLabel: localCategoryLabel(p.category),
+      source, sourceLabel: sourceLabel(source), inLibrary: true, favorite: p.isFavorite,
+      distanceMeters: p.distanceMiles == null ? null : p.distanceMiles * 1609.344,
+      rating: null, detail: p.hostNote, address: p.address, score, lat: p.lat, lng: p.lng, status: p.status,
+    }] : [];
+  }).sort(compareResults).slice(0, Math.max(0, limit));
+}
+
 /**
  * The threshold decision, isolated so there is exactly one place that answers
  * "should we spend a provider call?".
@@ -225,6 +246,8 @@ export interface RemoteCandidate {
   category: string;
   address: string | null;
   distanceMeters: number | null;
+  lat?: number;
+  lng?: number;
 }
 
 /**
@@ -264,6 +287,8 @@ export function mergeRemoteResults(
       rating: null,
       detail: null,
       address: c.address,
+      lat: c.lat,
+      lng: c.lng,
       // A provider row never outranks a local row of the same relevance; the
       // inLibrary tiebreak in compareResults handles equal scores, and a floor of
       // 1 keeps a loosely-matching suggestion visible rather than silently gone.

@@ -89,17 +89,15 @@ export async function POST(req: NextRequest) {
     });
     if (error) {
       // Table may not exist yet — still acknowledge the submission gracefully.
-      log.error('early_access_insert_failed', { error: error.message });
+      log.error('early_access_insert_failed', {});
     } else {
-      // Fire-and-forget: a confirmation email failure must never lose a signup.
-      void sendEarlyAccessThanks({ email: d.email, name: d.name ?? null }).catch((e) => {
-        log.warn('early_access_thanks_failed', { error: String(e) });
-      });
+      // Keep the send within the request lifetime; failure never loses the signup.
+      await sendEarlyAccessThanks({ email: d.email, name: d.name ?? null });
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    log.error('waitlist_unexpected', { error: err instanceof Error ? err.message : String(err) });
+  } catch {
+    log.error('waitlist_unexpected', {});
     return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 });
   }
 }

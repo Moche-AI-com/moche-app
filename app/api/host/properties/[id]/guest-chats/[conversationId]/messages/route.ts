@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getUser, requirePropertyAccess } from '@/lib/auth/guards';
-import { notifyGuestReply } from '@/lib/notify';
-import { publicEnv } from '@/lib/env';
+import { notifyGuestConversationReply } from '@/lib/notify';
+import { getGuestMessagingReadiness } from '@/lib/guest/messaging-readiness';
 import { normalizeGuestAnswerForBrain } from '@/lib/brain/guest-answer-learning';
+import { isMessageLocator } from '@/lib/notifications/links';
+import { recordMessageWorkflow } from '@/lib/notifications/message-workflow';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,13 +61,13 @@ async function loadExtrasOrders(db: any, propertyId: string, conversation: any) 
   const clauses = [
     `host_conversation_id.eq.${conversation.id}`,
     `conversation_id.eq.${conversation.id}`,
-    `stay_id.eq.${conversation.stay_id}`,
   ];
   if (conversation.guest_session_id) clauses.push(`guest_session_id.eq.${conversation.guest_session_id}`);
   const { data } = await db
     .from('extras_orders')
     .select('id, item_title, item_price_text, quantity, guest_note, request_number, fulfillment_status, scheduled_for, quoted_amount_cents, quote_currency, created_at')
     .eq('property_id', propertyId)
+    .eq('stay_id', conversation.stay_id)
     .in('fulfillment_status', ACTIVE_EXTRAS_STATUSES)
     .or(clauses.join(','))
     .order('created_at', { ascending: false })
@@ -73,7 +75,7 @@ async function loadExtrasOrders(db: any, propertyId: string, conversation: any) 
   return (data ?? []) as any[];
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string; conversationId: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string; conversationId: string }> }) {
   const { id, conversationId } = await params;
   const access = await requirePropertyAccess(id);
   if (!access.isOwner && !access.can.replyGuests) {
@@ -89,9 +91,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .from('messages')
     .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id, host_translation, host_translation_lang')
     .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(500);
   if (error) return NextResponse.json({ error: 'Could not load messages.' }, { status: 500 });
+  const messages = [...(rows ?? [])].reverse();
+  const focusId = new URL(req.url).searchParams.get('message');
+  if (focusId && (!isMessageLocator(focusId))) return NextResponse.json({ error: 'Message not found.' }, { status: 404 });
+  if (focusId && !messages.some((m) => m.id === focusId)) {
+    const { data: focus } = await db.from('messages').select('*').eq('id', focusId)
+      .eq('conversation_id', conversationId).eq('property_id', id).maybeSingle();
+    if (!focus) return NextResponse.json({ error: 'Message not found in this conversation.' }, { status: 404 });
+    messages.push(focus);
+    messages.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
 
   // Escalation and Extras state ride along so the thread can badge the request
   // bubble and gate the highlighted Reply CTA without a second round-trip.
@@ -100,6 +112,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       .from('escalations')
       .select('id, question, status, created_at, resolved_at')
       .eq('property_id', id)
+      .eq('stay_id', conversation.stay_id)
       .or(`conversation_id.eq.${conversationId},host_conversation_id.eq.${conversationId}`)
       .order('created_at', { ascending: true })
       .limit(50),
@@ -111,9 +124,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .update({ host_read_at: new Date().toISOString() })
     .eq('id', conversationId);
 
+  const readiness = conversation.guest_session_id && conversation.stay_id
+    ? await getGuestMessagingReadiness(admin, { sessionId: conversation.guest_session_id, stayId: conversation.stay_id, propertyId: id })
+    : { ready: false };
   return NextResponse.json({
     conversation,
-    messages: (rows ?? []).map(mapMessage),
+    messages: messages.map(mapMessage),
+    guestSmsEligible: readiness.ready,
     escalations: escRows ?? [],
     extrasOrders: extrasOrders.map((order) => ({
       id: order.id,
@@ -151,8 +168,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const db = admin as any;
   const conversation = await loadConversation(admin, id, conversationId);
   if (!conversation) return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
+  if (!conversation.stay_id) return NextResponse.json({ error: 'This conversation has no stay.' }, { status: 400 });
+  const { data: stay } = await db.from('stays').select('id, status, deleted_at')
+    .eq('id', conversation.stay_id).eq('property_id', id).maybeSingle();
+  if (!stay || stay.deleted_at || stay.status === 'revoked') return NextResponse.json({ error: 'Stay not available.' }, { status: 404 });
 
   const user = await getUser();
+  if (!user) return NextResponse.json({ error: 'Sign in to reply.' }, { status: 401 });
   const replyToId = parsed.data.replyToMessageId ?? null;
   let replyTo: any = null;
   if (replyToId) {
@@ -164,6 +186,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .maybeSingle();
     if (!data) return NextResponse.json({ error: 'The message you are replying to was not found.' }, { status: 404 });
     replyTo = data;
+  }
+  if (replyTo?.escalation_id && parsed.data.escalationId && replyTo.escalation_id !== parsed.data.escalationId) {
+    return NextResponse.json({ error: 'The escalation does not match this reply.' }, { status: 400 });
+  }
+  const escalationId = (replyTo?.escalation_id as string | undefined) ?? parsed.data.escalationId;
+  let escalation: any = null;
+  if (escalationId) {
+    const { data } = await db.from('escalations')
+      .select('id, property_id, stay_id, question, status, guest_session_id, host_conversation_id, conversation_id')
+      .eq('id', escalationId).eq('property_id', id).eq('stay_id', conversation.stay_id)
+      .or(`conversation_id.eq.${conversationId},host_conversation_id.eq.${conversationId}`).maybeSingle();
+    if (!data || (data.guest_session_id && data.guest_session_id !== conversation.guest_session_id)) {
+      return NextResponse.json({ error: 'Escalation not found in this conversation.' }, { status: 404 });
+    }
+    escalation = data;
+  }
+  let extrasOrder: any = null;
+  if (parsed.data.extrasOrderId) {
+    const { data } = await db.from('extras_orders')
+      .select('id, fulfillment_status, status, item_title, guest_session_id')
+      .eq('id', parsed.data.extrasOrderId).eq('property_id', id).eq('stay_id', conversation.stay_id)
+      .or(`conversation_id.eq.${conversationId},host_conversation_id.eq.${conversationId}`).maybeSingle();
+    if (!data || (data.guest_session_id && data.guest_session_id !== conversation.guest_session_id)) {
+      return NextResponse.json({ error: 'Extra request not found in this conversation.' }, { status: 404 });
+    }
+    extrasOrder = data;
+  }
+  if (parsed.data.learnFromReply && !escalation) {
+    return NextResponse.json({ error: 'Select an escalation before proposing a Brain update.' }, { status: 400 });
   }
 
   const now = new Date().toISOString();
@@ -184,26 +235,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (error) return NextResponse.json({ error: 'Could not send the reply.' }, { status: 500 });
 
-  await db
+  const workflowWarnings: string[] = [];
+  await recordMessageWorkflow(db
     .from('conversations')
     .update({ last_message_at: now, host_read_at: now, guest_read_at: null })
-    .eq('id', conversationId);
+    .eq('id', conversationId).select('id').maybeSingle(), workflowWarnings,
+    'Your reply was saved, but the conversation summary could not be refreshed.');
 
-  const escalationId = (replyTo?.escalation_id as string | undefined) ?? parsed.data.escalationId;
   let learningQueued = false;
   let learningError: string | null = null;
 
   if (escalationId) {
-    const { data: escalation } = await db
-      .from('escalations')
-      .select('id, property_id, stay_id, question, status')
-      .eq('id', escalationId)
-      .eq('property_id', id)
-      .maybeSingle();
-
     if (escalation) {
       const outcome = parsed.data.escalationOutcome;
-      await db
+      await recordMessageWorkflow(db
         .from('escalations')
         .update({
           host_response: parsed.data.message,
@@ -220,7 +265,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           guest_session_id: conversation.guest_session_id,
           guest_identity_id: conversation.guest_identity_id,
         })
-        .eq('id', escalationId);
+        .eq('id', escalationId).eq('property_id', id).eq('stay_id', conversation.stay_id).select('id').maybeSingle(),
+        workflowWarnings, 'Your reply was saved, but the escalation status could not be updated. Refresh and update its status separately; do not resend the reply.');
 
       if (parsed.data.learnFromReply) {
         try {
@@ -256,6 +302,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
               question: normalized.question,
               answer: normalized.answer,
               category: normalized.category,
+              section: normalized.section,
               rationale: normalized.rationale,
               sourceMessageIds: (threadRows ?? []).map((row: any) => row.id),
               model: normalized.model,
@@ -266,8 +313,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           });
           if (proposalError) throw proposalError;
           learningQueued = true;
-        } catch (learningFailure) {
-          learningError = learningFailure instanceof Error ? learningFailure.message : 'Could not queue the Brain update.';
+        } catch {
+          learningError = 'Could not queue the Brain update.';
         }
       }
     }
@@ -277,22 +324,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // same motion, mirroring the escalation outcome dropdown. The existing
   // status endpoint remains the granular path; this handles the common reply.
   if (parsed.data.extrasOrderId) {
-    const { data: order } = await db
-      .from('extras_orders')
-      .select('id, fulfillment_status, status, item_title')
-      .eq('id', parsed.data.extrasOrderId)
-      .eq('property_id', id)
-      .maybeSingle();
+    const order = extrasOrder;
     if (order) {
       const nextStatus = parsed.data.extrasOutcome;
       const legacy = nextStatus === 'fulfilled' ? 'fulfilled' : nextStatus === 'canceled' ? 'cancelled' : 'confirmed';
-      await db.from('extras_orders').update({
+      const extrasUpdated = await recordMessageWorkflow(db.from('extras_orders').update({
         fulfillment_status: nextStatus,
         status: legacy,
         host_note: parsed.data.message,
         updated_at: now,
-      }).eq('id', order.id);
-      await db.from('extras_order_events').insert({
+      }).eq('id', order.id).eq('property_id', id).eq('stay_id', conversation.stay_id).select('id').maybeSingle(),
+      workflowWarnings, 'Your reply was saved, but the extra request status could not be updated. Refresh and update it separately; do not resend the reply.');
+      if (extrasUpdated) await recordMessageWorkflow(db.from('extras_order_events').insert({
         order_id: order.id,
         property_id: id,
         from_status: order.fulfillment_status,
@@ -300,24 +343,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         actor_type: 'host',
         actor_id: user?.id ?? null,
         note: 'Updated while replying in Host Chat.',
-      });
+      }).select('id').maybeSingle(), workflowWarnings, 'The extra request was updated, but its activity entry could not be saved.');
     }
   }
 
-  if (conversation.guest_session_id) {
-    const { data: guestSession } = await db
-      .from('guest_access_sessions')
-      .select('guest_contact, notification_consent')
-      .eq('id', conversation.guest_session_id)
-      .maybeSingle();
-    if (guestSession?.notification_consent && guestSession.guest_contact) {
-      await notifyGuestReply({
-        contact: guestSession.guest_contact,
-        propertyName: (access.property as any).display_name,
-        portalUrl: `${publicEnv.appUrl}/g/${(access.property as any).slug}`,
-      }).catch(() => undefined);
-    }
-  }
+  const notification = await notifyGuestConversationReply(admin, {
+    propertyId: id, stayId: conversation.stay_id, conversationId,
+    messageId: inserted.id, slug: access.property.slug,
+  }).catch(() => ({ status: 'unknown' }));
 
-  return NextResponse.json({ ok: true, message: mapMessage(inserted), learningQueued, learningError });
+  return NextResponse.json({ ok: true, messageStored: true, notification, workflowWarnings, message: mapMessage(inserted), learningQueued, learningError });
 }

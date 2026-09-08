@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, ConciergeBell, Loader2, TriangleAlert } from 'lucide-react';
 import { linkify } from '@/lib/guest/linkify';
 import type { PortalT } from '@/lib/guest/portal-strings';
+import { GuestMessagingSetup } from './GuestMessagingSetup';
+import { messageNotificationNotice } from '@/lib/notifications/message-notice';
 
 type ThreadMsg = {
   id: string;
@@ -53,6 +55,8 @@ export function HostChatWorkflow(props: {
   propertyId?: string;
   hostPreview?: boolean;
   guestName: string | null;
+  initialConversationId?: string | null;
+  initialMessageId?: string | null;
   // The guest's portal language (Globe picker). Sent with each message so the
   // host receives an auto-translation alongside the original.
   language?: string | null;
@@ -69,6 +73,14 @@ export function HostChatWorkflow(props: {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(!hostPreview);
   const [error, setError] = useState<string | null>(null);
+  const [canSend, setCanSend] = useState(hostPreview);
+  const [conversationId, setConversationId] = useState(props.initialConversationId ?? null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [recoveryRequired, setRecoveryRequired] = useState(false);
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const focusedRef = useRef(false);
+  const lastMessageCountRef = useRef(0);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -78,16 +90,31 @@ export function HostChatWorkflow(props: {
       setLoading(false);
       return;
     }
-    const res = await fetch(`/api/guest/${props.slug}/host-chat`, { cache: 'no-store' });
+    try {
+    const query = new URLSearchParams();
+    if (props.initialConversationId) query.set('conversation', props.initialConversationId);
+    if (props.initialMessageId) query.set('message', props.initialMessageId);
+    const res = await fetch(`/api/guest/${props.slug}/host-chat?${query}`, { cache: 'no-store' });
     if (res.status === 401) {
       props.onSessionExpired();
       return;
     }
-    if (!res.ok) return;
     const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setCanSend(false);
+      setRecoveryRequired(json.code === 'RECOVERY_REQUIRED');
+      setRecoveryReady(json.recoveryReady === true);
+      setMessages([]);
+      setError(json.error || t('hostError')); setLoading(false); return;
+    }
+    setRecoveryRequired(false);
+    setError(null);
+    setCanSend(json.canSend === true);
+    setConversationId(json.conversationId ?? null);
     setMessages(Array.isArray(json.messages) ? json.messages : []);
     setLoading(false);
-  }, [hostPreview, props.slug, props.onSessionExpired]);
+    } catch { setError('Could not refresh messages.'); setCanSend(false); setLoading(false); }
+  }, [hostPreview, props.slug, props.initialConversationId, props.initialMessageId, props.onSessionExpired, t]);
 
   useEffect(() => {
     if (hostPreview) return;
@@ -97,8 +124,20 @@ export function HostChatWorkflow(props: {
   }, [load, hostPreview]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-  }, [messages.length]);
+    const hasNewMessages = lastMessageCountRef.current !== messages.length;
+    lastMessageCountRef.current = messages.length;
+    if (props.initialMessageId && !focusedRef.current) {
+      const target = messages.find((m) => m.id === props.initialMessageId);
+      if (target?.escalationId && !openCards[target.escalationId]) {
+        setOpenCards((cards) => ({ ...cards, [target.escalationId!]: true }));
+        return;
+      }
+      const el = document.getElementById(`message-${props.initialMessageId}`);
+      if (el) { el.scrollIntoView({ block: 'center' }); el.focus({ preventScroll: true }); focusedRef.current = true; }
+      return;
+    }
+    if (hasNewMessages) endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  }, [messages, openCards, props.initialMessageId]);
 
   // Host/system responses attach to their escalation via escalationId and render
   // inside the escalation's card, not as loose bubbles in the main stream.
@@ -121,9 +160,30 @@ export function HostChatWorkflow(props: {
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }
 
+  async function recoverConversation() {
+    if (recovering || !recoveryReady || !props.initialConversationId || !props.initialMessageId) return;
+    setRecovering(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/guest/${props.slug}/host-chat/recover`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ conversationId: props.initialConversationId, messageId: props.initialMessageId, confirm: true }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (json.code === 'PHONE_PROOF_REQUIRED') setRecoveryReady(false);
+        setError(json.error || 'Could not open this conversation.');
+        return;
+      }
+      focusedRef.current = false;
+      await load();
+    } catch { setError('Could not confirm recovery. Refresh before trying again.'); }
+    finally { setRecovering(false); }
+  }
+
   async function send() {
     const message = input.trim();
-    if (!message || busy) return;
+    if (!message || busy || !canSend) return;
     setBusy(true);
     setError(null);
     try {
@@ -137,6 +197,7 @@ export function HostChatWorkflow(props: {
             replyToMessageId: replyTo?.id,
             escalationId: replyTo?.escalationId ?? undefined,
             language: props.language ?? undefined,
+            conversationId: conversationId ?? undefined,
           }),
         },
       );
@@ -153,6 +214,7 @@ export function HostChatWorkflow(props: {
       setReplyTo(null);
       if (inputRef.current) inputRef.current.style.height = 'auto';
       if (json.message) setMessages((current) => [...current, json.message]);
+      if (!hostPreview) setNotice([messageNotificationNotice(json.notification?.sms), ...(Array.isArray(json.workflowWarnings) ? json.workflowWarnings : [])].join(' '));
       if (hostPreview) {
         // Show the host how a reply renders, clearly marked as simulated.
         window.setTimeout(() => {
@@ -170,6 +232,8 @@ export function HostChatWorkflow(props: {
           ]);
         }, 900);
       }
+    } catch {
+      setError('Could not confirm whether the message was saved. Refresh before resending.');
     } finally {
       setBusy(false);
     }
@@ -179,7 +243,7 @@ export function HostChatWorkflow(props: {
     const mine = message.role === 'guest';
     const escalation = message.messageKind === 'ai_escalation' || Boolean(message.escalationId);
     return (
-      <div className={`gp-msg-row ${mine ? 'gp-msg-row-user' : ''}`}>
+      <div id={`message-${message.id}`} tabIndex={-1} className={`gp-msg-row ${mine ? 'gp-msg-row-user' : ''}`}>
         <div className={`gp-msg ${mine ? 'gp-msg-user' : ''} ${escalation ? 'gp-msg-escalation' : ''} ${!mine && !escalation ? 'gp-msg-host' : ''}`}>
           {escalation && (
             <div className="gp-msg-tag">
@@ -213,6 +277,18 @@ export function HostChatWorkflow(props: {
         </p>
       </div>
 
+      {!loading && recoveryRequired && !hostPreview && (
+        <div className="gp-card" style={{ marginBottom: '1rem' }}>
+          <strong>Open a conversation from another browser</strong>
+          <p className="gp-muted">Verify the same phone you used for this conversation, using your own code in this browser. This does not give access to anyone else in your stay.</p>
+          {recoveryReady && props.initialMessageId && <button type="button" className="gp-btn gp-btn-primary" disabled={recovering} onClick={() => void recoverConversation()}>
+            {recovering ? 'Opening…' : 'Open this conversation here'}
+          </button>}
+          {recoveryReady && !props.initialMessageId && <p className="gp-muted">Open the original message link from your SMS to continue.</p>}
+        </div>
+      )}
+      {!loading && !canSend && !hostPreview && (!recoveryRequired || !recoveryReady) && <GuestMessagingSetup slug={props.slug} onReady={() => void load()} />}
+      {notice && <p role="status" className="gp-muted">{notice}</p>}
       <div aria-live="polite" className="gp-chat-panel" style={{ minHeight: 320, maxHeight: '52vh' }}>
         {loading ? (
           <p className="gp-muted"><Loader2 size={16} className="gp-spin" aria-hidden /> {t('hostLoading')}</p>
@@ -221,7 +297,7 @@ export function HostChatWorkflow(props: {
         ) : (
           messages.map((message) => {
             // Escalation responses render inside the card under their anchor.
-            if (message.escalationId && message.role !== 'guest') return null;
+            if (message.escalationId && message.role !== 'guest' && messages.some((m) => m.messageKind === 'ai_escalation' && m.escalationId === message.escalationId && m.role === 'guest')) return null;
             const isAnchor = message.messageKind === 'ai_escalation' && Boolean(message.escalationId);
             const replies = isAnchor ? escalationReplies.get(message.escalationId!) ?? [] : [];
             return (
@@ -274,6 +350,7 @@ export function HostChatWorkflow(props: {
           ref={inputRef}
           value={input}
           rows={1}
+          disabled={!canSend}
           onChange={(event) => {
             setInput(event.target.value);
             growComposer();
@@ -286,7 +363,7 @@ export function HostChatWorkflow(props: {
             }
           }}
         />
-        <button type="submit" className="gp-send" disabled={busy || !input.trim()} aria-label={t('sendMessage')} title={t('sendMessage')}>
+        <button type="submit" className="gp-send" disabled={busy || !input.trim() || !canSend} aria-label={t('sendMessage')} title={t('sendMessage')}>
           {busy ? <Loader2 size={18} className="gp-spin" aria-hidden /> : <ConciergeBell size={18} aria-hidden />}
         </button>
       </form>
@@ -327,7 +404,7 @@ function EscalationResponses(props: { replies: ThreadMsg[]; open: boolean; onTog
       {props.open && (
         <div style={{ padding: '0 .75rem .65rem', display: 'grid', gap: '.5rem' }}>
           {props.replies.map((reply) => (
-            <div key={reply.id} style={{ background: 'var(--gp-ghost-bg)', borderRadius: 10, padding: '.55rem .65rem', fontSize: '.9rem', lineHeight: 1.45 }}>
+            <div key={reply.id} id={`message-${reply.id}`} tabIndex={-1} style={{ background: 'var(--gp-ghost-bg)', borderRadius: 10, padding: '.55rem .65rem', fontSize: '.9rem', lineHeight: 1.45 }}>
               <div style={{ whiteSpace: 'pre-wrap' }}><LinkedText text={reply.content} /></div>
               <div style={{ fontSize: '.7rem', color: 'var(--gp-faint)', marginTop: '.3rem' }}>{timeLabel(reply.createdAt)}</div>
             </div>

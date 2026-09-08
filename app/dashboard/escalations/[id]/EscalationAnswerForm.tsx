@@ -5,6 +5,7 @@ import { useFormState } from 'react-dom';
 import { BrainCircuit, MessageSquareReply, Sparkles } from 'lucide-react';
 import { answerEscalationAction, type EscalationActionState } from '../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
+import { messageNotificationNotice } from '@/lib/notifications/message-notice';
 
 // Human labels for the Brain category buckets. 'auto' is the default: the AI picks the
 // best category and a normalized, reusable title so the saved answer is routed correctly.
@@ -40,7 +41,9 @@ export function EscalationAnswerForm({
       <FormMessage error={state.error} />
       {state.ok && (
         <div className="alert alert-success" style={{ marginBottom: '.25rem' }}>
-          Reply sent to your guest.
+          {messageNotificationNotice(state.notification?.status)}
+          {state.learningQueued && ' A Brain proposal is waiting for approval.'}
+          {state.warning && ` ${state.warning}`}
         </div>
       )}
 
@@ -54,7 +57,7 @@ export function EscalationAnswerForm({
         required
         maxLength={4000}
         defaultValue={defaultValue ?? ''}
-        placeholder="Type the answer you'd give this guest. It's delivered straight to their concierge chat."
+        placeholder="Write your reply. It will be saved in this guest's Host Chat."
         className="input"
         style={{ resize: 'vertical' }}
       />
@@ -81,11 +84,10 @@ export function EscalationAnswerForm({
           />
           <span style={{ display: 'flex', flexDirection: 'column', gap: '.15rem' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontWeight: 500, fontSize: '.9rem' }}>
-              <BrainCircuit size={16} aria-hidden style={{ color: '#c9a24b' }} /> Save to your Property Brain
+              <BrainCircuit size={16} aria-hidden style={{ color: '#c9a24b' }} /> Propose a Property Brain update
             </span>
             <span className="faint" style={{ fontSize: '.78rem', lineHeight: 1.4 }}>
-              Teach the Brain so future guests get this answer instantly. Leave unchecked for a
-              one-off reply that isn&rsquo;t worth saving.
+              Create reusable guidance for review. Nothing changes for future guests until a host approves the proposal.
             </span>
           </span>
         </label>
@@ -124,7 +126,7 @@ export function EscalationAnswerForm({
         <SubmitButton className="btn btn-primary">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}>
             <MessageSquareReply size={16} aria-hidden />
-            {canTeachBrain && saveToBrain ? 'Send reply & teach the Brain' : 'Send reply'}
+            {canTeachBrain && saveToBrain ? 'Save reply & propose Brain update' : 'Save reply'}
           </span>
         </SubmitButton>
       </div>

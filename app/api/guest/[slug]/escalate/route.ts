@@ -3,8 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { guestEscalateSchema } from '@/lib/validation';
 import { notify } from '@/lib/notify';
-import { signEscalationLinkToken } from '@/lib/crypto';
-import { publicEnv } from '@/lib/env';
+import { getGuestMessagingReadiness } from '@/lib/guest/messaging-readiness';
+import { hostConversationLink } from '@/lib/notifications/links';
 import { capture } from '@/lib/posthog-server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/log';
@@ -47,17 +47,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
+  const readiness = await getGuestMessagingReadiness(admin, session);
+  if (!readiness.ready) return NextResponse.json({ error: 'Connect your own verified phone and enable SMS in Host Chat first. The AI concierge remains available.', code: 'MESSAGING_NOT_READY' }, { status: 403 });
 
   // Rate-limit manual escalations per stay to prevent host-notification spam.
   const rl = await checkRateLimit(admin, {
-    key: `guest_escalate:${session.stayId}`,
+    key: `guest_escalate:${session.sessionId}`,
     action: 'guest.escalate',
     limit: 8,
     windowSeconds: 60 * 60,
   });
   if (!rl.allowed) {
     return NextResponse.json(
-      { error: 'You&rsquo;ve reached the message limit for now. Your host has already been notified.' },
+      { error: 'You have reached the request limit. Please wait before sending another.' },
       { status: 429 },
     );
   }
@@ -69,13 +71,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .select('id')
     .eq('stay_id', session.stayId)
     .eq('property_id', session.propertyId)
+    .eq('guest_session_id', session.sessionId)
+    .eq('channel', 'host_chat')
     .maybeSingle();
   if (existing) {
     conversationId = (existing as { id: string }).id;
   } else {
     const { data: conv, error } = await admin
       .from('conversations')
-      .insert({ property_id: session.propertyId, stay_id: session.stayId } as never)
+      .insert({ property_id: session.propertyId, stay_id: session.stayId, guest_session_id: session.sessionId, channel: 'host_chat', title: 'Host Chat' } as never)
       .select('id')
       .single();
     if (error || !conv) return NextResponse.json({ error: 'Could not start the conversation.' }, { status: 500 });
@@ -100,12 +104,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   // Record the guest's message so it shows in the thread (guest + host views).
   // Stored verbatim: the thread is what the GUEST sees, so it stays in their words.
-  await admin.from('messages').insert({
+  const { data: savedMessage, error: saveError } = await admin.from('messages').insert({
     conversation_id: conversationId,
     property_id: session.propertyId,
     role: 'guest',
     content: message,
-  } as never);
+  } as never).select('id').single();
+  if (saveError || !savedMessage) return NextResponse.json({ error: 'Could not save the request.' }, { status: 500 });
 
   // Reuse an existing OPEN escalation for this conversation if one is already pending
   // (avoids duplicate host pings when a guest sends several lines in quick succession).
@@ -115,6 +120,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .select('id, question, updated_at')
     .eq('conversation_id', conversationId)
     .eq('property_id', session.propertyId)
+    .eq('stay_id', session.stayId)
+    .eq('guest_session_id', session.sessionId)
     .eq('status', 'open')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -123,11 +130,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const openRow = openEsc as { id: string; question: string; updated_at: string } | null;
   let escId = openRow?.id ?? null;
   let created = false;
-  // Re-ping the host if the reused escalation hasn't been touched in a while, so a
-  // genuinely new issue (not just a rapid follow-up line) doesn't get silently swallowed
-  // into a stale open thread. Rapid multi-line sends still coalesce into one ping.
-  const REPING_AFTER_MS = 10 * 60 * 1000;
-  let shouldNotify = false;
 
   if (!escId) {
     const { data: esc } = await admin
@@ -136,6 +138,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         property_id: session.propertyId,
         stay_id: session.stayId,
         conversation_id: conversationId,
+        host_conversation_id: conversationId,
+        guest_session_id: session.sessionId,
         question: translated.text,
         status: 'open',
       } as never)
@@ -143,34 +147,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       .single();
     escId = (esc as { id: string } | null)?.id ?? null;
     created = true;
-    shouldNotify = true;
   } else {
     // Reuse: refresh the escalation so the host sees the LATEST question and an updated
     // timestamp. This fixes host views showing a stale earlier question.
-    const staleMs = openRow ? Date.now() - new Date(openRow.updated_at).getTime() : Infinity;
-    shouldNotify = staleMs >= REPING_AFTER_MS;
     await admin
       .from('escalations')
       .update({ question: translated.text, updated_at: new Date().toISOString() } as never)
       .eq('id', escId);
   }
 
-  // Notify the host on a new escalation, or when a reused one had gone quiet long enough
-  // that this counts as a fresh ask. Rapid follow-up lines within the window stay silent.
-  if (shouldNotify && escId) {
-    const answerUrl = `${publicEnv.appUrl}/answer/${signEscalationLinkToken(escId)}`;
-    await notify(admin, {
+  // Every authorized stored direct message gets its own exact-message ping.
+  let notification: unknown = { inApp: 'not_attempted', sms: 'not_attempted' };
+  if (escId) {
+    await (admin as any).from('messages').update({ escalation_id: escId, message_kind: 'ai_escalation' }).eq('id', savedMessage.id).eq('conversation_id', conversationId);
+    notification = await notify(admin, {
       hostAccountId: property.host_account_id,
-      kind: 'escalation',
+      kind: 'host_message',
       title: 'A guest is asking for you',
       body: notificationBody(translated, message),
       propertyId: session.propertyId,
-      link: `/dashboard/escalations/${escId}`,
-      actionUrl: answerUrl,
-    });
+      link: hostConversationLink(session.propertyId, session.stayId, conversationId, savedMessage.id),
+    }).catch(() => ({ inApp: 'failed', sms: 'unknown' }));
     await capture('escalation_created', session.propertyId, { property_id: session.propertyId, source: 'manual' });
     log.info('guest_manual_escalation_created', { escalationId: escId });
   }
 
-  return NextResponse.json({ ok: true, escalationId: escId, alreadyOpen: !created });
+  return NextResponse.json({ ok: true, messageStored: true, notification, escalationId: escId, alreadyOpen: !created });
 }

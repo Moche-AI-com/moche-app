@@ -61,10 +61,12 @@ export function GuestPortal(props: {
   extrasOffers: GuestExtraOffer[];
   accessToken: string | null;
   initialLanguage: string | null;
+  initialConversationId?: string | null;
+  initialMessageId?: string | null;
 }) {
   const [step, setStep] = useState<PortalStep>(() => {
     if (!props.initialVerified) return 'code';
-    if (props.hostPreview || props.initialRegistered) return 'menu';
+    if (props.hostPreview || props.initialRegistered) return props.initialConversationId ? 'host' : 'menu';
     return 'register';
   });
   const [guestName, setGuestName] = useState<string | null>(props.guestName);
@@ -170,7 +172,7 @@ export function GuestPortal(props: {
                 demo={demoSignIn}
                 onVerified={(registered, name) => {
                   if (name) setGuestName(name);
-                  setStep(registered ? 'menu' : 'register');
+                  setStep(registered ? props.initialConversationId ? 'host' : 'menu' : 'register');
                 }}
               />
             )}
@@ -184,7 +186,7 @@ export function GuestPortal(props: {
                 onRegistered={(name) => {
                   setGuestName(name);
                   setDemoSignIn(false);
-                  setStep('menu');
+                  setStep(props.initialConversationId ? 'host' : 'menu');
                 }}
                 onSessionExpired={goCode}
               />
@@ -224,6 +226,8 @@ export function GuestPortal(props: {
 
             {step === 'host' && (
               <HostChatWorkflow
+                initialConversationId={props.initialConversationId}
+                initialMessageId={props.initialMessageId}
                 slug={props.slug}
                 propertyId={props.propertyId}
                 hostPreview={props.hostPreview}

@@ -1,20 +1,19 @@
 import { MapPin, Star } from 'lucide-react';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { LocalPlaceManager } from './LocalPlaceManager';
-import { LocalSearch } from './LocalSearch';
-import { LocalMap } from './LocalMap';
+import { LocalWorkspace } from './LocalWorkspace';
 import { loadCanonicalPlaces } from '@/lib/local/canonical';
 import { localCategoryLabel } from '@/lib/local/merge';
+import { validCoordinates } from '@/lib/local/validation';
 
 export const dynamic = 'force-dynamic';
 
 export default async function LocalOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const access = await requirePropertyAccess((await params).id);
   const supabase = createClient();
-  const places = await loadCanonicalPlaces(supabase, (await params).id);
+  const places = await loadCanonicalPlaces(supabase, (await params).id, [], { includeHidden: true });
 
-  const guestVisible = places.filter((place) => place.status !== 'hidden');
+  const guestVisible = places.filter((place) => place.status === 'approved');
   const favorites = guestVisible.filter((place) => place.isFavorite);
   const pendingApproval = places.filter((place) => place.status === 'suggested').length;
   const hiddenCount = places.filter((place) => place.status === 'hidden').length;
@@ -31,7 +30,7 @@ export default async function LocalOverviewPage({ params }: { params: Promise<{ 
 
   // Property coordinates for the interactive map (2026-08-28).
   const coords = access.property as { lat?: number | null; lng?: number | null };
-  const hasCoords = typeof coords.lat === 'number' && typeof coords.lng === 'number';
+  const hasCoords = validCoordinates(coords.lat, coords.lng);
 
   const row = (place: (typeof guestVisible)[number]) => (
     <li key={place.recommendationId} className="report-list-row">
@@ -64,11 +63,9 @@ export default async function LocalOverviewPage({ params }: { params: Promise<{ 
     <div>
       <h1 style={{ marginTop: '.5rem' }}>Local</h1>
       <p className="muted" style={{ maxWidth: 640 }}>
-        Everything your concierge can recommend, exactly as it ranks it. Manage your local knowledge,
+        Curate the places your guests can discover. Manage your local knowledge,
         host notes, tags, favorites, and guest visibility in one place.
       </p>
-
-      {(access.isOwner || access.can.editBrain) && <LocalSearch propertyId={(await params).id} />}
 
       <div className="card" style={{ margin: '1.25rem 0' }}>
         <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
@@ -91,20 +88,14 @@ export default async function LocalOverviewPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {/* Interactive map between the stats and the lists (2026-08-28). Degrades to the
-          static preview when the public Mapbox token or the CDN script is unavailable. */}
-      {hasCoords && (
-        <div style={{ marginBottom: '1.25rem' }}>
-          <LocalMap center={{ lat: coords.lat as number, lng: coords.lng as number }} places={places} />
-        </div>
-      )}
+      <LocalWorkspace propertyId={(await params).id} places={places} canEdit={access.can.editBrain} center={hasCoords ? { lat: coords.lat as number, lng: coords.lng as number } : null} />
 
       {guestVisible.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
           <MapPin size={24} aria-hidden style={{ opacity: 0.5 }} />
           <h2 style={{ fontSize: '1rem', margin: '.75rem 0 .25rem' }}>Nothing local yet</h2>
           <p className="muted" style={{ fontSize: '.9rem', maxWidth: 420, margin: '0 auto' }}>
-            Add the spots you send every guest to with the manager below.
+            Add or approve the spots you send every guest to with the manager above.
           </p>
         </div>
       ) : (
@@ -126,9 +117,6 @@ export default async function LocalOverviewPage({ params }: { params: Promise<{ 
         </>
       )}
 
-      {access.can.editBrain && (
-        <LocalPlaceManager propertyId={(await params).id} places={places} canEdit={access.can.editBrain} />
-      )}
     </div>
   );
 }

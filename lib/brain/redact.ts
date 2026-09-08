@@ -35,7 +35,7 @@ export const REDACTION_PLACEHOLDER = '[stored securely - not available here]';
  * this, a model that sees a redaction marker will cheerfully invent "1234".
  */
 export const REDACTION_INSTRUCTION = `
-SECURITY: Some stored values were withheld from the context above and appear as "${REDACTION_PLACEHOLDER}". These are access credentials (Wi-Fi passwords, door codes, lock combinations, alarm codes). You do not have them and must never guess, reconstruct, or infer one. If the guest asks for a withheld credential, say it is released through their secure arrival details once their stay is verified, and offer to pass the request to the host. Answer any non-credential part of the question normally.`;
+SECURITY: Some stored values were withheld from the context above and appear as "${REDACTION_PLACEHOLDER}". These are access credentials (Wi-Fi passwords, door codes, lock combinations, alarm codes). You do not have them and must never guess, reconstruct, or infer one. Use only an explicitly approved password location or connection instruction; if none is supplied, ask the host. Do not invent an arrival card, release channel, or typical location. Answer any non-credential part of the question normally.`;
 
 /** Nouns that mark the following token as a credential rather than prose. */
 const SECRET_NOUN = String.raw`(?:pass\s?word|pass\s?phrase|passcode|pass|pin|code|combination|combo|key\s?code|keycode|key\s?pad|lock\s?box|lockbox)`;
@@ -78,7 +78,7 @@ const BARE_VALUE = String.raw`(?:"[^"\n]{3,64}"|'[^'\n]{3,64}'|\`[^\`\n]{3,64}\`
  * cannot fix this after the fact, because returning the match unchanged does
  * not make the engine backtrack into a longer filler.
  */
-const NOT_A_VALUE = String.raw`(?!${SECRET_NOUN}\b)`;
+const NOT_A_VALUE = String.raw`(?!(?:${SECRET_NOUN}|location|instructions)\b)`;
 
 interface Rule {
   label: string;

@@ -3,6 +3,7 @@
 import { useFormState } from 'react-dom';
 import { answerViaLinkAction, type AnswerLinkState } from '../actions';
 import { SubmitButton, FormMessage } from '@/components/FormFeedback';
+import { messageNotificationNotice } from '@/lib/notifications/message-notice';
 
 export function AnswerLinkForm({ token, question }: { token: string; question: string }) {
   const [state, action] = useFormState<AnswerLinkState, FormData>(answerViaLinkAction, {});
@@ -10,7 +11,7 @@ export function AnswerLinkForm({ token, question }: { token: string; question: s
   if (state.ok) {
     return (
       <div className="alert alert-success" data-testid="answer-link-success">
-        Answer sent to your guest and saved to your Property Brain. You can close this page.
+        {messageNotificationNotice(state.notification?.status)}
       </div>
     );
   }
@@ -32,14 +33,13 @@ export function AnswerLinkForm({ token, question }: { token: string; question: s
         rows={5}
         required
         maxLength={4000}
-        placeholder="Type the answer you'd give this guest. It's saved to your Brain and sent to them automatically."
+        placeholder="Write your reply to this guest."
         className="input"
         style={{ resize: 'vertical' }}
         data-testid="answer-link-textarea"
       />
       <p className="faint" style={{ fontSize: '.78rem', margin: 0 }}>
-        This secure link expires 15 minutes after the question was raised. Answering teaches your
-        Property Brain and delivers the reply to the guest automatically.
+        Your reply is saved in this guest&rsquo;s conversation. SMS alerts require their verified phone and consent; provider acceptance does not confirm delivery.
       </p>
       <div>
         <SubmitButton className="btn btn-primary">Send answer</SubmitButton>

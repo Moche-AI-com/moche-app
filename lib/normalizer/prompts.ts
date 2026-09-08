@@ -12,12 +12,13 @@ Rules:
 - Copy values verbatim where possible; do not paraphrase access codes, passwords, or times.`;
 
 const SPECS: Record<NodeType, string> = {
-  wifi: `Extract WiFi access details.
+  wifi: `Extract WiFi connection guidance, NEVER the credential itself.
+Never infer a location from a password or a typical home. If the host did not supply a location, use null.
 Keys:
   "network_name": string | null   // the SSID / network name
-  "password": string | null       // the WiFi password, verbatim
-  "instructions": string | null   // any extra steps to connect
-  "notes": string | null          // caveats (e.g. guest network, speed limits)`,
+  "password_location": string | null // where the host says guests can find the password, verbatim
+  "instructions": string | null   // host-supplied steps to connect, without any credential value
+  "notes": string | null          // caveats (e.g. guest network, speed limits), without credentials`,
   checkin: `Extract check-in details.
 Keys:
   "time": string | null           // check-in time, e.g. "3:00 PM"

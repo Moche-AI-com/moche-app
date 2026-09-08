@@ -2,7 +2,8 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
-import { rankPlacesForGuest, type RankedPlace } from './ranking';
+import { comparePlacesForGuest, rankPlacesForGuest, type RankedPlace } from './ranking';
+import { safeWebsite, safePhone, validCoordinates } from './validation';
 import {
   mergeLocalPlaces,
   type CuratedRecInput,
@@ -74,11 +75,14 @@ export function mapCanonicalPlaceRow(row: CanonicalPlaceRow): LocalPlaceRow | nu
 export function mapAndRankCanonicalPlaces(
   rows: CanonicalPlaceRow[],
   guestIntentTags: readonly string[] = [],
+  options: { includeHidden?: boolean } = {},
 ): LocalPlaceRow[] {
   const mapped = rows
     .map(mapCanonicalPlaceRow)
     .filter((row): row is LocalPlaceRow => row !== null);
-  return rankPlacesForGuest(mapped, guestIntentTags) as LocalPlaceRow[];
+  return options.includeHidden
+    ? mapped.sort((a, b) => comparePlacesForGuest(a, b, guestIntentTags))
+    : rankPlacesForGuest(mapped, guestIntentTags) as LocalPlaceRow[];
 }
 
 /** Fetch the canonical local set, ordered exactly as guest recommendations are. */
@@ -86,6 +90,7 @@ export async function loadCanonicalPlaces(
   admin: SupabaseClient<Database>,
   propertyId: string,
   guestIntentTags: readonly string[] = [],
+  options: { includeHidden?: boolean } = {},
 ): Promise<LocalPlaceRow[]> {
   const { data, error } = await admin
     .from('property_place_recommendations')
@@ -100,10 +105,12 @@ export async function loadCanonicalPlaces(
       places!inner(name, category, address, provider, last_refreshed_at, website, phone, lat, lon)
     `)
     .eq('property_id', propertyId)
-    .limit(100);
+    .order('status', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(1000);
 
   if (error) throw error;
-  return mapAndRankCanonicalPlaces((data ?? []) as unknown as CanonicalPlaceRow[], guestIntentTags);
+  return mapAndRankCanonicalPlaces((data ?? []) as unknown as CanonicalPlaceRow[], guestIntentTags, options);
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +148,12 @@ type NearbyContactRow = DiscoveredPlaceInput & {
   lat: number | null;
   lng: number | null;
 };
+type CuratedContactRow = CuratedRecInput & {
+  address: string | null;
+  url: string | null;
+  lat: number | null;
+  lng: number | null;
+};
 
 /**
  * Load the guest-visible local set for the portal's Local Guide page.
@@ -157,18 +170,18 @@ export async function loadGuestLocalPlaces(
   propertyId: string,
 ): Promise<GuestLocalPlace[]> {
   try {
-    const canonical = await loadCanonicalPlaces(admin, propertyId);
+    const canonical = await loadCanonicalPlaces(admin, propertyId, [], { includeHidden: true });
     const visible = canonical.filter((p) => p.status === 'approved');
-    if (visible.length > 0) {
+    if (canonical.length > 0) {
       return visible.map((p) => ({
         id: p.recommendationId,
         name: p.name,
         category: p.category,
         address: p.address,
-        website: p.website ?? null,
-        phone: p.phone ?? null,
-        lat: p.lat ?? null,
-        lng: p.lng ?? null,
+        website: safeWebsite(p.website),
+        phone: safePhone(p.phone)?.slice(4) ?? null,
+        lat: validCoordinates(p.lat, p.lng) ? p.lat! : null,
+        lng: validCoordinates(p.lat, p.lng) ? p.lng! : null,
         distanceMiles: p.distanceMiles,
         distanceNote: null,
         hostNote: p.hostNote,
@@ -178,10 +191,10 @@ export async function loadGuestLocalPlaces(
       }));
     }
   } catch (error) {
-    log.warn('guest_local.canonical_failed', {
-      propertyId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    // A missing canonical table is the only valid legacy compatibility case.
+    // An outage must never resurrect a host-hidden legacy recommendation.
+    if (!['42P01', 'PGRST205'].includes((error as { code?: string })?.code ?? '')) throw error;
+    log.warn('guest_local.canonical_unavailable', { propertyId });
   }
 
   const [discoveredRes, curatedRes] = await Promise.all([
@@ -196,8 +209,9 @@ export async function loadGuestLocalPlaces(
       .limit(60),
     admin
       .from('recommendations')
-      .select('id, name, category, host_preference, approved, hidden, host_note, description, distance_note, priority_weight')
+      .select('id, name, category, host_preference, approved, hidden, host_note, description, distance_note, priority_weight, address, url, lat, lng')
       .eq('property_id', propertyId)
+      .eq('visibility', 'guest')
       .eq('approved', true)
       .eq('hidden', false)
       .is('deleted_at', null)
@@ -206,27 +220,29 @@ export async function loadGuestLocalPlaces(
       .limit(60),
   ]);
 
-  if (discoveredRes.error) log.warn('guest_local.discovered_failed', { propertyId, error: discoveredRes.error.message });
-  if (curatedRes.error) log.warn('guest_local.curated_failed', { propertyId, error: curatedRes.error.message });
+  if (discoveredRes.error) throw discoveredRes.error;
+  if (curatedRes.error) throw curatedRes.error;
 
   const discovered = (discoveredRes.data ?? []) as NearbyContactRow[];
-  const curated = (curatedRes.data ?? []) as CuratedRecInput[];
+  const curated = (curatedRes.data ?? []) as CuratedContactRow[];
   if (discovered.length === 0 && curated.length === 0) return [];
 
   const merged = mergeLocalPlaces(curated, discovered);
   const discoveredById = new Map(discovered.map((row) => [row.id, row]));
+  const curatedById = new Map(curated.map((row) => [row.id, row]));
 
   return merged.map((m) => {
     const source = discoveredById.get(m.id);
+    const contact = curatedById.get(m.id) ?? source;
     return {
       id: m.id,
       name: m.name ?? 'Unnamed',
       category: m.category,
-      address: source?.address ?? null,
-      website: source?.url ?? null,
-      phone: source?.phone ?? null,
-      lat: source?.lat ?? null,
-      lng: source?.lng ?? null,
+      address: contact?.address ?? null,
+      website: safeWebsite(contact?.url),
+      phone: safePhone(source?.phone)?.slice(4) ?? null,
+      lat: validCoordinates(contact?.lat, contact?.lng) ? contact!.lat : null,
+      lng: validCoordinates(contact?.lat, contact?.lng) ? contact!.lng : null,
       distanceMiles: m.distance_m != null ? m.distance_m / 1609.344 : null,
       distanceNote: m.distanceNote,
       hostNote: m.host_notes,

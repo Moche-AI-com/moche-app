@@ -23,9 +23,8 @@ export async function runPing(payload: PingPayload, { ctx }: { ctx: { attempt: {
     throw new Error(`Intentional test failure on attempt ${ctx.attempt.number}`);
   }
 
-  logger.info(`ping: succeeded on attempt ${ctx.attempt.number}`, {
-    message: payload.message ?? null,
-  });
+  // Freeform payloads must never enter provider logs.
+  logger.info(`ping: succeeded on attempt ${ctx.attempt.number}`);
 
   return {
     ok: true as const,
