@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { redactCredentials } from '@/lib/brain/redact';
+import { safeWifiInstructions, safeWifiLocation } from '@/lib/guest/wifi-instructions';
 
 // POC scope: exactly three node types. `wifi` is filed under the `core` brain
 // category; `checkin` / `checkout` under `checkin_checkout`.
@@ -13,13 +15,16 @@ const nz = () => z.string().trim().min(1).nullable().optional();
 export const wifiSchema = z
   .object({
     network_name: nz(),
-    password: nz(),
-    instructions: nz(),
+    password_location: nz().refine((v) => !v || !!safeWifiLocation(v), 'Use a password location, not a credential'),
+    instructions: nz().refine((v) => !v || !!safeWifiInstructions(v), 'Use connection instructions, not a credential'),
     notes: nz(),
   })
   .strip()
-  .refine((d) => Boolean(d.network_name || d.password || d.instructions), {
-    message: 'wifi node requires at least a network name, password, or instructions',
+  .refine((d) => Boolean(d.network_name || d.password_location || d.instructions), {
+    message: 'wifi node requires at least a network name, password location, or instructions',
+  })
+  .refine((d) => !Object.values(d).some((v) => typeof v === 'string' && redactCredentials(v).redactions.length), {
+    message: 'wifi node cannot contain credentials',
   });
 
 export const checkinSchema = z
@@ -68,8 +73,8 @@ export function renderContent(nodeType: NodeType, data: Record<string, unknown>)
   };
   if (nodeType === 'wifi') {
     add('WiFi network', data.network_name);
-    add('WiFi password', data.password);
-    add('Connection instructions', data.instructions);
+    add('Wi-Fi password location', safeWifiLocation(data.password_location));
+    add('Connection instructions', safeWifiInstructions(data.instructions));
     add('Notes', data.notes);
   } else if (nodeType === 'checkin') {
     add('Check-in time', data.time);
@@ -87,5 +92,5 @@ export function renderContent(nodeType: NodeType, data: Record<string, unknown>)
     add('Key return', data.key_return);
     add('Notes', data.notes);
   }
-  return lines.join('\n');
+  return nodeType === 'wifi' ? redactCredentials(lines.join('\n')).text : lines.join('\n');
 }

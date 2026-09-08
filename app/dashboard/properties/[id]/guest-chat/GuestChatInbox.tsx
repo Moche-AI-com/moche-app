@@ -95,14 +95,17 @@ export function GuestChatInbox({
   );
 
   const loadThreads = useCallback(async () => {
+    try {
     const res = await fetch(`/api/host/properties/${propertyId}/guest-chats${query}`, { cache: 'no-store' });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(json.error || 'Could not load guest chats.');
+      setLoadingThreads(false);
       return;
     }
     setThreads(Array.isArray(json.threads) ? json.threads : []);
     setLoadingThreads(false);
+    } catch { setError('Could not refresh guest chats.'); setLoadingThreads(false); }
   }, [propertyId, query]);
 
   useEffect(() => {

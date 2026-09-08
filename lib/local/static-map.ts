@@ -23,7 +23,7 @@ export interface MapMarker {
 
 export function mapboxPublicToken(): string | null {
   const t = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
-  return t ? t : null;
+  return t?.startsWith('pk.') ? t : null;
 }
 
 export function hasStaticMaps(): boolean {

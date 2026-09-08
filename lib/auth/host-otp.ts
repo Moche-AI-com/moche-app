@@ -1,7 +1,8 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
-import { generateOtp, hashOtp, verifyOtp } from '@/lib/crypto';
+import { generateOtp, hashContact, hashOtp, verifyOtp } from '@/lib/crypto';
+import { normalizeSmsPhone } from '@/lib/notifications/phone';
 import { sendHostOtp } from '@/lib/notify';
 import { HOST_OTP_TTL_MINUTES, HOST_OTP_MAX_ATTEMPTS, HOST_OTP_MAX_PER_HOUR } from '@/lib/constants';
 import { serverEnv } from '@/lib/env';
@@ -18,20 +19,23 @@ export async function createAndSendHostOtp(
   admin: Client,
   p: { userId: string; phone: string; purpose: HostOtpPurpose },
 ): Promise<{ ok: boolean; rateLimited?: boolean }> {
+  const phone = normalizeSmsPhone(p.phone);
+  if (!phone || serverEnv.guestVerifyDevFallback) return { ok: false };
   const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count } = await admin
+  const { count, error: countError } = await admin
     .from('host_otp_challenges')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', p.userId)
     .eq('purpose', p.purpose)
     .gte('created_at', sinceIso);
-  if ((count ?? 0) >= HOST_OTP_MAX_PER_HOUR) {
+  if (countError || (count ?? 0) >= HOST_OTP_MAX_PER_HOUR) {
     log.warn('host_otp_rate_limited', { purpose: p.purpose });
     return { ok: false, rateLimited: true };
   }
 
   const code = generateOtp();
-  const codeHash = hashOtp(code, p.userId);
+  const binding = p.purpose === 'phone_verify' ? hashOtp(p.userId, hashContact(phone).contactHash) : p.userId;
+  const codeHash = hashOtp(code, binding);
   const expiresAt = new Date(Date.now() + HOST_OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
   // Invalidate any prior unconsumed challenge of the same purpose (single active code).
@@ -51,18 +55,11 @@ export async function createAndSendHostOtp(
     max_attempts: HOST_OTP_MAX_ATTEMPTS,
   } as never);
   if (error) {
-    log.warn('host_otp_insert_failed', { error: error.message });
+    log.warn('host_otp_insert_failed', {});
     return { ok: false };
   }
 
-  // Dev fallback mirrors notifyGuestOtp: log a masked hint to the SERVER only.
-  if (serverEnv.guestVerifyDevFallback) {
-    // eslint-disable-next-line no-console
-    console.info(`[dev-fallback] Host OTP (${p.purpose}) for user ${p.userId.slice(0, 8)}***: ${code}`);
-    return { ok: true };
-  }
-
-  const sent = await sendHostOtp(p.phone, code);
+  const sent = await sendHostOtp(phone, code);
   return { ok: sent };
 }
 
@@ -70,8 +67,11 @@ export async function createAndSendHostOtp(
 // user+purpose. Enforces max attempts and consumes the row on success. Never logs the code.
 export async function verifyHostOtp(
   admin: Client,
-  p: { userId: string; purpose: HostOtpPurpose; code: string },
+  p: { userId: string; purpose: HostOtpPurpose; code: string; phone?: string },
 ): Promise<boolean> {
+  const phone = normalizeSmsPhone(p.phone ?? '');
+  if (p.purpose === 'phone_verify' && !phone) return false;
+  const binding = p.purpose === 'phone_verify' ? hashOtp(p.userId, hashContact(phone!).contactHash) : p.userId;
   const { data: ch } = await admin
     .from('host_otp_challenges')
     .select('id, code_hash, expires_at, attempts, max_attempts')
@@ -86,12 +86,13 @@ export async function verifyHostOtp(
     await admin.from('host_otp_challenges').update({ consumed_at: new Date().toISOString() } as never).eq('id', ch.id);
     return false;
   }
-  if (!verifyOtp(p.code, p.userId, ch.code_hash)) {
+  if (!verifyOtp(p.code, binding, ch.code_hash)) {
     await admin.from('host_otp_challenges').update({ attempts: ch.attempts + 1 } as never).eq('id', ch.id);
     return false;
   }
-  await admin.from('host_otp_challenges').update({ consumed_at: new Date().toISOString() } as never).eq('id', ch.id);
-  return true;
+  const { data: claimed, error } = await admin.from('host_otp_challenges').update({ consumed_at: new Date().toISOString() } as never)
+    .eq('id', ch.id).is('consumed_at', null).eq('attempts', ch.attempts).select('id').maybeSingle();
+  return !error && !!claimed;
 }
 
 // True when the user has an active (unconsumed, unexpired) challenge of this purpose.

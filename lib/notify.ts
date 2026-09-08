@@ -2,7 +2,12 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import { log } from '@/lib/log';
-import { resolveTwilioAuth, serverEnv, publicEnv } from '@/lib/env';
+import { isProductionRuntime, resolveTwilioAuth, serverEnv, publicEnv } from '@/lib/env';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getGuestMessagingReadiness } from '@/lib/guest/messaging-readiness';
+import { normalizeSmsPhone } from '@/lib/notifications/phone';
+import { isSmsSuppressed } from '@/lib/notifications/sms-suppression';
+import { guestConversationLink, safeNotificationUrl } from '@/lib/notifications/links';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { TRANSACTIONAL_SENDER } from '@/lib/mail/senders';
 import {
@@ -23,9 +28,17 @@ interface NotifyParams {
   link?: string;
   propertyId?: string | null;
   recipientProfileId?: string | null;
-  // Optional absolute URL delivered in the email + SMS fan-out (e.g. an escalation
-  // answer magic link). Kept short for SMS. Never logged.
+  // Legacy compatibility only. Bearer answer URLs are no longer sent; use link.
   actionUrl?: string;
+}
+
+export type SmsStatus = 'accepted' | 'failed' | 'unknown' | 'disabled' | 'not_eligible' | 'not_attempted' | 'partial';
+export interface SmsResult { status: SmsStatus }
+export interface NotificationResult {
+  inApp: 'stored' | 'failed';
+  sms: SmsStatus;
+  smsAccepted: number;
+  emailAccepted: number;
 }
 
 // Which kinds may fan out to email / SMS at all lives in the category registry
@@ -44,14 +57,22 @@ const EMAIL_REPLY_TO = TRANSACTIONAL_SENDER.replyTo;
 // Auth is resolved by resolveTwilioAuth (API-Key first, Auth-Token fallback). The
 // Account SID sits in the URL path; credentials travel only in the Basic auth header
 // over TLS. Message bodies and phone numbers are NEVER logged.
-async function sendSms(to: string, message: string): Promise<boolean> {
+async function sendSms(to: string, message: string, client?: Client): Promise<SmsResult> {
+  // Next production builds also run for Vercel previews. BOTH runtime signals
+  // and the existing NOTIFY_SMS_ENABLED switch are required for every SMS path.
+  if (!isProductionRuntime() || !serverEnv.smsDeliveryEnabled) {
+    return { status: 'disabled' };
+  }
+  const phone = normalizeSmsPhone(to);
+  if (!phone) return { status: 'not_eligible' };
   const auth = resolveTwilioAuth();
   if (!auth) {
     log.warn('sms_disabled_no_twilio_config', {});
-    return false;
+    return { status: 'disabled' };
   }
-  const body = new URLSearchParams({ To: to, From: auth.fromNumber, Body: message });
+  const body = new URLSearchParams({ To: phone, From: auth.fromNumber, Body: message });
   try {
+    if (await isSmsSuppressed(client ?? createAdminClient(), phone)) return { status: 'not_eligible' };
     const res = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${auth.accountSid}/Messages.json`,
       {
@@ -61,17 +82,24 @@ async function sendSms(to: string, message: string): Promise<boolean> {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: body.toString(),
+        signal: AbortSignal.timeout(8000),
+        redirect: 'error',
       }
     );
     if (!res.ok) {
       // Status only — response body may contain PII / token hints.
       log.error('sms_send_failed', { status: res.status });
-      return false;
+      return { status: 'failed' };
     }
-    return true;
-  } catch (e) {
-    log.error('sms_send_error', { error: String(e) });
-    return false;
+    // HTTP acceptance is not delivery. A malformed success is ambiguous, never
+    // retried: the provider may already have enqueued the SMS.
+    const accepted = await res.json().catch(() => null);
+    if (!accepted?.sid) return { status: 'unknown' };
+    if (['failed', 'undelivered', 'canceled'].includes(accepted.status)) return { status: 'failed' };
+    return { status: 'accepted' };
+  } catch {
+    log.error('sms_send_outcome_unknown', {});
+    return { status: 'unknown' };
   }
 }
 
@@ -103,12 +131,12 @@ async function sendHostEmail(
       text,
     });
     if (error) {
-      log.error('host_email_failed', { error: error.message });
+      log.error('host_email_failed', {});
       return false;
     }
     return true;
-  } catch (e) {
-    log.error('host_email_error', { error: String(e) });
+  } catch {
+    log.error('host_email_error', {});
     return false;
   }
 }
@@ -146,23 +174,14 @@ function mapRecipient(row: ProfileRow): RecipientContact {
   };
 }
 
-// Resolves everyone a notification can reach: a targeted notification
-// (recipientProfileId) goes to that one member; an account-wide one goes to the
-// owner plus every org member. Runs under the service client from server
-// routes, so membership scoping comes from the callers, not RLS.
+// Resolve only the account owner and property-assigned recipients. Targeting
+// narrows that authorized set; a caller cannot name an unrelated profile.
 async function loadRecipientContacts(
   client: Client,
   hostAccountId: string,
   recipientProfileId: string | null,
+  propertyId: string | null,
 ): Promise<RecipientContact[]> {
-  if (recipientProfileId) {
-    const { data: profile } = await client
-      .from('profiles')
-      .select('id, email, phone, sms_opt_in, phone_verified_at')
-      .eq('id', recipientProfileId)
-      .maybeSingle();
-    return profile ? [mapRecipient(profile as unknown as ProfileRow)] : [];
-  }
   const { data: account } = await client
     .from('host_accounts')
     .select('owner_id')
@@ -170,11 +189,21 @@ async function loadRecipientContacts(
     .maybeSingle();
   if (!account) return [];
   const ownerId = (account as { owner_id: string }).owner_id;
-  const { data: members } = await client
-    .from('organization_members')
-    .select('profile_id')
-    .eq('host_account_id', hostAccountId);
-  const ids = Array.from(new Set([ownerId, ...((members ?? []) as Array<{ profile_id: string }>).map((m) => m.profile_id)]));
+  let memberIds: string[] = [];
+  if (propertyId) {
+    const { data: property } = await client.from('properties').select('host_account_id').eq('id', propertyId).maybeSingle();
+    if (property?.host_account_id !== hostAccountId) return [];
+    const { data: members, error } = await client.from('property_members').select('profile_id')
+      .eq('property_id', propertyId).eq('can_reply_guests', true);
+    if (error) return [];
+    memberIds = (members ?? []).map((m) => m.profile_id);
+  } else {
+    const { data: members, error } = await client.from('organization_members').select('profile_id').eq('host_account_id', hostAccountId);
+    if (error) return [];
+    memberIds = (members ?? []).map((m) => m.profile_id);
+  }
+  let ids = Array.from(new Set([ownerId, ...memberIds]));
+  if (recipientProfileId) ids = ids.filter((id) => id === recipientProfileId);
   if (ids.length === 0) return [];
   const { data: profiles } = await client
     .from('profiles')
@@ -189,9 +218,7 @@ interface CategoryPref {
   sms_enabled: boolean;
 }
 
-// Loads one member's preference row for one category. No row (or any read
-// failure) returns null = subscribed with default channels: a lookup problem
-// must never silently swallow a notification.
+// Absent row uses registry defaults; failed reads suppress external channels.
 async function loadCategoryPref(client: Client, profileId: string, categoryKey: string, kind: string): Promise<CategoryPref | null> {
   try {
     const { data, error } = await client
@@ -202,35 +229,26 @@ async function loadCategoryPref(client: Client, profileId: string, categoryKey: 
       .maybeSingle();
     if (error) {
       log.warn('notify_pref_read_failed', { kind });
-      return null;
+      return { enabled: false, email_enabled: false, sms_enabled: false };
     }
     return (data as CategoryPref | null) ?? null;
   } catch {
-    return null;
+    return { enabled: false, email_enabled: false, sms_enabled: false };
   }
 }
 
-// Creates the durable in-app notification row and fans out to email (now) and host SMS
-// (Pro+, behind a feature flag) on a best-effort basis. Fan-out failures NEVER throw —
-// the in-app row is the source of truth and the host dashboard always reflects it.
-//
-// Fan-out is PER MEMBER: a targeted notification (recipientProfileId) reaches only
-// that member; an account-wide one reaches the owner + every org member. Each
-// member's Profile → Notifications preferences gate their own email/text delivery.
-//
-// Host SMS gating requires ALL of:
-//   1. NOTIFY_SMS_ENABLED feature flag on, AND
-//   2. plan entitlement smsEscalation (Pro+), AND
-//   3. valid Twilio config present, AND
-//   4. the member has a VERIFIED phone (phone_verified_at) AND an active TCPA
-//      opt-in (sms_opt_in) — captured in dashboard/profile/security-actions.ts — AND
-//   5. the member's per-category text switch is on (sms_enabled, default off).
-export async function notify(client: Client, p: NotifyParams): Promise<void> {
+// Store the in-app row before external fan-out, returning both outcomes.
+// Each SMS requires production + configured transport + the recipient's own
+// verified phone, explicit opt-in and no STOP suppression. Direct host_message
+// notifications are not a paid escalation feature; other kinds retain plan and
+// per-category channel preferences.
+export async function notify(client: Client, p: NotifyParams): Promise<NotificationResult> {
+  const result: NotificationResult = { inApp: 'failed', sms: 'not_attempted', smsAccepted: 0, emailAccepted: 0 };
   // 1. Durable in-app row (source of truth). Always written, even for members
   //    who muted the category: the bell and history filter at READ time, so the
   //    account keeps a complete record and a muted member can still find it.
   try {
-    await client.from('notifications').insert({
+    const { error } = await client.from('notifications').insert({
       host_account_id: p.hostAccountId,
       kind: p.kind,
       title: p.title,
@@ -239,23 +257,33 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
       property_id: p.propertyId ?? null,
       recipient_profile_id: p.recipientProfileId ?? null,
     });
-  } catch (e) {
-    log.warn('notify_failed', { kind: p.kind, error: String(e) });
-    return; // if the durable row failed, skip fan-out
+    if (error) {
+      log.warn('notify_failed', { kind: p.kind });
+      return result;
+    }
+    result.inApp = 'stored';
+  } catch {
+    log.warn('notify_failed', { kind: p.kind });
+    return result;
   }
 
+  try {
   const wantsEmail = EMAIL_FANOUT_KINDS.has(p.kind);
   const wantsSmsKind = SMS_FANOUT_KINDS.has(p.kind);
-  if (!wantsEmail && !wantsSmsKind) return;
+  if (!wantsEmail && !wantsSmsKind) return result;
 
   const category = NOTIFICATION_CATEGORIES.find((c) => c.key === CATEGORY_FOR_KIND[p.kind]);
 
-  // 2. Resolve recipients (targeted member, or owner + all org members).
-  const recipients = await loadRecipientContacts(client, p.hostAccountId, p.recipientProfileId ?? null);
-  if (recipients.length === 0) return;
+  // 2. Resolve authorized recipients; do not fan out to unassigned org members.
+  const recipients = await loadRecipientContacts(client, p.hostAccountId, p.recipientProfileId ?? null, p.propertyId ?? null);
+  if (recipients.length === 0) return { ...result, sms: 'not_eligible' };
 
   // Entitlements are account-level; resolve once, and only when an SMS could fly.
-  const ent = wantsSmsKind && serverEnv.notifySmsEnabled ? await getEntitlements(client, p.hostAccountId) : null;
+  // The direct guest/host line is not an escalation plan feature. Other SMS
+  // categories retain their paid entitlement; all retain global consent gates.
+  const ent = wantsSmsKind && serverEnv.notifySmsEnabled && p.kind !== 'host_message' ? await getEntitlements(client, p.hostAccountId) : null;
+  const statuses: SmsStatus[] = [];
+  const url = safeNotificationUrl(publicEnv.appUrl, p.link);
 
   for (const recipient of recipients) {
     // 3. Preference gate. Always-on paths skip it entirely. A member whose
@@ -273,55 +301,77 @@ export async function notify(client: Client, p: NotifyParams): Promise<void> {
 
     // 4. Email to this member.
     if (wantsEmail && recipient.email && (category?.alwaysOn || !pref || pref.email_enabled)) {
-      const url = p.link ? `${publicEnv.appUrl}${p.link}` : '';
-      const action = p.actionUrl ? `\n\nAnswer now (link expires in 15 minutes): ${p.actionUrl}` : '';
-      const text = `${p.body ?? p.title}${action}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
-      await sendHostEmail(recipient.email, `Moche-AI: ${p.title}`, text);
+      const text = `${p.body ?? p.title}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
+      if (await sendHostEmail(recipient.email, `Moche-AI: ${p.title}`, text)) result.emailAccepted++;
     }
 
-    // 5. Text to this member (escalation + maintenance kinds only, every gate
-    //    above plus their own per-category text switch — TCPA double opt-in).
+    // 5. Text to this eligible member, never using another profile's consent.
     if (
       wantsSmsKind &&
-      ent?.smsEscalation &&
-      resolveTwilioAuth() &&
+      serverEnv.notifySmsEnabled &&
+      (p.kind === 'host_message' || ent?.smsEscalation) &&
       recipient.phone &&
       recipient.smsOptIn &&
       recipient.phoneVerifiedAt &&
-      (category?.alwaysOn || !pref || pref.sms_enabled)
+      (category?.alwaysOn || pref?.sms_enabled === true)
     ) {
-      // Keep it short; never include guest PII beyond the already-truncated title.
-      // Append the answer magic link when present so the host can reply from the SMS.
-      const msg = p.actionUrl ? `Moche-AI: ${p.title} Answer: ${p.actionUrl}` : `Moche-AI: ${p.title}`;
-      await sendSms(recipient.phone, msg);
+      // No guest names, message bodies, access codes or bearer answer links.
+      const msg = `Moche-AI: You have a new ${p.kind === 'host_message' ? 'guest message' : 'notification'}.${url ? ` Open: ${url}` : ''} Reply STOP to opt out.`;
+      const sent = await sendSms(recipient.phone, msg, client);
+      statuses.push(sent.status);
+      if (sent.status === 'accepted') result.smsAccepted++;
     }
+  }
+  result.sms = statuses.length === 0 ? 'not_eligible'
+    : statuses.every((s) => s === 'accepted') ? 'accepted'
+    : statuses.includes('accepted') ? 'partial'
+    : statuses.includes('unknown') ? 'unknown'
+    : statuses.includes('failed') ? 'failed'
+    : statuses[0];
+  return result;
+  } catch {
+    log.warn('notify_fanout_failed', { kind: p.kind });
+    return { ...result, sms: 'unknown' };
   }
 }
 
 // Sends a host phone-verification / login 2FA OTP over SMS, reusing the same Twilio
 // fetch path as every other SMS here (no second client). The full code is NEVER logged.
 export async function sendHostOtp(phone: string, code: string): Promise<boolean> {
-  return sendSms(phone, `Moche-AI verification code: ${code}\n\nExpires in 10 minutes. Never share this code. Reply STOP to opt out.`);
+  return (await sendSms(phone, `Moche-AI verification code: ${code}\n\nExpires in 10 minutes. Never share this code. Reply STOP to opt out.`)).status === 'accepted';
 }
 
-// Best-effort guest ping when a host answers an escalation. Only ever called after an
-// affirmative TCPA opt-in (notification_consent) recorded on the guest session. The
-// answer text is NOT included — the guest opens their concierge to read it. Failures
-// are swallowed; contact/body are never logged (status codes only, via the senders).
-export async function notifyGuestReply(p: { contact: string; propertyName: string; portalUrl: string }): Promise<void> {
+// Low-level transport; direct-message callers must use the scoped helper below.
+// Answer text is excluded. Failure/ambiguity is returned, never silently successful.
+export async function notifyGuestReply(p: { contact: string; propertyName: string; portalUrl: string }, client?: Client): Promise<SmsResult> {
+  const url = safeNotificationUrl(publicEnv.appUrl, p.portalUrl);
+  if (!url) return { status: 'not_eligible' };
+  return sendSms(p.contact, `Moche-AI: Your host replied. Open your conversation: ${url} Reply STOP to opt out.`, client);
+}
+
+/** Resolve the destination from the EXACT conversation participant, never from
+ * the most recently opted-in person on the stay. URLs carry no access tokens. */
+export async function notifyGuestConversationReply(client: Client, p: {
+  propertyId: string; stayId: string; conversationId: string; messageId: string; slug: string;
+}): Promise<SmsResult> {
   try {
-    if (p.contact.includes('@')) {
-      await sendHostEmail(
-        p.contact,
-        `Your host replied — ${p.propertyName}`,
-        `Good news — your host just replied to your question about ${p.propertyName}.\n\nOpen your concierge to read it: ${p.portalUrl}`,
-      );
-    } else {
-      await sendSms(p.contact, `Moche-AI: Your host replied to your question. Open your concierge: ${p.portalUrl} Reply STOP to opt out.`);
-    }
-  } catch {
-    /* best-effort — never block the answer flow */
-  }
+    const { data: conversation, error } = await client.from('conversations')
+      .select('guest_session_id, guest_identity_id').eq('id', p.conversationId)
+      .eq('property_id', p.propertyId).eq('stay_id', p.stayId).eq('channel', 'host_chat').maybeSingle();
+    if (error || !conversation?.guest_session_id) return { status: 'not_eligible' };
+    const { data: message, error: messageError } = await client.from('messages')
+      .select('id').eq('id', p.messageId).eq('conversation_id', p.conversationId)
+      .eq('property_id', p.propertyId).eq('role', 'host').maybeSingle();
+    if (messageError || !message) return { status: 'not_eligible' };
+    const readiness = await getGuestMessagingReadiness(client, {
+      propertyId: p.propertyId, stayId: p.stayId, sessionId: conversation.guest_session_id,
+    });
+    if (!readiness.ready) return { status: 'not_eligible' };
+    return notifyGuestReply({
+      contact: readiness.contact, propertyName: '',
+      portalUrl: guestConversationLink(p.slug, p.conversationId, p.messageId),
+    }, client);
+  } catch { return { status: 'unknown' }; }
 }
 
 // Host-initiated guest portal share (Stays tab → Share with guests). Moche-AI
@@ -350,10 +400,10 @@ export async function sendGuestPortalShare(p: {
       ].join('\n'),
     );
   }
-  return sendSms(
+  return (await sendSms(
     p.contact,
     `Moche-AI: Your host at ${p.propertyName} is sharing their AI concierge with you. Open ${p.portalUrl} and enter stay code ${p.code}. Reply STOP to opt out.`,
-  );
+  )).status === 'accepted';
 }
 
 // Host-initiated service report share (Service tab → Email/Text report, and the
@@ -382,21 +432,19 @@ export async function sendServiceReportShare(p: {
     const to = p.to && p.to.length > 0 ? p.to : [p.contact];
     return sendHostEmail(to, p.subject ?? 'Service report', p.text, p.replyToEmail ?? undefined, p.cc);
   }
-  return sendSms(p.contact, p.text);
+  return (await sendSms(p.contact, p.text)).status === 'accepted';
 }
 
 // Delivers a guest OTP out-of-band (email/SMS).
 // Security contract:
-//   - The full OTP code is NEVER logged (only masked hints in dev fallback).
+//   - The OTP code is NEVER logged, including in development.
 //   - Twilio credentials are read exclusively from serverEnv (process.env) via
 //     resolveTwilioAuth — never from client-accessible paths, params, bodies, or headers.
 //   - Uses the Twilio Messages REST API directly via native fetch to minimise attack surface.
 export async function notifyGuestOtp(p: { contact: string; code: string; devFallback: boolean }): Promise<void> {
   if (p.devFallback) {
-    // Dev only: write a masked hint to SERVER console. Code is never returned to the client.
-    // eslint-disable-next-line no-console
-    console.info(`[dev-fallback] Guest OTP for ${p.contact.slice(0, 2)}***: ${p.code}`);
-    return;
+    // Never log a usable OTP, including development. Test transport is mocked.
+    throw new Error('Verification delivery is disabled in preview.');
   }
 
   if (p.contact.includes('@')) {
@@ -410,42 +458,13 @@ export async function notifyGuestOtp(p: { contact: string; code: string; devFall
       text: `Your verification code is: ${p.code}\n\nThis code expires in 10 minutes. Do not share it with anyone.`,
     });
     if (error) {
-      log.error('guest_otp_email_failed', { error: error.message });
+      log.error('guest_otp_email_failed', {});
       throw new Error('Email delivery failed');
     }
     log.info('guest_otp_email_sent', { channel: 'email' });
   } else {
-    // ── SMS path ── deliver via Twilio (server-side only, dual-auth) ─────────────
-    const auth = resolveTwilioAuth();
-    if (!auth) {
-      log.error('guest_otp_sms_config_missing', { channel: 'sms' });
-      throw new Error('SMS delivery not configured');
-    }
-
-    const body = new URLSearchParams({
-      To: p.contact,
-      From: auth.fromNumber,
-      Body: `Moche-AI verification code: ${p.code}\n\nExpires in 10 minutes. Never share this code.`,
-    });
-
-    const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${auth.accountSid}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${auth.authHeader}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: body.toString(),
-      },
-    );
-
-    if (!res.ok) {
-      // Log HTTP status only — never log the response body (may contain PII or token hints).
-      log.error('guest_otp_sms_failed', { status: res.status, channel: 'sms' });
-      throw new Error(`SMS delivery failed (HTTP ${res.status})`);
-    }
-
-    log.info('guest_otp_sms_sent', { channel: 'sms', mode: auth.mode });
+    const result = await sendSms(p.contact, `Moche-AI verification code: ${p.code}\n\nExpires in 10 minutes. Never share this code.`);
+    if (result.status !== 'accepted') throw new Error('SMS verification could not be confirmed.');
+    log.info('guest_otp_sms_accepted', { channel: 'sms' });
   }
 }

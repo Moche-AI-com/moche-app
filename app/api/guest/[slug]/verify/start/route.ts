@@ -94,22 +94,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const codeHash = hashOtp(code, contactHash);
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
-    // Invalidate prior unconsumed codes for this contact+property.
-    await admin.from('guest_verifications')
-      .update({ consumed_at: new Date().toISOString() } as never)
-      .eq('property_id', property.id).eq('contact_hash', contactHash).is('consumed_at', null);
-
-    await admin.from('guest_verifications').insert({
-      property_id: property.id,
-      stay_id: stay.id,
-      contact_hash: contactHash,
-      code_hash: codeHash,
-      expires_at: expiresAt,
-      max_attempts: OTP_MAX_ATTEMPTS,
-    } as never);
-
-    // Deliver the code out-of-band. In dev fallback, this logs to server only (never to client).
-    await notifyGuestOtp({ contact, code, devFallback: serverEnv.guestVerifyDevFallback });
+    try {
+      // Never send a code unless both persistence operations succeeded.
+      const { error: invalidateError } = await admin.from('guest_verifications')
+        .update({ consumed_at: new Date().toISOString() } as never)
+        .eq('property_id', property.id).eq('contact_hash', contactHash).is('consumed_at', null);
+      if (invalidateError) {
+        log.warn('guest_verify_persistence_failed', {});
+        return NextResponse.json(GENERIC_OK);
+      }
+      const { error: insertError } = await admin.from('guest_verifications').insert({
+        property_id: property.id,
+        stay_id: stay.id,
+        contact_hash: contactHash,
+        code_hash: codeHash,
+        expires_at: expiresAt,
+        max_attempts: OTP_MAX_ATTEMPTS,
+      } as never);
+      if (insertError) {
+        log.warn('guest_verify_persistence_failed', {});
+        return NextResponse.json(GENERIC_OK);
+      }
+      await notifyGuestOtp({ contact, code, devFallback: serverEnv.guestVerifyDevFallback });
+    } catch {
+      // Identical public response for an unmatched booking or unavailable delivery.
+      // No contact, code, provider message, or error object enters telemetry.
+      log.warn('guest_verify_delivery_unavailable', {});
+    }
   }
 
   return NextResponse.json(GENERIC_OK);

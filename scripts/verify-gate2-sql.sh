@@ -42,9 +42,22 @@ psql -f "$REPO/supabase/migrations/supabase-migrations-GATE2-REGISTRY.sql"
 psql -f "$REPO/supabase/migrations/supabase-migrations-GATE2-REGISTRY-SEED.sql"
 psql -f "$REPO/supabase/migrations/supabase-migrations-BRAIN-SECTIONS.sql"
 
+echo "== reviewed Wi-Fi instruction delta, including idempotency =="
+psql -f "$REPO/supabase/migrations/20260908135705_wifi_instruction_registry.sql"
+psql -f "$REPO/supabase/migrations/20260908135705_wifi_instruction_registry.sql"
+
 echo "== contract tests =="
 "$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
   -f "$REPO/scripts/gate2-contract-tests.sql"
+
+echo "== messaging phone/consent migration and real RLS contract tests =="
+psql -f "$REPO/scripts/messaging-local-stubs.sql"
+psql -f "$REPO/supabase/migrations/20260908134135_guest_messaging_phone_consent.sql"
+psql -f "$REPO/supabase/migrations/20260908134135_guest_messaging_phone_consent.sql"
+"$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+  -f "$REPO/scripts/messaging-contract-tests.sql"
+"$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+  -f "$REPO/scripts/messaging-notification-contract-tests.sql"
 
 "$PGBIN/pg_ctl" -D "$PGDATA" stop >/dev/null 2>&1 || true
 echo "== GATE 2 SQL VERIFIED =="

@@ -56,7 +56,9 @@ export default async function LocalGuidePage({
   // Canonical places first, legacy nearby_places/recommendations merge as the
   // fallback (see lib/local/canonical.ts). A data failure degrades to an empty
   // guide with a helpful note, never a broken page.
-  const places = await loadGuestLocalPlaces(admin, property.id).catch(() => []);
+  const { places, loadError } = await loadGuestLocalPlaces(admin, property.id)
+    .then((places) => ({ places, loadError: false }))
+    .catch(() => ({ places: [], loadError: true }));
 
   return (
     <LocalGuide
@@ -68,6 +70,7 @@ export default async function LocalGuidePage({
       brandAccent={property.brand_accent}
       logoUrl={property.logo_url}
       places={places}
+      loadError={loadError}
     />
   );
 }

@@ -6,6 +6,10 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { notify } from '@/lib/notify';
 import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { translateForHost } from '@/lib/guest/translate';
+import { getGuestMessagingReadiness } from '@/lib/guest/messaging-readiness';
+import { hostConversationLink, isMessageLocator } from '@/lib/notifications/links';
+import { hasRecentPhoneProof, recoveredConversationScope } from '@/lib/guest/conversation-recovery';
+import { recordMessageWorkflow } from '@/lib/notifications/message-workflow';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,6 +21,7 @@ const postSchema = z.object({
   // The guest's portal language (Globe picker). Optional — older clients and
   // "Automatic" mode simply send nothing, and no translation runs.
   language: z.string().trim().max(40).optional(),
+  conversationId: z.string().uuid().optional(),
 });
 
 type AuthSuccess = {
@@ -52,15 +57,26 @@ async function sessionProfile(admin: ReturnType<typeof createAdminClient>, sessi
   return data as { guest_identity_id: string | null; guest_contact: string | null; notification_consent: boolean } | null;
 }
 
-async function findHostConversation(admin: ReturnType<typeof createAdminClient>, session: AuthSuccess['session']) {
-  const { data } = await (admin as any)
+async function findHostConversation(admin: ReturnType<typeof createAdminClient>, session: AuthSuccess['session'], conversationId?: string | null) {
+  let query = (admin as any)
     .from('conversations')
     .select('id, title, guest_session_id, guest_identity_id, host_read_at, guest_read_at')
     .eq('property_id', session.propertyId)
     .eq('stay_id', session.stayId)
     .eq('channel', 'host_chat')
-    .eq('guest_session_id', session.sessionId)
-    .maybeSingle();
+    .eq('guest_session_id', session.sessionId);
+  if (conversationId) query = query.eq('id', conversationId);
+  const { data } = await query.maybeSingle();
+  if (!data && conversationId) {
+    const recovered = await recoveredConversationScope(admin, session, conversationId);
+    if (recovered) {
+      const { data: recoveredThread } = await (admin as any).from('conversations')
+        .select('id, title, guest_session_id, guest_identity_id, host_read_at, guest_read_at')
+        .eq('id', conversationId).eq('property_id', recovered.propertyId).eq('stay_id', recovered.stayId)
+        .eq('channel', 'host_chat').eq('guest_session_id', recovered.sessionId).maybeSingle();
+      return recoveredThread as { id: string; title: string | null; guest_session_id: string | null; guest_identity_id: string | null; host_read_at: string | null; guest_read_at: string | null } | null;
+    }
+  }
   return data as { id: string; title: string | null; guest_session_id: string | null; guest_identity_id: string | null; host_read_at: string | null; guest_read_at: string | null } | null;
 }
 
@@ -104,18 +120,25 @@ function mapMessage(row: any) {
   };
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const auth = await authorize((await params).slug);
   if ('error' in auth) return auth.error;
 
-  const conversation = await findHostConversation(auth.admin, auth.session);
-  if (!conversation) return NextResponse.json({ conversationId: null, messages: [] });
+  const readiness = await getGuestMessagingReadiness(auth.admin, auth.session);
+  const target = new URL(req.url).searchParams.get('conversation');
+  if (target && !isMessageLocator(target)) return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
+  const conversation = await findHostConversation(auth.admin, auth.session, target);
+  if (!conversation && target) return NextResponse.json({
+    error: 'This conversation is not available in this browser yet. Verify your own phone to request access.',
+    code: 'RECOVERY_REQUIRED', recoveryReady: hasRecentPhoneProof(readiness), canSend: false,
+  }, { status: 404 });
+  if (!conversation) return NextResponse.json({ conversationId: null, messages: [], canSend: readiness.ready, readinessReason: readiness.reason });
 
   const { data: rows, error } = await (auth.admin as any)
     .from('messages')
     .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id, host_translation, host_translation_lang')
     .eq('conversation_id', conversation.id)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(300);
 
   if (error) return NextResponse.json({ error: 'Could not load messages.' }, { status: 500 });
@@ -125,7 +148,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     .update({ guest_read_at: new Date().toISOString() })
     .eq('id', conversation.id);
 
-  return NextResponse.json({ conversationId: conversation.id, messages: (rows ?? []).map(mapMessage) });
+  const focus = new URL(req.url).searchParams.get('message');
+  let messages = [...(rows ?? [])].reverse();
+  if (isMessageLocator(focus) && !messages.some((row: any) => row.id === focus)) {
+    const { data: focused } = await (auth.admin as any).from('messages')
+      .select('id, role, content, created_at, message_kind, reply_to_message_id, escalation_id, host_translation, host_translation_lang')
+      .eq('conversation_id', conversation.id).eq('property_id', auth.session.propertyId).eq('id', focus).maybeSingle();
+    if (focused) messages = [focused, ...messages].sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+  }
+  return NextResponse.json({ conversationId: conversation.id, messages: messages.map(mapMessage), canSend: readiness.ready, readinessReason: readiness.reason });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -135,6 +166,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const parsed = postSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Write a message first.' }, { status: 400 });
+  const readiness = await getGuestMessagingReadiness(admin, session);
+  if (!readiness.ready) {
+    return NextResponse.json({
+      error: 'To message your host, connect and verify your own phone and explicitly enable SMS alerts. The AI concierge is still available.',
+      code: 'MESSAGING_NOT_READY', readinessReason: readiness.reason,
+    }, { status: 403 });
+  }
 
   const rate = await checkRateLimit(admin, {
     key: `guest_host_chat:${session.sessionId}`,
@@ -146,14 +184,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: 'Too many messages. Please wait a moment and try again.' }, { status: 429 });
   }
 
-  const conversation = await getOrCreateHostConversation(admin, session);
+  let conversation = await findHostConversation(admin, session, parsed.data.conversationId);
+  if (parsed.data.conversationId && !conversation) return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 });
   const replyToId = parsed.data.replyToMessageId ?? null;
   if (replyToId) {
     const { data: replyTo } = await (admin as any)
       .from('messages')
       .select('id')
       .eq('id', replyToId)
-      .eq('conversation_id', conversation.id)
+      .eq('conversation_id', conversation?.id ?? '')
       .maybeSingle();
     if (!replyTo) return NextResponse.json({ error: 'The message you are replying to was not found.' }, { status: 404 });
   }
@@ -169,10 +208,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       .eq('id', parsed.data.escalationId)
       .eq('property_id', session.propertyId)
       .eq('stay_id', session.stayId)
+      .eq('guest_session_id', conversation?.guest_session_id ?? session.sessionId)
+      .eq('host_conversation_id', conversation?.id ?? '')
       .maybeSingle();
     if (!data) return NextResponse.json({ error: 'That escalation was not found for this stay.' }, { status: 404 });
     escalation = data;
   }
+  conversation ??= await getOrCreateHostConversation(admin, session);
 
   // Guest UX pass — translate the guest's words into the host's language so the
   // host reads Host Chat without a translator app. The ORIGINAL stays in
@@ -217,22 +259,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   if (error) return NextResponse.json({ error: 'Could not send your message.' }, { status: 500 });
 
-  await (admin as any)
+  const workflowWarnings: string[] = [];
+  await recordMessageWorkflow((admin as any)
     .from('conversations')
     .update({ last_message_at: now, host_read_at: null, guest_read_at: now })
-    .eq('id', conversation.id);
+    .eq('id', conversation.id).select('id').maybeSingle(), workflowWarnings,
+    'Your message was saved, but the conversation summary could not be refreshed.');
 
   // A guest reply on an answered/handled escalation reopens it (owner decision
   // 2026-08-24): the host sees it pinned again instead of missing the follow-up.
   // Reopening also un-archives, so a reply to an already-closed escalation still
   // surfaces in the inbox.
   let reopened = false;
+  const reopenWarning = 'Your message was saved, but the escalation could not be reopened. Ask your host to check its status; do not resend the message.';
   if (escalation && escalation.status !== 'open') {
-    await (admin as any)
+    reopened = await recordMessageWorkflow((admin as any)
       .from('escalations')
       .update({ status: 'open', pinned: true, resolved_at: null, lifecycle_status: 'active', archived_at: null })
-      .eq('id', escalation.id);
-    reopened = true;
+      .eq('id', escalation.id).eq('property_id', session.propertyId).eq('stay_id', session.stayId)
+      .eq('guest_session_id', conversation.guest_session_id).select('id').maybeSingle(), workflowWarnings, reopenWarning);
   }
 
   // A follow-up not attached to a specific escalation still reopens anything in
@@ -240,30 +285,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // guest just responded. Handled/cancelled rows stay as they are: a new issue
   // gets its own escalation.
   if (!escalation) {
-    const { data: waiting } = await (admin as any)
+    let reopenedCount = 0;
+    const updated = await recordMessageWorkflow((admin as any)
       .from('escalations')
       .update({ status: 'open', pinned: true, resolved_at: null, updated_at: now })
       .eq('host_conversation_id', conversation.id)
+      .eq('property_id', session.propertyId).eq('stay_id', session.stayId)
+      .eq('guest_session_id', conversation.guest_session_id)
       .eq('status', 'answered')
-      .select('id');
-    reopened = (waiting?.length ?? 0) > 0;
+      .select('id').then((result: { data: { id: string }[] | null; error: unknown }) => {
+        reopenedCount = result.data?.length ?? 0; return result;
+      }), workflowWarnings, reopenWarning);
+    reopened = updated && reopenedCount > 0;
   }
 
   // Guest chat messages get their own always-on kind ('host_message') instead
   // of overloading 'system', so hosts can never unsubscribe from the direct
   // guest line and 'system' stays reserved for security/platform alerts.
   // Reopened escalations keep the 'escalation' kind and its SMS fan-out path.
-  await notify(admin, {
+  const notification = await notify(admin, {
     hostAccountId: property.host_account_id,
-    kind: reopened ? 'escalation' : 'host_message',
+    kind: 'host_message',
     title: reopened ? `Escalation reopened at ${property.display_name}` : `New guest message at ${property.display_name}`,
     body: reopened
       ? `${session.guestDisplayName} replied in Host Chat — an escalation needs another look.`
       : `${session.guestDisplayName} sent a message in Host Chat.`,
     propertyId: property.id,
     // Deep link straight into the full-page conversation (Stays redesign).
-    link: `/dashboard/properties/${property.id}/stays/${session.stayId}/conversations/${conversation.id}`,
-  }).catch(() => undefined);
+    link: hostConversationLink(property.id, session.stayId, conversation.id, inserted.id),
+  }).catch(() => ({ inApp: 'failed', sms: 'unknown', smsAccepted: 0, emailAccepted: 0 }));
 
-  return NextResponse.json({ ok: true, conversationId: conversation.id, message: mapMessage(inserted) });
+  return NextResponse.json({ ok: true, messageStored: true, notification, workflowWarnings, reopened, conversationId: conversation.id, message: mapMessage(inserted) });
 }

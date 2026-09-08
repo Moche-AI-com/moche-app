@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Brain, CheckCheck, Languages, Loader2, Megaphone, Send, Sparkles } from 'lucide-react';
+import { messageNotificationNotice } from '@/lib/notifications/message-notice';
 
 type ChatMessage = {
   id: string;
@@ -131,11 +132,13 @@ export function ConversationThread({
   conversationId,
   canLearn,
   initialEscalationId = null,
+  initialMessageId = null,
 }: {
   propertyId: string;
   conversationId: string;
   canLearn: boolean;
   initialEscalationId?: string | null;
+  initialMessageId?: string | null;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [escalations, setEscalations] = useState<ThreadEscalation[]>([]);
@@ -151,6 +154,8 @@ export function ConversationThread({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [guestSmsEligible, setGuestSmsEligible] = useState<boolean | null>(null);
+  const messageFocusedRef = useRef(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const autoOpenRef = useRef(false);
@@ -163,18 +168,21 @@ export function ConversationThread({
   const latestExtrasOrder = extrasOrders[0] ?? null;
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/host/properties/${propertyId}/guest-chats/${conversationId}/messages`, { cache: 'no-store' });
+    try {
+    const res = await fetch(`/api/host/properties/${propertyId}/guest-chats/${conversationId}/messages${initialMessageId ? `?message=${encodeURIComponent(initialMessageId)}` : ''}`, { cache: 'no-store' });
     const json = await res.json().catch(() => ({}));
     if (res.ok) {
       setMessages(Array.isArray(json.messages) ? json.messages : []);
       setEscalations(Array.isArray(json.escalations) ? json.escalations : []);
       setExtrasOrders(Array.isArray(json.extrasOrders) ? json.extrasOrders : []);
+      setGuestSmsEligible(json.guestSmsEligible === true);
       setError(null);
     } else {
       setError(json.error || 'Could not load messages.');
     }
     setLoading(false);
-  }, [propertyId, conversationId]);
+    } catch { setError('Could not refresh messages.'); setLoading(false); }
+  }, [propertyId, conversationId, initialMessageId]);
 
   useEffect(() => {
     void load();
@@ -183,8 +191,13 @@ export function ConversationThread({
   }, [load]);
 
   useEffect(() => {
+    if (initialMessageId && !messageFocusedRef.current) {
+      const target = document.getElementById(`message-${initialMessageId}`);
+      if (target) { target.scrollIntoView({ block: 'center' }); target.focus({ preventScroll: true }); messageFocusedRef.current = true; }
+      return;
+    }
     endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length]);
+  }, [messages.length, initialMessageId]);
 
   // Deep-linked from the Escalations inbox (?escalation=<id>): open the composer
   // on that escalation once the thread has loaded. When no message in this thread
@@ -261,9 +274,12 @@ export function ConversationThread({
       setReply('');
       cancelReply();
       if (json.message) setMessages((current) => [...current, json.message]);
-      if (json.learningQueued) setNotice('Reply sent. A normalized Brain update is waiting in the approval queue.');
-      if (json.learningError) setNotice(`Reply sent, but the Brain update could not be queued: ${json.learningError}`);
+      setNotice(messageNotificationNotice(json.notification?.status) +
+        (Array.isArray(json.workflowWarnings) && json.workflowWarnings.length ? ` ${json.workflowWarnings.join(' ')}` : '') +
+        (json.learningQueued ? ' A Brain proposal is waiting for approval.' : json.learningError ? ' The Brain proposal could not be queued.' : ''));
       void load();
+    } catch {
+      setError('Could not confirm whether the reply was saved. Refresh before resending.');
     } finally {
       setSending(false);
     }
@@ -272,6 +288,7 @@ export function ConversationThread({
   return (
     <div className="chat-panel">
       <style>{CONV_CSS}</style>
+      {guestSmsEligible === false && <p role="status" className="muted" style={{ padding: '0 1rem' }}>This guest has not enabled verified SMS messaging. Replies are saved here, but no SMS alert can be sent.</p>}
 
       {openEscalations.length > 0 && (
         <div className="chat-banner-escalation" role="status">
@@ -295,7 +312,7 @@ export function ConversationThread({
             const extrasOrder = extrasRequest ? latestExtrasOrder : null;
             const unresolvedExtras = extrasRequest && extrasOrder !== null;
             return (
-              <div key={message.id} className={`bubble-row${host ? ' bubble-row-host' : ''}`}>
+              <div key={message.id} id={`message-${message.id}`} tabIndex={-1} className={`bubble-row${host ? ' bubble-row-host' : ''}`}>
                 <div className={`bubble${host ? ' bubble-host' : ' bubble-guest'}${escalation ? ' bubble-escalation' : ''}${extrasRequest ? ' bubble-extras' : ''}`}>
                   {escalation && (
                     <div className="bubble-flag bubble-flag-escalation">

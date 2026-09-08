@@ -401,6 +401,7 @@ export async function fetchNearbyPlaces(opts: {
   lng: number;
   radiusMeters?: number;
   perCategoryLimit?: number;
+  throwOnError?: boolean;
 }): Promise<NearbyPlace[]> {
   const radius = opts.radiusMeters ?? 2000;
   const perCat = opts.perCategoryLimit ?? 15;
@@ -416,11 +417,13 @@ export async function fetchNearbyPlaces(opts: {
     });
     if (!res.ok) {
       log.warn('overpass_nearby_failed', { status: res.status });
+      if (opts.throwOnError) throw new Error('Nearby discovery unavailable');
       return [];
     }
     const json = (await res.json()) as { elements?: OverpassElement[] };
     elements = json.elements ?? [];
   } catch (e) {
+    if (opts.throwOnError) throw new Error('Nearby discovery unavailable');
     log.warn('overpass_nearby_error', { error: String(e) });
     return [];
   }

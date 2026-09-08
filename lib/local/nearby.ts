@@ -1,11 +1,13 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { geoNearbyPlaces } from '@/lib/local/geo';
+import { fetchNearbyPlaces } from '@/lib/local/osm';
 import { log } from '@/lib/log';
 import { normalizePlaceName } from '@/lib/local/dedupe';
+import { safePhone, safeWebsite, validCoordinates } from '@/lib/local/validation';
+import { haversineMeters } from '@/lib/local/distance';
 
-// Refresh cadence: a property's nearby set is re-fetched from the geo provider
-// (Mapbox when a key is present, Overpass otherwise) at most once every 30 days
+// Durable discovery uses OSM only. Mapbox Search Box results must never be stored.
+// Refresh cadence: a property's nearby set is re-fetched at most once every 30 days
 // unless a host forces it. Place data is slow-moving, and caching in our own
 // table means guest traffic never fans out to a third-party API.
 export const NEARBY_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -56,67 +58,47 @@ export interface RefreshResult {
   error?: string;
 }
 
-// Fetch nearby places for a property and upsert them into nearby_places.
-// Preserves host curation (host_starred / host_notes / hidden) on conflict by
-// only touching the discovery-owned columns. Runs as the service role so the
-// bulk write bypasses RLS. Returns the count of rows written.
+// Caller must authorize editBrain for this property before invoking the service
+// role. Only canonical suggestions are written; guests see them after approval.
 export async function refreshNearbyPlaces(
   propertyId: string,
   coords: { lat: number | null; lng: number | null },
 ): Promise<RefreshResult> {
-  if (typeof coords.lat !== 'number' || typeof coords.lng !== 'number') {
+  if (!validCoordinates(coords.lat, coords.lng)) {
     return { ok: false, found: 0, skipped: 'no_coords' };
   }
 
-  const fetched = await geoNearbyPlaces({
-    lat: coords.lat,
-    lng: coords.lng,
+  try {
+  const fetched = await fetchNearbyPlaces({
+    lat: coords.lat!,
+    lng: coords.lng!,
     radiusMeters: NEARBY_RADIUS_M,
     perCategoryLimit: PER_CATEGORY_LIMIT,
+    throwOnError: true,
   });
-  const provider = fetched.provider;
-  const places = capPerCategory(fetched.places);
+  const places = capPerCategory(fetched.filter((place) => (
+    validCoordinates(place.lat, place.lng) && place.name.trim() &&
+    haversineMeters(coords.lat!, coords.lng!, place.lat, place.lng) <= NEARBY_RADIUS_M
+  )));
 
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
   if (places.length === 0) {
-    // Still stamp refreshed_at on existing rows so we don't retry every request.
-    await admin.from('nearby_places').update({ refreshed_at: now }).eq('property_id', propertyId);
     return { ok: true, found: 0, skipped: 'no_results' };
   }
 
-  // Upsert on (property_id, place_id). host_* / hidden are omitted so a re-run
-  // never clobbers host curation; column defaults apply only on first insert.
-  const rows = places.map((p) => ({
-    property_id: propertyId,
-    place_id: p.placeId,
-    category: p.category,
-    name: p.name,
-    lat: p.lat,
-    lng: p.lng,
-    distance_m: p.distanceMeters,
-    address: p.address ?? null,
-    url: p.url ?? null,
-    phone: p.phone ?? null,
-    source: provider,
-    refreshed_at: now,
-  }));
-
-  const { error } = await admin
-    .from('nearby_places')
-    .upsert(rows, { onConflict: 'property_id,place_id', ignoreDuplicates: false });
-  if (error) {
-    log.warn('nearby_upsert_failed', { error: error.message });
-    return { ok: false, found: 0, error: error.message };
-  }
-
-  // Mapbox search data is temporary-use and intentionally stays in the legacy
-  // cache. OSM places are durable, so mirror those results into the canonical
-  // tables. Relationship upserts use `ignoreDuplicates` to retain every host
-  // decision (status, note, tags, intents, favorite) on a subsequent refresh.
-  if (provider === 'osm') {
-    const canonicalRows = places.map((place) => ({
+  // This provider identity has a partial unique index, which PostgREST's bare
+  // onConflict cannot infer. Reuse existing immutable business records, insert
+  // missing ones, then re-read on a concurrent insert conflict.
+  const providerIds = places.map((place) => place.placeId);
+  const { data: existing, error: readError } = await admin.from('places')
+    .select('id, provider_place_id').eq('provider', 'osm').in('provider_place_id', providerIds);
+  if (readError) throw readError;
+  const idsByProviderId = new Map((existing ?? []).map((place) => [place.provider_place_id, place.id]));
+  for (const place of places) {
+    if (idsByProviderId.has(place.placeId)) continue;
+    const { data: inserted, error: insertError } = await admin.from('places').insert({
       provider: 'osm',
       provider_place_id: place.placeId,
       name: place.name,
@@ -125,29 +107,29 @@ export async function refreshNearbyPlaces(
       address: place.address ?? null,
       lat: place.lat,
       lon: place.lng,
-      phone: place.phone ?? null,
-      website: place.url ?? null,
+      phone: safePhone(place.phone) ? place.phone : null,
+      website: safeWebsite(place.url),
       provider_payload: null,
       last_refreshed_at: now,
-    }));
-    const { data: canonicalPlaces, error: canonicalError } = await admin
-      .from('places')
-      .upsert(canonicalRows as never, { onConflict: 'provider,provider_place_id', ignoreDuplicates: false })
-      .select('id, provider_place_id');
-    if (canonicalError) {
-      log.warn('canonical_places_upsert_failed', { propertyId, error: canonicalError.message });
-      return { ok: false, found: 0, error: canonicalError.message };
+    }).select('id').single();
+    if (insertError?.code === '23505') {
+      const { data: concurrent, error } = await admin.from('places').select('id')
+        .eq('provider', 'osm').eq('provider_place_id', place.placeId).single();
+      if (error || !concurrent) throw error ?? new Error('Place was not saved');
+      idsByProviderId.set(place.placeId, concurrent.id);
+    } else {
+      if (insertError || !inserted) throw insertError ?? new Error('Place was not saved');
+      idsByProviderId.set(place.placeId, inserted.id);
     }
-
-    const idsByProviderId = new Map((canonicalPlaces ?? []).map((place) => [place.provider_place_id, place.id]));
+  }
     const recommendationRows = places.flatMap((place) => {
       const placeId = idsByProviderId.get(place.placeId);
       return placeId
         ? [{
           property_id: propertyId,
           place_id: placeId,
-          status: 'approved',
-          distance_miles: place.distanceMeters / 1609.344,
+          status: 'suggested',
+          distance_miles: haversineMeters(coords.lat!, coords.lng!, place.lat, place.lng) / 1609.344,
         }]
         : [];
     });
@@ -159,14 +141,15 @@ export async function refreshNearbyPlaces(
           ignoreDuplicates: true,
         });
       if (relationshipError) {
-        log.warn('canonical_place_relationship_upsert_failed', { propertyId, error: relationshipError.message });
-        return { ok: false, found: 0, error: relationshipError.message };
+        throw relationshipError;
       }
     }
+  log.info('nearby_refreshed', { provider: 'osm', found: recommendationRows.length });
+  return { ok: true, found: recommendationRows.length };
+  } catch {
+    log.warn('nearby_refresh_failed', { propertyId });
+    return { ok: false, found: 0, error: 'Nearby suggestions could not be loaded. Please try again.' };
   }
-
-  log.info('nearby_refreshed', { provider, found: rows.length });
-  return { ok: true, found: rows.length };
 }
 
 // True when the property has never been discovered or its newest row is older

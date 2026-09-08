@@ -16,6 +16,8 @@ import type { Database } from '@/lib/database.types';
 import { TONE_PRESET_IDS, type TonePresetId } from '@/lib/constants';
 import { REGISTRY_FIELDS, type RegistryField } from '@/lib/brain/completeness';
 import { isBrainSection, storageCategoryFor } from '@/lib/brain/taxonomy';
+import { redactCredentials } from '@/lib/brain/redact';
+import { safeWifiInstructions, safeWifiLocation } from '@/lib/guest/wifi-instructions';
 
 export type ProposedUpdateStatus = Database['public']['Enums']['proposed_update_status'];
 
@@ -304,6 +306,15 @@ const ISO_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 function normalizeRegistryValue(field: ProposableField, trimmed: string): NormalizeResult {
   const max = field.maxLength ?? 500;
   if (trimmed.length > max) return { ok: false, error: `Keep this under ${max} characters.` };
+  if (field.fieldId === 'wifi_password_location' && !safeWifiLocation(trimmed)) {
+    return { ok: false, error: 'Describe where guests can find the password, not the password itself.' };
+  }
+  if (field.fieldId === 'wifi_connection_instructions' && !safeWifiInstructions(trimmed)) {
+    return { ok: false, error: 'Describe the connection steps, not the password itself.' };
+  }
+  if (field.fieldId?.startsWith('wifi_') && redactCredentials(trimmed).redactions.length) {
+    return { ok: false, error: 'Remove the credential. Save password location and connection instructions only.' };
+  }
 
   switch (field.valueType) {
     case 'time':

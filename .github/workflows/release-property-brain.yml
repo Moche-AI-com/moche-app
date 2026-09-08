@@ -1,0 +1,54 @@
+name: Release Property Brain schema
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Reviewed main commit SHA (40 characters)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: production-property-brain-schema
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply reviewed Property Brain schema
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify reviewed revision and required CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
+            | jq -e '
+              .check_runs as $runs |
+              ["Lint", "Typecheck", "Unit tests", "Field registry drift", "SQL contract tests", "Local Recs browser tests", "Production build"]
+              | all(. as $name |
+                  [$runs[] | select(.name == $name and .app.slug == "github-actions")]
+                  | sort_by(.id) | last
+                  | .status == "completed" and .conclusion == "success")
+            '
+      - name: Apply only the two reviewed migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: node scripts/release-property-brain.mjs

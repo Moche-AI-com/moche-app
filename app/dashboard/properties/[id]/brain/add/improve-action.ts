@@ -13,7 +13,8 @@
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { routedCompletion } from '@/lib/router/modelRouter';
-import { looksLikeCredentialValue } from '@/lib/brain/redact';
+import { looksLikeCredentialValue, redactCredentials } from '@/lib/brain/redact';
+import { WIFI_CONTEXT, wifiInstructionsFromNotes } from '@/lib/guest/wifi-instructions';
 import { logAiUsage } from '@/lib/ai/usage';
 import { log } from '@/lib/log';
 
@@ -28,7 +29,7 @@ const SYSTEM_PROMPT = [
   'Rules:',
   '- Keep every fact from the draft; never invent details. If the draft is ambiguous, keep the ambiguity.',
   '- Plain, warm, concise language. Short sentences. No markdown, no headings, no bullet points unless the draft is a list.',
-  '- If the draft contains a Wi-Fi password, door code, or any other credential, do NOT repeat the secret. Rewrite it as where guests can find it (for example: "the password is on the framed card in the kitchen").',
+  '- Never include credentials. Include password location only if the host stated it, keeping that location verbatim. Never infer a location from a credential or a typical home.',
   '- Return only the rewritten text, nothing else.',
 ].join('\n');
 
@@ -46,6 +47,9 @@ export async function improveBrainDraftAction(
   if (body.trim().length < 10) {
     return { error: 'Write at least a sentence or two first, then improve it.' };
   }
+  if (redactCredentials(`${title}\n${body}`).redactions.length || looksLikeCredentialValue(body.trim())) {
+    return { error: 'Remove the credential first. Describe the password location and connection instructions instead; never paste the password.' };
+  }
 
   const started = Date.now();
   try {
@@ -62,11 +66,19 @@ export async function improveBrainDraftAction(
     );
     const improved = result.text.trim();
     if (!improved) return { error: 'The model returned nothing usable — your draft is unchanged.' };
-    if (looksLikeCredentialValue(improved) && !looksLikeCredentialValue(body)) {
+    if (looksLikeCredentialValue(improved) || redactCredentials(improved).redactions.length) {
       return {
         error:
           'The rewrite looked like it contained a credential, so it was discarded. Your draft is unchanged.',
       };
+    }
+    if (WIFI_CONTEXT.test(`${title}\n${body}\n${improved}`)) {
+      const original = wifiInstructionsFromNotes([{ title, body }]);
+      const rewritten = wifiInstructionsFromNotes([{ title, body: improved }]);
+      if (rewritten.location && (!original.location
+        || !improved.toLowerCase().includes(original.location.toLowerCase()))) {
+        return { error: 'The rewrite changed or added a password location, so it was discarded. Your draft is unchanged.' };
+      }
     }
     // Fire-and-forget telemetry; never blocks the response.
     void logAiUsage(createAdminClient(), {
@@ -80,7 +92,7 @@ export async function improveBrainDraftAction(
     });
     return { ok: true, improved };
   } catch (e) {
-    log.warn('brain_improve_failed', { error: String(e) });
+    log.warn('brain_improve_failed', { code: 'completion_unavailable' });
     return { error: 'Improvement is unavailable right now — your draft is unchanged.' };
   }
 }

@@ -7,6 +7,7 @@ import { getPropertyAccess } from '@/lib/auth/guards';
 import { publicEnv } from '@/lib/env';
 import { GuestPortal } from './GuestPortal';
 import type { GuestExtraOffer } from './ExtrasWorkflow';
+import { isMessageLocator } from '@/lib/notifications/links';
 
 // Luxury concierge typography: serif display for headings, clean sans for body.
 // Exposed as CSS variables so the brand-scoped portal styles can reference them.
@@ -33,10 +34,10 @@ export default async function GuestPortalPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; view?: string; conversation?: string; message?: string }>;
 }) {
   const { slug } = await params;
-  const { token } = await searchParams;
+  const { token, view, conversation, message } = await searchParams;
   const admin = createAdminClient();
 
   const { data: property } = await admin
@@ -123,6 +124,8 @@ export default async function GuestPortalPage({
       extrasOffers={offers}
       accessToken={typeof token === 'string' && token.length > 0 ? token : null}
       initialLanguage={initialLanguage}
+      initialConversationId={view === 'host' && isMessageLocator(conversation) ? conversation : null}
+      initialMessageId={isMessageLocator(message) ? message : null}
     />
   );
 }

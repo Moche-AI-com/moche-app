@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { capture } from '@/lib/posthog-server';
+import { safeWebsite, safePhone, validCoordinates } from '@/lib/local/validation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
 
   const admin = createAdminClient();
   const { data: property } = await admin
-    .from('properties').select('id, slug').eq('id', session.propertyId).maybeSingle();
+    .from('properties').select('id, slug').eq('id', session.propertyId).eq('status', 'live').is('deleted_at', null).maybeSingle();
   if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
   }
@@ -33,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     `)
     .eq('id', (await params).id)
     .eq('property_id', session.propertyId)
-    .neq('status', 'hidden')
+    .eq('status', 'approved')
     .maybeSingle();
 
   if (error || !place) {
@@ -54,27 +55,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
 
   // Build outbound links ourselves from trusted fields only — never surface a raw
   // model- or host-provided string as an href without validation (WS-5 security).
-  const mapsUrl = canonical.places.lat != null && canonical.places.lon != null
+  const mapsUrl = validCoordinates(canonical.places.lat, canonical.places.lon)
     ? `https://www.google.com/maps/search/?api=1&query=${canonical.places.lat},${canonical.places.lon}`
     : canonical.places.address
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(canonical.places.address)}`
       : null;
 
-  const websiteUrl = (() => {
-    if (!canonical.places.website) return null;
-    try {
-      const u = new URL(canonical.places.website);
-      return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null;
-    } catch {
-      return null;
-    }
-  })();
-
-  const telHref = (() => {
-    if (!canonical.places.phone) return null;
-    const digits = canonical.places.phone.replace(/[^\d+]/g, '');
-    return digits.length >= 7 ? `tel:${digits}` : null;
-  })();
+  const websiteUrl = safeWebsite(canonical.places.website);
+  const telHref = safePhone(canonical.places.phone);
 
   void capture('place_link_click', session.propertyId, {
     property_id: session.propertyId,
@@ -99,5 +87,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       websiteUrl,
       telHref,
     },
-  });
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

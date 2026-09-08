@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { notify } from '@/lib/notify';
+import { getGuestMessagingReadiness } from '@/lib/guest/messaging-readiness';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { hostConversationLink } from '@/lib/notifications/links';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,6 +33,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if (!property || property.id !== session.propertyId) {
     return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
   }
+  const readiness = await getGuestMessagingReadiness(admin, session);
+  if (!readiness.ready) return NextResponse.json({ error: 'Connect your own verified phone and enable SMS in Host Chat first. The AI concierge remains available.', code: 'MESSAGING_NOT_READY' }, { status: 403 });
+  const rate = await checkRateLimit(admin, { key: session.sessionId, action: 'guest.escalation.sync', limit: 8, windowSeconds: 3600 });
+  if (!rate.allowed) return NextResponse.json({ error: 'Please wait before sending another host request.' }, { status: 429 });
 
   const db = admin as any;
   const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
@@ -38,6 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .select('id, conversation_id, question, status')
     .eq('property_id', session.propertyId)
     .eq('stay_id', session.stayId)
+    .eq('guest_session_id', session.sessionId)
     .eq('question', parsed.data.question)
     .in('status', ['open', 'answered'])
     .gte('created_at', since)
@@ -62,15 +70,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     if (error) return NextResponse.json({ error: 'Could not notify the host.' }, { status: 500 });
     escalation = created;
 
-    await notify(admin, {
-      hostAccountId: (property as any).host_account_id,
-      kind: 'escalation',
-      title: `AI escalation at ${(property as any).display_name}`,
-      body: parsed.data.question,
-      propertyId: session.propertyId,
-      // Deep link into the merged Stays tab (guest chat lives there now).
-      link: `/dashboard/properties/${session.propertyId}/stays?stay=${session.stayId}`,
-    }).catch(() => undefined);
   }
 
   const { data: sessionRow } = await db
@@ -115,7 +114,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       guest_identity_id: sessionRow?.guest_identity_id ?? null,
       pinned: true,
     })
-    .eq('id', escalation.id);
+    .eq('id', escalation.id).eq('property_id', session.propertyId).eq('stay_id', session.stayId).eq('guest_session_id', session.sessionId);
 
   const { data: existingMessage } = await db
     .from('messages')
@@ -124,21 +123,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .eq('escalation_id', escalation.id)
     .maybeSingle();
 
+  let notification: unknown = { inApp: 'not_attempted', sms: 'not_attempted' };
+  let messageId = existingMessage?.id;
   if (!existingMessage) {
     const now = new Date().toISOString();
-    await db.from('messages').insert({
+    const { data: saved, error } = await db.from('messages').insert({
       conversation_id: conversation.id,
       property_id: session.propertyId,
       role: 'guest',
       content: parsed.data.question,
       message_kind: 'ai_escalation',
       escalation_id: escalation.id,
-    });
+    }).select('id').single();
+    if (error || !saved) return NextResponse.json({ error: 'Could not save the host request.' }, { status: 500 });
+    messageId = saved.id;
     await db
       .from('conversations')
       .update({ last_message_at: now, host_read_at: null })
       .eq('id', conversation.id);
+    notification = await notify(admin, {
+      hostAccountId: property.host_account_id, kind: 'host_message', title: 'A guest is asking for you',
+      body: parsed.data.question, propertyId: session.propertyId,
+      link: hostConversationLink(session.propertyId, session.stayId, conversation.id, saved.id),
+    }).catch(() => ({ inApp: 'failed', sms: 'unknown' }));
   }
 
-  return NextResponse.json({ ok: true, escalationId: escalation.id, conversationId: conversation.id });
+  return NextResponse.json({ ok: true, messageStored: true, notification, messageId, escalationId: escalation.id, conversationId: conversation.id });
 }

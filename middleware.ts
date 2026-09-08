@@ -41,7 +41,9 @@ export async function middleware(request: NextRequest) {
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    url.searchParams.set('next', path);
+    // Keep the exact message locator through login; it is not an auth token.
+    url.search = '';
+    url.searchParams.set('next', path + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 

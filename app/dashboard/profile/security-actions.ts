@@ -8,6 +8,8 @@ import { hostPhoneSchema, hostOtpConfirmSchema } from '@/lib/validation';
 import { createAndSendHostOtp, verifyHostOtp } from '@/lib/auth/host-otp';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
+import { normalizeSmsPhone } from '@/lib/notifications/phone';
+import { isSmsSuppressed } from '@/lib/notifications/sms-suppression';
 
 export interface SecurityFormState {
   error?: string;
@@ -33,7 +35,7 @@ export async function sendPhoneOtpAction(_prev: SecurityFormState, formData: For
         : 'We could not send a code to that number. Check it and try again.',
     };
   }
-  return { success: 'We sent a 6-digit code to that number.', codeSent: true };
+  return { success: 'Verification SMS accepted by the provider. Enter the code if it arrives.', codeSent: true };
 }
 
 // Step 2 — host enters the code (and optionally opts into operational SMS, TCPA consent).
@@ -48,15 +50,19 @@ export async function verifyPhoneOtpAction(_prev: SecurityFormState, formData: F
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Enter the 6-digit code.', codeSent: true };
 
   const admin = createAdminClient();
-  const ok = await verifyHostOtp(admin, { userId: ctx.user.id, purpose: 'phone_verify', code: parsed.data.code });
+  const phone = normalizeSmsPhone(parsed.data.phone);
+  if (!phone) return { error: 'Enter an international phone number, starting with +.', codeSent: true };
+  const ok = await verifyHostOtp(admin, { userId: ctx.user.id, purpose: 'phone_verify', code: parsed.data.code, phone });
   if (!ok) return { error: 'That code is invalid or has expired.', codeSent: true };
 
   const now = new Date().toISOString();
   const supabase = createClient();
-  const { error } = await supabase
+  // Phone/proof columns are server-only even for direct PostgREST self-updates.
+  // The authenticated user and exact destination OTP were checked above.
+  const { error } = await admin
     .from('profiles')
     .update({
-      phone: parsed.data.phone,
+      phone,
       phone_verified_at: now,
       sms_opt_in: parsed.data.optIn,
       sms_opt_in_at: parsed.data.optIn ? now : null,
@@ -64,7 +70,7 @@ export async function verifyPhoneOtpAction(_prev: SecurityFormState, formData: F
     })
     .eq('id', ctx.user.id);
   if (error) {
-    log.warn('phone_verify_persist_failed', { error: error.message });
+    log.warn('phone_verify_persist_failed', {});
     return { error: 'Could not save your phone. Please try again.', codeSent: true };
   }
 
@@ -94,6 +100,9 @@ export async function setSmsOptInAction(_prev: SecurityFormState, formData: Form
   // Guard: can only opt into SMS with a verified phone on file.
   if (optIn && !ctx.profile.phone_verified_at) {
     return { error: 'Verify a phone number before enabling SMS alerts.' };
+  }
+  if (optIn && (!ctx.profile.phone || await isSmsSuppressed(createAdminClient(), ctx.profile.phone))) {
+    return { error: 'SMS is opted out or unavailable for this number. SMS alerts have not been enabled.' };
   }
   const { error } = await supabase
     .from('profiles')

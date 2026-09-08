@@ -110,14 +110,15 @@ describe('notification channel matrix', () => {
     expect(categorySupportsChannel('extras', 'sms')).toBe(false);
     expect(categorySupportsChannel('review_nudges', 'email')).toBe(false);
     expect(categorySupportsChannel('host_messages', 'email')).toBe(true);
-    expect(categorySupportsChannel('host_messages', 'sms')).toBe(false);
+    // Direct guest messages now ping each independently verified, opted-in host.
+    expect(categorySupportsChannel('host_messages', 'sms')).toBe(true);
   });
 
   it('keeps the fan-out kind sets in their documented shape', () => {
     expect([...EMAIL_FANOUT_KINDS].sort()).toEqual(
       ['billing', 'escalation', 'extras', 'host_message', 'maintenance', 'system'].sort(),
     );
-    expect([...SMS_FANOUT_KINDS].sort()).toEqual(['escalation', 'maintenance'].sort());
+    expect([...SMS_FANOUT_KINDS].sort()).toEqual(['escalation', 'host_message', 'maintenance'].sort());
   });
 });
 

@@ -16,12 +16,13 @@ export default async function PropertyInboxPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: { view?: string | string[]; stay?: string | string[] };
+  searchParams?: Promise<{ view?: string | string[]; stay?: string | string[] }>;
 }) {
   const propertyId = (await params).id;
+  const query = await searchParams;
   const access = await requirePropertyAccess(propertyId);
-  const view = parseLifecycleView(searchParams?.view);
-  const stayFilter = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
+  const view = parseLifecycleView(query?.view);
+  const stayFilter = typeof query?.stay === 'string' ? query.stay : null;
 
   // Mirrors the guest-chats API gate: the inbox is for roles that answer guests.
   const canManage = access.can.replyGuests || access.isOwner;

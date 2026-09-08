@@ -198,15 +198,18 @@ describe('routedCompletion', () => {
     vi.restoreAllMocks();
   });
 
-  it('with NO key: uses the in-house provider and never calls fetch', async () => {
+  // Requirement 1–2 replaces the old cheap/dev fallback expectation. Preserve
+  // the zero-request privacy assertion and strengthen it across ALL strong tasks.
+  it.each(['extraction', 'brain_ops', 'concierge_complex'] as const)('with NO key: %s fails closed without a cheap provider', async (task) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: '' });
 
-    const res = await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+    const provider = vi.spyOn(await import('@/lib/ai'), 'getAIProvider');
+    await expect(routedCompletion(MESSAGES, undefined, { task })).rejects.toThrow(/not configured/);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(res.model).toBe('dev-fallback-chat');
+    expect(provider).not.toHaveBeenCalled();
   });
 
   it('with key + extraction: routes to the strong tier with hardened ZDR', async () => {
@@ -356,18 +359,20 @@ describe('routedCompletion', () => {
   // The failure this replaces: an all-unreviewed provider env used to drop `only` and
   // still send the request, letting OpenRouter pick any endpoint its own ZDR
   // classification accepted. No request may leave at all in that state.
-  it('issues no request when no configured provider is reviewed', async () => {
+  it.each(['extraction', 'brain_ops', 'concierge_complex'] as const)('%s issues no request or weak fallback when no provider is reviewed', async (task) => {
     const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
       OPENROUTER_PROVIDER_ALLOWLIST: 'some-random-host',
+      OPENROUTER_CONCIERGE_ENABLED: 'true',
     });
 
-    const res = await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+    const provider = vi.spyOn(await import('@/lib/ai'), 'getAIProvider');
+    await expect(routedCompletion(MESSAGES, undefined, { task })).rejects.toThrow(/provider/i);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(res.text).not.toBe('external-answer');
+    expect(provider).not.toHaveBeenCalled();
   });
 
   it('always pins `only` on the outbound request', async () => {
@@ -428,25 +433,30 @@ describe('routedCompletion', () => {
     expect(body.messages[0].content).toContain('[redacted-email]');
   });
 
-  it('falls back to in-house on a non-2xx response', async () => {
+  it.each(['extraction', 'brain_ops', 'concierge_complex'] as const)('%s fails closed on a non-2xx response', async (task) => {
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
     vi.stubGlobal('fetch', fetchMock);
-    const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
+    const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key', OPENROUTER_CONCIERGE_ENABLED: 'true' });
 
-    const res = await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
+    const provider = vi.spyOn(await import('@/lib/ai'), 'getAIProvider');
+    await expect(routedCompletion(MESSAGES, undefined, { task })).rejects.toThrow(/500/);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(res.model).toBe('dev-fallback-chat');
+    expect(lastBody(fetchMock).models).toEqual(['openai/gpt-4o']);
+    expect(provider).not.toHaveBeenCalled();
   });
 
-  it('falls back to in-house on a network error', async () => {
+  it.each(['extraction', 'brain_ops', 'concierge_complex'] as const)('%s fails closed on a network error', async (task) => {
     const fetchMock = vi.fn(async () => {
       throw new Error('network down');
     });
     vi.stubGlobal('fetch', fetchMock);
-    const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
+    const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key', OPENROUTER_CONCIERGE_ENABLED: 'true' });
 
-    const res = await routedCompletion(MESSAGES, undefined, { task: 'extraction' });
-    expect(res.model).toBe('dev-fallback-chat');
+    const provider = vi.spyOn(await import('@/lib/ai'), 'getAIProvider');
+    await expect(routedCompletion(MESSAGES, undefined, { task })).rejects.toThrow('network down');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(lastBody(fetchMock).models).toEqual(['openai/gpt-4o']);
+    expect(provider).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ConversationThread } from './ConversationThread';
+import { isMessageLocator } from '@/lib/notifications/links';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +19,10 @@ export default async function ConversationPage({
   searchParams,
 }: {
   params: Promise<{ id: string; stayId: string; conversationId: string }>;
-  searchParams: { escalation?: string };
+  searchParams: Promise<{ escalation?: string; message?: string }>;
 }) {
   const { id, stayId, conversationId } = await params;
+  const query = await searchParams;
   const access = await requirePropertyAccess(id);
   if (!access.isOwner && !access.can.replyGuests) {
     redirect(`/dashboard/properties/${id}/stays`);
@@ -88,7 +90,9 @@ export default async function ConversationPage({
             : ''}
         </p>
       </div>
-      <ConversationThread propertyId={id} conversationId={conversationId} canLearn={canLearn} initialEscalationId={searchParams.escalation ?? null} />
+      <ConversationThread propertyId={id} conversationId={conversationId} canLearn={canLearn}
+        initialEscalationId={isMessageLocator(query.escalation) ? query.escalation : null}
+        initialMessageId={isMessageLocator(query.message) ? query.message : null} />
     </div>
   );
 }

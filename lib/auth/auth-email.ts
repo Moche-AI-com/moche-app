@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import { serverEnv, publicEnv } from '@/lib/env';
 import { log } from '@/lib/log';
+import { TRANSACTIONAL_SENDER } from '@/lib/mail/senders';
 import {
   CAPABILITIES,
   MEMBER_ROLES,
@@ -28,7 +29,7 @@ import {
 
 type AdminClient = SupabaseClient<Database>;
 
-const EMAIL_FROM = 'Moche-AI <noreply@moche-ai.com>';
+const EMAIL_FROM = TRANSACTIONAL_SENDER.from;
 const SUPPORT_EMAIL = 'hostspark.org@gmail.com';
 
 // Inline bell-igloo brand mark (mirrors components/Logo.tsx DomeMark), sized for
@@ -145,14 +146,16 @@ async function send(to: string, subject: string, html: string, text: string): Pr
   try {
     const { Resend } = await import('resend');
     const resend = new Resend(serverEnv.resendApiKey);
-    const { error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html, text });
-    if (error) {
-      log.error('auth_email_send_failed', { kind: subject, reason: error.message });
+    const { data, error } = await resend.emails.send(
+      { from: EMAIL_FROM, replyTo: TRANSACTIONAL_SENDER.replyTo, to, subject, html, text },
+    );
+    if (error || !data?.id) {
+      log.error('auth_email_send_failed', {});
       return false;
     }
     return true;
-  } catch (e) {
-    log.error('auth_email_send_error', { error: String(e) });
+  } catch {
+    log.error('auth_email_send_error', {});
     return false;
   }
 }
@@ -177,7 +180,7 @@ export async function createUserAndSendConfirmation(
   if (error || !data?.properties?.hashed_token || !data.user) {
     const reason = error?.message ?? 'link_generation_failed';
     // "User already registered" is an expected, non-alarming case.
-    log.warn('signup_link_generation_failed', { reason });
+    log.warn('signup_link_generation_failed', {});
     return { ok: false, reason };
   }
 
@@ -217,7 +220,7 @@ export async function sendPasswordReset(
   // Non-existent email → Supabase returns an error; swallow it to avoid
   // account enumeration. Nothing is sent, but the caller's response is identical.
   if (error || !data?.properties?.hashed_token) {
-    log.info('password_reset_no_send', { reason: error?.message ?? 'no_link' });
+    log.info('password_reset_no_send', {});
     return;
   }
 

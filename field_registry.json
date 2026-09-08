@@ -581,6 +581,33 @@
       "interview_prompt": "Can a guest check out late, and is there a fee?"
     },
     {
+      "field_id": "wifi_connection_instructions",
+      "label": "Wi-Fi connection instructions",
+      "domain": "connectivity",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "pre-arrival",
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 1.0,
+      "hard_block": false,
+      "applicability": "has_wifi",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "What steps should guests follow to connect to Wi-Fi? Refer to the password location; never include the password."
+    },
+    {
       "field_id": "wifi_network_name",
       "label": "Wi-Fi network name",
       "domain": "connectivity",
@@ -625,13 +652,40 @@
         "column": "secret_ref_or_ciphertext",
         "vault": true
       },
-      "gap_weight": 3.0,
-      "hard_block": true,
+      "gap_weight": 0.0,
+      "hard_block": false,
       "applicability": "has_wifi",
       "requires_on_failure": true,
       "on_failure_field": "wifi_troubleshooting",
       "scrape_hint": null,
-      "interview_prompt": "What is the Wi-Fi password? It is stored encrypted and never sent to a model."
+      "interview_prompt": "Legacy credential field. Do not enter a password; use password location and connection instructions."
+    },
+    {
+      "field_id": "wifi_password_location",
+      "label": "Wi-Fi password location",
+      "domain": "connectivity",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "public_guest",
+      "default_audience": "guest_prearrival",
+      "phase": [
+        "pre-arrival",
+        "check-in",
+        "mid-stay"
+      ],
+      "ttl_days": 180,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
+      "gap_weight": 3.0,
+      "hard_block": true,
+      "applicability": "has_wifi",
+      "requires_on_failure": false,
+      "on_failure_field": null,
+      "scrape_hint": null,
+      "interview_prompt": "Where can guests find the Wi-Fi password? Give the exact location. Do not enter the password itself."
     },
     {
       "field_id": "wifi_speed_tier",

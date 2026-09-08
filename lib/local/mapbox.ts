@@ -9,6 +9,7 @@ import type {
   PoiCategory,
 } from '@/lib/local/osm';
 import { NEARBY_CATEGORIES } from '@/lib/local/osm';
+import { validCoordinates } from './validation';
 
 // ============================================================================
 // Mapbox provider — the "key is present" upgrade tier for local intel.
@@ -436,7 +437,7 @@ export async function mapboxSearchPois(opts: {
 }): Promise<MapboxPoiHit[]> {
   const token = mapboxToken();
   const q = opts.query.trim();
-  if (!token || q.length < 2) return [];
+  if (!token || q.length < 2 || q.length > 120 || !validCoordinates(opts.lat, opts.lng)) return [];
 
   const radius = opts.radiusMeters ?? 8000;
   const limit = Math.min(Math.max(opts.limit ?? 6, 1), 10);
@@ -459,7 +460,7 @@ export async function mapboxSearchPois(opts: {
     });
     if (!res.ok) {
       log.warn('mapbox_poi_search_failed', { status: res.status });
-      return [];
+      throw new Error('Map suggestions are unavailable');
     }
     const json = (await res.json()) as {
       features?: Array<{
@@ -477,7 +478,9 @@ export async function mapboxSearchPois(opts: {
       const name = p?.name?.trim();
       const lat = p?.coordinates?.latitude;
       const lng = p?.coordinates?.longitude;
-      if (!name || typeof lat !== 'number' || typeof lng !== 'number') continue;
+      if (!name || typeof lat !== 'number' || typeof lng !== 'number' || !validCoordinates(lat, lng)) continue;
+      const measuredDistance = haversineMeters(opts.lat, opts.lng, lat, lng);
+      if (measuredDistance > radius) continue;
       const key = p?.mapbox_id ?? `${lat.toFixed(6)},${lng.toFixed(6)}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -485,20 +488,18 @@ export async function mapboxSearchPois(opts: {
         key,
         name,
         providerCategory: (p?.poi_category_ids?.[0] ?? p?.poi_category?.[0] ?? null)?.toLowerCase() ?? null,
-        address: p?.address ?? p?.full_address ?? null,
-        distanceMeters: typeof p?.distance === 'number'
-          ? Math.round(p.distance)
-          : Math.round(haversineMeters(opts.lat, opts.lng, lat, lng)),
+        address: p?.full_address ?? p?.address ?? null,
+        distanceMeters: Math.round(measuredDistance),
         lat,
         lng,
         url: p?.metadata?.website ?? null,
         phone: p?.metadata?.phone ?? null,
       });
     }
-    return out;
-  } catch (e) {
-    log.warn('mapbox_poi_search_error', { error: String(e) });
-    return [];
+    return out.slice(0, limit);
+  } catch {
+    // Do not log fetch errors/URLs: they may contain query text or access tokens.
+    throw new Error('Map suggestions are unavailable');
   }
 }
 

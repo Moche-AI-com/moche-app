@@ -7,31 +7,29 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireSession, requirePropertyAccess } from '@/lib/auth/guards';
 import { escalationRespondSchema } from '@/lib/validation';
-import { reindexBrainItem } from '@/app/dashboard/properties/[id]/brain/actions';
-import { notifyGuestReply } from '@/lib/notify';
-import { publicEnv } from '@/lib/env';
+import { notifyGuestConversationReply, type SmsResult } from '@/lib/notify';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 import { capture } from '@/lib/posthog-server';
-import { classifyBrainAnswer, type BrainCategory } from '@/lib/brain/classify';
+import type { BrainCategory } from '@/lib/brain/classify';
+import { normalizeGuestAnswerForBrain } from '@/lib/brain/guest-answer-learning';
+import { hostConversationLink } from '@/lib/notifications/links';
 
 type Client = SupabaseClient<Database>;
 
 export interface EscalationActionState {
   error?: string;
   ok?: boolean;
+  messageStored?: boolean;
+  notification?: SmsResult;
+  learningQueued?: boolean;
+  warning?: string;
 }
 
-// Shared learning loop (Part D1). SINGLE source of truth used by BOTH the dashboard
-// answer form and the signed magic-link route (Feature 4b) — do not fork this logic.
-// The caller is responsible for authorizing the actor BEFORE invoking this (dashboard:
-// requirePropertyAccess; magic link: HMAC token verification). All writes go through the
-// service-role admin client so it works with or without a Postgres session.
-//
-// The host's answer is (1) saved + embedded as a guest-visible host_qa Brain item so
-// future guests get it instantly, (2) delivered back into the guest conversation,
-// (3) recorded on the escalation, and (4) best-effort pinged to the guest IF and only if
-// they gave TCPA consent on their session (Feature 4c).
+// Shared reply path for dashboard and legacy signed links. Authorization lives
+// INSIDE this exported server action: a token or caller-supplied actor is not auth.
+// Replies are saved to the exact participant's conversation; notification and
+// optional pending Brain proposal outcomes are reported independently.
 export async function answerEscalationCore(
   admin: Client,
   opts: {
@@ -48,14 +46,40 @@ export async function answerEscalationCore(
   },
 ): Promise<EscalationActionState> {
   const { escalationId, answerText, actorProfileId } = opts;
-  const convertToBrain = opts.convertToBrain ?? true;
+  const convertToBrain = opts.convertToBrain ?? false;
+  const ctx = await requireSession();
+  if (actorProfileId !== ctx.user.id) return { error: 'Sign in as the replying host.' };
+  if (!answerText.trim() || answerText.length > 4000) return { error: 'Write a reply of up to 4000 characters.' };
 
   const { data: esc } = await admin
     .from('escalations')
-    .select('id, property_id, question, conversation_id, status, stay_id')
+    .select('id, property_id, question, conversation_id, status, stay_id, host_conversation_id, guest_session_id')
     .eq('id', escalationId)
     .maybeSingle();
   if (!esc) return { error: 'Escalation not found.' };
+  const access = await requirePropertyAccess(esc.property_id);
+  if (!access.can.receiveEscalations || !access.can.replyGuests || (convertToBrain && !access.can.editBrain)) {
+    return { error: 'You do not have permission to perform this action.' };
+  }
+  // Validate every stored pointer before message, escalation or Brain writes.
+  const db = admin as any;
+  if (!esc.stay_id) return { error: 'This escalation has no guest stay.' };
+  const { data: stay } = await db.from('stays').select('id, status, deleted_at')
+    .eq('id', esc.stay_id).eq('property_id', esc.property_id).maybeSingle();
+  if (!stay || stay.deleted_at || stay.status === 'revoked') return { error: 'Stay not available.' };
+  let sessionId = esc.guest_session_id;
+  for (const pointer of [esc.conversation_id, esc.host_conversation_id].filter(Boolean)) {
+    const { data: conversation } = await db.from('conversations').select('id, guest_session_id')
+      .eq('id', pointer).eq('stay_id', esc.stay_id).eq('property_id', esc.property_id).maybeSingle();
+    if (!conversation || !conversation.guest_session_id || (sessionId && sessionId !== conversation.guest_session_id)) {
+      return { error: 'Escalation conversation scope does not match.' };
+    }
+    sessionId = conversation.guest_session_id;
+  }
+  if (!sessionId) return { error: 'This escalation cannot be linked to an individual guest.' };
+  const { data: guestSession } = await db.from('guest_access_sessions').select('id, guest_identity_id, stay_guest_id')
+    .eq('id', sessionId).eq('stay_id', esc.stay_id).eq('property_id', esc.property_id).maybeSingle();
+  if (!guestSession) return { error: 'Guest session not found.' };
 
   const { data: prop } = await admin
     .from('properties')
@@ -64,80 +88,64 @@ export async function answerEscalationCore(
     .maybeSingle();
   if (!prop) return { error: 'Escalation not found.' };
 
-  let brainItemId: string | null = null;
-
-  if (convertToBrain) {
-    // Normalize + route: use the host's explicit category override, else AI-classify
-    // into the best-fit bucket with a reusable, guest-agnostic title. This is what
-    // makes saved answers properly labeled so retrieval serves them next time.
-    let category: BrainCategory = opts.brainCategory ?? 'host_qa';
-    let title = esc.question.trim().slice(0, 200);
-    if (!opts.brainCategory) {
-      const classified = await classifyBrainAnswer({ question: esc.question, answer: answerText });
-      category = classified.category;
-      title = classified.title;
-    }
-
-    // 1. Create the guest-visible Brain item from the answered question.
-    const { data: created, error: biErr } = await admin
-      .from('brain_items')
-      .insert({
-        property_id: esc.property_id,
-        title,
-        body: answerText,
-        category,
-        visibility: 'guest',
-        source_type: 'host_qa',
-        status: 'ready',
-        created_by: actorProfileId,
-      } as never)
-      .select('id')
-      .single();
-    if (biErr || !created) {
-      log.warn('escalation_brain_create_failed', { error: biErr?.message });
-      return { error: 'Could not save the answer to your Brain.' };
-    }
-    brainItemId = (created as { id: string }).id;
-
-    // 2. Embed it so retrieval can serve it. reindexBrainItem also bumps the Brain
-    //    version + clears the answer cache for this property (Part E invalidation).
-    await reindexBrainItem(esc.property_id, brainItemId, title, answerText, 'guest', category);
+  // Create/use only this participant's host thread. The SMS points here, not
+  // to a bearer answer token or another party member's latest session.
+  let { data: thread } = await db.from('conversations').select('id')
+    .eq('property_id', esc.property_id).eq('stay_id', esc.stay_id).eq('guest_session_id', sessionId).eq('channel', 'host_chat')
+    .order('created_at', { ascending: true }).limit(1).maybeSingle();
+  if (!thread) {
+    const created = await db.from('conversations').insert({
+      property_id: esc.property_id, stay_id: esc.stay_id, guest_session_id: sessionId,
+      guest_identity_id: guestSession.guest_identity_id, stay_guest_id: guestSession.stay_guest_id,
+      title: 'Host Chat', channel: 'host_chat',
+    }).select('id').single();
+    if (created.error || !created.data) return { error: 'Could not open the guest conversation.' };
+    thread = created.data;
   }
-
-  // 3. Record the response on the escalation and link any created Brain item.
-  await admin
+  const { data: message, error: messageError } = await db.from('messages').insert({
+    conversation_id: thread.id, property_id: esc.property_id, role: 'host', content: answerText,
+    author_profile_id: actorProfileId, model: 'host_answer', escalation_id: escalationId, message_kind: 'text',
+  }).select('id').single();
+  if (messageError || !message) return { error: 'Could not save the reply.' };
+  const notification = await notifyGuestConversationReply(admin, {
+    propertyId: esc.property_id, stayId: esc.stay_id, conversationId: thread.id, messageId: message.id, slug: prop.slug,
+  }).catch((): SmsResult => ({ status: 'unknown' }));
+  const { error: updateError } = await admin
     .from('escalations')
     .update({
       host_response: answerText,
       status: 'answered',
       responded_at: new Date().toISOString(),
       responded_by: actorProfileId,
-      converted_brain_item_id: brainItemId,
+      host_conversation_id: thread.id,
+      guest_session_id: sessionId,
       updated_at: new Date().toISOString(),
     } as never)
     .eq('id', escalationId)
     .eq('property_id', esc.property_id);
-
-  // 4. Deliver the answer into the guest conversation so it appears live in their chat.
-  //    Stored with role 'host' (distinct from the AI 'assistant') so the guest portal
-  //    can render + poll for it separately and continue the thread two-way.
-  if (esc.conversation_id) {
-    await admin.from('messages').insert({
-      conversation_id: esc.conversation_id,
-      property_id: esc.property_id,
-      role: 'host',
-      content: answerText,
-      author_profile_id: actorProfileId,
-      model: 'host_answer',
-    } as never);
+  await db.from('conversations').update({ last_message_at: new Date().toISOString(), guest_read_at: null }).eq('id', thread.id);
+  let learningQueued = false;
+  let warning = updateError ? 'Reply saved, but escalation status could not be updated.' : undefined;
+  if (convertToBrain) {
+    try {
+      const { data: context } = await db.from('messages').select('id, role, content, created_at')
+        .eq('property_id', esc.property_id).eq('conversation_id', thread.id).eq('escalation_id', escalationId)
+        .order('created_at', { ascending: false }).limit(60);
+      const normalized = await normalizeGuestAnswerForBrain({
+        question: esc.question, hostAnswer: answerText,
+        threadMessages: [...(context ?? [])].reverse().map((m: any) => ({ role: m.role, content: m.content, createdAt: m.created_at })),
+      });
+      const { error } = await db.from('proposed_updates').insert({
+        property_id: esc.property_id, host_account_id: prop.host_account_id, status: 'pending',
+        field_path: 'host_qa.guest_reply', label: normalized.question.slice(0, 160),
+        proposed_value: { question: normalized.question, answer: normalized.answer, category: normalized.category,
+          section: normalized.section, rationale: normalized.rationale, model: normalized.model, sourceMessageIds: (context ?? []).map((m: any) => m.id) },
+        source_type: 'ai_suggestion', source_ref: escalationId, confidence: normalized.confidence,
+      });
+      if (error) throw error;
+      learningQueued = true;
+    } catch { warning = 'Reply saved, but the Brain proposal could not be queued.'; }
   }
-
-  // 4c. Best-effort guest ping — ONLY if the guest opted in on their session.
-  await maybePingGuest(admin, {
-    stayId: esc.stay_id,
-    propertyName: (prop as { display_name: string }).display_name,
-    slug: (prop as { slug: string }).slug,
-  });
 
   await audit(admin, {
     action: 'escalation.answered',
@@ -151,33 +159,7 @@ export async function answerEscalationCore(
 
   revalidatePath('/dashboard/escalations');
   revalidatePath(`/dashboard/escalations/${escalationId}`);
-  return { ok: true };
-}
-
-// Looks up the guest's opted-in notify contact for this stay and pings them that the
-// host replied. Consent is mandatory: notification_consent must be true. Never pings
-// otherwise; never logs the contact.
-async function maybePingGuest(
-  admin: Client,
-  p: { stayId: string | null; propertyName: string; slug: string },
-): Promise<void> {
-  if (!p.stayId) return;
-  const { data: sess } = await admin
-    .from('guest_access_sessions')
-    .select('guest_contact, notification_consent')
-    .eq('stay_id', p.stayId)
-    .eq('notification_consent', true)
-    .not('guest_contact', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const contact = (sess as { guest_contact: string | null } | null)?.guest_contact;
-  if (!sess || !contact) return;
-  await notifyGuestReply({
-    contact,
-    propertyName: p.propertyName,
-    portalUrl: `${publicEnv.appUrl}/g/${p.slug}`,
-  });
+  return { ok: true, messageStored: true, notification, learningQueued, warning };
 }
 
 // Answer an escalated guest question from the dashboard. Authorizes via the host session
@@ -250,13 +232,13 @@ export async function openEscalationThreadAction(escalationId: string): Promise<
   const supabase = createClient();
   const { data: esc } = await supabase
     .from('escalations')
-    .select('id, property_id, stay_id, host_conversation_id, guest_session_id, guest_identity_id, stay_guest_id')
+    .select('id, property_id, stay_id, conversation_id, host_conversation_id, guest_session_id, guest_identity_id, stay_guest_id')
     .eq('id', escalationId)
     .maybeSingle();
   if (!esc) return { error: 'Escalation not found.' };
 
   const access = await requirePropertyAccess(esc.property_id);
-  if (!access.can.receiveEscalations) return { error: 'You do not have permission to manage escalations for this property.' };
+  if (!access.can.receiveEscalations || !access.can.replyGuests) return { error: 'You do not have permission to manage escalations for this property.' };
 
   // Legacy rows without a stay have no thread to route to — the detail page
   // stays as their fallback surface.
@@ -266,32 +248,36 @@ export async function openEscalationThreadAction(escalationId: string): Promise<
   const db = admin as any;
   const propertyId = esc.property_id;
   const stayId = esc.stay_id;
-
+  const { data: scopedStay } = await db.from('stays').select('id').eq('id', stayId).eq('property_id', propertyId).maybeSingle();
+  if (!scopedStay) return { error: 'Stay not found.' };
+  let sessionId = esc.guest_session_id;
+  for (const pointer of [esc.conversation_id, esc.host_conversation_id].filter(Boolean)) {
+    const { data: thread } = await db.from('conversations').select('id, guest_session_id, channel')
+      .eq('id', pointer).eq('property_id', propertyId).eq('stay_id', stayId).maybeSingle();
+    if (!thread?.guest_session_id || (sessionId && sessionId !== thread.guest_session_id) ||
+        (pointer === esc.host_conversation_id && thread.channel !== 'host_chat')) {
+      return { error: 'Escalation conversation scope does not match.' };
+    }
+    sessionId = thread.guest_session_id;
+  }
+  if (!sessionId) return { error: 'This escalation cannot be linked to an individual guest.' };
+  const { data: participant } = await db.from('guest_access_sessions').select('id, guest_identity_id, stay_guest_id')
+    .eq('id', sessionId).eq('stay_id', stayId).eq('property_id', propertyId).maybeSingle();
+  if (!participant) return { error: 'Guest session not found.' };
   let conversationId = esc.host_conversation_id ?? null;
 
-  if (!conversationId && esc.guest_session_id) {
+  if (!conversationId) {
     const { data } = await db
       .from('conversations')
       .select('id')
       .eq('property_id', propertyId)
       .eq('stay_id', stayId)
       .eq('channel', 'host_chat')
-      .eq('guest_session_id', esc.guest_session_id)
+      .eq('guest_session_id', sessionId)
+      .order('created_at', { ascending: true }).limit(1)
       .maybeSingle();
     conversationId = data?.id ?? null;
   }
-  if (!conversationId && esc.guest_identity_id) {
-    const { data } = await db
-      .from('conversations')
-      .select('id')
-      .eq('property_id', propertyId)
-      .eq('stay_id', stayId)
-      .eq('channel', 'host_chat')
-      .eq('guest_identity_id', esc.guest_identity_id)
-      .maybeSingle();
-    conversationId = data?.id ?? null;
-  }
-
   if (!conversationId) {
     let guestName = 'Guest';
     if (esc.guest_identity_id) {
@@ -316,15 +302,15 @@ export async function openEscalationThreadAction(escalationId: string): Promise<
         stay_id: stayId,
         title: `Host Chat — ${guestName}`,
         channel: 'host_chat',
-        guest_session_id: esc.guest_session_id,
-        guest_identity_id: esc.guest_identity_id,
-        stay_guest_id: esc.stay_guest_id,
+        guest_session_id: sessionId,
+        guest_identity_id: participant.guest_identity_id,
+        stay_guest_id: participant.stay_guest_id,
         last_message_at: now,
       })
       .select('id')
       .single();
     if (convErr || !created) {
-      log.warn('escalation_thread_create_failed', { error: convErr?.message });
+      log.warn('escalation_thread_create_failed', {});
       return { error: 'Could not open the guest thread. Please try again.' };
     }
     conversationId = created.id;
@@ -335,10 +321,11 @@ export async function openEscalationThreadAction(escalationId: string): Promise<
     await db
       .from('escalations')
       .update({ host_conversation_id: conversationId, updated_at: new Date().toISOString() })
-      .eq('id', escalationId);
+      .eq('id', escalationId).eq('property_id', propertyId).eq('stay_id', stayId);
   }
 
-  return { url: `/dashboard/properties/${propertyId}/stays/${stayId}/conversations/${conversationId}?escalation=${escalationId}` };
+  if (!conversationId) return { error: 'Could not open the guest conversation.' };
+  return { url: `${hostConversationLink(propertyId, stayId, conversationId)}?escalation=${escalationId}` };
 }
 
 const INBOX_STATUS_SET = ['resolved', 'answered', 'dismissed'] as const;

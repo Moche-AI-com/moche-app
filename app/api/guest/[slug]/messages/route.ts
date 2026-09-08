@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
+import { redactCredentials } from '@/lib/brain/redact';
+import { WIFI_CONTEXT } from '@/lib/guest/wifi-instructions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -45,6 +47,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
   const url = new URL(req.url);
   const after = url.searchParams.get('after');
+  let wifiContext = false;
+  if (after) {
+    // A delta may start with a bare answer whose Wi-Fi question was in an older
+    // poll. Check topic existence, not full historical content, scoped to this
+    // same private concierge conversation. A read failure must not enable replay.
+    const { data: priorWifi, error } = await admin
+      .from('messages')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('property_id', session.propertyId)
+      .lte('created_at', after)
+      .or(['wi%fi', 'wireless', 'internet', 'network', 'ssid', 'router']
+        .map((topic) => `content.ilike.%${topic}%`).join(','))
+      .limit(1)
+      .maybeSingle();
+    wifiContext = !!error || !!priorWifi;
+  }
 
   let query = admin
     .from('messages')
@@ -63,11 +82,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   // answers to a stable shape the portal renders as a "host" bubble.
   const messages = (data ?? [])
     .filter((m) => m.role === 'guest' || m.role === 'assistant' || m.role === 'host')
-    .map((m) => ({
-      role: m.role,
-      content: m.content,
-      created_at: m.created_at,
-    }));
+    .map((m) => {
+      wifiContext ||= WIFI_CONTEXT.test(m.content);
+      // Historical AI prose is not approved property truth. Do not replay a
+      // password, a context-only passphrase, or an old invented physical location.
+      // Keep context sticky: an implicit follow-up need not repeat "Wi-Fi".
+      // Direct host-chat endpoints and explicit guest/host messages are unchanged.
+      const content = m.role !== 'assistant' ? m.content : wifiContext
+        ? 'This earlier Wi-Fi answer is unavailable. Ask the host for the current password location and connection instructions.'
+        : redactCredentials(m.content).text;
+      return { role: m.role, content, created_at: m.created_at };
+    });
 
   return NextResponse.json({ messages });
 }
