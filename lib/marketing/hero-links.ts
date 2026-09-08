@@ -39,7 +39,8 @@ import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
  * z-order and the desktop arc's proportions. It no longer hides anything: the
  * old implementation dropped rank 3 under 700px and rank 2 under 430px, which
  * on a phone silently removed four of the seven destinations from the page.
- * Under 700px the arc becomes a grid instead, so all seven stay reachable.
+ * Under 700px the arc becomes a snap-scrolling card carousel instead, so all
+ * seven stay reachable at every width.
  *
  * `pos` is the crop anchor. These frames are tall windows onto photographs that
  * were not shot for that ratio, and a centred crop of the beach house is two
@@ -109,9 +110,9 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: -3,
     rot: 0,
     rank: 0,
-    // Centred rather than 50% 45%: the source is already 3:4, so desktop frames
-    // show it whole, and the mobile CTA band (16 / 7) crops to a horizontal strip
-    // that keeps both the bell and the badge in view at 50%.
+    // Centred rather than 50% 45%: the source is already 3:4, and both the
+    // desktop arc and the mobile carousel show it in a 3:4 frame, so no crop
+    // decision is needed anywhere.
     pos: '50% 50%',
     cta: true,
     noSitemap: true,

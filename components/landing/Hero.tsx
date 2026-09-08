@@ -33,7 +33,8 @@ import styles from './landing.module.css';
 // from centre and drives z-order plus the arc's proportions. It no longer hides
 // anything: the old CSS dropped rank 3 under 700px and rank 2 under 430px, which
 // silently removed four of the seven destinations on a phone. Under 700px the arc
-// becomes a grid instead, so all seven stay reachable at every width.
+// becomes a snap-scrolling card carousel instead, so all seven stay reachable at
+// every width.
 //
 // Headline is taken verbatim from the approved list: the word "AI" must not
 // appear in the H1 or the subheadline.
@@ -64,7 +65,9 @@ export function Hero() {
               src={frame.src}
               alt=""
               fill
-              sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 34vw"
+              /* The desktop arc tops out at 192px wide; the mobile carousel
+                 cards run ~45vw. */
+              sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 45vw"
               className={styles.heroFanImage}
               priority={frame.rank < 2}
             />
