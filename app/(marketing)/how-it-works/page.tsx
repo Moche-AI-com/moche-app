@@ -217,7 +217,7 @@ export default function HowItWorksPage() {
           to split the two without duplicating messages.
         </p>
 
-        <CtaBand text="Load one property and see the completeness score for yourself. Free until January 1, 2027." />
+        <CtaBand text="Load one property and see the completeness score for yourself. Free plan, no card." />
         <Related current="/how-it-works" />
       </div>
     </>

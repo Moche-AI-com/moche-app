@@ -18,23 +18,21 @@ import {
 //      cost us their trust.
 //   2. The mailto was the only route into the programme and captured nothing. A
 //      visitor who clicked it left the site and landed in a drafts folder.
-//   3. A 30-day trial is meaningless when every pre-launch account is already
-//      free until January 1, 2027.
+//   3. A 30-day trial is meaningless next to a free plan with no time limit.
 //
 // The programme is now the signup itself: no application, no email, no card. The
 // thing being offered is a rate that survives launch, which is worth something
 // precisely because it is redeemed later. See docs/pricing-model-2027.md.
 const PERKS = [
   `${FOUNDING_DISCOUNT_PERCENT}% off your first ${FOUNDING_DISCOUNT_MONTHS} months of billing, locked in when you sign up`,
-  'Free to use for everything between now and launch day, with no card on file',
+  'A free plan you can publish on from day one — one property, live guest portal, no card on file',
   'Early access to new features before general release',
   'A direct line to the founder, not a ticket queue',
 ] as const;
 
 // Stating the three steps is not decoration. The old section asked for a signup
-// without saying what happened after it, and the honest answer (you can build
-// your whole setup today, the guest side switches on at launch) is more
-// persuasive than the ask was.
+// without saying what happened after it, and the honest answer (you build today,
+// publish whenever you are ready) is more persuasive than the ask was.
 const STEPS = [
   {
     title: 'Create your account',
@@ -45,8 +43,8 @@ const STEPS = [
     body: 'Add each property once, then preview the guest portal exactly as a guest will see it.',
   },
   {
-    title: 'We tell you the day we go live',
-    body: 'Your guest links and QR codes switch on, and your founding rate is already applied.',
+    title: 'Go live whenever you are ready',
+    body: 'Publish your guest portal today — links and QR codes work immediately. Your founding rate is locked for your first paid plan.',
   },
 ] as const;
 
@@ -61,9 +59,9 @@ export function FoundingBand() {
               Sign up now, pay half for your first year
             </h2>
             <p className="muted">
-              Every account created before we go live on January 1, 2027 is a founding
-              account. There is no application and no waiting list. You build your setup
-              now, and the discount applies to the first bill you ever get.
+              Every account created before our official launch on January 1, 2027 is a founding
+              account. There is no application and no waiting list. Sign up free, publish today,
+              and the discount applies to the first paid plan you ever choose.
             </p>
             <ul className={styles.foundingList}>
               {PERKS.map((perk) => (
