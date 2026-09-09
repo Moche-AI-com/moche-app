@@ -278,11 +278,13 @@
    page reading as a bento menu.
 
    It is now a swipeable snap-carousel. The strip runs edge to edge with the
-   scrollbar hidden and both ends fade-masked; each card is 58vw so the next
-   one peeks in from the right edge -- the peek, not a scrollbar, is what tells
-   a thumb there is more. The CTA leads the strip a touch wider with its teal
-   ring, first thing a thumb lands on. Same seven frames, same DOM order, so
-   keyboard tab order and the sitemap are unchanged. */
+   scrollbar hidden and both ends fade-masked; every card is the same 58vw, so
+   the next one peeks in from the right edge -- the peek, not a scrollbar, is
+   what tells a thumb there is more. The CTA leads the strip at exactly the
+   same size: the teal ring and the arrow already mark it as the primary
+   action, and a larger first card read as misaligned against the rest of the
+   strip. Same seven frames, same DOM order, so keyboard tab order and the
+   sitemap are unchanged. */
 @media (max-width: 700px) {
   .heroFan {
     position: static;
@@ -323,23 +325,15 @@
     scroll-snap-align: center;
   }
 
-  /* The CTA leads the strip, a touch wider than the content cards: it is the
-     primary action, and on a phone it should not read as one of seven equal
-     tiles. */
+  /* The CTA leads the strip at exactly the same size as every other card:
+     the teal ring and the arrow already mark it as the primary action. */
   .heroFanFrame[data-cta] {
     order: -1;
-    flex-basis: 68vw;
-    max-width: 280px;
   }
 
   .heroFanLabel {
     font-size: 0.78rem;
     padding: 0.5rem 0.35rem 0.55rem;
-  }
-
-  .heroFanFrame[data-cta] .heroFanLabel {
-    font-size: 0.95rem;
-    padding-bottom: 0.7rem;
   }
 }
 
