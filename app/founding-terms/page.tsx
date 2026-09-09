@@ -44,12 +44,13 @@ export default function FoundingTermsPage() {
           is any conflict, those documents control.
         </p>
 
-        <h2>0. Before we launch</h2>
+        <h2>0. During the public beta</h2>
         <p>
-          Until {LAUNCH_DATE_LABEL} there is no card to enter and nothing to pay. Accounts
-          created before launch are free, with no expiry date, and you can build your whole
-          setup in that time. The billing sections below describe what happens when paid
-          plans begin at launch.
+          Moche-AI is in public beta until our official launch on {LAUNCH_DATE_LABEL}. The
+          free plan includes one property at no cost, with no expiry date and no card
+          required, and you can publish your guest portal from day one. You can upgrade to
+          a paid plan at any time from the dashboard, and the billing sections below apply
+          from the day you do.
         </p>
 
         <h2>1. What the founding rate is</h2>

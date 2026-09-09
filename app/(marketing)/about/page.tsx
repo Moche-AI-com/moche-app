@@ -14,11 +14,11 @@ export const metadata: Metadata = marketingMetadata({
 
 // The brand article. Written to be the page a cautious host reads before
 // trusting an unfamiliar product with their property data, so it is deliberately
-// specific about what the company is and is not: pre-launch, independent, small,
-// and unwilling to publish numbers it cannot show.
+// specific about what the company is and is not: in public beta, independent,
+// small, and unwilling to publish numbers it cannot show.
 //
 // Every factual claim here is already published elsewhere in this repo (the
-// January 1 2027 launch date and free-until-launch offer in Pricing.tsx, the
+// January 1 2027 launch date and the free plan in Pricing.tsx, the
 // "inform, never invent" instruction in Faq.tsx, "Built in Somerville, MA" in
 // LandingFooter.tsx, the security posture in /legal/security). No headcount,
 // funding, customer count, or vanity metric appears, because none of those are
@@ -120,9 +120,10 @@ export default function AboutPage() {
 
         <h2>Where we are right now</h2>
         <p>
-          Moche-AI is pre-launch. General availability is January 1, 2027. Accounts created before
-          then are free until launch and no card is charged before that date. After launch the pricing
-          is per property and published openly on the homepage rather than hidden behind a call.
+          Moche-AI is in public beta. The official launch is January 1, 2027. Anyone can sign up
+          today: one property is free forever, no card required, and you can publish a live guest
+          portal from day one. Paid plans are per property and published openly on the homepage
+          rather than hidden behind a call.
         </p>
         <p>
           We are telling you this on the page that exists to earn your trust because the alternative
@@ -161,7 +162,7 @@ export default function AboutPage() {
           including for security reports and data rights requests.
         </p>
 
-        <CtaBand text="Early accounts are free until the January 1, 2027 launch. No card required." />
+        <CtaBand text="Free plan, live guest portal, no card. Official launch January 1, 2027." />
         <Related current="/about" />
       </div>
     </>

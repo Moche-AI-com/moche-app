@@ -301,7 +301,7 @@ export default function GuestCommunicationGuidePage() {
           <Link href="/security">trust and safety</Link> for how guest data is handled.
         </p>
 
-        <CtaBand text="Run the audit, then load the results into one property. Free until January 1, 2027." />
+        <CtaBand text="Run the audit, then load the results into one property. Free plan, no card." />
         <Sources items={SOURCES} />
         <Related current="/resources/guest-communication-guide" />
       </div>
