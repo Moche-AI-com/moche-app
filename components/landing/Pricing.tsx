@@ -21,9 +21,10 @@ import {
 // numbers, including the competitor pricing they were set against, is in
 // docs/pricing-model-2027.md.
 //
-// Pre-launch (go-live January 1, 2027) these cards exist for transparency rather
-// than conversion. Nothing is billed before launch and no card is collected, so
-// every CTA goes to signup, not to checkout.
+// Public beta (official launch January 1, 2027): the free tier is a real plan a
+// host can publish on, not a waiting list. The paid card is the upgrade path for
+// a second property onward, and founding accounts still lock their rate at
+// signup. Both CTAs go to signup; checkout happens later, from the dashboard.
 
 const MIN_PROPERTIES = 1;
 const DEFAULT_PROPERTIES = 3;
@@ -70,11 +71,11 @@ export function Pricing() {
           Pricing that gets cheaper as you grow
         </Reveal>
         <Reveal as="p" delay={60} className={`muted ${styles.pricingIntro}`}>
-          Moche-AI goes live January 1, 2027. Accounts created before then are free until
-          launch and no card is collected. After launch you pay per property, and the rate
-          drops as you add more. Guest messages are unlimited on every paid plan, with no
-          per-conversation charge, because our costs sit in setup rather than in
-          conversations.
+          Moche-AI is in public beta now: sign up free, build your Property Brain, and publish a
+          live guest portal today. The official launch is January 1, 2027. One property is free
+          forever, and when you are ready to grow you pay per property at a rate that drops as you
+          add more. Guest messages are unlimited on every paid plan, with no per-conversation
+          charge, because our costs sit in setup rather than in conversations.
         </Reveal>
 
         <Reveal delay={90} className={styles.pricingControls}>
@@ -230,8 +231,8 @@ export function Pricing() {
         <Reveal delay={170} className={styles.pricingSetup}>
           <p className={styles.pricingSetupCopy}>
             <strong>Setup is self serve and included.</strong> You add each property once,
-            confirm the details, and preview the guest portal before anyone sees it. There is
-            no setup fee and nothing to buy before you go live.
+            confirm the details, and publish the guest portal whenever you are ready. There is
+            no setup fee and nothing standing between you and a live portal.
           </p>
         </Reveal>
 

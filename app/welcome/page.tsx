@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Set up your concierge — Moche-AI',
   description:
-    'Your Moche-AI account is live. Add your properties, build each Property Brain, and preview the guest portal before launch.',
+    'Your Moche-AI account is live. Add your properties, build each Property Brain, and publish your guest portal whenever you are ready.',
   robots: { index: false, follow: false },
 };
 
@@ -26,22 +26,19 @@ interface Step {
 }
 
 /**
- * Pre-launch onboarding launchpad.
+ * Onboarding launchpad.
  *
  * What was here before was a holding page: it confirmed the email, said the
  * product ships on January 1 2027, and offered a short survey. A host who was
  * interested enough to create an account and click a confirmation link arrived
- * and found there was nothing they could do for about four months. That is the
- * single worst place in the funnel to hand someone a dead end, and it also cost
- * us the thing we actually want before launch: real properties, real Brains, and
- * real hosts discovering where the setup hurts.
+ * and found there was nothing they could do for months. That is the single
+ * worst place in the funnel to hand someone a dead end.
  *
- * So the gate moved. The dashboard is open (see requireLaunchAccess in
- * lib/auth/guards.ts) and the GUEST side is what stays shut, structurally, at
- * the one transition that matters: a property cannot go `live` before the launch
- * date, and every guest surface requires `live`. This page is now the bridge into
- * that work, with real progress read from the database so it stops being a
- * checklist of things we hope the host did and becomes a status of what they have.
+ * The product is open now: the dashboard is available (see requireLaunchAccess
+ * in lib/auth/guards) and a property can go live whenever the host is ready.
+ * This page is the bridge into that work, with real progress read from the
+ * database so it stops being a checklist of things we hope the host did and
+ * becomes a status of what they have.
  *
  * Signup confirmation links point here (next=/welcome). Nothing redirects here
  * anymore, so a host who has finished the first steps is sent straight to the
@@ -107,7 +104,7 @@ export default async function WelcomePage() {
     {
       id: 'brain',
       title: 'Build the Property Brain',
-      body: 'Check-in and check-out, door codes, wifi, house rules, appliances, parking, the local recommendations you repeat every week. This is the part that answers your guests, and the part worth doing before launch day rather than on it.',
+      body: 'Check-in and check-out, door codes, wifi, house rules, appliances, parking, the local recommendations you repeat every week. This is the part that answers your guests, and the part worth doing before your first guest arrives rather than after.',
       href: firstPropertyId ? `/dashboard/properties/${firstPropertyId}/brain` : '/dashboard/properties/new',
       cta: hasBrain ? 'Keep building' : 'Start the Brain',
       done: hasBrain,
@@ -137,9 +134,9 @@ export default async function WelcomePage() {
             {firstName ? `You are in, ${firstName}.` : 'You are in.'} Let us get your concierge built.
           </h1>
           <p className={styles.lede}>
-            Your account is live now, not on launch day. Add your properties and build each Property
-            Brain at your own pace, preview the guest portal exactly as a guest will see it, and your
-            setup switches on for real guests on {LAUNCH_DATE_LABEL}.
+            Your account is live now — the whole product, not a waiting list. Add your properties,
+            build each Property Brain at your own pace, and publish your guest portal whenever you
+            are ready. Moche-AI is in public beta ahead of our official launch on {LAUNCH_DATE_LABEL}.
           </p>
           <div className={styles.progress}>
             <div className={styles.progressTrack} aria-hidden="true">
@@ -186,18 +183,17 @@ export default async function WelcomePage() {
         </ol>
 
         <section className={styles.note}>
-          <h2 className={styles.noteTitle}>What happens on {LAUNCH_DATE_LABEL}</h2>
+          <h2 className={styles.noteTitle}>What {LAUNCH_DATE_LABEL} means</h2>
           <p className={styles.noteBody}>
-            Guest links and QR codes switch on, and everything you built starts answering guests. You
-            will get an email the day it happens. Until then the guest side is closed, so nothing you
-            are still working on can reach a real guest by accident.
+            That is our official launch day: the public beta label comes off and the founding rates
+            close for good. Everything you publish before then keeps working — you will simply have
+            been live longer than everyone else.
           </p>
           <p className={styles.noteBody}>
-            Because you signed up before launch, your founding rate is already attached to this
+            Because you signed up during the beta, your founding rate is already attached to this
             account: {FOUNDING_DISCOUNT_PERCENT}% off for your first {FOUNDING_DISCOUNT_MONTHS}{' '}
-            months, starting the day you choose a plan at launch. Nothing is billed before then and
-            we do not hold a card. Pricing is public on the{' '}
-            <Link href="/#pricing">homepage</Link>.
+            months of any paid plan. Start free — one property, no card — and upgrade only when you
+            want more. Pricing is public on the <Link href="/#pricing">homepage</Link>.
           </p>
         </section>
 

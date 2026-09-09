@@ -29,19 +29,19 @@ const SALES_MAILTO = `${MAILTO}?subject=${encodeURIComponent(
 // the programme; this one only makes the three ways in impossible to miss, and
 // states the beta incentive plainly next to them.
 //
-// Every incentive below is already promised elsewhere on the page (the hero
-// pre-launch note and the founding band's perk list). Nothing new is offered,
-// and the numbers come from constants so this can never drift from the offer
-// the checkout actually applies.
+// Every incentive below is already promised elsewhere on the page (the hero beta
+// note and the founding band's perk list). Nothing new is offered, and the
+// numbers come from constants so this can never drift from the offer the
+// checkout actually applies.
 const INCENTIVES = [
   {
     label: `${FOUNDING_DISCOUNT_PERCENT}% off for ${FOUNDING_DISCOUNT_MONTHS} months`,
-    detail: `Locked in at signup for the first ${FOUNDING_ACCOUNT_CAP} accounts. No card until launch, and you can cancel at any point.`,
+    detail: `Locked in at signup for the first ${FOUNDING_ACCOUNT_CAP} accounts. Start on the free plan — no card required — and cancel at any point.`,
   },
   {
     label: 'Setup you can finish today',
     detail:
-      'Add a property, confirm the details, and preview the guest portal. Self serve, with no setup fee.',
+      'Add a property, confirm the details, and publish the guest portal. Self serve, with no setup fee.',
   },
   {
     label: 'Support that is a person',
@@ -61,8 +61,8 @@ export function ClosingCta() {
             Elevate your stay, get more reviews, and handle fewer questions.
           </Reveal>
           <Reveal as="p" delay={70} className={styles.closingLead}>
-            Start free today, or have us walk you through it first. Either way you are set up before
-            your next check-in.
+            Start free today, or have us walk you through it first. Either way you can be live
+            before your next check-in.
           </Reveal>
 
           <Reveal delay={140} className={styles.closingActions}>
