@@ -16,15 +16,14 @@ export interface BehavioralEscalation {
   trigger: BehavioralTrigger | null;
 }
 
-const HUMAN_NOUN_EN = '(?:human|person|someone|host|owner|manager|staff|agent)';
-
 // "Get me to a person" across the portal's shipped languages. Patterns anchor on
 // an intent verb near a human noun so neutral mentions ("the host manual is in
 // the drawer") never fire. Standalone phrase patterns cover the verbless forms
-// ("real person?").
+// ("real person?"). Regex literals only — a `new RegExp` template literal turns
+// `\b` into a backspace character and silently never matches.
 const HUMAN_PATTERNS: RegExp[] = [
   // English — intent verb within a short window of a human noun.
-  new RegExp(`\b(?:talk|speak|chat|message|text|call|reach|contact)\b[^.!?\n]{0,40}\b${HUMAN_NOUN_EN}\b`, 'i'),
+  /\b(?:talk|speak|chat|message|text|call|reach|contact)\b[^.!?\n]{0,40}\b(?:human|person|someone|host|owner|manager|staff|agent)\b/i,
   /\b(?:someone|anyone)\s+(?:i|we)\s+can\s+(?:call|contact|reach|speak to|talk to)\b/i,
   /\b(?:get|give)\s+me\s+(?:a\s+|the\s+)?(?:real\s+)?(?:human|person|host|manager)\b/i,
   /\b(?:real|actual|live)\s+(?:person|human)\b/i,
@@ -88,8 +87,8 @@ export function questionSimilarity(a: string, b: string): number {
   return overlap / (tokensA.size + tokensB.size - overlap);
 }
 
-/** A re-ask needs enough content words to be a real question… */
-export const REPEAT_MIN_TOKENS = 3;
+/** A re-ask needs at least two content words ("trash bin?") to carry intent… */
+export const REPEAT_MIN_TOKENS = 2;
 /** …and high overlap, so "wifi password?" and "wifi not working" never collide. */
 export const REPEAT_SIMILARITY_THRESHOLD = 0.6;
 
