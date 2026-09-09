@@ -271,26 +271,36 @@
   flex: none;
 }
 
-/* Under 700px seven frames at a legible size cannot sit side by side in an arc
-   without overlapping into an unreadable smear.
+/* Under 700px the arc cannot hold seven legible frames side by side without
+   overlapping into an unreadable smear. The first mobile pass flattened it
+   into a static 3-up grid of square tiles: every destination crammed into the
+   same small box, nothing moving, and the most valuable real estate on the
+   page reading as a bento menu.
 
-   The arc previously thinned from the outside in -- rank 3 was hidden under
-   700px and rank 2 under 430px -- which was defensible while the frames were
-   decoration. It is not defensible now that each one is a destination: it would
-   remove four of the seven links, including the whole trust and support side of
-   the set, from every phone. Mobile is where a guest-facing product is evaluated.
-
-   So the arc becomes a grid instead. Same seven frames, same DOM order, no
-   absolute positioning, no transforms, and the CTA spans the full width on the
-   first row where a thumb reaches it first. */
+   It is now a swipeable snap-carousel. The strip runs edge to edge with the
+   scrollbar hidden and both ends fade-masked; each card is 58vw so the next
+   one peeks in from the right edge -- the peek, not a scrollbar, is what tells
+   a thumb there is more. The CTA leads the strip a touch wider with its teal
+   ring, first thing a thumb lands on. Same seven frames, same DOM order, so
+   keyboard tab order and the sitemap are unchanged. */
 @media (max-width: 700px) {
   .heroFan {
     position: static;
     height: auto;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.45rem;
-    padding: 0 1rem;
+    display: flex;
+    gap: 0.6rem;
+    padding: 0 1rem 0.5rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  }
+
+  .heroFan::-webkit-scrollbar {
+    display: none;
   }
 
   /* `relative`, not `static`: next/image with `fill` renders an absolutely
@@ -300,58 +310,71 @@
     position: relative;
     top: auto;
     left: auto;
+    flex: 0 0 58vw;
     width: auto;
+    max-width: 230px;
     /* The arc's transform and animation are both keyed to translate(-50%) and
-       would drag every frame a half-width off its grid cell. Both are scoped to
+       would drag every frame a half-width off its slot. Both are scoped to
        min-width: 701px below; these resets are the belt to that braces. */
     transform: none;
     animation: none;
-    /* Square, not 3:4. Seven portrait tiles plus the CTA band push the headline
-       more than a screen down on a phone, which buries the thing the page is
-       actually for. Square keeps the whole set and the H1 in one view. */
-    aspect-ratio: 1 / 1;
-    border-radius: 12px;
+    aspect-ratio: 3 / 4;
+    border-radius: 14px;
+    scroll-snap-align: center;
   }
 
-  /* Full-bleed CTA on its own first row: it is the primary action, and on a
-     phone it should not be one of nine equal tiles. */
+  /* The CTA leads the strip, a touch wider than the content cards: it is the
+     primary action, and on a phone it should not read as one of seven equal
+     tiles. */
   .heroFanFrame[data-cta] {
-    grid-column: 1 / -1;
     order: -1;
-    aspect-ratio: 16 / 7;
-    width: auto;
+    flex-basis: 68vw;
+    max-width: 280px;
   }
 
   .heroFanLabel {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     padding: 0.5rem 0.35rem 0.55rem;
   }
 
   .heroFanFrame[data-cta] .heroFanLabel {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     padding-bottom: 0.7rem;
   }
-
 }
 
-/* Two columns plus the CTA band at the narrowest widths. Three tiles inside
-   320px leaves each one about 90px wide, which is below the point where the
-   photograph reads as anything. */
-@media (max-width: 360px) {
-  .heroFan {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.4rem;
+/* The mobile entrance plays from CSS with no JS involved, the same reasoning
+   as the [data-eager] reveals in globals.css: the hero is the first screen,
+   and gating it on hydration leaves the top of the page visibly empty for a
+   few hundred milliseconds. The strip cascades in from the right, following
+   the direction a thumb will swipe it. Declared after the <=700px reset block
+   so the animation wins over its `animation: none` at equal specificity. */
+@media (prefers-reduced-motion: no-preference) and (max-width: 700px) {
+  .heroFanFrame {
+    animation: fanCascadeIn 620ms var(--ease-out) backwards;
+    animation-delay: calc(50ms + var(--fan-i) * 65ms);
   }
 }
 
-/* The entrance plays from CSS with no JS involved, the same reasoning as the
-   [data-eager] reveals in globals.css: the hero is the first screen, and
-   gating it on hydration leaves the top of the page visibly empty for a few
-   hundred milliseconds. Frames fan out from a near-centred stack.
+@keyframes fanCascadeIn {
+  from {
+    opacity: 0;
+    transform: translate3d(26px, 10px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The desktop entrance plays from CSS with no JS involved, the same reasoning
+   as the [data-eager] reveals in globals.css: the hero is the first screen,
+   and gating it on hydration leaves the top of the page visibly empty for a
+   few hundred milliseconds. Frames fan out from a near-centred stack.
 
    Scoped to the arc's own width: both keyframes below resolve to
    translate(-50%), which is the arc's horizontal centring, and under 701px the
-   frames are grid cells with no centring to undo. */
+   frames are flex cards in the snap strip with no centring to undo. */
 @media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
   .heroFanFrame {
     animation: fanIn 760ms var(--ease-out) backwards;
@@ -465,9 +488,9 @@
   text-align: center;
 }
 
-/* The upward tuck belongs to the arc only. Under 701px the frames are a grid
-   with no outer pair hanging below their box, so pulling the copy up just runs
-   the kicker underneath the bottom row of tiles. */
+/* The upward tuck belongs to the arc only. Under 701px the frames are a
+   swipeable strip with no outer pair hanging below their box, so pulling the
+   copy up just runs the kicker underneath the cards. */
 @media (min-width: 701px) {
   .heroCopy {
     margin-top: calc(-1 * clamp(0.5rem, 2vw, 2rem));
