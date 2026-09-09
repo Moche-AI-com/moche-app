@@ -39,7 +39,8 @@ import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
  * z-order and the desktop arc's proportions. It no longer hides anything: the
  * old implementation dropped rank 3 under 700px and rank 2 under 430px, which
  * on a phone silently removed four of the seven destinations from the page.
- * Under 700px the arc becomes a grid instead, so all seven stay reachable.
+ * Under 700px the arc becomes a swipeable snap-carousel instead, so all seven
+ * stay reachable at every width.
  *
  * `pos` is the crop anchor. These frames are tall windows onto photographs that
  * were not shot for that ratio, and a centred crop of the beach house is two
