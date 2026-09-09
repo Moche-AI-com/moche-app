@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { LAUNCH_DATE_ISO } from '@/lib/constants';
 import type { Database } from '@/lib/database.types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -68,40 +67,18 @@ export async function requireSession(): Promise<SessionContext> {
   return ctx;
 }
 
-// Retained because the signup confirmation link and /welcome still distinguish a
-// brand-new pre-launch account from a legacy tester account. It no longer gates
-// anything.
-export const LAUNCH_GATE_CUTOFF_ISO = '2026-08-21T00:00:00.000Z';
-
-/**
- * True until Moche-AI goes live. Reads LAUNCH_DATE_ISO so the marketing copy, the
- * publish gate and the dashboard banner cannot disagree about the date.
- */
-export function isPreLaunch(now: Date = new Date()): boolean {
-  return now.getTime() < new Date(LAUNCH_DATE_ISO).getTime();
-}
-
 /**
  * Dashboard access.
  *
- * This used to redirect every account created after LAUNCH_GATE_CUTOFF_ISO to
- * /welcome, which meant a host who signed up, confirmed their email, and wanted
- * to try the product hit a page that told them to wait about four months. Nothing
- * they could do on that page moved them closer to using the tool, and nothing we
- * learned from it told us whether the product worked for them.
+ * Public beta: every confirmed account gets the full product — profile,
+ * properties, Property Brain, extras — and can publish a live guest portal
+ * whenever it is ready. The old pre-launch split (build now, guest side opens
+ * on the official launch date) was retired when the beta opened: hosts told us
+ * the portal was the thing they needed to try for real, not just preview.
  *
- * Pre-launch hosts now get the full host side: profile, properties, Property
- * Brain, extras, and a host preview of the guest portal. What stays shut is the
- * GUEST side, and it is shut structurally rather than by a redirect: every
- * guest-facing surface (app/g, app/stay, the guest verify/redeem routes) already
- * requires `properties.status = 'live'`, and `setStatus` in
- * app/dashboard/properties/actions.ts refuses to set that before the launch date.
- * So a pre-launch host can build and preview everything, and no real guest can
- * reach any of it.
- *
- * This function is now just requireSession with a name the dashboard layout
- * already imports; it is kept so the launch-gating intent stays documented in one
- * place rather than dissolving into the layout.
+ * This function is requireSession with a name the dashboard layout already
+ * imports; it stays so the access intent is documented in one place rather
+ * than dissolving into the layout.
  */
 export async function requireLaunchAccess(): Promise<SessionContext> {
   return requireSession();
