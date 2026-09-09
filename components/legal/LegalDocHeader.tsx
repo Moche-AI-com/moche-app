@@ -12,9 +12,16 @@ export function LegalDocHeader({ slug }: { slug: LegalSlug }) {
     timeZone: 'UTC',
   });
   return (
-    <header style={{ marginBottom: '1.75rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border, rgba(255,255,255,.1))' }}>
+    <header
+      style={{
+        marginBottom: '2.25rem',
+        paddingBottom: '1.15rem',
+        borderBottom: '1px solid var(--border, rgba(255,255,255,.1))',
+        textAlign: 'left',
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 'clamp(1.6rem,4vw,2.2rem)', margin: 0 }}>{doc.title}</h1>
+        <h1 style={{ fontSize: 'clamp(1.6rem,4vw,2.2rem)', margin: 0, lineHeight: 1.15, letterSpacing: '-0.02em' }}>{doc.title}</h1>
         <PrintButton />
       </div>
       <p className="muted" style={{ fontSize: '.8rem', margin: '.6rem 0 0' }}>

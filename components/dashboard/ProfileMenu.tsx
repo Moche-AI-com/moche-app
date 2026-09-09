@@ -14,7 +14,7 @@ const SUPPORT_MAILTO = `mailto:${SALES_EMAIL}?subject=${encodeURIComponent('Moch
 // Account menu for the dashboard header. It replaced the flat Profile tab and
 // the standalone header theme toggle: the trigger is the host's name next to
 // the notification bell, and the panel carries the three account destinations
-// (Profile Settings, Documentation, Support), the dark/light switch, and
+// (Profile Settings, Documents, Support), the dark/light switch, and
 // sign out — which used to be its own header button.
 //
 // Theme handling mirrors components/ThemeToggle.tsx exactly — same data-theme
@@ -144,19 +144,17 @@ export function ProfileMenu({ displayName }: { displayName: string }) {
             <UserRound size={15} aria-hidden />
             Profile Settings
           </Link>
-          {/* Plain anchor, not next/link: the Legal Center lives outside the
-              dashboard shell, so it opens in a new tab and the host keeps their
-              place. */}
-          <a
-            href="/legal"
-            target="_blank"
-            rel="noopener noreferrer"
+          {/* In-dashboard documents page: the public guides and the versioned
+              legal documents rendered from the same registries the site uses,
+              so the host keeps their place instead of opening a new tab. */}
+          <Link
+            href="/dashboard/profile/documents"
             className="profile-menu-item"
             onClick={() => setOpen(false)}
           >
             <FileText size={15} aria-hidden />
-            Documentation
-          </a>
+            Documents
+          </Link>
           {/* Direct mailto per spec — "sends us an email". The richer support
               page (account id pre-filled) stays reachable at
               Profile Settings → Support. */}

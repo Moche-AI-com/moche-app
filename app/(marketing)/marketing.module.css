@@ -490,3 +490,62 @@
   text-underline-offset: 0.16em;
   overflow-wrap: anywhere;
 }
+
+/* ---- Phones: flatten the page chrome -------------------------------------
+
+   On a phone the reading column already spans the viewport, so the framed
+   page-hero photograph and the bordered text cards stop reading as structure
+   and start reading as a stack of boxed widgets. Mobile flattens them: the
+   hero goes edge to edge with no frame, and the text-only card grids (cards,
+   topics) become hairline-separated rows -- the settings-list pattern a thumb
+   already knows how to scan. Cards that carry photographs (Related) keep
+   their shape, because an image still needs an edge, and the CTA band keeps
+   its fill: it is the page's one conversion surface. */
+@media (max-width: 640px) {
+  /* --w overrides the .wide breakout width, so the figure escapes the reading
+     column's gutter on both sides. The frame's border and radius come off
+     because there is no page edge left for them to sit against. */
+  .hero.wide.wide {
+    --w: 100vw;
+  }
+
+  .heroFrame {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  /* The caption lives inside the full-bleed figure, so it has to re-supply
+     the gutter the figure escaped. */
+  .heroCaption {
+    padding-inline: var(--doc-gutter);
+  }
+
+  /* Text-only card grids flatten into hairline-separated rows: side borders,
+     radii and the card fill go, and the doubled border between neighbours
+     becomes a single rule. */
+  .cards,
+  .topics {
+    gap: 0;
+  }
+
+  .cards > li,
+  .topics > li {
+    padding: 1rem 0;
+    background: transparent;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  .cards > li + li,
+  .topics > li + li {
+    border-top: 0;
+  }
+
+  /* With the card chrome gone the action row's own hairline would double the
+     separator between items; it keeps its spacing but drops the border. */
+  .topics .topicAction {
+    border-top: 0;
+  }
+}
