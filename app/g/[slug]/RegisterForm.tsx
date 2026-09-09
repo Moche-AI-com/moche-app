@@ -5,11 +5,12 @@ import { UserRound } from 'lucide-react';
 import type { PortalT } from '@/lib/guest/portal-strings';
 
 // Step 2 of the portal: "Who's joining?" Every member of the party identifies
-// themselves on their own device after entering the shared stay code. Name is
-// required; phone is OPTIONAL — it powers the SMS reply alert and reconnects
-// the guest to the same identity when they open the portal on another device.
-// Terms are accepted per guest; the SMS opt-in only appears once a phone
-// number is entered (it is meaningless without one).
+// themselves on their own device after entering the shared stay code. Names are
+// OPTIONAL (issue #133 — the stay code already routed them, and every required
+// field costs concierge usage); phone is OPTIONAL and only powers the SMS reply
+// alert plus reconnecting the same identity on another device. Terms are
+// accepted per guest; the SMS opt-in only appears once a phone number is
+// entered (it is meaningless without one).
 //
 // Demo mode (host preview sign-in walkthrough): the form validates natively,
 // then advances without a network call — no identity is registered or saved.
@@ -30,6 +31,9 @@ export function RegisterForm(props: {
   const [error, setError] = useState<string | null>(null);
   const { t } = props;
   const hasPhone = phone.trim().length > 0;
+  // portalT falls back to the key itself when a locale has no translation yet,
+  // so an unlisted key degrades gracefully to the English "(optional)".
+  const optionalTag = t('regNameOptional') === 'regNameOptional' ? '(optional)' : t('regNameOptional');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -42,8 +46,8 @@ export function RegisterForm(props: {
         return;
       }
       const payload = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: firstName.trim() || undefined,
+        lastName: lastName.trim() || undefined,
         phone: phone.trim() || undefined,
         notificationConsent: hasPhone && notificationConsent,
         termsAccepted,
@@ -62,7 +66,7 @@ export function RegisterForm(props: {
         setError(typeof json.error === 'string' && res.status !== 400 ? json.error : t('regError'));
         return;
       }
-      props.onRegistered(`${payload.firstName} ${payload.lastName}`.trim());
+      props.onRegistered(`${payload.firstName ?? ''} ${payload.lastName ?? ''}`.trim() || 'Guest');
     } catch {
       setError('Could not confirm registration. Please try again.');
     } finally {
@@ -81,25 +85,27 @@ export function RegisterForm(props: {
       <form onSubmit={submit}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.65rem' }}>
           <div className="gp-field">
-            <label className="gp-label" htmlFor="gp-reg-first">{t('regFirstName')}</label>
+            <label className="gp-label" htmlFor="gp-reg-first">
+              {t('regFirstName')} <span className="gp-muted">{optionalTag}</span>
+            </label>
             <input
               id="gp-reg-first"
               className="gp-input"
               value={firstName}
               onChange={(event) => setFirstName(event.target.value)}
               autoComplete="given-name"
-              required
             />
           </div>
           <div className="gp-field">
-            <label className="gp-label" htmlFor="gp-reg-last">{t('regLastName')}</label>
+            <label className="gp-label" htmlFor="gp-reg-last">
+              {t('regLastName')} <span className="gp-muted">{optionalTag}</span>
+            </label>
             <input
               id="gp-reg-last"
               className="gp-input"
               value={lastName}
               onChange={(event) => setLastName(event.target.value)}
               autoComplete="family-name"
-              required
             />
           </div>
         </div>

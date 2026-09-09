@@ -9,21 +9,26 @@ import { serverEnv } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Code-only entry (issue #133): the 4-digit stay code already routed the guest
+// to the right party, so names are OPTIONAL and fall back to "Guest". Phone is
+// collected only alongside the SMS opt-in, and terms remain a one-tap checkbox.
+// Every field removed here is more guests actually reaching the concierge.
 const schema = z.object({
-  firstName: z.string().trim().min(1).max(80),
-  lastName: z.string().trim().min(1).max(80),
+  firstName: z.string().trim().max(80).optional().default(''),
+  lastName: z.string().trim().max(80).optional().default(''),
   phone: z.string().trim().max(40).optional(),
   notificationConsent: z.boolean().optional().default(false),
   termsAccepted: z.literal(true),
 });
 
-// Name-only guests retain the concierge. Registration does not prove phone
+// Anonymous guests retain the concierge. Registration does not prove phone
 // ownership and must never reclaim another person's identity via a shared stay.
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Session expired.' }, { status: 401 });
   const parsed = schema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Enter your name and accept the terms.' }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Accept the terms to continue.' }, { status: 400 });
   const admin = createAdminClient();
   const db = admin as any;
   const { data: property } = await admin.from('properties').select('id, slug').eq('slug', (await params).slug).maybeSingle();
@@ -35,7 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if (!own) return NextResponse.json({ error: 'Session expired.' }, { status: 401 });
   const wantsSms = !!phone && parsed.data.notificationConsent;
   const now = new Date().toISOString();
-  const fullName = `${parsed.data.firstName} ${parsed.data.lastName}`;
+  const fullName = `${parsed.data.firstName} ${parsed.data.lastName}`.trim() || 'Guest';
   const hashed = phone ? hashContact(phone) : null;
   let identityId = own.guest_identity_id;
   // Only reuse the identity already bound to this session, never a phone lookup.
