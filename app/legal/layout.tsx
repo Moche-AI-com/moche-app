@@ -10,9 +10,10 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-// Shared chrome for every /legal page: a sticky TOC sidebar (collapsible on
-// mobile via <details>), a print-friendly main column, and a footer that links
-// to every document. Print CSS hides the nav/sidebar so a saved PDF is clean.
+// Shared chrome for every /legal page: a sticky TOC sidebar on desktop (a
+// horizontally scrollable pill rail on mobile), a left-aligned reading column
+// with real typographic rhythm, and a footer that links to every document.
+// Print CSS hides the nav/sidebar so a saved PDF is clean.
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="legal-center" style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
@@ -24,13 +25,45 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
           .legal-center a { color: #000 !important; text-decoration: underline; }
         }
         .legal-center .legal-shell { display: grid; grid-template-columns: 240px minmax(0,1fr); gap: 2.5rem; }
-        @media (max-width: 860px) { .legal-center .legal-shell { grid-template-columns: 1fr; } }
         .legal-center .legal-toc-sticky { position: sticky; top: 1.5rem; }
-        .legal-center .legal-main h2 { font-size: 1.25rem; margin: 1.75rem 0 .6rem; }
-        .legal-center .legal-main h3 { font-size: 1.02rem; margin: 1.25rem 0 .4rem; }
-        .legal-center .legal-main p, .legal-center .legal-main li { line-height: 1.6; font-size: .92rem; }
-        .legal-center .legal-main table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .82rem; }
-        .legal-center .legal-main th, .legal-center .legal-main td { border: 1px solid var(--border, rgba(255,255,255,.12)); padding: .5rem .6rem; text-align: left; vertical-align: top; }
+        .legal-center .legal-toc-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .35rem; }
+        .legal-center .legal-toc-list a { display: inline-flex; align-items: center; min-height: 32px; }
+
+        /* Document typography. These pages previously inherited whatever
+           alignment and rhythm the surrounding chrome happened to set, which
+           left binding documents reading as centred, under-spaced flyers.
+           Everything is now explicitly left-aligned with a real reading
+           rhythm: headings attach to their own paragraphs, lists are indented,
+           and the measure tracks characters, not pixels. */
+        .legal-center .legal-main { max-width: 72ch; text-align: left; }
+        .legal-center .legal-main h2 { font-size: 1.25rem; line-height: 1.3; margin: 2.25rem 0 .65rem; }
+        .legal-center .legal-main h3 { font-size: 1.02rem; line-height: 1.35; margin: 1.5rem 0 .45rem; }
+        .legal-center .legal-main p, .legal-center .legal-main li { line-height: 1.7; font-size: .92rem; }
+        .legal-center .legal-main p { margin: 0 0 1rem; }
+        .legal-center .legal-main ul, .legal-center .legal-main ol { margin: 0 0 1.15rem; padding-left: 1.4rem; display: grid; gap: .45rem; }
+        .legal-center .legal-main table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: .84rem; }
+        .legal-center .legal-main th, .legal-center .legal-main td { border: 1px solid var(--border, rgba(255,255,255,.12)); padding: .55rem .65rem; text-align: left; vertical-align: top; }
+        .legal-center .legal-main th { font-weight: 600; background: var(--surface-2, transparent); }
+
+        @media (max-width: 860px) {
+          .legal-center .legal-shell { grid-template-columns: 1fr; gap: 1.25rem; }
+          /* The 13-link sidebar becomes a horizontal pill rail above the
+             document: stacked vertically on a phone, the menu is a full screen
+             of links between the reader and the first sentence. */
+          .legal-center .legal-toc-sticky { position: static; }
+          .legal-center .legal-toc-list { flex-direction: row; overflow-x: auto; gap: .4rem; padding-bottom: .35rem; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+          .legal-center .legal-toc-list::-webkit-scrollbar { display: none; }
+          .legal-center .legal-toc-list li { flex: 0 0 auto; }
+          .legal-center .legal-toc-list a {
+            min-height: 44px;
+            padding: 0 .85rem;
+            border: 1px solid var(--border, rgba(127,127,127,.22));
+            border-radius: 999px;
+            white-space: nowrap;
+            background: var(--surface, transparent);
+          }
+          .legal-center .legal-main h2 { margin-top: 1.85rem; }
+        }
       `}</style>
 
       <header className="wrap legal-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 72 }}>
@@ -44,7 +77,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
             <p className="faint" style={{ fontSize: '.72rem', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '.6rem' }}>
               Legal Center
             </p>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '.35rem' }}>
+            <ul className="legal-toc-list">
               <li>
                 <Link href="/legal" className="muted" style={{ fontSize: '.85rem', textDecoration: 'none' }}>Overview</Link>
               </li>
@@ -59,7 +92,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
           </nav>
         </aside>
 
-        <main className="legal-main" style={{ maxWidth: 760 }}>{children}</main>
+        <main className="legal-main">{children}</main>
       </div>
 
       <footer className="wrap legal-footer" style={{ paddingBottom: '2.5rem', borderTop: '1px solid var(--border, rgba(255,255,255,.1))', paddingTop: '1.5rem' }}>

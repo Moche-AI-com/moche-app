@@ -9,8 +9,10 @@ import {
 } from './profile-nav';
 
 describe('PROFILE_SECTIONS', () => {
-  it('has the ten sections the plan calls for', () => {
-    expect(PROFILE_SECTIONS).toHaveLength(10);
+  it('has the eleven sections the plan calls for', () => {
+    // Ten from the original plan, plus Documents (added 2026-09-09): the
+    // in-dashboard list of the public guides and legal documents.
+    expect(PROFILE_SECTIONS).toHaveLength(11);
   });
 
   it('uses unique keys and unique hrefs', () => {

@@ -88,6 +88,13 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
     ownerOnly: false,
   },
   {
+    key: 'documents',
+    label: 'Documents',
+    href: `${BASE}/documents`,
+    summary: 'The guides, terms, and policies behind your account and guest experience.',
+    ownerOnly: false,
+  },
+  {
     key: 'support',
     label: 'Support',
     href: `${BASE}/support`,
