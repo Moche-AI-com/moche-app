@@ -72,7 +72,9 @@ export function PushOptIn(props: { slug: string; t: PortalT }) {
   );
 }
 
-function urlBase64ToUint8Array(base64: string): Uint8Array {
+// Return type is explicitly Uint8Array<ArrayBuffer> (not ArrayBufferLike) so it
+// satisfies BufferSource under the stricter TS 5.7+/Next 16 generic typings.
+function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4);
   const base64Safe = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw = window.atob(base64Safe);

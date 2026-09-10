@@ -144,7 +144,7 @@ export async function sendGuestPush(client: Client, input: {
   let sent = 0;
   for (const sub of subs as { id: string; endpoint: string; p256dh: string; auth: string }[]) {
     try {
-      const body = encryptPushPayload(sub.p256dh, sub.auth, payload);
+      const encrypted = encryptPushPayload(sub.p256dh, sub.auth, payload);
       const jwt = buildVapidJwt(sub.endpoint, keys);
       const res = await fetch(sub.endpoint, {
         method: 'POST',
@@ -154,7 +154,9 @@ export async function sendGuestPush(client: Client, input: {
           'Content-Type': 'application/octet-stream',
           TTL: '43200',
         },
-        body,
+        // Buffer<ArrayBufferLike> is not a BodyInit under the stricter Next 16
+        // typings — copy into a plain Uint8Array<ArrayBuffer> for the wire.
+        body: Uint8Array.from(encrypted),
         signal: AbortSignal.timeout(8000),
       });
       if (res.status >= 200 && res.status < 300) {
