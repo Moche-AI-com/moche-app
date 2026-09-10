@@ -51,31 +51,10 @@ export const PROPOSAL_SOURCE_LABEL: Record<ProposalSourceType, string> = {
 // Field allowlist
 // ---------------------------------------------------------------------------
 
-/**
- * `brain_item` fields become a new knowledge entry (title + body + category)
- * on approval. `text` fields overwrite a single scalar column. `tone_preset` is
- * a `text` field whose value must additionally be one of the five preset ids.
- */
-export type ProposableKind = 'brain_item' | 'text' | 'tone_preset' | 'brain_value';
+export type ProposableKind = 'brain_item' | 'text' | 'tone_preset' | 'brain_value' | 'guest_qa';
 
-/**
- * Prefix for registry-backed paths: `brain_value.<field_id>`.
- *
- * These are NOT hand-listed in PROPOSABLE_FIELDS. field_registry.json is
- * generated and is already the allowlist the database trigger enforces, so
- * hand-copying 53 entries here would create a second list to drift out of sync
- * with the first. Resolution goes through the registry, which means an unknown
- * field_id fails the same way an unknown path does.
- */
 export const BRAIN_VALUE_PREFIX = 'brain_value.';
 
-/**
- * Secrets are deliberately not proposable. A proposal row holds its value as
- * plaintext jsonb in `proposed_updates`, so routing a Wi-Fi password or door
- * code through this queue would reintroduce exactly the plaintext-at-rest
- * exposure the brain_values envelope exists to prevent. Secrets are entered by
- * the host directly and go straight to Vault.
- */
 export function isRegistryProposable(f: RegistryField): boolean {
   return !f.system_section && f.type !== 'secret';
 }
@@ -100,18 +79,12 @@ export function registryProposableField(fieldId: string): ProposableField | null
 
 export interface ProposableField {
   path: string;
-  /** Shown in the review list when the row's own label is missing. */
   label: string;
   kind: ProposableKind;
-  /** Which table the approved value lands in. */
   target: 'brain_items' | 'properties' | 'property_settings' | 'brain_values';
-  /** Column name for `properties` / `property_settings` targets. */
   column?: string;
-  /** Registry field_id for `brain_values` targets. */
   fieldId?: string;
-  /** Registry value type for `brain_values` targets. */
   valueType?: string;
-  /** Character ceiling for `text` values. */
   maxLength?: number;
 }
 
@@ -126,6 +99,15 @@ export const PROPOSABLE_FIELDS: Record<string, ProposableField> = {
     path: 'brain.document_summary',
     label: 'Property details read from a document',
     kind: 'brain_item',
+    target: 'brain_items',
+  },
+  // Issue #133, item 6: learned guest Q&A from resolved escalations. Without
+  // this entry the decision route 422'd every learning proposal — they could be
+  // queued but never approved.
+  'host_qa.guest_reply': {
+    path: 'host_qa.guest_reply',
+    label: 'Learned from an answered guest question',
+    kind: 'guest_qa',
     target: 'brain_items',
   },
   'properties.city': {
@@ -157,8 +139,6 @@ export function proposableField(path: string): ProposableField | null {
   if (path.startsWith(BRAIN_VALUE_PREFIX)) {
     return registryProposableField(path.slice(BRAIN_VALUE_PREFIX.length));
   }
-  // Object.prototype keys ('constructor', '__proto__', …) would otherwise
-  // resolve to inherited members and pass a truthy check.
   if (!Object.prototype.hasOwnProperty.call(PROPOSABLE_FIELDS, path)) return null;
   return PROPOSABLE_FIELDS[path];
 }
@@ -177,21 +157,20 @@ export interface BrainItemProposal {
   category: Database['public']['Enums']['brain_category'];
   visibility: Database['public']['Enums']['brain_visibility'];
   sourceUrl?: string | null;
-  /**
-   * Canonical section (registry domain id) this entry files under. Validated
-   * against the taxonomy at BOTH boundaries (draft + approval) — a misroute
-   * fails the review loudly instead of silently filing into the wrong bucket.
-   */
   section?: string | null;
-  /** Custom feature target (Spaces & features). Ownership is verified at apply time. */
   featureId?: string | null;
-  /**
-   * Set when this proposal REPLACES an existing brain item rather than adding a
-   * new one — the add/replace decision is made when the update is drafted (by the
-   * brain_ops-tier routing call) and carried here so approval is a deterministic
-   * apply, never a second judgement.
-   */
   replacesItemId?: string | null;
+}
+
+/** Learned guest Q&A from a resolved escalation (issue #133, item 6). */
+export interface GuestQaProposal {
+  question: string;
+  answer: string;
+  category: string;
+  section: string;
+  rationale?: string | null;
+  model?: string;
+  sourceMessageIds?: string[];
 }
 
 export type NormalizeResult =
@@ -213,19 +192,37 @@ function asBrainCategory(v: unknown): BrainCategoryValue {
 
 const MAX_BRAIN_TEXT = 20000;
 
-// Feature and replacement targets are uuid references carried through a jsonb
-// value — shape-check them here; ownership is verified at apply time.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Validates and canonicalizes a value against its field's contract.
- *
- * Called on BOTH paths: when ingestion drafts a proposal, and again when a host
- * approves a hand-edited version. Validating on approval is the important one —
- * the edited value arrives from a browser and must not be trusted just because
- * the row it belongs to was created server-side.
- */
 export function normalizeProposedValue(field: ProposableField, raw: unknown): NormalizeResult {
+  if (field.kind === 'guest_qa') {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return { ok: false, error: 'That entry is missing its content.' };
+    }
+    const v = raw as Record<string, unknown>;
+    const question = typeof v.question === 'string' ? v.question.trim() : '';
+    const answer = typeof v.answer === 'string' ? v.answer.trim() : '';
+    if (question.length < 8) return { ok: false, error: 'The question is too short to file.' };
+    if (question.length > 500) return { ok: false, error: 'Questions are limited to 500 characters.' };
+    if (answer.length < 10) return { ok: false, error: 'There is not enough content here to save.' };
+    if (answer.length > MAX_BRAIN_TEXT) return { ok: false, error: 'That entry is too long to save.' };
+    const section = typeof v.section === 'string' && isBrainSection(v.section.trim()) ? v.section.trim() : 'policies';
+    return {
+      ok: true,
+      value: {
+        question,
+        answer,
+        category: 'host_qa',
+        section,
+        rationale: typeof v.rationale === 'string' ? v.rationale : null,
+        model: typeof v.model === 'string' ? v.model : undefined,
+        sourceMessageIds: Array.isArray(v.sourceMessageIds)
+          ? (v.sourceMessageIds as unknown[]).filter((id): id is string => typeof id === 'string' && UUID_RE.test(id))
+          : [],
+      } satisfies GuestQaProposal,
+    };
+  }
+
   if (field.kind === 'brain_item') {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
       return { ok: false, error: 'That entry is missing its content.' };
@@ -238,10 +235,6 @@ export function normalizeProposedValue(field: ProposableField, raw: unknown): No
     if (text.length < 20) return { ok: false, error: 'There is not enough content here to save.' };
     if (text.length > MAX_BRAIN_TEXT) return { ok: false, error: 'That entry is too long to save.' };
 
-    // Routing fields (2026-08-28 directive). An update lands in a precise place —
-    // a canonical section, optionally a custom feature, and either as a new entry
-    // or an in-place replacement of an existing one. Each is validated here so a
-    // bad route is a review error the host can see, not a silent misfile.
     let section: string | null = null;
     if (typeof v.section === 'string' && v.section.trim()) {
       const s = v.section.trim();
@@ -253,7 +246,6 @@ export function normalizeProposedValue(field: ProposableField, raw: unknown): No
       const f = v.featureId.trim();
       if (!UUID_RE.test(f)) return { ok: false, error: 'That feature target is not valid.' };
       featureId = f;
-      // A feature target implies its coarse section, so retrieval and display agree.
       section = 'amenities';
     }
     let replacesItemId: string | null = null;
@@ -263,8 +255,6 @@ export function normalizeProposedValue(field: ProposableField, raw: unknown): No
       replacesItemId = r;
     }
 
-    // The storage bucket follows the routing decision, not the model's free choice:
-    // a precise section implies its bucket, so the two can never disagree.
     const category = section ? storageCategoryFor(section) : asBrainCategory(v.category);
     const visibility = v.visibility === 'internal' ? 'internal' : 'guest';
     const sourceUrl = typeof v.sourceUrl === 'string' && v.sourceUrl.length <= 2000 ? v.sourceUrl : null;
@@ -297,12 +287,6 @@ export function normalizeProposedValue(field: ProposableField, raw: unknown): No
 const TIME_24H = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ISO_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
-/**
- * Type validation for registry-backed values. The database trigger enforces
- * tier, audience and payload shape but has no opinion on whether a `time` field
- * holds "11:00" or "whenever" — that check belongs here, where the host still
- * gets a sentence they can act on.
- */
 function normalizeRegistryValue(field: ProposableField, trimmed: string): NormalizeResult {
   const max = field.maxLength ?? 500;
   if (trimmed.length > max) return { ok: false, error: `Keep this under ${max} characters.` };
@@ -333,9 +317,6 @@ function normalizeRegistryValue(field: ProposableField, trimmed: string): Normal
       return { ok: true, value: n };
     }
     default:
-      // text / string / enum / place / contact all land as trimmed text. The
-      // three enum fields carry no value list in the registry, so constraining
-      // them here would be inventing a contract the generator never declared.
       return { ok: true, value: trimmed };
   }
 }
@@ -356,14 +337,6 @@ export function statusForDecision(decision: ProposalDecision): ProposedUpdateSta
   return decision === 'approve' ? 'approved' : decision === 'modify' ? 'modified' : 'denied';
 }
 
-/**
- * Only pending rows are decidable.
- *
- * Re-deciding a settled row is refused rather than silently re-applied: an
- * approved brain entry has already been chunked and embedded, so "approve"
- * twice would duplicate it in retrieval, and "deny" after "approve" would leave
- * the guest-visible copy in place while the queue claimed it was rejected.
- */
 export function canDecide(status: ProposedUpdateStatus): boolean {
   return status === 'pending';
 }
@@ -379,9 +352,7 @@ export interface QueueRow {
 
 export interface QueueSummary {
   pending: number;
-  /** Whole days since the oldest pending row was created; null when none. */
   oldestPendingDays: number | null;
-  /** One-line tile subtitle. */
   detail: string;
 }
 
@@ -410,7 +381,6 @@ export function queueSummary(rows: QueueRow[], now: Date = new Date()): QueueSum
   };
 }
 
-/** Short preview of a jsonb value for the review list. */
 export function summarizeValue(value: unknown, max = 180): string {
   if (value === null || value === undefined) return 'Not set';
   if (typeof value === 'string') return truncate(value, max);
