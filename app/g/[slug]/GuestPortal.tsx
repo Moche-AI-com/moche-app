@@ -9,6 +9,7 @@ import { AiChatWorkflow } from './AiChatWorkflow';
 import { HostChatWorkflow } from './HostChatWorkflow';
 import { MaintenanceWorkflow } from './MaintenanceWorkflow';
 import { ExtrasWorkflow, type GuestExtraOffer } from './ExtrasWorkflow';
+import { PushOptIn } from './PushOptIn';
 import { LanguagePicker } from '@/components/guest/LanguagePicker';
 import { resolveLanguage } from '@/lib/guest/languages';
 import { portalT } from '@/lib/guest/portal-strings';
@@ -43,6 +44,10 @@ const LANG_STORAGE_KEY = 'gp-lang';
 // (stays.guest_language) on return visits — and drives the full UI translation
 // of every card, dropdown, and action via the static dictionary in
 // lib/guest/portal-strings.ts (no runtime translation cost).
+//
+// Notifications (issue #133): the menu offers a one-tap web-push opt-in — the
+// guest's default channel, no phone number needed. Hidden unless VAPID keys
+// are configured; never rendered in host preview.
 export function GuestPortal(props: {
   fontClassName: string;
   slug: string;
@@ -201,14 +206,17 @@ export function GuestPortal(props: {
             )}
 
             {step === 'menu' && (
-              <MainMenu
-                propertyName={props.propertyName}
-                guestName={guestName}
-                hostPreview={props.hostPreview}
-                t={t}
-                onSelect={(key) => setStep(key)}
-                onPreviewSignIn={startSignInDemo}
-              />
+              <>
+                <MainMenu
+                  propertyName={props.propertyName}
+                  guestName={guestName}
+                  hostPreview={props.hostPreview}
+                  t={t}
+                  onSelect={(key) => setStep(key)}
+                  onPreviewSignIn={startSignInDemo}
+                />
+                {!props.hostPreview && <PushOptIn slug={props.slug} t={t} />}
+              </>
             )}
 
             {step === 'ask' && (
@@ -289,7 +297,7 @@ function PortalHero(props: { imageUrl: string | null; name: string; location: st
     return (
       <div className="gp-hero-compact">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={props.imageUrl!} alt="" loading="lazy" onError={() => setFailed(true)} />
+        <img src={props.imageUrl!} alt="" className="gp-hero-img" loading="lazy" onError={() => setFailed(true)} />
       </div>
     );
   }
