@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { marketingMetadata } from '@/lib/marketing/metadata';
+import portal from '@/public/premium/portal-hero.jpg';
 import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
-import productPortal from '@/public/premium/product-portal-desktop.png';
+import cottage from '@/public/premium/str-gallery-cliffside-cottage.webp';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -32,13 +34,23 @@ export default function GuestExperiencePage() {
       />
 
       <PageHero
-        src={productPortal}
-        alt="The Moche-AI guest portal open in a browser showing the concierge chat interface"
-        caption="The guest portal — the actual screen a guest sees when they open their stay link. No app, no account, no friction."
+        src={cottage}
+        alt="A cliffside cottage at dusk with warm light in the windows"
+        caption="A cliffside cottage at dusk. What a guest sees when they arrive, and where every question they are about to ask begins."
         priority
       />
 
       <div className={styles.body}>
+        <figure style={{ margin: '0 0 2rem' }}>
+          <Image
+            src={portal}
+            alt="The Moche-AI guest portal open in a phone browser during a stay"
+            sizes="(min-width: 720px) 68ch, 100vw"
+            style={{ width: '100%', height: 'auto', borderRadius: 12 }}
+            priority
+          />
+        </figure>
+
         <h2>The first thing a guest touches</h2>
         <p>
           One link, or a QR code, for their stay. It opens in whatever browser is already on their
