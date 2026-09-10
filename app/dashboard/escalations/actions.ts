@@ -13,6 +13,7 @@ import { log } from '@/lib/log';
 import { capture } from '@/lib/posthog-server';
 import type { BrainCategory } from '@/lib/brain/classify';
 import { normalizeGuestAnswerForBrain } from '@/lib/brain/guest-answer-learning';
+import { detectOneOffAnswer, oneOffReason } from '@/lib/brain/one-off';
 import { hostConversationLink } from '@/lib/notifications/links';
 
 type Client = SupabaseClient<Database>;
@@ -26,22 +27,13 @@ export interface EscalationActionState {
   warning?: string;
 }
 
-// Shared reply path for dashboard and legacy signed links. Authorization lives
-// INSIDE this exported server action: a token or caller-supplied actor is not auth.
-// Replies are saved to the exact participant's conversation; notification and
-// optional pending Brain proposal outcomes are reported independently.
 export async function answerEscalationCore(
   admin: Client,
   opts: {
     escalationId: string;
     answerText: string;
     actorProfileId: string;
-    // Whether to teach the Brain from this answer. When false, the answer is delivered
-    // to the guest but NOT saved as reusable knowledge (one-off replies).
     convertToBrain?: boolean;
-    // Optional host override for the Brain category. When omitted (and convertToBrain
-    // is true), the answer is AI-classified into the best category with a normalized,
-    // reusable title.
     brainCategory?: BrainCategory;
   },
 ): Promise<EscalationActionState> {
@@ -61,7 +53,6 @@ export async function answerEscalationCore(
   if (!access.can.receiveEscalations || !access.can.replyGuests || (convertToBrain && !access.can.editBrain)) {
     return { error: 'You do not have permission to perform this action.' };
   }
-  // Validate every stored pointer before message, escalation or Brain writes.
   const db = admin as any;
   if (!esc.stay_id) return { error: 'This escalation has no guest stay.' };
   const { data: stay } = await db.from('stays').select('id, status, deleted_at')
@@ -88,8 +79,6 @@ export async function answerEscalationCore(
     .maybeSingle();
   if (!prop) return { error: 'Escalation not found.' };
 
-  // Create/use only this participant's host thread. The SMS points here, not
-  // to a bearer answer token or another party member's latest session.
   let { data: thread } = await db.from('conversations').select('id')
     .eq('property_id', esc.property_id).eq('stay_id', esc.stay_id).eq('guest_session_id', sessionId).eq('channel', 'host_chat')
     .order('created_at', { ascending: true }).limit(1).maybeSingle();
@@ -127,24 +116,32 @@ export async function answerEscalationCore(
   let learningQueued = false;
   let warning = updateError ? 'Reply saved, but escalation status could not be updated.' : undefined;
   if (convertToBrain) {
-    try {
-      const { data: context } = await db.from('messages').select('id, role, content, created_at')
-        .eq('property_id', esc.property_id).eq('conversation_id', thread.id).eq('escalation_id', escalationId)
-        .order('created_at', { ascending: false }).limit(60);
-      const normalized = await normalizeGuestAnswerForBrain({
-        question: esc.question, hostAnswer: answerText,
-        threadMessages: [...(context ?? [])].reverse().map((m: any) => ({ role: m.role, content: m.content, createdAt: m.created_at })),
-      });
-      const { error } = await db.from('proposed_updates').insert({
-        property_id: esc.property_id, host_account_id: prop.host_account_id, status: 'pending',
-        field_path: 'host_qa.guest_reply', label: normalized.question.slice(0, 160),
-        proposed_value: { question: normalized.question, answer: normalized.answer, category: normalized.category,
-          section: normalized.section, rationale: normalized.rationale, model: normalized.model, sourceMessageIds: (context ?? []).map((m: any) => m.id) },
-        source_type: 'ai_suggestion', source_ref: escalationId, confidence: normalized.confidence,
-      });
-      if (error) throw error;
-      learningQueued = true;
-    } catch { warning = 'Reply saved, but the Brain proposal could not be queued.'; }
+    // Issue #133, item 6: teach the Brain only from reusable policy. A stay-scoped
+    // answer ("fine this once") is delivered to the guest but never queued as a
+    // proposal — and the host sees why, on the answer form.
+    const oneOff = detectOneOffAnswer(answerText);
+    if (oneOff.oneOff) {
+      warning = oneOffReason(oneOff.marker ?? 'stay-scoped');
+    } else {
+      try {
+        const { data: context } = await db.from('messages').select('id, role, content, created_at')
+          .eq('property_id', esc.property_id).eq('conversation_id', thread.id).eq('escalation_id', escalationId)
+          .order('created_at', { ascending: false }).limit(60);
+        const normalized = await normalizeGuestAnswerForBrain({
+          question: esc.question, hostAnswer: answerText,
+          threadMessages: [...(context ?? [])].reverse().map((m: any) => ({ role: m.role, content: m.content, createdAt: m.created_at })),
+        });
+        const { error } = await db.from('proposed_updates').insert({
+          property_id: esc.property_id, host_account_id: prop.host_account_id, status: 'pending',
+          field_path: 'host_qa.guest_reply', label: normalized.question.slice(0, 160),
+          proposed_value: { question: normalized.question, answer: normalized.answer, category: normalized.category,
+            section: normalized.section, rationale: normalized.rationale, model: normalized.model, sourceMessageIds: (context ?? []).map((m: any) => m.id) },
+          source_type: 'ai_suggestion', source_ref: escalationId, confidence: normalized.confidence,
+        });
+        if (error) throw error;
+        learningQueued = true;
+      } catch { warning = 'Reply saved, but the Brain proposal could not be queued.'; }
+    }
   }
 
   await audit(admin, {
@@ -162,8 +159,6 @@ export async function answerEscalationCore(
   return { ok: true, messageStored: true, notification, learningQueued, warning };
 }
 
-// Answer an escalated guest question from the dashboard. Authorizes via the host session
-// + property access, then runs the shared learning loop above.
 export async function answerEscalationAction(
   _prev: EscalationActionState,
   formData: FormData,
@@ -171,8 +166,6 @@ export async function answerEscalationAction(
   const escalationId = String(formData.get('escalationId') ?? '');
   if (!escalationId) return { error: 'Missing escalation.' };
 
-  // The form sends the answer plus the host's save choice: whether to teach the Brain
-  // and an optional category override ('' → let the AI classify).
   const rawCategory = formData.get('brainCategory');
   const parsed = escalationRespondSchema.safeParse({
     response: formData.get('response'),
@@ -184,16 +177,12 @@ export async function answerEscalationAction(
   }
   const answerText = parsed.data.response;
   const convertToBrain = parsed.data.convertToBrain;
-  // Only treat a category as an explicit override when the host actually chose one
-  // AND opted to save. The zod default fills 'host_qa'; we distinguish "host picked a
-  // specific bucket" from "let AI decide" by inspecting the raw form value.
   const hostPickedCategory =
     typeof rawCategory === 'string' && rawCategory !== '' && rawCategory !== 'auto';
 
   const ctx = await requireSession();
   const supabase = createClient();
 
-  // RLS scopes escalations through properties the host can see.
   const { data: esc } = await supabase
     .from('escalations')
     .select('id, property_id, status')
@@ -223,10 +212,6 @@ export interface EscalationThreadTarget {
   error?: string;
 }
 
-// Where an escalation gets handled: the guest's Host Chat thread. The escalation
-// row remembers the thread (host_conversation_id) once it exists, so resolving is
-// a plain lookup from then on. A first open creates the thread, mirroring the
-// guest-side creation in app/api/guest/[slug]/host-chat/route.ts.
 export async function openEscalationThreadAction(escalationId: string): Promise<EscalationThreadTarget> {
   await requireSession();
   const supabase = createClient();
@@ -240,8 +225,6 @@ export async function openEscalationThreadAction(escalationId: string): Promise<
   const access = await requirePropertyAccess(esc.property_id);
   if (!access.can.receiveEscalations || !access.can.replyGuests) return { error: 'You do not have permission to manage escalations for this property.' };
 
-  // Legacy rows without a stay have no thread to route to — the detail page
-  // stays as their fallback surface.
   if (!esc.stay_id) return { url: `/dashboard/escalations/${escalationId}` };
 
   const admin = createAdminClient();
@@ -316,7 +299,6 @@ export async function openEscalationThreadAction(escalationId: string): Promise<
     conversationId = created.id;
   }
 
-  // Remember the thread on the escalation so every later open is a plain lookup.
   if (!esc.host_conversation_id) {
     await db
       .from('escalations')
@@ -330,9 +312,6 @@ export async function openEscalationThreadAction(escalationId: string): Promise<
 
 const INBOX_STATUS_SET = ['resolved', 'answered', 'dismissed'] as const;
 
-// Status change without a reply, from the inbox row menu: mark handled, mark
-// awaiting-guest, or cancel a duplicate/irrelevant escalation. Reply-linked
-// transitions stay in the thread composer (guest-chats messages route).
 export async function setEscalationStatusAction(_prev: EscalationActionState, formData: FormData): Promise<EscalationActionState> {
   const escalationId = String(formData.get('escalationId') ?? '');
   const status = String(formData.get('status') ?? '');
@@ -376,8 +355,6 @@ export async function setEscalationStatusAction(_prev: EscalationActionState, fo
   return { ok: true };
 }
 
-// Close = archive out of the inbox into Reports. Only terminal rows (handled or
-// cancelled) can close; reopening puts the row back in the inbox as it was.
 export async function closeEscalationAction(_prev: EscalationActionState, formData: FormData): Promise<EscalationActionState> {
   const escalationId = String(formData.get('escalationId') ?? '');
   if (!escalationId) return { error: 'Missing escalation.' };
@@ -452,8 +429,6 @@ export async function reopenEscalationAction(_prev: EscalationActionState, formD
   return { ok: true };
 }
 
-// Bulk close for a property group header: archives every handled/cancelled row
-// still active for that property.
 export async function closeHandledEscalationsAction(_prev: EscalationActionState, formData: FormData): Promise<EscalationActionState> {
   const propertyId = String(formData.get('propertyId') ?? '');
   if (!propertyId) return { error: 'Missing property.' };

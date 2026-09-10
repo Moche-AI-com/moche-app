@@ -6,6 +6,7 @@ import { routedCompletion } from '@/lib/router/modelRouter';
 import { looksLikeCredentialValue, redactCredentials } from '@/lib/brain/redact';
 import { isBrainSection, resolveSection, sectionRoutingGuide, storageCategoryFor } from '@/lib/brain/taxonomy';
 import { WIFI_CONTEXT } from '@/lib/guest/wifi-instructions';
+import { detectOneOffAnswer } from '@/lib/brain/one-off';
 
 const ALLOWED_CATEGORIES = new Set([
   'core',
@@ -80,16 +81,23 @@ const SYSTEM_PROMPT = [
 /**
  * Draft only: callers must insert proposed_updates and require human approval.
  * The central brain_ops router owns provider/privacy/strong-tier failure policy.
+ * Throws when the answer is stay-scoped (issue #133): a one-off "this once" reply
+ * must never reach the review queue as if it were policy.
  */
 export async function normalizeGuestAnswerForBrain(input: GuestAnswerLearningInput): Promise<NormalizedGuestAnswer> {
+  // One-off gate runs BEFORE any model spend: deterministic, free, and the only
+  // check a paraphrase can never dodge (the model sees only what survives it).
+  const oneOff = detectOneOffAnswer(input.hostAnswer);
+  if (oneOff.oneOff) {
+    throw new Error(`Host answer is scoped to one stay ("${oneOff.marker}"); not permanent policy.`);
+  }
+
   const wifi = WIFI_CONTEXT.test(`${input.question}\n${input.hostAnswer}`)
     || input.threadMessages.some((message) => WIFI_CONTEXT.test(message.content));
   if (wifi && (looksLikeCredentialValue(input.hostAnswer)
     || redactCredentials(`Wi-Fi\n${input.hostAnswer}`).redactions.length)) {
     throw new Error('Remove the credential and provide its location before creating a guest guidance draft.');
   }
-  // Old assistant replies may be a bare password without a label. They are not
-  // learning evidence: the current host reply is the only Wi-Fi source of truth.
   const thread = (wifi ? [] : input.threadMessages.slice(-60)).map((message) => ({
     role: message.role,
     content: redactPII(message.content),
@@ -117,9 +125,6 @@ export async function normalizeGuestAnswerForBrain(input: GuestAnswerLearningInp
     : resolveSection({ category });
   return {
     question: redactPII(parsed.question),
-    // For Wi-Fi, the host's exact words remain the draft answer. A strong model
-    // may categorize/rephrase the question, but cannot invent a location or
-    // connection step, even before the human review.
     answer: redactPII(wifi ? input.hostAnswer.trim() : parsed.answer),
     category: isBrainSection(proposedSection) || section === 'connectivity' ? storageCategoryFor(section) : category,
     section,
