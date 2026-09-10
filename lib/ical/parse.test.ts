@@ -30,7 +30,9 @@ const FEED = [
   'UID:folded-1@vrbo.com',
   'DTSTART:20261010T150000Z',
   'DTEND:20261012T110000Z',
-  'SUMMARY:Booking - Jane Doe - family reunion',
+  // RFC 5545 folding removes exactly one leading whitespace char from the
+  // continuation line, so a real fold keeps the separating space at the break.
+  'SUMMARY:Booking - Jane Doe - family reunion ',
   ' at the lake house',
   'END:VEVENT',
   'END:VCALENDAR',
