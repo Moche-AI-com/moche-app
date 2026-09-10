@@ -5,9 +5,11 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireSession, getPropertyAccess } from '@/lib/auth/guards';
 import { stayCreateSchema } from '@/lib/validation';
-import { hashContact, generateSessionToken, hashSessionToken, generateVisitCode, hashVisitCode, verifyVisitCode } from '@/lib/crypto';
-import { publicEnv } from '@/lib/env';
-import { DEFAULT_GRACE_PERIOD_HOURS, STAY_LINK_DEFAULT_MAX_REDEMPTIONS, VISIT_CODE_GRACE_PERIOD_HOURS } from '@/lib/constants';
+import { hashContact } from '@/lib/crypto';
+import { assertPublicUrl } from '@/lib/net/ssrf';
+import { fetchIcalFeed, syncPropertyIcalFeed } from '@/lib/stays/ical-sync';
+import { mintStayPortalAccess } from '@/lib/stays/mint-portal-access';
+import { generateStayReference } from '@/lib/stays/reference';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
 
@@ -23,23 +25,6 @@ export interface StayActionState {
   portalCodeExpiresAt?: string;
   /** Set when the stay was created but its portal link/code could not be minted. */
   portalError?: string;
-}
-
-// Alphabet for stay_reference excludes visually ambiguous characters (no 0/O,
-// 1/I/L) so a reference read over the phone transcribes cleanly.
-const STAY_REFERENCE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
-/**
- * Human-quotable stay reference (Reports rework, #81): 'STY-' + 6 random chars,
- * unique across all stays via the stays_stay_reference_key index. Displayable
- * and filterable — unlike the 4-digit visit code, which stays hash-only.
- */
-function generateStayReference(): string {
-  const bytes = new Uint8Array(6);
-  globalThis.crypto.getRandomValues(bytes);
-  let ref = 'STY-';
-  for (const b of bytes) ref += STAY_REFERENCE_ALPHABET[b % STAY_REFERENCE_ALPHABET.length];
-  return ref;
 }
 
 // Host creates a stay. The guest's raw contact is hashed immediately and never stored raw;
@@ -82,9 +67,9 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
   const status = now < checkIn ? 'upcoming' : now > checkOut ? 'completed' : 'active';
 
   // The insert retries on a stay_reference unique collision (23505) with a
-  // freshly drawn code — same allocation style as the visit-code loop below.
-  // A DB-side DEFAULT (migration stay_reference_default) covers any insert
-  // path that does not set a reference explicitly.
+  // freshly drawn code — same allocation style as the visit-code loop in the
+  // mint helper. A DB-side DEFAULT (migration stay_reference_default) covers
+  // any insert path that does not set a reference explicitly.
   let stay: { id: string } | null = null;
   let insertError: string | null = null;
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -121,12 +106,9 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
   }
   const stayId = stay.id;
 
-  // Ticket 3: creating a stay auto-mints its portal link + 4-digit visit code in
-  // the same action — no separate generate step. Hash-only storage is preserved:
-  // the raw token and code are returned exactly once and never persisted. Expiry
-  // math matches the manual mint route: the link/URL lives until check-out +
-  // DEFAULT_GRACE_PERIOD_HOURS; the code fails closed at check-out +
-  // VISIT_CODE_GRACE_PERIOD_HOURS.
+  // Creating a stay auto-mints its portal link + 4-digit visit code in the same
+  // action — no separate generate step. The mint lives in
+  // lib/stays/mint-portal-access so the iCal importer mints identically.
   let portalCode: string | undefined;
   let portalUrl: string | undefined;
   let portalCodeExpiresAt: string | undefined;
@@ -135,87 +117,17 @@ export async function createStayAction(_prev: StayActionState, formData: FormDat
     const propertySlug = (access.property as { slug?: string | null }).slug;
     if (!propertySlug) throw new Error('property slug unavailable');
     const admin = createAdminClient();
-    const token = generateSessionToken();
-    const linkExpiresAt = new Date(checkOut.getTime() + DEFAULT_GRACE_PERIOD_HOURS * 60 * 60 * 1000).toISOString();
-    const { data: link, error: linkError } = await admin
-      .from('guest_access_links')
-      .insert({
-        property_id: propertyId,
-        stay_id: stayId,
-        token_hash: hashSessionToken(token),
-        kind: 'stay',
-        expires_at: linkExpiresAt,
-        max_redemptions: STAY_LINK_DEFAULT_MAX_REDEMPTIONS,
-        require_otp: false,
-        created_by: ctx.user.id,
-      } as never)
-      .select('id')
-      .single();
-    if (linkError || !link) {
-      throw new Error(linkError?.message ?? 'link insert failed');
-    }
-    const linkId = (link as { id: string }).id;
-
-    // One stay code (2026-08-24): the tokenless portal entry (/auth/code without
-    // ?k=) resolves a bare code to one stay, so codes must be unique across the
-    // property's concurrently coded links. Hashes are per-link salted, so
-    // candidates are verified one by one until one is clear.
-    const { data: siblingLinks } = await admin
-      .from('guest_access_links')
-      .select('id, code_hash')
-      .eq('property_id', propertyId)
-      .not('code_hash', 'is', null)
-      .is('code_revoked_at', null)
-      .gt('code_expires_at', new Date().toISOString());
-    let code = '';
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const candidate = generateVisitCode();
-      const clash = (siblingLinks ?? []).some((sibling: any) =>
-        verifyVisitCode(candidate, sibling.id as string, sibling.code_hash as string));
-      if (!clash) {
-        code = candidate;
-        break;
-      }
-    }
-    if (!code) throw new Error('could not allocate a unique visit code');
-
-    const codeExpiresAt = new Date(checkOut.getTime() + VISIT_CODE_GRACE_PERIOD_HOURS * 60 * 60 * 1000).toISOString();
-    const { error: codeError } = await admin
-      .from('guest_access_links')
-      .update({ code_hash: hashVisitCode(code, linkId), code_expires_at: codeExpiresAt } as never)
-      .eq('id', linkId);
-    if (codeError) {
-      throw new Error(codeError.message);
-    }
-
-    // Ticket 2B: vault the code so it stays host-viewable for the life of the stay.
-    // The hash remains the verification path; a Vault failure degrades to hash-only.
-    try {
-      const { data: secretId, error: vaultError } = await (admin as any).rpc('portal_code_store', {
-        p_secret: code,
-        p_name: `stay-link:${linkId}:${Date.now()}`,
-      });
-      if (!vaultError && secretId) {
-        await admin
-          .from('guest_access_links')
-          .update({ code_secret_ref: `vault:${secretId}` } as never)
-          .eq('id', linkId);
-      }
-    } catch {
-      // Display-only enhancement — never fail the mint over it.
-    }
-
-    await audit(admin, {
-      action: 'guest_link.code_issued',
-      actorProfileId: ctx.user.id,
-      hostAccountId: access.property.host_account_id,
+    const minted = await mintStayPortalAccess(admin, {
       propertyId,
-      targetType: 'guest_access_link',
-      targetId: linkId,
+      stayId,
+      propertySlug,
+      checkOut,
+      createdBy: ctx.user.id,
+      hostAccountId: access.property.host_account_id,
     });
-    portalCode = code;
-    portalUrl = `${publicEnv.appUrl.replace(/\/$/, '')}/stay/${propertySlug}?k=${token}`;
-    portalCodeExpiresAt = codeExpiresAt;
+    portalCode = minted.code;
+    portalUrl = minted.portalUrl;
+    portalCodeExpiresAt = minted.codeExpiresAt;
   } catch (mintError) {
     // The stay itself is already durable — never fail its creation because the
     // portal mint failed. The host can mint from the stay's Guest access pane.
@@ -273,4 +185,74 @@ export async function revokeStayAction(formData: FormData): Promise<void> {
     targetId: stayId,
   });
   revalidatePath(`/dashboard/properties/${propertyId}/stays`);
+}
+
+export interface IcalActionState {
+  error?: string;
+  ok?: boolean;
+  created?: number;
+  updated?: number;
+  revoked?: number;
+}
+
+// iCal stay import (issue #133, item 4): the host pastes their Airbnb/Vrbo
+// calendar export URL once; the scheduled sync keeps stays current from then
+// on. An empty URL disconnects the feed. The URL contains the platform's
+// secret token — it is validated against the SSRF guard before saving and
+// never rendered back to the client.
+export async function saveIcalImportAction(formData: FormData): Promise<IcalActionState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const rawUrl = String(formData.get('icalUrl') ?? '').trim();
+  const access = await getPropertyAccess(propertyId);
+  if (!access) return { error: 'Property not found.' };
+  if (!access.can.replyGuests && !access.isOwner) {
+    return { error: 'You do not have permission to manage stays for this property.' };
+  }
+
+  const supabase = createClient();
+  if (!rawUrl) {
+    const { error } = await (supabase as any).from('properties').update({ ical_import_url: null }).eq('id', propertyId);
+    if (error) return { error: 'Could not save. Please try again.' };
+    revalidatePath(`/dashboard/properties/${propertyId}/stays`);
+    return { ok: true };
+  }
+  if (!/^https:\/\//i.test(rawUrl)) return { error: 'Use the https calendar URL from your booking platform.' };
+  try {
+    await assertPublicUrl(rawUrl);
+  } catch (guardError) {
+    return { error: guardError instanceof Error ? guardError.message : 'That URL is not allowed.' };
+  }
+  const { error } = await (supabase as any).from('properties').update({ ical_import_url: rawUrl }).eq('id', propertyId);
+  if (error) return { error: 'Could not save. Please try again.' };
+  revalidatePath(`/dashboard/properties/${propertyId}/stays`);
+  return { ok: true };
+}
+
+// Manual "sync now" — the same engine the scheduled task runs, on demand.
+export async function syncIcalNowAction(formData: FormData): Promise<IcalActionState> {
+  const propertyId = String(formData.get('propertyId') ?? '');
+  const access = await getPropertyAccess(propertyId);
+  if (!access) return { error: 'Property not found.' };
+  if (!access.can.replyGuests && !access.isOwner) {
+    return { error: 'You do not have permission to manage stays for this property.' };
+  }
+  const admin = createAdminClient();
+  const { data: property } = await (admin as any)
+    .from('properties')
+    .select('id, slug, host_account_id, ical_import_url')
+    .eq('id', propertyId)
+    .maybeSingle();
+  if (!property?.ical_import_url) return { error: 'Save a calendar URL first.' };
+  try {
+    const feed = await fetchIcalFeed(property.ical_import_url as string);
+    const result = await syncPropertyIcalFeed(admin, {
+      id: property.id as string,
+      slug: property.slug as string,
+      host_account_id: property.host_account_id as string,
+    }, feed);
+    revalidatePath(`/dashboard/properties/${propertyId}/stays`);
+    return { ok: true, created: result.created, updated: result.updated, revoked: result.revoked };
+  } catch (syncError) {
+    return { error: syncError instanceof Error ? syncError.message : 'Could not sync the calendar.' };
+  }
 }
