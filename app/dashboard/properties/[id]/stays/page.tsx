@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { LifecycleToggle, parseLifecycleView, lifecycleStatusFor } from '@/components/dashboard/LifecycleToggle';
 import { StaysManager } from './StaysManager';
+import { IcalImportForm } from './IcalImportForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +80,16 @@ export default async function StaysPage({
     });
   }
 
+  // iCal import state (issue #133): the calendar URL contains the platform's
+  // secret token, so only its presence + last sync time ever reach the client.
+  const { data: icalRow } = await (admin as any)
+    .from('properties')
+    .select('ical_import_url, ical_last_synced_at')
+    .eq('id', (await params).id)
+    .maybeSingle();
+  const icalFeedConnected = Boolean(icalRow?.ical_import_url);
+  const icalLastSyncedAt = (icalRow?.ical_last_synced_at as string | null) ?? null;
+
   const canManage = access.can.replyGuests || access.isOwner;
   // Deep links (notifications, legacy /guest-chat redirect) arrive as ?stay=<id>.
   const initialStayId = typeof searchParams?.stay === 'string' ? searchParams.stay : null;
@@ -91,6 +102,14 @@ export default async function StaysPage({
           ? 'Completed and revoked stays. Their guest links no longer work.'
           : 'Upcoming and in-progress stays. Select a stay to manage its access code and guests — guest chats live in the Property Inbox.'}
       </p>
+
+      {view === 'active' && canManage && (
+        <IcalImportForm
+          propertyId={(await params).id}
+          hasFeed={icalFeedConnected}
+          lastSyncedAt={icalLastSyncedAt}
+        />
+      )}
 
       <LifecycleToggle
         basePath={`/dashboard/properties/${(await params).id}/stays`}
