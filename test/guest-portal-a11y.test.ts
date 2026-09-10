@@ -12,6 +12,9 @@ import { describe, expect, it } from 'vitest';
 // shared stay code admits the party, then every device self-identifies; each
 // guest gets their own concierge + host-chat thread; and the whole chrome renders
 // through the static portal-strings dictionary instead of hardcoded English.
+//
+// Issue #133 (roadmap correction) relaxes registration to code-only entry: names
+// are optional with a "Guest" fallback, phone stays opt-in-only, terms one tap.
 
 const read = (file: string) =>
   readFileSync(resolve(process.cwd(), 'app/g/[slug]', file), 'utf8');
@@ -80,8 +83,12 @@ describe('party access + i18n guardrails (PR #103)', () => {
     expect(guestCodeRoute).not.toContain('requiresPhoneConfirm: true');
   });
 
-  it('registers every guest with a name; phone stays optional', () => {
-    expect(registerRoute).toContain('firstName: z.string().trim().min(1');
+  it('registers guests with an optional name; phone stays opt-in only (#133)', () => {
+    // Code-only entry: the stay code already routed the guest, so names are
+    // optional and the display name falls back to "Guest".
+    expect(registerRoute).toContain("firstName: z.string().trim().max(80).optional().default('')");
+    expect(registerRoute).toContain("lastName: z.string().trim().max(80).optional().default('')");
+    expect(registerRoute).toContain("|| 'Guest'");
     expect(registerRoute).toContain('phone: z.string().trim().max(40).optional()');
     expect(registerRoute).toContain('termsAccepted: z.literal(true)');
     // Name-only guests still get a first-class identity row (synthetic hash).

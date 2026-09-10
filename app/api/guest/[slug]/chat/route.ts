@@ -13,6 +13,7 @@ import type { ChatMessage } from '@/lib/ai';
 import { log } from '@/lib/log';
 import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { translateForHost, notificationBody } from '@/lib/guest/translate';
+import { behavioralEscalation } from '@/lib/guest/behavioral-triggers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -131,6 +132,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .filter((m) => m.role === 'guest' || m.role === 'assistant')
     .map((m) => ({ role: m.role === 'guest' ? 'user' : 'assistant', content: m.content }));
 
+  // Behavioral escalation triggers (issue #133): an explicit ask-for-a-human or
+  // a re-asked question escalates even when the model answered confidently.
+  // Deterministic and explainable — never a sentiment score, which cries wolf on
+  // short, sarcastic, or non-native messages. `history` holds only prior turns.
+  const behavioral = behavioralEscalation(question, history);
+
   // Persist the guest message.
   await admin.from('messages').insert({
     conversation_id: conversationId, property_id: session.propertyId, role: 'guest', content: question,
@@ -180,10 +187,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     void admin.from('stays').update({ guest_language: guestLanguage.code } as never).eq('id', session.stayId);
   }
 
-  // Escalate on low confidence, or when the concierge explicitly declared it cannot
+  // Escalate on low confidence, on a behavioral trigger (asked for a human /
+  // re-asked question), or when the concierge explicitly declared it cannot
   // answer from the property knowledge (the no-guessing contract). Either way the
   // host gets a real, answerable question rather than the guest getting a guess.
-  if (answer.shouldEscalate) {
+  if (answer.shouldEscalate || behavioral.escalate) {
     // The host reads escalations in THEIR language. The guest's original wording is
     // always preserved above the translation — a mistranslated door code or street
     // name must never be the only copy the host sees.
@@ -191,7 +199,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     // `unknownNote` is the model's own English restatement of what the host needs to
     // answer, which is a far better prompt for the host than the raw guest turn.
     const asked = answer.unknownNote ? `${question}\n\n(Concierge could not answer: ${answer.unknownNote})` : question;
-    const translated = await translateForHost(asked, guestLanguage?.code ?? null, hostLanguage);
+    // Tell the host WHY a confident-looking question still landed in their queue.
+    const triggerNote =
+      behavioral.trigger === 'human_request'
+        ? 'Guest asked to reach a human.'
+        : behavioral.trigger === 'repeat_question'
+          ? 'Guest has asked this question more than once.'
+          : null;
+    const askedWithTrigger = triggerNote ? `${asked}\n\n(${triggerNote})` : asked;
+    const translated = await translateForHost(askedWithTrigger, guestLanguage?.code ?? null, hostLanguage);
 
     const { data: esc } = await admin.from('escalations').insert({
       property_id: session.propertyId,
@@ -221,7 +237,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         actionUrl: answerUrl,
       });
     }
-    log.info('guest_escalation_created', { escalationId: (esc as { id: string } | null)?.id, confidence: answer.confidence });
+    log.info('guest_escalation_created', {
+      escalationId: (esc as { id: string } | null)?.id,
+      confidence: answer.confidence,
+      trigger: behavioral.trigger ?? 'low_confidence',
+    });
     // Server-safe analytics: property-scoped id only, no guest PII.
     await capture('escalation_created', session.propertyId, { property_id: session.propertyId });
   }
@@ -253,7 +273,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     ok: true,
     answer: finalAnswer,
     confidence: Number(answer.confidence.toFixed(2)),
-    escalated: answer.shouldEscalate,
+    escalated: answer.shouldEscalate || behavioral.escalate,
     isEmergency: answer.isEmergency,
     serviceRequestCreated: maintenance.created,
     suggestions: answer.suggestions,
