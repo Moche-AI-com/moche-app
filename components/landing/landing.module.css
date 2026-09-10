@@ -129,78 +129,366 @@
 
 /* ---- Hero ---------------------------------------------------------------- */
 
-/* Two-act layout on a browser: copy on the left, the six destination documents
-   as a clean 3x2 card grid on the right. The previous arc fanned seven tilted
-   photographs above a centred headline; on a wide screen that read as a photo
-   collage rather than a product page, and the centring buried the message
-   under the imagery. The grid keeps every destination the same size, lets the
-   copy do the selling, and holds its proportions from laptop to widescreen.
-
-   Mobile keeps the swipeable snap-carousel: six legible tiles cannot sit side
-   by side on a phone, and the next card peeking in from the right edge is the
-   affordance that says there is more. Same six links, same DOM order, at every
-   width. */
+/* Gallery-led, arc layout. The photography fans overhead and the copy sits
+   under it on the centre line, so the frames flank the headline instead of
+   competing with it for the same vertical space.
+   The fan stays in normal flow -- it reserves its own height, and the copy is
+   pulled up into the bottom of the arc with a negative margin rather than the
+   hero carrying a hand-tuned padding that has to be kept in sync with it. */
 .hero {
   padding-top: clamp(1.75rem, 4vw, 3rem);
   padding-bottom: clamp(1rem, 3vw, 2.25rem);
   overflow: hidden;
 }
 
-.heroGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: clamp(1.75rem, 4vw, 2.75rem);
-  align-items: center;
+.heroFan {
+  position: relative;
+  width: min(1220px, 100%);
+  height: clamp(150px, 24vw, 300px);
+  margin: 0 auto;
 }
 
-@media (min-width: 961px) {
-  .heroGrid {
-    grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
-    gap: clamp(2.5rem, 4.5vw, 4.5rem);
+/* Each frame carries its own --fan-x / --fan-y / --fan-rot. --fan-x and
+   --fan-y are percentages, so they resolve against .heroFan rather than
+   against the frame's own box, which keeps the arc's proportions identical at
+   every width instead of drifting with the card size. */
+/* Each frame is an <a>. The link resets matter: a bare anchor here inherits an
+   underline that lands across the photograph, and the default focus outline is
+   clipped away by `overflow: hidden` on the frame itself, so focus is drawn with
+   an inset ring instead. Never `outline: none` without that replacement -- these
+   are seven of the first eight links on the page and they have to be traversable
+   by keyboard. */
+.heroFanFrame {
+  position: absolute;
+  top: var(--fan-y);
+  left: calc(50% + var(--fan-x));
+  width: clamp(74px, 11.5vw, 168px);
+  aspect-ratio: 3 / 4;
+  border-radius: clamp(9px, 1.1vw, 16px);
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-md);
+  transform: translate(-50%, 0) rotate(var(--fan-rot));
+  z-index: calc(4 - var(--fan-rank, 0));
+  display: block;
+  text-decoration: none;
+  color: #fff;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The focus ring is a pseudo-element, and it took three tries to get here, so:
+   an outward `outline` is clipped by the `overflow: hidden` on .hero, which the
+   outer frames hang past. An inward one (negative offset) computes correctly but
+   is painted over by the absolutely positioned next/image fill inside the frame,
+   so it is invisible. And box-shadow loses a specificity fight with the hover
+   block further down. A ring drawn as ::after is the last child, so it paints
+   above the photograph, and it clips with the frame instead of the section.
+
+   White, not teal: the CTA frame already carries a 2px teal ring, so a teal
+   focus ring vanishes on exactly the frame most people tab to first. White reads
+   against every photograph in the set; the teal inside it keeps it on-brand. */
+.heroFan .heroFanFrame:focus-visible {
+  outline: none;
+}
+
+.heroFan .heroFanFrame:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: 3px solid #fff;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 5px var(--teal-vivid);
+  pointer-events: none;
+}
+
+/* The centre frame is upright, largest, on top, and the primary action. It is
+   the one the eye lands on before it reads the headline underneath, so it is the
+   one that carries the conversion. */
+.heroFanFrame[data-rank='0'] {
+  width: clamp(88px, 13vw, 192px);
+}
+
+.heroFanFrame[data-cta] {
+  box-shadow:
+    0 0 0 2px var(--teal),
+    var(--shadow-lg);
+}
+
+.heroFanImage {
+  object-fit: cover;
+  object-position: var(--fan-pos, 50% 50%);
+}
+
+/* Contrast floor for the label. Without this the label's legibility depends on
+   whichever part of the photograph happens to sit under it, which fails outright
+   on the pool deck and the kitchen. A bottom-anchored gradient keeps the top two
+   thirds of every photograph untouched. */
+.heroFanScrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.82) 0%,
+    rgba(0, 0, 0, 0.55) 34%,
+    rgba(0, 0, 0, 0) 68%
+  );
+}
+
+/* Always visible, never hover-only. There is no hover on a phone, and a frame
+   that looks exactly like the decorative version it replaced has not been made
+   clickable in any way a visitor can perceive.
+
+   This is also the link's accessible name -- the <Image> carries alt="" -- so it
+   must never be display:none at any width. */
+.heroFanLabel {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22em;
+  padding: 0.4rem 0.3rem 0.45rem;
+  font-size: clamp(0.6rem, 0.82vw, 0.76rem);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.1;
+  text-align: center;
+  color: #fff;
+  /* Two-word labels at the narrowest frame would wrap to two lines and push the
+     second line out of the scrim. */
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.heroFanFrame[data-cta] .heroFanLabel {
+  font-size: clamp(0.66rem, 0.95vw, 0.86rem);
+  padding-bottom: 0.55rem;
+}
+
+.heroFanFrame[data-cta] .heroFanLabel svg {
+  flex: none;
+}
+
+/* Under 700px the arc cannot hold seven legible frames side by side without
+   overlapping into an unreadable smear. The first mobile pass flattened it
+   into a static 3-up grid of square tiles: every destination crammed into the
+   same small box, nothing moving, and the most valuable real estate on the
+   page reading as a bento menu.
+
+   It is now a swipeable snap-carousel. The strip runs edge to edge with the
+   scrollbar hidden and both ends fade-masked; every card is the same 58vw, so
+   the next one peeks in from the right edge -- the peek, not a scrollbar, is
+   what tells a thumb there is more. The CTA leads the strip at exactly the
+   same size: the teal ring and the arrow already mark it as the primary
+   action, and a larger first card read as misaligned against the rest of the
+   strip. Same seven frames, same DOM order, so keyboard tab order and the
+   sitemap are unchanged. */
+@media (max-width: 700px) {
+  .heroFan {
+    position: static;
+    height: auto;
+    display: flex;
+    gap: 0.6rem;
+    padding: 0 1rem 0.5rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  }
+
+  .heroFan::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* `relative`, not `static`: next/image with `fill` renders an absolutely
+     positioned <img>, so a static frame would let it resolve against the
+     section instead and blow the photograph up to the full viewport. */
+  .heroFanFrame {
+    position: relative;
+    top: auto;
+    left: auto;
+    flex: 0 0 58vw;
+    width: auto;
+    max-width: 230px;
+    /* The arc's transform and animation are both keyed to translate(-50%) and
+       would drag every frame a half-width off its slot. Both are scoped to
+       min-width: 701px below; these resets are the belt to that braces. */
+    transform: none;
+    animation: none;
+    aspect-ratio: 3 / 4;
+    border-radius: 14px;
+    scroll-snap-align: center;
+  }
+
+  /* The CTA leads the strip at exactly the same size as every other card:
+     the teal ring and the arrow already mark it as the primary action. */
+  .heroFanFrame[data-cta] {
+    order: -1;
+  }
+
+  .heroFanLabel {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.35rem 0.55rem;
   }
 }
 
-/* ---- Hero: copy column --------------------------------------------------- */
+/* The mobile entrance plays from CSS with no JS involved, the same reasoning
+   as the [data-eager] reveals in globals.css: the hero is the first screen,
+   and gating it on hydration leaves the top of the page visibly empty for a
+   few hundred milliseconds. The strip cascades in from the right, following
+   the direction a thumb will swipe it. Declared after the <=700px reset block
+   so the animation wins over its `animation: none` at equal specificity. */
+@media (prefers-reduced-motion: no-preference) and (max-width: 700px) {
+  .heroFanFrame {
+    animation: fanCascadeIn 620ms var(--ease-out) backwards;
+    animation-delay: calc(50ms + var(--fan-i) * 65ms);
+  }
+}
+
+@keyframes fanCascadeIn {
+  from {
+    opacity: 0;
+    transform: translate3d(26px, 10px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The desktop entrance plays from CSS with no JS involved, the same reasoning
+   as the [data-eager] reveals in globals.css: the hero is the first screen,
+   and gating it on hydration leaves the top of the page visibly empty for a
+   few hundred milliseconds. Frames fan out from a near-centred stack.
+
+   Scoped to the arc's own width: both keyframes below resolve to
+   translate(-50%), which is the arc's horizontal centring, and under 701px the
+   frames are flex cards in the snap strip with no centring to undo. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
+  .heroFanFrame {
+    animation: fanIn 760ms var(--ease-out) backwards;
+    animation-delay: calc(40ms + var(--fan-i) * 55ms);
+  }
+}
+
+@keyframes fanIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 22px) rotate(calc(var(--fan-rot) * 0.35)) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) rotate(var(--fan-rot));
+  }
+}
+
+/* Scroll parallax: the outer frames travel further than the centre, which is
+   what makes the arc read as having depth rather than being a flat decal.
+   Animated via the `translate` property, NOT `transform` -- transform already
+   holds the frame's fixed position and rotation, and the two would overwrite
+   each other. Progressive enhancement: browsers without scroll-driven
+   animations get the static arc and lose nothing they can name. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
+    .heroFanFrame {
+      animation:
+        fanIn 760ms var(--ease-out) backwards,
+        fanDrift 1s linear both;
+      animation-delay: calc(40ms + var(--fan-i) * 55ms), 0s;
+      animation-timeline: auto, scroll(root block);
+      animation-range: normal, 0 80vh;
+    }
+  }
+}
+
+@keyframes fanDrift {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 calc(var(--fan-rank, 0) * -14px - 6px);
+  }
+}
+
+/* Hovering a frame borrows the pricing rail's grammar so the two interactions
+   read as the same system: the pointed-at thing comes forward in full colour
+   and everything around it recedes. The frame lifts, straightens most of the
+   way out of its tilt, and rises above its neighbours -- the tilt is what makes
+   the arc read as a stack of prints, so releasing it is what makes one feel
+   picked up out of that stack. Gated behind a fine pointer: on touch there is
+   no hover, and leaving it ungated leaves frames stuck in the lifted state
+   after a tap. Fill mode on the entrance is `backwards`, not `both`, so the
+   finished keyframe stops outranking these transforms. The dimming is keyed off
+   `:has()` rather than `.heroFan:hover`, because the outer frames hang outside
+   their container's box: pointing at one of those never puts the pointer inside
+   .heroFan, so an ancestor :hover would silently do nothing there. */
+@media (hover: hover) and (pointer: fine) {
+  .heroFanFrame {
+    transition:
+      filter 300ms var(--ease-out),
+      box-shadow 420ms var(--ease-out);
+  }
+
+  .heroFan:has(.heroFanFrame:hover) .heroFanFrame,
+  .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame {
+    filter: saturate(0.72) opacity(0.72);
+  }
+
+  .heroFan:has(.heroFanFrame:hover) .heroFanFrame:hover,
+  .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame:focus-visible {
+    filter: saturate(1.02) opacity(1);
+    box-shadow: var(--shadow-lg);
+    z-index: 9;
+  }
+
+  @media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
+    .heroFanFrame {
+      transition:
+        transform 420ms var(--ease-out),
+        filter 300ms var(--ease-out),
+        box-shadow 420ms var(--ease-out);
+    }
+
+    .heroFan:has(.heroFanFrame:hover) .heroFanFrame:hover,
+    .heroFan:has(.heroFanFrame:focus-visible) .heroFanFrame:focus-visible {
+      transform: translate(-50%, -14px) rotate(calc(var(--fan-rot) * 0.3)) scale(1.055);
+    }
+
+    /* The image drifts the opposite way to the frame, so the crop opens
+       slightly as the frame rises instead of the whole thing scaling as one
+       flat sticker. */
+    .heroFanFrame:hover .heroFanImage {
+      transform: scale(1.06);
+    }
+
+    .heroFanImage {
+      transition: transform 520ms var(--ease-out);
+    }
+  }
+}
 
 .heroCopy {
   position: relative;
+  /* Above the frames: the outermost pair hangs below the fan's own box and
+     would otherwise sit on top of the headline. */
   z-index: 5;
-  max-width: 40rem;
-  margin: 0 auto;
+  max-width: 48rem;
+  margin-top: clamp(1rem, 4vw, 1.75rem);
   text-align: center;
 }
 
-@media (min-width: 961px) {
+/* The upward tuck belongs to the arc only. Under 701px the frames are a
+   swipeable strip with no outer pair hanging below their box, so pulling the
+   copy up just runs the kicker underneath the cards. */
+@media (min-width: 701px) {
   .heroCopy {
-    margin: 0;
-    max-width: none;
-    text-align: left;
+    margin-top: calc(-1 * clamp(0.5rem, 2vw, 2rem));
   }
-}
-
-/* The beta pill is the honest framing: open now, official launch dated. */
-.heroBetaPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.85rem;
-  border-radius: 9999px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--teal-deep);
-  margin-bottom: 1.1rem;
-}
-
-.heroBetaPill::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--teal);
 }
 
 .heroKicker {
@@ -244,205 +532,6 @@
   color: var(--text-faint);
   max-width: 30rem;
   margin: 0 auto;
-}
-
-@media (min-width: 961px) {
-  .heroKicker,
-  .heroSubtitle,
-  .heroTrialNote {
-    margin-left: 0;
-    margin-right: 0;
-  }
-
-  .heroActions {
-    justify-content: flex-start;
-  }
-}
-
-/* ---- Hero: the six-document showcase -------------------------------------- */
-
-/* Mobile-first: a snap carousel. Cards are 64vw so the next one peeks in from
-   the right edge -- the peek, not a scrollbar, is what tells a thumb there is
-   more. The scrollbar is hidden and the strip keeps the wrap's gutter. */
-.heroShowcase {
-  display: flex;
-  gap: 0.6rem;
-  padding-bottom: 0.5rem;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.heroShowcase::-webkit-scrollbar {
-  display: none;
-}
-
-/* Each card is an <a>. The link resets matter: a bare anchor here inherits an
-   underline that lands across the photograph, and the default focus outline is
-   clipped away by `overflow: hidden` on the card itself, so focus is drawn with
-   an inset ring instead. Never `outline: none` without that replacement.
-
-   `relative`, not `static`: next/image with `fill` renders an absolutely
-   positioned <img>, so a static card would let it resolve against the section
-   instead and blow the photograph up to the full viewport. */
-.heroShowcaseCard {
-  position: relative;
-  display: block;
-  flex: 0 0 64vw;
-  max-width: 240px;
-  aspect-ratio: 4 / 5;
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow-md);
-  scroll-snap-align: start;
-  text-decoration: none;
-  color: #fff;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.heroShowcase .heroShowcaseCard:focus-visible {
-  outline: none;
-}
-
-.heroShowcase .heroShowcaseCard:focus-visible::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  border: 3px solid #fff;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 5px var(--teal-vivid);
-  pointer-events: none;
-}
-
-.heroShowcaseImage {
-  object-fit: cover;
-  object-position: var(--card-pos, 50% 50%);
-}
-
-/* Contrast floor for the label. Without this the label's legibility depends on
-   whichever part of the photograph happens to sit under it, which fails
-   outright on the pool deck and the kitchen. A bottom-anchored gradient keeps
-   the top two thirds of every photograph untouched. */
-.heroShowcaseScrim {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.78) 0%,
-    rgba(0, 0, 0, 0.42) 38%,
-    rgba(0, 0, 0, 0) 66%
-  );
-}
-
-/* Always visible, never hover-only. There is no hover on a phone, and a card
-   that looks decorative is not a link in any way a visitor can perceive.
-   This is also the link's accessible name -- the <Image> carries alt="" -- so
-   it must never be display:none at any width. */
-.heroShowcaseLabel {
-  position: absolute;
-  inset: auto 0 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  padding: 0.55rem 0.7rem 0.6rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  line-height: 1.15;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
-}
-
-.heroShowcaseLabel svg {
-  flex: none;
-}
-
-/* From 701px the carousel becomes a grid: same six cards, three columns, no
-   absolute positioning, no scrolling. */
-@media (min-width: 701px) {
-  .heroShowcase {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: clamp(0.6rem, 1.1vw, 0.9rem);
-    overflow: visible;
-    padding-bottom: 0;
-  }
-
-  .heroShowcaseCard {
-    flex: none;
-    max-width: none;
-    width: auto;
-    aspect-ratio: 5 / 4;
-    border-radius: clamp(10px, 1vw, 14px);
-  }
-
-  .heroShowcaseLabel {
-    font-size: clamp(0.7rem, 0.85vw, 0.8rem);
-  }
-}
-
-/* The entrance plays from CSS with no JS involved, the same reasoning as the
-   [data-eager] reveals in globals.css: the hero is the first screen, and
-   gating it on hydration leaves the top of the page visibly empty for a few
-   hundred milliseconds. Cards rise in sequence. */
-@media (prefers-reduced-motion: no-preference) {
-  .heroShowcaseCard {
-    animation: cardIn 640ms var(--ease-out) backwards;
-    animation-delay: calc(60ms + var(--card-i) * 70ms);
-  }
-}
-
-@keyframes cardIn {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 14px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* Hovering a card borrows the pricing rail's grammar so the two interactions
-   read as the same system: the pointed-at thing comes forward in full colour
-   and everything around it recedes. Gated behind a fine pointer: on touch
-   there is no hover, and leaving it ungated leaves cards stuck in the lifted
-   state after a tap. Fill mode on the entrance is `backwards`, not `both`, so
-   the finished keyframe stops outranking these transforms. */
-@media (hover: hover) and (pointer: fine) {
-  .heroShowcaseCard {
-    transition:
-      transform 320ms var(--ease-out),
-      box-shadow 320ms var(--ease-out),
-      filter 300ms var(--ease-out);
-  }
-
-  .heroShowcase:has(.heroShowcaseCard:hover) .heroShowcaseCard,
-  .heroShowcase:has(.heroShowcaseCard:focus-visible) .heroShowcaseCard {
-    filter: saturate(0.82) opacity(0.82);
-  }
-
-  .heroShowcase:has(.heroShowcaseCard:hover) .heroShowcaseCard:hover,
-  .heroShowcase:has(.heroShowcaseCard:focus-visible) .heroShowcaseCard:focus-visible {
-    transform: translateY(-4px);
-    filter: none;
-    box-shadow: var(--shadow-lg);
-    z-index: 2;
-  }
-
-  .heroShowcaseImage {
-    transition: transform 480ms var(--ease-out);
-  }
-
-  .heroShowcaseCard:hover .heroShowcaseImage {
-    transform: scale(1.045);
-  }
 }
 
 /* ---- Who it serves / compatibility band --------------------------------- */

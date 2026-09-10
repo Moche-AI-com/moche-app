@@ -549,3 +549,23 @@
     border-top: 0;
   }
 }
+
+/* ---- Desktop: the page hero belongs to the article -------------------------
+
+   The 1040px breakout at 21:9 read as a banner above the article rather than a
+   figure in it: on a browser it was wider than every line of text that
+   followed and roughly one and a half times the reading column, so the page
+   opened with advertising instead of content. Desktop caps the page-opening
+   image at a deliberate figure width — still wider than the measure so it
+   reads as the opening figure, no longer wide enough to own the page — and
+   gives it the same frame the rest of the page's surfaces wear. Mobile is
+   untouched: the full-bleed treatment in the phone block above stays. */
+@media (min-width: 641px) {
+  .hero.wide.wide {
+    --w: min(880px, calc(100vw - 2 * var(--doc-gutter)));
+  }
+
+  .heroFrame {
+    aspect-ratio: 16 / 9;
+  }
+}
