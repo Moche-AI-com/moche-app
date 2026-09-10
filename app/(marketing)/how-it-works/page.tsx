@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_URL } from '@/lib/seo';
 import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
-import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
+import productGoLive from '@/public/premium/product-go-live-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -76,9 +76,9 @@ export default function HowItWorksPage() {
       />
 
       <PageHero
-        src={cabin}
-        alt="The interior of a wood-lined cabin with a stove and soft lamplight"
-        caption="A cabin interior. The thermostat, the wood stove, the router in the cupboard: everything a Property Brain has to know before a guest asks about it."
+        src={productGoLive}
+        alt="The Moche-AI go-live readiness screen showing a property brain completeness score"
+        caption="The go-live readiness screen. A property can only go live once the required Brain sections are complete — this is the gate that keeps the assistant from being confidently wrong."
         priority
       />
 
