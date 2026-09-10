@@ -1,66 +1,56 @@
 /* Shared chrome for the public content routes reached from the hero fan.
    Deliberately small: these pages reuse the landing header and footer and the
-   global type/colour tokens, so this file only owns the reading column and the
-   handful of blocks the pages actually use (lede, callout, step list, source
-   list, CTA band).
+   global type/colour tokens, so this file only owns the page shell, the prose
+   measure, and the handful of blocks the pages actually use (lede, callout,
+   step list, source list, CTA band).
 
-   Measure is capped at 68ch rather than a pixel width so the column tracks the
-   font size instead of drifting narrow at large type settings. */
+   Measure is capped at 66ch rather than a pixel width so prose tracks the font
+   size instead of drifting narrow at large type settings. */
 
 .doc {
   min-height: 100dvh;
   background: var(--bg);
-  /* `clip`, not `hidden`: the break-out widths below are computed from 100vw,
-     which does not know about a classic desktop scrollbar, so they can exceed the
-     content box by the scrollbar width at a narrow band of viewports. `clip`
-     absorbs that without creating a scroll container, so it cannot break
-     `position: sticky` on the header the way `hidden` would. */
+  /* `clip`, not `hidden`: full-bleed figures are computed from 100vw, which
+     does not know about a classic desktop scrollbar. `clip` absorbs that
+     without creating a scroll container, so it cannot break `position: sticky`
+     on the header the way `hidden` would. */
   overflow-x: clip;
 }
 
-/* Reading column, with a way out of it.
-
-   This was a plain `max-width: 68ch` box, which meant that on a 1440px screen the
-   page was a narrow ribbon of text with roughly two thirds of the viewport empty,
-   and nothing on the page could ever be wider than a paragraph: a card grid or a
-   landscape photograph had to stack single-file inside the measure.
-
-   `.wide` and `.bleed` break out of the column by centring themselves on it with
-   a symmetric negative margin. That is deliberately a margin trick rather than a
-   three-track grid, because the pages wrap their content in `<div class="body">`
-   and a grid would only reach direct children, so every block that wanted room
-   would have to be hoisted out of the prose wrapper it belongs to.
-
-   Measure stays at 68ch rather than a pixel width so the column tracks the font
-   size instead of drifting narrow at large type settings. */
+/* The page shell.
+ *
+ * This was `max-width: 68ch; margin: 0 auto` — a narrow ribbon centred in the
+ * viewport. On any browser wider than a laptop the page floated in the middle
+ * with two thirds of the screen as dead margin, every block trapped inside the
+ * measure, and the whole thing read as a centred flyer rather than a document.
+ *
+ * The shell is now as wide as the landing page's wrap (1180px): prose anchors
+ * to the left edge of the content area at a 66ch measure — the same x-position
+ * as the logo and header nav — while figures, card grids, tables and the CTA
+ * band use the full width of the shell. The old `.wide`/`.bleed`
+ * negative-margin breakouts existed only because the column was narrow; with a
+ * real content area they collapse to plain full width and are retained as
+ * no-op-capable classes so the page markup does not need to change. */
 .docInner {
   --doc-gutter: clamp(1.25rem, 4vw, 3rem);
-  --doc-wide: 1040px;
-  --doc-bleed: 1320px;
-  max-width: 68ch;
-  margin: 0 auto;
-  padding: clamp(2.5rem, 6vw, 4.5rem) var(--doc-gutter) clamp(3rem, 7vw, 5rem);
+  --doc-page: 1180px;
+  --doc-measure: 66ch;
+  width: 100%;
+  max-width: var(--doc-page);
+  margin-inline: auto;
+  padding: clamp(2.5rem, 6vw, 4.5rem) var(--doc-gutter) clamp(3.5rem, 7vw, 5.5rem);
+  text-align: left;
 }
 
-/* One step out: wide enough for a card grid or a landscape figure to feel like it
-   belongs to the page rather than to the paragraph above it, still narrow enough
-   to read as part of the same document. Collapses to exactly the reading column
-   on phones, where the negative margin resolves to zero. */
-/* The doubled class is load-bearing, not a typo. `.body :where(ul, ol)` sets a
-   `margin` shorthand and is declared later in this file, so at equal specificity
-   it would win and reset the negative inline margin to zero, leaving a 1040px
-   block sitting in a 68ch column and overflowing off the right of the page. */
-.wide.wide {
-  --w: min(var(--doc-wide), calc(100vw - 2 * var(--doc-gutter)));
-  width: var(--w);
-  margin-inline: calc(50% - var(--w) / 2);
-}
-
-/* Wider still. Reserved for the page-opening image. */
+/* One step out used to mean "wider than the reading column". The shell IS the
+   reading surface now, so wide blocks are simply full width. The doubled-class
+   selectors stay because the pages still pass `.wide`/`bleed` to PageHero,
+   CardGrid, tables and Related — restating them as width:100% keeps the markup
+   stable while the geometry changed. */
+.wide.wide,
 .bleed.bleed {
-  --w: min(var(--doc-bleed), calc(100vw - 2 * var(--doc-gutter)));
-  width: var(--w);
-  margin-inline: calc(50% - var(--w) / 2);
+  width: 100%;
+  margin-inline: 0;
 }
 
 .eyebrow {
@@ -83,8 +73,18 @@
 .lede {
   font-size: clamp(1.02rem, 2.2vw, 1.2rem);
   line-height: 1.55;
-  margin: 0 0 2.25rem;
+  margin: 0 0 clamp(2rem, 4vw, 2.75rem);
   text-wrap: pretty;
+  max-width: 62ch;
+}
+
+/* Prose measure. Direct prose children of the article body — headings,
+   paragraphs, plain lists, plain figures, callouts — cap at 66ch on the left
+   edge of the shell. Anything carrying a class of its own (.cards, .topics,
+   .steps, .ctaBand, .related, .sources) is a layout block and takes the full
+   width; the `:not([class])` exclusions are what keep the grids wide. */
+.body > :where(h2, h3, p, ul:not([class]), ol:not([class]), figure:not([class]), .callout, .meta) {
+  max-width: var(--doc-measure);
 }
 
 /* Body rhythm. Headings get more space above than below so a section reads as
@@ -93,7 +93,7 @@
   font-size: clamp(1.25rem, 2.8vw, 1.6rem);
   line-height: 1.2;
   letter-spacing: -0.01em;
-  margin: 2.75rem 0 0.75rem;
+  margin: clamp(2.75rem, 5vw, 3.5rem) 0 0.75rem;
 }
 
 .body :where(h3) {
@@ -137,20 +137,29 @@
 .body table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1.25rem 0;
+  margin: 1.5rem 0;
   font-size: 0.88rem;
+  background: var(--surface, transparent);
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
 }
 
 .body th,
 .body td {
-  border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
-  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  padding: 0.7rem 0.9rem;
   text-align: left;
   vertical-align: top;
 }
 
 .body th {
   font-weight: 600;
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+}
+
+.body tr:last-child :where(th, td) {
+  border-bottom: 0;
 }
 
 /* Pulled-aside fact block. Left rule rather than a filled card: these pages are
@@ -169,21 +178,24 @@
 /* Page-opening image. These pages are about physical places and physical stays,
    and a wall of text with no photograph reads as a policy document rather than as
    something written by someone who hosts. One per page, directly under the lede,
-   and never a second decorative image mid-article competing with the reading. */
+   and never a second decorative image mid-article competing with the reading.
+
+   On desktop it spans the full shell as a framed 16:9 figure — the one element
+   allowed to be wider than the prose, which is what makes the page read as an
+   editorial layout instead of a centred letter. */
 .hero {
-  /* `margin-block`, never the `margin` shorthand: these blocks also carry `.wide`,
-     whose negative inline margin is what breaks them out of the reading column,
-     and a shorthand declared later in this file would silently reset it to zero. */
-  margin-block: 0 clamp(2rem, 5vw, 3rem);
+  width: 100%;
+  margin-block: 0 clamp(2.25rem, 5vw, 3.25rem);
 }
 
 .heroFrame {
   position: relative;
-  aspect-ratio: 21 / 9;
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius-lg, 16px);
   overflow: hidden;
   background: var(--surface-2, rgba(127, 127, 127, 0.12));
   border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  box-shadow: var(--shadow-md, 0 8px 24px -12px rgba(0, 0, 0, 0.4));
 }
 
 .heroFrame img {
@@ -191,11 +203,12 @@
 }
 
 .heroCaption {
-  margin: 0.6rem 0 0;
+  margin: 0.65rem 0 0;
   font-size: 0.8rem;
   line-height: 1.5;
   color: var(--text-muted, inherit);
   opacity: 0.8;
+  max-width: var(--doc-measure);
 }
 
 @media (max-width: 640px) {
@@ -204,20 +217,19 @@
   }
 }
 
-/* Small card grid for facts that are a set rather than a sequence. Sits at
-   `.wide` so three cards get real room instead of stacking in a 68ch column. */
+/* Small card grid for facts that are a set rather than a sequence. Spans the
+   full shell so three cards get real room instead of stacking in the measure. */
 .cards {
   list-style: none;
   padding: 0;
-  /* margin-block only; see the note on .hero. */
-  margin-block: clamp(1.5rem, 4vw, 2.25rem);
+  margin-block: clamp(1.75rem, 4vw, 2.5rem);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
   gap: clamp(0.85rem, 2vw, 1.15rem);
 }
 
 .cards > li {
-  padding: var(--pad-card, 1rem);
+  padding: var(--pad-card, 1.1rem);
   background: var(--surface, transparent);
   border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
   border-radius: var(--radius-md, 12px);
@@ -243,8 +255,7 @@
 .topics {
   list-style: none;
   padding: 0;
-  /* margin-block only; see the note on .hero. */
-  margin-block: clamp(1.5rem, 4vw, 2.25rem);
+  margin-block: clamp(1.75rem, 4vw, 2.5rem);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
   gap: clamp(0.85rem, 2vw, 1.15rem);
@@ -253,7 +264,7 @@
 .topics > li {
   display: flex;
   flex-direction: column;
-  padding: var(--pad-card, 1rem);
+  padding: var(--pad-card, 1.1rem);
   background: var(--surface, transparent);
   border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
   border-radius: var(--radius-md, 12px);
@@ -286,10 +297,21 @@
 .steps {
   list-style: none;
   padding: 0;
-  margin: 1.5rem 0;
+  margin: clamp(1.75rem, 4vw, 2.5rem) 0;
   display: grid;
   gap: 1.25rem;
   counter-reset: step;
+}
+
+/* On desktop a numbered sequence stops being a single ribbon and becomes a
+   two-to-three-across grid: three setup steps land on one row, four audit
+   steps land 2x2. The counter gutter carries over unchanged. */
+@media (min-width: 820px) {
+  .steps {
+    grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+    column-gap: clamp(2rem, 4vw, 3rem);
+    row-gap: clamp(1.75rem, 3vw, 2.5rem);
+  }
 }
 
 .steps > li {
@@ -321,29 +343,27 @@
 /* End-of-page conversion band. One per page, and never a second CTA with the
    same intent higher up.
 
-   This was a hairline rule with a sentence and a button crammed into the 68ch
-   measure, which read as a footnote at exactly the point where a host has
-   finished reading and is deciding. A filled panel at full content width gives
-   that decision somewhere to land. Filled surfaces are rationed on these pages
-   (this and the card grids, nothing else) so they still read as emphasis. */
+   On desktop the sentence and the button sit on opposite ends of a full-width
+   panel: the reader finishes the article on the left edge and the decision is
+   waiting on the right. On a phone it stacks, sentence first. */
 .ctaBand {
-  /* margin-block only; see the note on .hero. */
-  margin-block: clamp(2.5rem, 6vw, 3.5rem) 0;
-  padding: clamp(1.15rem, 3vw, 1.6rem);
+  margin-block: clamp(3rem, 6vw, 4rem) 0;
+  padding: clamp(1.4rem, 3vw, 1.9rem) clamp(1.3rem, 3vw, 2.25rem);
   background: var(--surface, transparent);
   border: 1px solid var(--border, rgba(127, 127, 127, 0.22));
   border-radius: var(--radius-lg, 16px);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.9rem 1.5rem;
+  justify-content: space-between;
+  gap: 1rem 2rem;
 }
 
 .ctaBand .ctaBandText {
   margin: 0;
-  flex: 1 1 24ch;
+  flex: 1 1 34ch;
   font-size: 1rem;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 /* Cross-links between these pages. Internal linking is the whole point: six
@@ -351,12 +371,12 @@
 
    This was a row of bare underlined labels wrapped tight under the CTA band, so
    the end of every page read as a footnote and almost nobody continued to a
-   second page. It is now a card grid at `.wide`, with each card carrying the
-   page's own image and its one-line description, so the choice of where to go
-   next is made on substance rather than on a two-word link. */
+   second page. It is now a card grid at full shell width, with each card
+   carrying the page's own image and its one-line description, so the choice of
+   where to go next is made on substance rather than on a two-word link. */
 .related {
-  margin-top: clamp(2.75rem, 6vw, 4rem);
-  padding-top: clamp(1.75rem, 4vw, 2.5rem);
+  margin-top: clamp(3rem, 6vw, 4.25rem);
+  padding-top: clamp(2rem, 4vw, 2.75rem);
   border-top: 1px solid var(--border, rgba(127, 127, 127, 0.22));
 }
 
@@ -375,7 +395,7 @@
   display: grid;
   /* auto-fit rather than fixed columns: six cards land as 3x2 on a desktop,
      2x3 on a tablet and a single column on a phone with no breakpoints. */
-  grid-template-columns: repeat(auto-fit, minmax(min(15.5rem, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(16.5rem, 100%), 1fr));
   gap: clamp(0.85rem, 2vw, 1.15rem);
 }
 
@@ -469,6 +489,7 @@
   margin-top: 2.75rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--border, rgba(127, 127, 127, 0.22));
+  max-width: var(--doc-measure);
 }
 
 .sources h2 {
@@ -502,17 +523,19 @@
    their shape, because an image still needs an edge, and the CTA band keeps
    its fill: it is the page's one conversion surface. */
 @media (max-width: 640px) {
-  /* --w overrides the .wide breakout width, so the figure escapes the reading
-     column's gutter on both sides. The frame's border and radius come off
+  /* The figure escapes the shell's gutter on both sides by cancelling it with
+     a matching negative margin. The frame's border and radius come off
      because there is no page edge left for them to sit against. */
-  .hero.wide.wide {
-    --w: 100vw;
+  .hero {
+    margin-inline: calc(-1 * var(--doc-gutter));
+    width: auto;
   }
 
   .heroFrame {
     border-radius: 0;
     border-left: 0;
     border-right: 0;
+    box-shadow: none;
   }
 
   /* The caption lives inside the full-bleed figure, so it has to re-supply
@@ -547,25 +570,5 @@
      separator between items; it keeps its spacing but drops the border. */
   .topics .topicAction {
     border-top: 0;
-  }
-}
-
-/* ---- Desktop: the page hero belongs to the article -------------------------
-
-   The 1040px breakout at 21:9 read as a banner above the article rather than a
-   figure in it: on a browser it was wider than every line of text that
-   followed and roughly one and a half times the reading column, so the page
-   opened with advertising instead of content. Desktop caps the page-opening
-   image at a deliberate figure width — still wider than the measure so it
-   reads as the opening figure, no longer wide enough to own the page — and
-   gives it the same frame the rest of the page's surfaces wear. Mobile is
-   untouched: the full-bleed treatment in the phone block above stays. */
-@media (min-width: 641px) {
-  .hero.wide.wide {
-    --w: min(880px, calc(100vw - 2 * var(--doc-gutter)));
-  }
-
-  .heroFrame {
-    aspect-ratio: 16 / 9;
   }
 }
