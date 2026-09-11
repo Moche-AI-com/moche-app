@@ -1,0 +1,83 @@
+name: Capture product shots
+
+# Run manually from Actions → "Capture product shots" → Run workflow.
+# The runner builds the app, starts it, runs the Playwright capture script,
+# and commits the resulting PNGs straight to main.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions → New):
+#   DEMO_EMAIL           demo host login
+#   DEMO_PASSWORD        demo host password
+#   DEMO_PROPERTY_ID     UUID of the demo property to deep-link
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   NEXT_PUBLIC_MAPBOX_TOKEN
+#   NEXT_PUBLIC_APP_URL  (set to http://localhost:3000 for CI)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Push back to main needs a token with write access.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          # Suppress non-critical build-time env warnings
+          NEXT_TELEMETRY_DISABLED: 1
+        run: npm run build
+
+      - name: Start app (background)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          PORT: 3000
+        run: |
+          npm run start &
+          # Wait until the server is accepting connections
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000 > /dev/null && break
+            echo "waiting for server ($i/30)..."
+            sleep 2
+          done
+
+      - name: Run capture script
+        env:
+          BASE_URL: http://localhost:3000
+          DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          DEMO_PROPERTY_ID: ${{ secrets.DEMO_PROPERTY_ID }}
+        run: npm run capture:product-shots
+
+      - name: Commit PNGs to main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/premium/product-*.png
+          git diff --cached --quiet || git commit -m "chore: update product screenshots [skip ci]"
+          git push
