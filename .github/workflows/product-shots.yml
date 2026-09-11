@@ -7,11 +7,17 @@ name: Capture product shots
 # Required repo secrets (Settings → Secrets and variables → Actions → New):
 #   DEMO_EMAIL           demo host login
 #   DEMO_PASSWORD        demo host password
-#   DEMO_PROPERTY_ID     UUID of the demo property to deep-link
+#   DEMO_PROPERTY_ID     UUID of the demo property to deep-link (use the live
+#                        Harbor View Loft — the Brain and go-live pages read
+#                        best from it)
 #   NEXT_PUBLIC_SUPABASE_URL
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY
 #   NEXT_PUBLIC_MAPBOX_TOKEN
 #   NEXT_PUBLIC_APP_URL  (set to http://localhost:3000 for CI)
+#   PORTAL_URL           optional — a live guest portal or host preview link.
+#                        When set, the capture also produces the guest-portal
+#                        shots. Mint one from the demo property's Stays page
+#                        and rotate it after the run.
 
 on:
   workflow_dispatch:
@@ -27,6 +33,23 @@ jobs:
         with:
           # Push back to main needs a token with write access.
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sanity-check secrets
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          DEMO_PROPERTY_ID: ${{ secrets.DEMO_PROPERTY_ID }}
+        run: |
+          missing=0
+          for name in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_MAPBOX_TOKEN NEXT_PUBLIC_APP_URL DEMO_EMAIL DEMO_PASSWORD DEMO_PROPERTY_ID; do
+            if [ -z "${!name}" ]; then echo "MISSING: $name"; missing=1; fi
+          done
+          [ "$missing" = 0 ] || { echo "One or more secrets are not set."; exit 1; }
+          echo "All required secrets present."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -72,6 +95,7 @@ jobs:
           DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
           DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
           DEMO_PROPERTY_ID: ${{ secrets.DEMO_PROPERTY_ID }}
+          PORTAL_URL: ${{ secrets.PORTAL_URL }}
         run: npm run capture:product-shots
 
       - name: Commit PNGs to main
