@@ -1,11 +1,11 @@
 import type { StaticImageData } from 'next/image';
 
-import productLandingMobile from '@/public/premium/product-landing-mobile.png';
+import productStaysMobile from '@/public/premium/product-stays-mobile.png';
 import productLocalRecsMobile from '@/public/premium/product-local-recs-mobile.png';
 import productGoLiveMobile from '@/public/premium/product-go-live-mobile.png';
-import productBrainMobile from '@/public/premium/product-brain-mobile.png';
+import productEscalationsMobile from '@/public/premium/product-escalations-mobile.png';
 import productPortalMobile from '@/public/premium/product-portal-mobile.png';
-import productDashboardMobile from '@/public/premium/product-dashboard-mobile.png';
+import productUpdatesMobile from '@/public/premium/product-updates-mobile.png';
 import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
 
 /**
@@ -45,15 +45,16 @@ import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
  * `pos` is the crop anchor — and with the product captures it does double duty.
  * Every mobile capture shares the same app header at the top, so frames cropped
  * at the same depth read as one image repeated. Each frame is anchored at a
- * different depth (10% to 85%) so the arc shows six different parts of the
- * product, not six copies of the header bar.
+ * different depth so the arc shows six different parts of the product, not six
+ * copies of the header bar.
  *
  * Six of the seven frames carry product captures — the arc shows the product
- * itself, each frame the surface its link opens. All six use the *mobile*
- * captures (390x844 portrait) because the arc's frames are tall: a 1600x900
- * desktop shot would crop to an unreadable sliver. The centre frame is the one
- * deliberate exception: the concierge bell is a metaphor, not a UI surface —
- * "someone is on the other end of this" — and it carries the brand mark.
+ * itself, each frame a surface related to where its link goes. All six use the
+ * *mobile* captures (390x844 portrait) because the arc's frames are tall: a
+ * 1600x900 desktop shot would crop to an unreadable sliver. The centre frame is
+ * the one deliberate exception: the concierge bell is a metaphor, not a UI
+ * surface — "someone is on the other end of this" — and it carries the brand
+ * mark.
  */
 export interface HeroLink {
   href: string;
@@ -77,12 +78,13 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/about',
     label: 'Our story',
     description: 'Why we built Moche-AI, and who is behind it',
-    src: productLandingMobile,
+    // A guest conversation thread — the human story behind the product.
+    src: productStaysMobile,
     x: -46,
     y: 26,
     rot: -21,
     rank: 3,
-    pos: '50% 10%',
+    pos: '50% 40%',
   },
   {
     href: '/resources/guest-communication-guide',
@@ -93,6 +95,7 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 11,
     rot: -14,
     rank: 2,
+    // Deeper crop: past the header, into the recommendations list.
     pos: '50% 45%',
   },
   {
@@ -104,6 +107,7 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 2,
     rot: -7,
     rank: 1,
+    // Mid-page: the readiness verdict and checklist, not the page header.
     pos: '50% 30%',
   },
   {
@@ -142,25 +146,25 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/support',
     label: 'Support',
     description: 'Get help, report a problem, or reach a human',
-    src: productBrainMobile,
+    // The escalations inbox — the surface where a host actually answers a guest.
+    src: productEscalationsMobile,
     x: 31,
     y: 11,
     rot: 14,
     rank: 2,
-    // Deepest crop in the set: the knowledge items, not the page chrome.
-    pos: '50% 75%',
+    pos: '50% 35%',
   },
   {
     href: '/security',
     label: 'Trust & safety',
     description: 'How your data and your guests\u2019 data are protected',
-    src: productDashboardMobile,
+    // The knowledge queue: nothing publishes to guests until a host approves it.
+    src: productUpdatesMobile,
     x: 46,
     y: 26,
     rot: 21,
     rank: 3,
-    // Below the header: the value band and property cards.
-    pos: '50% 25%',
+    pos: '50% 30%',
   },
 ] as const;
 
