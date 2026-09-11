@@ -1,7 +1,7 @@
 import type { StaticImageData } from 'next/image';
 
-import productStaysMobile from '@/public/premium/product-stays-mobile.png';
-import productLocalRecsMobile from '@/public/premium/product-local-recs-mobile.png';
+import productDashboardMobile from '@/public/premium/product-dashboard-mobile.png';
+import productExtrasMobile from '@/public/premium/product-extras-mobile.png';
 import productGoLiveMobile from '@/public/premium/product-go-live-mobile.png';
 import productEscalationsMobile from '@/public/premium/product-escalations-mobile.png';
 import productPortalMobile from '@/public/premium/product-portal-mobile.png';
@@ -78,25 +78,27 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/about',
     label: 'Our story',
     description: 'Why we built Moche-AI, and who is behind it',
-    // A guest conversation thread — the human story behind the product.
-    src: productStaysMobile,
+    // The portfolio dashboard — the product as a whole, which is what the
+    // story page is about.
+    src: productDashboardMobile,
     x: -46,
     y: 26,
     rot: -21,
     rank: 3,
-    pos: '50% 40%',
+    pos: '50% 25%',
   },
   {
     href: '/resources/guest-communication-guide',
     label: 'Host guide',
     description: 'The guest communication guide for short-term rental hosts',
-    src: productLocalRecsMobile,
+    // The extras queue — guest requests with prices, a concrete example of
+    // the communication the guide teaches.
+    src: productExtrasMobile,
     x: -31,
     y: 11,
     rot: -14,
     rank: 2,
-    // Deeper crop: past the header, into the recommendations list.
-    pos: '50% 45%',
+    pos: '50% 35%',
   },
   {
     href: '/how-it-works',
