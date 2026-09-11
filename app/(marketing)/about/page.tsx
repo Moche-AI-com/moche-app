@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
-import beachhouse from '@/public/premium/str-hero-beachhouse.webp';
+import productDashboard from '@/public/premium/product-dashboard-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -34,9 +34,9 @@ export default function AboutPage() {
       />
 
       <PageHero
-        src={beachhouse}
-        alt="A sunlit beach house living room with linen sofas and open sliding doors"
-        caption="A beach house living room with the afternoon light coming in, the kind of property whose details live in a text message from two summers ago."
+        src={productDashboard}
+        alt="The Moche-AI host dashboard showing a property portfolio with concierge activity, guest topics, and review queues"
+        caption="The host dashboard. The product this page describes, as a host sees it every morning."
         priority
       />
 

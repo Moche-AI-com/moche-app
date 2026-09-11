@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related, PageHero } from '../_parts';
-import handoff from '@/public/premium/str-gallery-key-handoff.webp';
+import productGoLive from '@/public/premium/product-go-live-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -32,9 +32,9 @@ export default function SecurityPage() {
       />
 
       <PageHero
-        src={handoff}
-        alt="A set of house keys being handed over at a front door"
-        caption="A set of keys handed over at a door. Access to a property is the thing being protected here, which is why the guest side never has a login to steal."
+        src={productGoLive}
+        alt="The Moche-AI go-live readiness screen with publish checks and a completeness score"
+        caption="The go-live readiness screen. Nothing reaches a guest until a property clears its publish checks — the gate is the control."
         priority
       />
 

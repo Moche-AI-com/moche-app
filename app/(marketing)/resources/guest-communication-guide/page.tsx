@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_URL, SITE_NAME } from '@/lib/seo';
 import { DocHeader, Related, CtaBand, Sources, PageHero } from '../../_parts';
-import pool from '@/public/premium/str-gallery-pool-deck.webp';
+import productLocalRecs from '@/public/premium/product-local-recs-desktop.png';
 import styles from '../../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -73,9 +73,9 @@ export default function GuestCommunicationGuidePage() {
       />
 
       <PageHero
-        src={pool}
-        alt="A pool deck with loungers and folded towels in late afternoon light"
-        caption="The questions a guest asks about a pool deck are the same questions every week: what time it closes, whether the towels in the cupboard are for the pool, where the gate key lives."
+        src={productLocalRecs}
+        alt="The Moche-AI local recommendations screen showing a host's curated places with notes and a map"
+        caption="The local recommendations a host curates. This is what 'write answers once, at the property level' looks like in the product."
         priority
       />
 

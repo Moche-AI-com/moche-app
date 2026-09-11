@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related, PageHero } from '../_parts';
-import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
+import productBrain from '@/public/premium/product-brain-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -97,9 +97,9 @@ export default function SupportPage() {
       />
 
       <PageHero
-        src={kitchen}
-        alt="A tidy rental kitchen with a kettle, counter stools and morning light"
-        caption="A rental kitchen. Most support questions start with an appliance, a code, or a cupboard nobody labelled."
+        src={productBrain}
+        alt="The Moche-AI Property Brain manager showing a property's knowledge base with sections, coverage map, and answers"
+        caption="The Property Brain. Most support questions trace back to a missing or stale answer here — which is fixable at the source."
         priority
       />
 

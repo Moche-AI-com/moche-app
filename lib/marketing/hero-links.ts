@@ -1,11 +1,11 @@
 import type { StaticImageData } from 'next/image';
 
-import beachhouse from '@/public/premium/str-hero-beachhouse.webp';
-import productPortalMobile from '@/public/premium/product-portal-mobile.png';
+import productLandingMobile from '@/public/premium/product-landing-mobile.png';
+import productLocalRecsMobile from '@/public/premium/product-local-recs-mobile.png';
 import productGoLiveMobile from '@/public/premium/product-go-live-mobile.png';
-import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
-import pool from '@/public/premium/str-gallery-pool-deck.webp';
-import handoff from '@/public/premium/str-gallery-key-handoff.webp';
+import productBrainMobile from '@/public/premium/product-brain-mobile.png';
+import productPortalMobile from '@/public/premium/product-portal-mobile.png';
+import productDashboardMobile from '@/public/premium/product-dashboard-mobile.png';
 import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
 
 /**
@@ -46,10 +46,12 @@ import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
  * were not shot for that ratio, and a centred crop of the beach house is two
  * thirds empty sky.
  *
- * Two frames now carry product captures instead of photography: How-it-works
- * shows the go-live readiness screen and Guest view shows the guest portal.
- * Both use the *mobile* captures (390x844 portrait) because the arc's frames
- * are tall — a 1600x900 desktop shot would crop to an unreadable sliver.
+ * Six of the seven frames carry product captures — the arc shows the product
+ * itself, each frame the surface its link opens. All six use the *mobile*
+ * captures (390x844 portrait) because the arc's frames are tall: a 1600x900
+ * desktop shot would crop to an unreadable sliver. The centre frame is the one
+ * deliberate exception: the concierge bell is a metaphor, not a UI surface —
+ * "someone is on the other end of this" — and it carries the brand mark.
  */
 export interface HeroLink {
   href: string;
@@ -73,23 +75,23 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/about',
     label: 'Our story',
     description: 'Why we built Moche-AI, and who is behind it',
-    src: beachhouse,
+    src: productLandingMobile,
     x: -46,
     y: 26,
     rot: -21,
     rank: 3,
-    pos: '50% 86%',
+    pos: '50% 12%',
   },
   {
     href: '/resources/guest-communication-guide',
     label: 'Host guide',
     description: 'The guest communication guide for short-term rental hosts',
-    src: pool,
+    src: productLocalRecsMobile,
     x: -31,
     y: 11,
     rot: -14,
     rank: 2,
-    pos: '50% 62%',
+    pos: '50% 12%',
   },
   {
     href: '/how-it-works',
@@ -137,23 +139,23 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/support',
     label: 'Support',
     description: 'Get help, report a problem, or reach a human',
-    src: kitchen,
+    src: productBrainMobile,
     x: 31,
     y: 11,
     rot: 14,
     rank: 2,
-    pos: '50% 55%',
+    pos: '50% 12%',
   },
   {
     href: '/security',
     label: 'Trust & safety',
     description: 'How your data and your guests\u2019 data are protected',
-    src: handoff,
+    src: productDashboardMobile,
     x: 46,
     y: 26,
     rot: 21,
     rank: 3,
-    pos: '50% 50%',
+    pos: '50% 12%',
   },
 ] as const;
 
