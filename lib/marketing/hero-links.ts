@@ -42,9 +42,11 @@ import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
  * Under 700px the arc becomes a swipeable snap-carousel instead, so all seven
  * stay reachable at every width.
  *
- * `pos` is the crop anchor. These frames are tall windows onto photographs that
- * were not shot for that ratio, and a centred crop of the beach house is two
- * thirds empty sky.
+ * `pos` is the crop anchor — and with the product captures it does double duty.
+ * Every mobile capture shares the same app header at the top, so frames cropped
+ * at the same depth read as one image repeated. Each frame is anchored at a
+ * different depth (10% to 85%) so the arc shows six different parts of the
+ * product, not six copies of the header bar.
  *
  * Six of the seven frames carry product captures — the arc shows the product
  * itself, each frame the surface its link opens. All six use the *mobile*
@@ -80,7 +82,7 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 26,
     rot: -21,
     rank: 3,
-    pos: '50% 12%',
+    pos: '50% 10%',
   },
   {
     href: '/resources/guest-communication-guide',
@@ -91,7 +93,7 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 11,
     rot: -14,
     rank: 2,
-    pos: '50% 12%',
+    pos: '50% 45%',
   },
   {
     href: '/how-it-works',
@@ -102,7 +104,7 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 2,
     rot: -7,
     rank: 1,
-    pos: '50% 12%',
+    pos: '50% 30%',
   },
   {
     href: '/signup',
@@ -133,7 +135,8 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 2,
     rot: 7,
     rank: 1,
-    pos: '50% 12%',
+    // Deep crop: the conversation thread, below the portal header.
+    pos: '50% 60%',
   },
   {
     href: '/support',
@@ -144,7 +147,8 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 11,
     rot: 14,
     rank: 2,
-    pos: '50% 12%',
+    // Deepest crop in the set: the knowledge items, not the page chrome.
+    pos: '50% 75%',
   },
   {
     href: '/security',
@@ -155,7 +159,8 @@ export const HERO_LINKS: readonly HeroLink[] = [
     y: 26,
     rot: 21,
     rank: 3,
-    pos: '50% 12%',
+    // Below the header: the value band and property cards.
+    pos: '50% 25%',
   },
 ] as const;
 

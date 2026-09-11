@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
-import productDashboard from '@/public/premium/product-dashboard-desktop.png';
+import productLanding from '@/public/premium/product-landing-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -34,9 +34,9 @@ export default function AboutPage() {
       />
 
       <PageHero
-        src={productDashboard}
-        alt="The Moche-AI host dashboard showing a property portfolio with concierge activity, guest topics, and review queues"
-        caption="The host dashboard. The product this page describes, as a host sees it every morning."
+        src={productLanding}
+        alt="The Moche-AI landing page showing the product promise and hero arc"
+        caption="The front door of the product this page describes — what a host sees before they ever sign up."
         priority
       />
 
