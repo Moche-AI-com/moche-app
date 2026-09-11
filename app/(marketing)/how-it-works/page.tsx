@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_URL } from '@/lib/seo';
 import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
-import productGoLive from '@/public/premium/product-go-live-desktop.png';
+import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -76,9 +76,9 @@ export default function HowItWorksPage() {
       />
 
       <PageHero
-        src={productGoLive}
-        alt="The Moche-AI go-live readiness screen showing a property brain at 98% completeness and ready to publish"
-        caption="The go-live readiness screen. A Property Brain at 98% completeness — every section checked, the guest portal one click from being live."
+        src={cabin}
+        alt="The interior of a wood-lined cabin with a stove and soft lamplight"
+        caption="A cabin interior. The thermostat, the wood stove, the router in the cupboard: everything a Property Brain has to know before a guest asks about it."
         priority
       />
 
@@ -115,8 +115,6 @@ export default function HowItWorksPage() {
         <p>
           Chat is the interface, not the product. Six parts do the work:
         </p>
-        {/* .wide: a two-column comparison read inside a 68ch measure wraps every cell
-            to three or four lines, which is exactly the shape a table exists to avoid. */}
         <table className={styles.wide}>
           <thead>
             <tr>
