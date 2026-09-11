@@ -1,7 +1,7 @@
 name: Capture product shots
 
 # Run manually from Actions → "Capture product shots" → Run workflow.
-# The runner builds the app, starts it, runs the Playwright capture script,
+# The runner builds the app, starts it, runs both Playwright capture passes,
 # and commits the resulting PNGs straight to main.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions → New):
@@ -89,7 +89,7 @@ jobs:
             sleep 2
           done
 
-      - name: Run capture script
+      - name: Run capture script (first pass)
         env:
           BASE_URL: http://localhost:3000
           DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
@@ -97,6 +97,14 @@ jobs:
           DEMO_PROPERTY_ID: ${{ secrets.DEMO_PROPERTY_ID }}
           PORTAL_URL: ${{ secrets.PORTAL_URL }}
         run: npm run capture:product-shots
+
+      - name: Run capture script (operations surfaces)
+        env:
+          BASE_URL: http://localhost:3000
+          DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          DEMO_PROPERTY_ID: ${{ secrets.DEMO_PROPERTY_ID }}
+        run: node scripts/capture-extra-shots.mjs
 
       - name: Commit PNGs to main
         run: |
