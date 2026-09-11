@@ -1,8 +1,8 @@
 import type { StaticImageData } from 'next/image';
 
 import beachhouse from '@/public/premium/str-hero-beachhouse.webp';
-import cottage from '@/public/premium/str-gallery-cliffside-cottage.webp';
-import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
+import productPortalMobile from '@/public/premium/product-portal-mobile.png';
+import productGoLiveMobile from '@/public/premium/product-go-live-mobile.png';
 import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
 import pool from '@/public/premium/str-gallery-pool-deck.webp';
 import handoff from '@/public/premium/str-gallery-key-handoff.webp';
@@ -45,6 +45,11 @@ import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
  * `pos` is the crop anchor. These frames are tall windows onto photographs that
  * were not shot for that ratio, and a centred crop of the beach house is two
  * thirds empty sky.
+ *
+ * Two frames now carry product captures instead of photography: How-it-works
+ * shows the go-live readiness screen and Guest view shows the guest portal.
+ * Both use the *mobile* captures (390x844 portrait) because the arc's frames
+ * are tall — a 1600x900 desktop shot would crop to an unreadable sliver.
  */
 export interface HeroLink {
   href: string;
@@ -90,12 +95,12 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/how-it-works',
     label: 'How it works',
     description: 'What the Property Brain is and how a guest answer is produced',
-    src: cabin,
+    src: productGoLiveMobile,
     x: -16,
     y: 2,
     rot: -7,
     rank: 1,
-    pos: '50% 50%',
+    pos: '50% 12%',
   },
   {
     href: '/signup',
@@ -121,12 +126,12 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/guest-experience',
     label: 'Guest view',
     description: 'What your guests actually see during a stay',
-    src: cottage,
+    src: productPortalMobile,
     x: 16,
     y: 2,
     rot: 7,
     rank: 1,
-    pos: '50% 55%',
+    pos: '50% 12%',
   },
   {
     href: '/support',
