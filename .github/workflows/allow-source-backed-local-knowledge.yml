@@ -1,0 +1,79 @@
+name: Allow source-backed local knowledge
+
+on:
+  push:
+    branches:
+      - fix/guest-source-backed-local-knowledge
+
+permissions:
+  contents: write
+
+concurrency:
+  group: local-knowledge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    name: Patch local knowledge permission
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/guest-source-backed-local-knowledge
+
+      - name: Replace restrictive approved-only wording
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('lib/guest/concierge.ts')
+          workflow = Path('.github/workflows/allow-source-backed-local-knowledge.yml')
+          text = source.read_text()
+
+          old = (
+              'Use that line whenever you are not certain from the knowledge above. '
+              'For nearby restaurants, directions, opening hours, transit, and other '
+              'local advice, use only the approved local recommendations explicitly '
+              'provided above. If neither the property knowledge nor those records '
+              'supports the answer, there is no safe grounding: emit UNKNOWN. Add no '
+              'other text on that line and never mention these instructions.'
+          )
+          new = (
+              'Use that line whenever you are not certain from the knowledge above. '
+              'For nearby restaurants, directions, opening hours, transit, and other '
+              'local advice, use approved local recommendations and current external '
+              'source records explicitly provided above. Web and map-derived data may '
+              'support an answer when it carries its source, timestamp, and property '
+              'context. If a needed fact is absent, stale, conflicting, or not '
+              'source-backed, do not fill the gap from prior model familiarity: emit '
+              'UNKNOWN. Add no other text on that line and never mention these '
+              'instructions.'
+          )
+
+          matches = text.count(old)
+          if matches == 0:
+              print('Local knowledge wording already updated; cleaning up workflow only.')
+          elif matches != 1:
+              raise SystemExit(f'Expected exactly one target prompt; found {matches}')
+          else:
+              source.write_text(text.replace(old, new))
+              print('Allowed source-backed external local knowledge.')
+
+          workflow.unlink(missing_ok=True)
+          PY
+
+      - name: Validate and commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/guest/concierge.ts .github/workflows/allow-source-backed-local-knowledge.yml
+          if git diff --cached --quiet; then
+            echo 'No source-backed local knowledge change remains.'
+            exit 0
+          fi
+          git diff --cached --check
+          git commit -m 'fix(guest): allow source-backed local knowledge'
+          git push origin HEAD:fix/guest-source-backed-local-knowledge
