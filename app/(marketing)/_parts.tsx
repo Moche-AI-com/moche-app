@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image, { type StaticImageData } from 'next/image';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { articleCoverFor } from '@/lib/marketing/article-covers';
 import { MARKETING_ROUTES } from '@/lib/marketing/hero-links';
 import styles from './marketing.module.css';
 
@@ -39,15 +40,17 @@ export function DocHeader({
 /**
  * Page-opening image, one per page, directly under the lede.
  *
- * Takes the same StaticImageData the hero fan uses, so a page and its card in the
- * hero fan and its card in `Related` are all the same photograph. That is not a
- * shortcut: a visitor who clicked a cottage in the fan should land on a page that
- * looks like the thing they clicked.
+ * The picture at the top of an article is an editorial cover, not a product
+ * screenshot. The registry maps the product capture each page previously passed
+ * to the correct vacation-rental photograph, so article covers, homepage arc
+ * cards, and Related-card thumbnails all show the same place. Product captures
+ * stay with ArticleFigure, where the surrounding text is actually describing
+ * the interface being shown.
  *
- * `alt` is required and must describe the photograph. These are editorial images
- * carrying real information about the kind of property being discussed, so an
- * empty alt would be wrong here even though it is correct for the hero fan, where
- * the adjacent label is already the accessible name.
+ * `alt` is required at the call site and remains the fallback for a capture not
+ * in the cover registry. Registered editorial photographs provide their own
+ * descriptive alt and caption. Empty alt would be wrong even though it is
+ * correct for the hero fan, where the adjacent label is already the link name.
  */
 export function PageHero({
   src,
@@ -62,19 +65,23 @@ export function PageHero({
   /** Set on the above-the-fold image so it is not lazy-loaded into a layout shift. */
   priority?: boolean;
 }) {
+  const editorialCover = articleCoverFor(src);
+
   return (
     <figure className={`${styles.hero} ${styles.wide}`}>
       <div className={styles.heroFrame}>
         <Image
-          src={src}
-          alt={alt}
+          src={editorialCover?.src ?? src}
+          alt={editorialCover?.alt ?? alt}
           fill
           priority={priority}
           sizes="(max-width: 1040px) 100vw, 1040px"
           placeholder="blur"
         />
       </div>
-      {caption ? <figcaption className={styles.heroCaption}>{caption}</figcaption> : null}
+      {(editorialCover?.caption ?? caption) ? (
+        <figcaption className={styles.heroCaption}>{editorialCover?.caption ?? caption}</figcaption>
+      ) : null}
     </figure>
   );
 }

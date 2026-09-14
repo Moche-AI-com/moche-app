@@ -1,11 +1,11 @@
 import type { StaticImageData } from 'next/image';
 
-import productDashboardMobile from '@/public/premium/product-dashboard-mobile.png';
-import productExtrasMobile from '@/public/premium/product-extras-mobile.png';
-import productGoLiveMobile from '@/public/premium/product-go-live-mobile.png';
-import productEscalationsMobile from '@/public/premium/product-escalations-mobile.png';
-import productPortalMobile from '@/public/premium/product-portal-mobile.png';
-import productUpdatesMobile from '@/public/premium/product-updates-mobile.png';
+import beachhouse from '@/public/premium/str-hero-beachhouse.webp';
+import cottage from '@/public/premium/str-gallery-cliffside-cottage.webp';
+import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
+import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
+import pool from '@/public/premium/str-gallery-pool-deck.webp';
+import handoff from '@/public/premium/str-gallery-key-handoff.webp';
 import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
 
 /**
@@ -42,19 +42,9 @@ import conciergeBell from '@/public/premium/concierge-bell-signup.webp';
  * Under 700px the arc becomes a swipeable snap-carousel instead, so all seven
  * stay reachable at every width.
  *
- * `pos` is the crop anchor — and with the product captures it does double duty.
- * Every mobile capture shares the same app header at the top, so frames cropped
- * at the same depth read as one image repeated. Each frame is anchored at a
- * different depth so the arc shows six different parts of the product, not six
- * copies of the header bar.
- *
- * Six of the seven frames carry product captures — the arc shows the product
- * itself, each frame a surface related to where its link goes. All six use the
- * *mobile* captures (390x844 portrait) because the arc's frames are tall: a
- * 1600x900 desktop shot would crop to an unreadable sliver. The centre frame is
- * the one deliberate exception: the concierge bell is a metaphor, not a UI
- * surface — "someone is on the other end of this" — and it carries the brand
- * mark.
+ * `pos` is the crop anchor. These frames are tall windows onto photographs that
+ * were not shot for that ratio, and a centred crop of the beach house is two
+ * thirds empty sky.
  */
 export interface HeroLink {
   href: string;
@@ -78,39 +68,34 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/about',
     label: 'Our story',
     description: 'Why we built Moche-AI, and who is behind it',
-    // The portfolio dashboard — the product as a whole, which is what the
-    // story page is about.
-    src: productDashboardMobile,
+    src: beachhouse,
     x: -46,
     y: 26,
     rot: -21,
     rank: 3,
-    pos: '50% 25%',
+    pos: '50% 86%',
   },
   {
     href: '/resources/guest-communication-guide',
     label: 'Host guide',
     description: 'The guest communication guide for short-term rental hosts',
-    // The extras queue — guest requests with prices, a concrete example of
-    // the communication the guide teaches.
-    src: productExtrasMobile,
+    src: pool,
     x: -31,
     y: 11,
     rot: -14,
     rank: 2,
-    pos: '50% 35%',
+    pos: '50% 62%',
   },
   {
     href: '/how-it-works',
     label: 'How it works',
     description: 'What the Property Brain is and how a guest answer is produced',
-    src: productGoLiveMobile,
+    src: cabin,
     x: -16,
     y: 2,
     rot: -7,
     rank: 1,
-    // Mid-page: the readiness verdict and checklist, not the page header.
-    pos: '50% 30%',
+    pos: '50% 50%',
   },
   {
     href: '/signup',
@@ -136,37 +121,34 @@ export const HERO_LINKS: readonly HeroLink[] = [
     href: '/guest-experience',
     label: 'Guest view',
     description: 'What your guests actually see during a stay',
-    src: productPortalMobile,
+    src: cottage,
     x: 16,
     y: 2,
     rot: 7,
     rank: 1,
-    // Deep crop: the conversation thread, below the portal header.
-    pos: '50% 60%',
+    pos: '50% 55%',
   },
   {
     href: '/support',
     label: 'Support',
     description: 'Get help, report a problem, or reach a human',
-    // The escalations inbox — the surface where a host actually answers a guest.
-    src: productEscalationsMobile,
+    src: kitchen,
     x: 31,
     y: 11,
     rot: 14,
     rank: 2,
-    pos: '50% 35%',
+    pos: '50% 55%',
   },
   {
     href: '/security',
     label: 'Trust & safety',
     description: 'How your data and your guests\u2019 data are protected',
-    // The knowledge queue: nothing publishes to guests until a host approves it.
-    src: productUpdatesMobile,
+    src: handoff,
     x: 46,
     y: 26,
     rot: 21,
     rank: 3,
-    pos: '50% 30%',
+    pos: '50% 50%',
   },
 ] as const;
 
