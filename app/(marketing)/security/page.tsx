@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related, PageHero, ArticleFigure } from '../_parts';
-import productGoLive from '@/public/premium/product-go-live-desktop.png';
+import productHowItWorks from '@/public/premium/product-how-it-works-desktop.png';
 import productUpdates from '@/public/premium/product-updates-desktop.png';
 import styles from '../marketing.module.css';
 
@@ -33,9 +33,9 @@ export default function SecurityPage() {
       />
 
       <PageHero
-        src={productGoLive}
-        alt="The Moche-AI go-live readiness screen with publish checks and a completeness score"
-        caption="The go-live readiness screen. Nothing reaches a guest until a property clears its publish checks — the gate is the control."
+        src={productHowItWorks}
+        alt="The Moche-AI data flow showing how a guest question is retrieved, answered or escalated"
+        caption="The pipeline the controls below govern: a question comes in, an answer comes out only from approved material, or it escalates."
         priority
       />
 

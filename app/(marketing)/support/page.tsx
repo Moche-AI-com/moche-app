@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related, PageHero, ArticleFigure } from '../_parts';
-import productBrain from '@/public/premium/product-brain-desktop.png';
+import productGuestExperience from '@/public/premium/product-guest-experience-desktop.png';
 import productEscalations from '@/public/premium/product-escalations-desktop.png';
 import styles from '../marketing.module.css';
 
@@ -98,9 +98,9 @@ export default function SupportPage() {
       />
 
       <PageHero
-        src={productBrain}
-        alt="The Moche-AI Property Brain manager showing a property's knowledge base with sections, coverage map, and answers"
-        caption="The Property Brain. Most support questions trace back to a missing or stale answer here — which is fixable at the source."
+        src={productGuestExperience}
+        alt="The guest-side view of Moche-AI showing the portal a guest sees during their stay"
+        caption="The guest's side of the product — what your guest is looking at when they hit the problem you are writing in about."
         priority
       />
 
