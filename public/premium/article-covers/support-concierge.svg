@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600" role="presentation">
+  <defs>
+    <linearGradient id="backdrop" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FEFAEF"/><stop offset="1" stop-color="#E6F6F7"/></linearGradient>
+    <linearGradient id="bell" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#52CBDE"/><stop offset="1" stop-color="#7698F9"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="30" stdDeviation="30" flood-color="#13334B" flood-opacity="0.18"/></filter>
+  </defs>
+  <rect width="1200" height="1600" fill="url(#backdrop)"/>
+  <rect x="118" y="292" width="430" height="216" rx="24" fill="#FFFFFF" opacity="0.72"/>
+  <rect x="630" y="292" width="430" height="216" rx="24" fill="#FFFFFF" opacity="0.56"/>
+  <path d="M0 885h1200v715H0Z" fill="#E7D7BF"/>
+  <path d="M0 885c202 70 414 74 634 0 202-69 385-69 566 0v78H0Z" fill="#FFFDF8"/>
+  <g filter="url(#shadow)">
+    <ellipse cx="600" cy="1134" rx="310" ry="66" fill="#163B56" opacity="0.16"/>
+    <path d="M370 984c15-146 105-236 230-236 125 0 215 90 230 236Z" fill="url(#bell)"/>
+    <rect x="332" y="978" width="536" height="56" rx="28" fill="#143F5C"/>
+    <circle cx="600" cy="716" r="29" fill="#FF8B5C"/>
+    <path d="M534 620c53-46 108-45 160 0" fill="none" stroke="#33E6D3" stroke-width="16" stroke-linecap="round"/>
+    <path d="M496 660c85-71 163-71 248 0" fill="none" stroke="#52CBDE" stroke-width="11" stroke-linecap="round" opacity="0.72"/>
+  </g>
+  <g fill="none" stroke="#174057" stroke-width="26" stroke-linecap="round">
+    <path d="M832 860c80 33 117 112 103 228"/>
+    <path d="M898 1137c-24 74-86 107-164 104"/>
+  </g>
+  <rect x="878" y="1064" width="74" height="142" rx="32" fill="#33E6D3"/>
+  <circle cx="746" cy="1236" r="34" fill="#FF8B5C"/>
+</svg>

@@ -9,9 +9,6 @@ import styles from './marketing.module.css';
  * Blocks shared by every page in this route group. Kept here rather than in
  * /components because they are coupled to marketing.module.css and to
  * MARKETING_ROUTES, and nothing outside this group should render them.
- *
- * Only `page.tsx` and `route.ts` are routable in the app router, so this file
- * sitting next to the pages does not create a URL.
  */
 
 /** Page header: eyebrow, H1, lede, optional review date. */
@@ -40,17 +37,11 @@ export function DocHeader({
 /**
  * Page-opening image, one per page, directly under the lede.
  *
- * The picture at the top of an article is an editorial cover, not a product
- * screenshot. The registry maps the product capture each page previously passed
- * to the correct vacation-rental photograph, so article covers, homepage arc
- * cards, and Related-card thumbnails all show the same place. Product captures
- * stay with ArticleFigure, where the surrounding text is actually describing
- * the interface being shown.
- *
- * `alt` is required at the call site and remains the fallback for a capture not
- * in the cover registry. Registered editorial photographs provide their own
- * descriptive alt and caption. Empty alt would be wrong even though it is
- * correct for the hero fan, where the adjacent label is already the link name.
+ * The cover is generated editorial art that shows the page's own subject. The
+ * homepage thumbnail, this first article image, and the Related-card all use
+ * the same registered source so readers can follow a visual thread rather than
+ * landing on an unrelated photograph. Product captures stay with
+ * ArticleFigure, where the surrounding text describes the interface.
  */
 export function PageHero({
   src,
@@ -66,21 +57,25 @@ export function PageHero({
   priority?: boolean;
 }) {
   const editorialCover = articleCoverFor(src);
+  const imageSrc = editorialCover?.src ?? src;
+  const isVectorArt = typeof imageSrc === 'string' && imageSrc.endsWith('.svg');
+  const imageCaption = editorialCover?.caption ?? caption;
 
   return (
     <figure className={`${styles.hero} ${styles.wide}`}>
       <div className={styles.heroFrame}>
         <Image
-          src={editorialCover?.src ?? src}
+          src={imageSrc}
           alt={editorialCover?.alt ?? alt}
           fill
           priority={priority}
           sizes="(max-width: 1040px) 100vw, 1040px"
-          placeholder="blur"
+          placeholder={isVectorArt ? 'empty' : 'blur'}
+          unoptimized={isVectorArt}
         />
       </div>
-      {(editorialCover?.caption ?? caption) ? (
-        <figcaption className={styles.heroCaption}>{editorialCover?.caption ?? caption}</figcaption>
+      {imageCaption ? (
+        <figcaption className={styles.heroCaption}>{imageCaption}</figcaption>
       ) : null}
     </figure>
   );
@@ -89,15 +84,6 @@ export function PageHero({
 /**
  * Inline figure inside the article body: the product, at the moment the text
  * is describing it.
- *
- * Distinct from PageHero on purpose: the hero opens the page and answers "what
- * is this about", the inline figure sits inside a section and answers "show
- * me". One per article section that names a real surface — the image must be
- * the thing the surrounding paragraphs describe, not decoration between them.
- *
- * Same 16:9 frame and caption treatment as the hero so the two read as one
- * visual language; no `priority` because an inline figure is below the fold by
- * definition and should lazy-load.
  */
 export function ArticleFigure({
   src,
@@ -105,8 +91,7 @@ export function ArticleFigure({
   caption,
 }: {
   src: StaticImageData;
-  /** Required: the figure illustrates a specific surface, and a screen reader
-      needs to know which one. */
+  /** Required: the figure illustrates a specific surface. */
   alt: string;
   /** The tie back to the text — name the surface and why it is here. */
   caption?: string;
@@ -127,13 +112,7 @@ export function ArticleFigure({
   );
 }
 
-/**
- * Grid of short cards for facts that are a set rather than a sequence.
- *
- * Sits at `.wide`, so three or four cards get real horizontal room instead of
- * stacking single-file inside the 68ch reading column. Use `steps` (in the page
- * markup) when order matters and this when it does not.
- */
+/** Grid of short cards for facts that are a set rather than a sequence. */
 export function CardGrid({
   items,
 }: {
@@ -152,16 +131,9 @@ export function CardGrid({
 }
 
 /**
- * Cross-links to the other pages in this group, minus the current one.
- *
- * Every page renders this, which is what makes the six pages a linked cluster
- * instead of six dead ends. Passing `current` prevents a page linking to itself.
- *
- * It used to be a wrapped row of underlined two-word labels, which read as a
- * footnote: a visitor who finished the article had no reason to prefer "Support"
- * over "Trust and safety" and so chose neither. Each entry is now a card with the
- * destination's own photograph and its one-line description, both already defined
- * on HeroLink, so there is nothing to keep in sync by hand.
+ * Cross-links to the other pages in this group, minus the current one. Each
+ * entry uses the registered article illustration, so the thumbnail, page
+ * opener, and homepage arc card cannot drift apart.
  */
 export function Related({ current }: { current: string }) {
   const others = MARKETING_ROUTES.filter((r) => r.href !== current);
@@ -172,36 +144,39 @@ export function Related({ current }: { current: string }) {
         More about Moche-AI
       </p>
       <ul className={styles.relatedList}>
-        {others.map((r) => (
-          <li key={r.href}>
-            <Link href={r.href} className={styles.relatedCard}>
-              {/* alt="" because the card's heading is immediately adjacent and is
-                  already the accessible name for this link. */}
-              <span className={styles.relatedThumb}>
-                <Image src={r.src} alt="" fill sizes="(max-width: 720px) 100vw, 340px" />
-              </span>
-              <span className={styles.relatedText}>
-                <span className={styles.relatedName}>
-                  {r.label}
-                  <ArrowUpRight size={14} aria-hidden />
+        {others.map((r) => {
+          const isVectorArt = typeof r.src === 'string' && r.src.endsWith('.svg');
+
+          return (
+            <li key={r.href}>
+              <Link href={r.href} className={styles.relatedCard}>
+                {/* alt="" because the card's heading is already the link name. */}
+                <span className={styles.relatedThumb}>
+                  <Image
+                    src={r.src}
+                    alt=""
+                    fill
+                    sizes="(max-width: 720px) 100vw, 340px"
+                    unoptimized={isVectorArt}
+                  />
                 </span>
-                <span className={styles.relatedDesc}>{r.description}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
+                <span className={styles.relatedText}>
+                  <span className={styles.relatedName}>
+                    {r.label}
+                    <ArrowUpRight size={14} aria-hidden />
+                  </span>
+                  <span className={styles.relatedDesc}>{r.description}</span>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );
 }
 
-/**
- * The single conversion action on the page, at the end of the reading.
- *
- * One CTA per page and nothing above it with the same intent: a second "start
- * free" button mid-article competes with the reading rather than adding a
- * chance to convert.
- */
+/** The single conversion action on the page, at the end of the reading. */
 export function CtaBand({ text }: { text: string }) {
   return (
     <div className={`${styles.ctaBand} ${styles.wide}`}>
@@ -214,13 +189,7 @@ export function CtaBand({ text }: { text: string }) {
   );
 }
 
-/**
- * Numbered source list with real URLs.
- *
- * These pages exist to be trusted, and a page that cites "industry research"
- * without a link is worse than one that cites nothing: it makes every other
- * claim on the page look decorative too.
- */
+/** Numbered source list with real URLs. */
 export function Sources({ items }: { items: readonly { label: string; href: string }[] }) {
   return (
     <section className={styles.sources} aria-labelledby="sources-heading">

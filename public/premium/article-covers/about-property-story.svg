@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600" role="presentation">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#E9FAF9"/><stop offset="1" stop-color="#EFF4FF"/></linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#52CBDE"/><stop offset="1" stop-color="#7698F9"/></linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFFDF7"/><stop offset="1" stop-color="#E8F3F1"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#123247" flood-opacity="0.18"/></filter>
+  </defs>
+  <rect width="1200" height="1600" fill="url(#sky)"/>
+  <circle cx="988" cy="382" r="118" fill="#FFDFA7" opacity="0.58"/>
+  <path d="M0 704C210 650 338 766 540 725c219-44 343-126 660-70v945H0Z" fill="url(#sea)" opacity="0.24"/>
+  <path d="M0 1072c186-58 361-56 520 0 221 78 436 72 680-15v543H0Z" fill="#F4EBDC"/>
+  <g filter="url(#shadow)">
+    <path d="M300 756 602 548l302 208v430H300Z" fill="#FFFDF8"/>
+    <path d="M258 767 602 520l344 247" fill="none" stroke="#173E62" stroke-width="30" stroke-linecap="round"/>
+    <rect x="414" y="858" width="140" height="182" rx="10" fill="#DDF4F8"/>
+    <rect x="640" y="846" width="172" height="250" rx="14" fill="#268C95"/>
+    <path d="M480 622c0-47 54-83 122-83s122 36 122 83" fill="none" stroke="#33E6D3" stroke-width="18" stroke-linecap="round"/>
+    <path d="M448 656c20-67 76-108 154-108 84 0 139 45 154 108" fill="none" stroke="#52CBDE" stroke-width="11" stroke-linecap="round" opacity="0.72"/>
+    <circle cx="602" cy="606" r="13" fill="#FF8B5C"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M292 1096c139-54 240-32 308 26v258c-70-55-165-78-308-28Z" fill="url(#page)"/>
+    <path d="M908 1096c-139-54-240-32-308 26v258c70-55 165-78 308-28Z" fill="#F8FCFC"/>
+    <path d="M600 1122v260" stroke="#B6D2D6" stroke-width="5"/>
+    <path d="M395 1180h116M395 1230h130M705 1180h116M705 1230h130" stroke="#83AFC0" stroke-width="8" stroke-linecap="round" opacity="0.72"/>
+    <path d="M712 1305c22-20 54-22 78-3" fill="none" stroke="#FF8B5C" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>

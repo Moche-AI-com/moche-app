@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600" role="presentation">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#EDFAF7"/><stop offset="1" stop-color="#EAF1FF"/></linearGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#52CBDE"/><stop offset="1" stop-color="#7698F9"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#0C2A40" flood-opacity="0.17"/></filter>
+  </defs>
+  <rect width="1200" height="1600" fill="url(#background)"/>
+  <path d="M0 1016c177-82 386-86 627 0s408 75 573 2v582H0Z" fill="#F3E9DA"/>
+  <g opacity="0.8" stroke-linecap="round" fill="none">
+    <path d="M748 412c73-77 128-66 154 0" stroke="#52CBDE" stroke-width="16"/>
+    <path d="M812 354c105-112 189-100 230 0" stroke="#7698F9" stroke-width="11" opacity="0.68"/>
+    <path d="M452 412c-73-77-128-66-154 0" stroke="#33E6D3" stroke-width="16"/>
+    <path d="M388 354c-105-112-189-100-230 0" stroke="#52CBDE" stroke-width="11" opacity="0.68"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M303 612c130-59 232-38 297 24v436c-70-60-166-80-297-26Z" fill="#FFFDF6"/>
+    <path d="M897 612c-130-59-232-38-297 24v436c70-60 166-80 297-26Z" fill="#F8FCFC"/>
+    <path d="M303 612c130-59 232-38 297 24 65-62 167-83 297-24" fill="none" stroke="#143F5C" stroke-width="20" stroke-linejoin="round"/>
+    <path d="M600 638v434" stroke="#AACBCC" stroke-width="5"/>
+    <rect x="377" y="718" width="142" height="22" rx="11" fill="#9CC0C8" opacity="0.75"/>
+    <rect x="377" y="786" width="172" height="18" rx="9" fill="#C6DEE1"/>
+    <rect x="377" y="840" width="104" height="18" rx="9" fill="#C6DEE1"/>
+    <rect x="666" y="718" width="140" height="22" rx="11" fill="#33E6D3" opacity="0.8"/>
+    <rect x="666" y="786" width="166" height="18" rx="9" fill="#C6DEE1"/>
+    <rect x="666" y="840" width="112" height="18" rx="9" fill="#C6DEE1"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="376" y="1012" width="448" height="194" rx="34" fill="url(#cover)"/>
+    <path d="M451 1120h186M451 1154h102" stroke="#FFF" stroke-width="15" stroke-linecap="round" opacity="0.78"/>
+    <circle cx="750" cy="1116" r="40" fill="#FFF" opacity="0.94"/>
+    <path d="m733 1112 13 13 25-31" fill="none" stroke="#143F5C" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
