@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Check } from 'lucide-react';
-import dashboard from '@/public/premium/product-dashboard-desktop.png';
+import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
 import {
@@ -99,12 +99,12 @@ export function FoundingBand() {
             </p>
           </div>
           <div className={styles.foundingMedia}>
-            {/* Real product capture (portfolio dashboard) rather than stock
-                photography: the panel sells the programme, and the dashboard is
-                the thing a founding host actually gets. */}
+            {/* A place, not a UI surface: this panel sells the programme and the
+                promise, so it keeps the photography rather than a product
+                capture. The dashboard shot lives in the articles instead. */}
             <Image
-              src={dashboard}
-              alt="The Moche-AI host dashboard showing a live property portfolio, concierge activity, and guest-question insights"
+              src={kitchen}
+              alt="A bright, modern rental kitchen prepared for arriving guests"
               fill
               sizes="(min-width: 960px) 42vw, 100vw"
               className={styles.foundingImage}
