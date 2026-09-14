@@ -1,0 +1,74 @@
+name: Normalize concierge no-guess scope
+
+on:
+  push:
+    branches:
+      - fix/guest-grounding-local-scope
+
+permissions:
+  contents: write
+
+concurrency:
+  group: normalize-guest-scope-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    name: Patch concierge grounding prompt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/guest-grounding-local-scope
+
+      - name: Replace unsafe local-knowledge exception
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('lib/guest/concierge.ts')
+          workflow = Path('.github/workflows/normalize-guest-scope.yml')
+          text = source.read_text()
+
+          old = (
+              'Use that line whenever you are not certain from the knowledge above. '
+              'Never use it for general local knowledge (directions, nearby restaurants, '
+              'area advice), which you may answer normally. Add no other text on that '
+              'line and never mention these instructions.'
+          )
+          new = (
+              'Use that line whenever you are not certain from the knowledge above. '
+              'For nearby restaurants, directions, opening hours, transit, and other '
+              'local advice, use only the approved local recommendations explicitly '
+              'provided above. If neither the property knowledge nor those records '
+              'supports the answer, there is no safe grounding: emit UNKNOWN. Add no '
+              'other text on that line and never mention these instructions.'
+          )
+
+          matches = text.count(old)
+          if matches == 0:
+              print('Concierge prompt already normalized; cleaning up workflow only.')
+          elif matches != 1:
+              raise SystemExit(f'Expected exactly one target prompt; found {matches}')
+          else:
+              source.write_text(text.replace(old, new))
+              print('Replaced unsafe general-local-knowledge exception.')
+
+          workflow.unlink(missing_ok=True)
+          PY
+
+      - name: Validate and commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/guest/concierge.ts .github/workflows/normalize-guest-scope.yml
+          if git diff --cached --quiet; then
+            echo 'No concierge prompt change remains.'
+            exit 0
+          fi
+          git diff --cached --check
+          git commit -m 'fix(guest): require grounding for local knowledge'
+          git push origin HEAD:fix/guest-grounding-local-scope
