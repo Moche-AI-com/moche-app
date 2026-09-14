@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, PageHero } from '../_parts';
+import { DocHeader, Related, PageHero, ArticleFigure } from '../_parts';
 import productBrain from '@/public/premium/product-brain-desktop.png';
+import productEscalations from '@/public/premium/product-escalations-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -132,6 +133,12 @@ export default function SupportPage() {
             </li>
           ))}
         </ul>
+
+        <ArticleFigure
+          src={productEscalations}
+          alt="The escalations inbox showing guest questions the assistant could not answer, waiting for the host"
+          caption="When the assistant cannot answer, the question lands here — the escalations inbox, waiting on you."
+        />
 
         <h2>What to include when you write in</h2>
         <p>

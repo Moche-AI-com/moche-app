@@ -80,6 +80,47 @@ export function PageHero({
 }
 
 /**
+ * Inline figure inside the article body: the product, at the moment the text
+ * is describing it.
+ *
+ * Distinct from PageHero on purpose: the hero opens the page and answers "what
+ * is this about", the inline figure sits inside a section and answers "show
+ * me". One per article section that names a real surface — the image must be
+ * the thing the surrounding paragraphs describe, not decoration between them.
+ *
+ * Same 16:9 frame and caption treatment as the hero so the two read as one
+ * visual language; no `priority` because an inline figure is below the fold by
+ * definition and should lazy-load.
+ */
+export function ArticleFigure({
+  src,
+  alt,
+  caption,
+}: {
+  src: StaticImageData;
+  /** Required: the figure illustrates a specific surface, and a screen reader
+      needs to know which one. */
+  alt: string;
+  /** The tie back to the text — name the surface and why it is here. */
+  caption?: string;
+}) {
+  return (
+    <figure className={`${styles.hero} ${styles.wide}`}>
+      <div className={styles.heroFrame}>
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes="(max-width: 1040px) 100vw, 1040px"
+          placeholder="blur"
+        />
+      </div>
+      {caption ? <figcaption className={styles.heroCaption}>{caption}</figcaption> : null}
+    </figure>
+  );
+}
+
+/**
  * Grid of short cards for facts that are a set rather than a sequence.
  *
  * Sits at `.wide`, so three or four cards get real horizontal room instead of

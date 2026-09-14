@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Image from 'next/image';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
+import { DocHeader, Related, CtaBand, PageHero, ArticleFigure } from '../_parts';
 import productPortal from '@/public/premium/product-portal-desktop.png';
+import productExtras from '@/public/premium/product-extras-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -93,6 +93,12 @@ export default function GuestExperiencePage() {
             answer.
           </li>
         </ul>
+
+        <ArticleFigure
+          src={productExtras}
+          alt="The extras requests list showing a late check-out and a mid-stay clean with prices and statuses"
+          caption="A request on the host side: priced, scheduled, and waiting on a decision — not a paragraph to interpret."
+        />
 
         <h2>The review moment</h2>
         <p>

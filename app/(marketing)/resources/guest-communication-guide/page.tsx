@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_URL, SITE_NAME } from '@/lib/seo';
-import { DocHeader, Related, CtaBand, Sources, PageHero } from '../../_parts';
+import { DocHeader, Related, CtaBand, Sources, PageHero, ArticleFigure } from '../../_parts';
 import productLocalRecs from '@/public/premium/product-local-recs-desktop.png';
+import productDashboard from '@/public/premium/product-dashboard-desktop.png';
 import styles from '../../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -160,6 +161,12 @@ export default function GuestCommunicationGuidePage() {
           judgement. If a guest is messaging you about any of them, the information existed and was not
           reachable.
         </p>
+
+        <ArticleFigure
+          src={productDashboard}
+          alt="The host dashboard's topic breakdown showing what guests ask about most, per property"
+          caption="The dashboard's topic breakdown answers the audit question for you: what guests actually ask about, measured."
+        />
 
         <h2>Write answers once, at the property level</h2>
         <p>

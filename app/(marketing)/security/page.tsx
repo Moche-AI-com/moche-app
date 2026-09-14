@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, PageHero } from '../_parts';
+import { DocHeader, Related, PageHero, ArticleFigure } from '../_parts';
 import productGoLive from '@/public/premium/product-go-live-desktop.png';
+import productUpdates from '@/public/premium/product-updates-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -110,6 +111,12 @@ export default function SecurityPage() {
             <Link href="/how-it-works">How it works</Link> covers the mechanism.
           </li>
         </ul>
+
+        <ArticleFigure
+          src={productUpdates}
+          alt="The knowledge queue showing AI-drafted updates waiting for host approval before publishing"
+          caption="The approval step, made visible: drafted updates wait in the queue until a host approves them. Nothing auto-publishes."
+        />
 
         <h2>Payments</h2>
         <p>

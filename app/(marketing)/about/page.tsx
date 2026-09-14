@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
+import { DocHeader, Related, CtaBand, PageHero, ArticleFigure } from '../_parts';
 import productLanding from '@/public/premium/product-landing-desktop.png';
+import productStays from '@/public/premium/product-stays-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -64,6 +65,12 @@ export default function AboutPage() {
           on top of a 4.8 rating and a cancellation rate under 1%. The work is not optional, and it
           does not scale with the number of properties.
         </p>
+
+        <ArticleFigure
+          src={productStays}
+          alt="A guest conversation in the host inbox showing a guest question and the assistant's answer with a cited source"
+          caption="A guest asking a question mid-stay — the exact moment this product exists for."
+        />
 
         <h2>What we decided to build instead of a chatbot</h2>
         <p>

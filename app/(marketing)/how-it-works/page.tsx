@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_URL } from '@/lib/seo';
-import { DocHeader, Related, CtaBand, PageHero } from '../_parts';
+import { DocHeader, Related, CtaBand, PageHero, ArticleFigure } from '../_parts';
 import productGoLive from '@/public/premium/product-go-live-desktop.png';
+import productBrain from '@/public/premium/product-brain-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
@@ -151,6 +152,12 @@ export default function HowItWorksPage() {
             </tr>
           </tbody>
         </table>
+
+        <ArticleFigure
+          src={productBrain}
+          alt="The Property Brain manager showing a property's answers grouped by section with a coverage map"
+          caption="The first row of the table, as a real screen: the Property Brain, with every answer filed under its section."
+        />
 
         <h2>How a single answer is produced</h2>
         <p>
