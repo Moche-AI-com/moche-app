@@ -1,30 +1,27 @@
 import type { StaticImageData } from 'next/image';
 
-import beachhouse from '@/public/premium/str-hero-beachhouse.webp';
-import cottage from '@/public/premium/str-gallery-cliffside-cottage.webp';
-import cabin from '@/public/premium/str-gallery-cozy-cabin.webp';
-import kitchen from '@/public/premium/str-video-poster-kitchen.webp';
-import pool from '@/public/premium/str-gallery-pool-deck.webp';
-import handoff from '@/public/premium/str-gallery-key-handoff.webp';
-
 /**
- * Editorial photograph at the opening of each public article.
+ * Editorial cover for each public marketing article.
  *
- * Product captures belong in ArticleFigure, inside the paragraph that is
- * actually describing the surface. The page opener, the homepage arc card, and
- * the Related-card thumbnail all need to be the same *place*: a visitor who
- * clicked a cottage should arrive at an article that opens with that cottage,
- * not with a dashboard screenshot. That continuity is part of what makes the
- * cluster read as client-facing marketing rather than a stack of UI captures.
+ * The first image on an article has to earn its place twice: it represents the
+ * page in the homepage arc and Related cards, and then it opens the article
+ * itself. Generic rental photography can do the first job while saying almost
+ * nothing about the second. These six generated illustrations use the brand
+ * palette and property-setting details to make the page's actual subject
+ * visible before the reader reaches the first paragraph.
  *
- * The current page call sites still pass the product capture that briefly
- * opened each article, so the registry is keyed by that capture's path marker.
- * That keeps this correction small and leaves every inline ArticleFigure
- * untouched; it is a compatibility bridge, not an invitation to add another
- * selector by image filename when the call sites are next normalized.
+ * `src` is a static public-path SVG rather than a generated raster. The assets
+ * are text, reviewable, tiny, and cannot recreate an inappropriate face or
+ * publish artifact; Next/Image serves them unoptimized by design.
+ *
+ * Current page call sites still pass the product capture that briefly opened
+ * each article, so PageHero resolves the cover through `legacyProductMarker`.
+ * New marketing pages should call `requireArticleCover(href)` directly rather
+ * than adding another compatibility marker.
  */
 export interface ArticleCover {
-  src: StaticImageData;
+  href: string;
+  src: `/premium/article-covers/${string}.svg`;
   alt: string;
   caption: string;
 }
@@ -36,57 +33,73 @@ interface RegisteredArticleCover extends ArticleCover {
 
 const ARTICLE_COVERS: readonly RegisteredArticleCover[] = [
   {
+    href: '/about',
     legacyProductMarker: 'product-landing-desktop',
-    src: beachhouse,
-    alt: 'A modern beach house with palm trees and the ocean visible in the distance',
+    src: '/premium/article-covers/about-property-story.svg',
+    alt: 'Editorial illustration of a coastal holiday home beside an open host guide',
     caption:
-      'A coastal rental at arrival time — the kind of property whose details too often live in a text message from two summers ago.',
+      'Started from the work of hosting: the handwritten detail, the shared property, and the knowledge worth keeping.',
   },
   {
+    href: '/resources/guest-communication-guide',
     legacyProductMarker: 'product-local-recs-desktop',
-    src: pool,
-    alt: 'A backyard swimming pool and wooden deck at a vacation rental under a clear blue sky',
+    src: '/premium/article-covers/host-guide-communication.svg',
+    alt: 'Editorial illustration of an open guest guide with communication waves above a rental desk',
     caption:
-      'The place the guide is preparing guests to enjoy — while the operational answers are reachable before they have to ask.',
+      'A guest guide is most useful when the answer is reachable before another message is sent.',
   },
   {
+    href: '/how-it-works',
     legacyProductMarker: 'product-go-live-desktop',
-    src: cabin,
-    alt: 'A cozy short-term rental cabin interior with natural light and warm wood finishes',
+    src: '/premium/article-covers/how-it-works-flow.svg',
+    alt: 'Editorial illustration of property details flowing through a house and into a checked answer',
     caption:
-      'A finished stay ready to open its door — the visible result once the property knowledge behind it is organized.',
+      'Property details flow through one checked path: source, answer, and escalation when the source is not there.',
   },
   {
+    href: '/guest-experience',
     legacyProductMarker: 'product-portal-desktop',
-    src: cottage,
-    alt: 'A coastal cottage with white cliffs in the background, photographed as a vacation rental',
+    src: '/premium/article-covers/guest-experience-phone.svg',
+    alt: 'Editorial illustration of a guest holding a phone with a checked answer inside a holiday rental',
     caption:
-      'The stay your guest is standing inside. The portal is the quiet layer that answers from the details of this property.',
+      'One stay link, property-specific answers, and no account between the guest and the detail they need.',
   },
   {
+    href: '/support',
     legacyProductMarker: 'product-guest-experience-desktop',
-    src: kitchen,
-    alt: 'A bright modern vacation rental kitchen and dining area, clean and ready for guests',
+    src: '/premium/article-covers/support-concierge.svg',
+    alt: 'Editorial illustration of a concierge bell and headset details beside a prepared rental kitchen',
     caption:
-      'A prepared rental is a set of small decisions made in advance. Support exists for the moments one is still missing.',
+      'When the answer is not already known, a person can step in with the context already attached.',
   },
   {
+    href: '/security',
     legacyProductMarker: 'product-how-it-works-desktop',
-    src: handoff,
-    alt: 'A key being handed over at a vacation rental check-in, with only the hands visible',
+    src: '/premium/article-covers/trust-safety-lock.svg',
+    alt: 'Editorial illustration of a secured holiday-rental door with a shield and key',
     caption:
-      'Trust shows up at contact points: a clear handoff, scoped guest access, and no broad claim the record cannot support.',
+      'The front door is the model: access belongs to the right guest, for the right stay, and nowhere else.',
   },
 ] as const;
 
+export function articleCoverForHref(href: string): ArticleCover | null {
+  return ARTICLE_COVERS.find((cover) => cover.href === href) ?? null;
+}
+
+/** Fail at module initialization rather than letting a page fall out of the set. */
+export function requireArticleCover(href: string): ArticleCover {
+  const cover = articleCoverForHref(href);
+  if (!cover) throw new Error(`No marketing article cover is registered for ${href}`);
+  return cover;
+}
+
 /**
- * Resolve the editorial cover for the capture currently passed by a page.
- * Returns null for any other StaticImageData so unrelated marketing images
- * cannot be silently replaced.
+ * Resolve the editorial cover for the product capture currently passed by a
+ * page. Returns null for any other image so unrelated marketing surfaces are
+ * never silently replaced.
  */
 export function articleCoverFor(legacySource: StaticImageData): ArticleCover | null {
   const filename = legacySource.src.split('/').findLast(Boolean) ?? legacySource.src;
-
   return (
     ARTICLE_COVERS.find((cover) => filename.includes(cover.legacyProductMarker)) ?? null
   );
