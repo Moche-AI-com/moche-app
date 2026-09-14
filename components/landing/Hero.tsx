@@ -5,54 +5,49 @@ import { HERO_LINKS } from '@/lib/marketing/hero-links';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
 
-// Gallery-led hero. The editorial art is fanned in an arc above the headline:
-// the copy stays the focal point and the illustrations frame it instead of
-// competing with it. Each frame is a destination, and the centre frame carries
-// the primary conversion action.
+// Gallery-led hero. The rental photography is fanned in an arc above the
+// headline: it is the brand-facing promise, separate from each article's more
+// descriptive opening illustration. Every frame is a destination, and the
+// centre frame carries the primary conversion action.
 export function Hero() {
   return (
     <section className={styles.hero}>
       <nav className={styles.heroFan} aria-label="Explore Moche-AI">
-        {HERO_LINKS.map((frame, i) => {
-          const isVectorArt = typeof frame.src === 'string' && frame.src.endsWith('.svg');
-
-          return (
-            <Link
-              key={frame.href}
-              href={frame.href}
-              title={frame.description}
-              className={styles.heroFanFrame}
-              data-rank={frame.rank}
-              data-cta={frame.cta ? '' : undefined}
-              style={
-                {
-                  '--fan-x': `${frame.x}%`,
-                  '--fan-y': `${frame.y}%`,
-                  '--fan-rot': `${frame.rot}deg`,
-                  '--fan-rank': frame.rank,
-                  '--fan-i': i,
-                  '--fan-pos': frame.pos,
-                } as React.CSSProperties
-              }
-            >
-              <Image
-                src={frame.src}
-                alt=""
-                fill
-                sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 58vw"
-                className={styles.heroFanImage}
-                priority={frame.rank < 2}
-                unoptimized={isVectorArt}
-              />
-              {/* Scrim sits between the artwork and the always-visible label. */}
-              <span className={styles.heroFanScrim} aria-hidden />
-              <span className={styles.heroFanLabel}>
-                {frame.label}
-                {frame.cta ? <ArrowRight size={13} strokeWidth={2.25} aria-hidden /> : null}
-              </span>
-            </Link>
-          );
-        })}
+        {HERO_LINKS.map((frame, i) => (
+          <Link
+            key={frame.href}
+            href={frame.href}
+            title={frame.description}
+            className={styles.heroFanFrame}
+            data-rank={frame.rank}
+            data-cta={frame.cta ? '' : undefined}
+            style={
+              {
+                '--fan-x': `${frame.x}%`,
+                '--fan-y': `${frame.y}%`,
+                '--fan-rot': `${frame.rot}deg`,
+                '--fan-rank': frame.rank,
+                '--fan-i': i,
+                '--fan-pos': frame.pos,
+              } as React.CSSProperties
+            }
+          >
+            <Image
+              src={frame.src}
+              alt=""
+              fill
+              sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 58vw"
+              className={styles.heroFanImage}
+              priority={frame.rank < 2}
+            />
+            {/* Scrim sits between the photograph and the always-visible label. */}
+            <span className={styles.heroFanScrim} aria-hidden />
+            <span className={styles.heroFanLabel}>
+              {frame.label}
+              {frame.cta ? <ArrowRight size={13} strokeWidth={2.25} aria-hidden /> : null}
+            </span>
+          </Link>
+        ))}
       </nav>
 
       <div className={`wrap ${styles.heroCopy}`}>
