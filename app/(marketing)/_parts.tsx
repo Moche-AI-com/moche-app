@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image, { type StaticImageData } from 'next/image';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
-import { articleCoverFor } from '@/lib/marketing/article-covers';
+import { articleCoverFor, articleH1ForEyebrow } from '@/lib/marketing/article-covers';
 import { MARKETING_ROUTES } from '@/lib/marketing/hero-links';
 import styles from './marketing.module.css';
 
@@ -11,7 +11,13 @@ import styles from './marketing.module.css';
  * MARKETING_ROUTES, and nothing outside this group should render them.
  */
 
-/** Page header: eyebrow, H1, lede, optional review date. */
+/**
+ * Page header: eyebrow, H1, lede, optional review date.
+ *
+ * Registered articles resolve their H1 from the article registry so heading,
+ * route, and opening image remain one presentation contract. Any new fallback
+ * page simply uses the title supplied by its page file.
+ */
 export function DocHeader({
   eyebrow,
   title,
@@ -24,10 +30,12 @@ export function DocHeader({
   /** Human-readable review date. Omitted on pages with no time-sensitive claims. */
   updated?: string;
 }) {
+  const articleH1 = articleH1ForEyebrow(eyebrow) ?? title;
+
   return (
     <>
       <span className={styles.eyebrow}>{eyebrow}</span>
-      <h1 className={styles.title}>{title}</h1>
+      <h1 className={styles.title}>{articleH1}</h1>
       <p className={styles.lede}>{lede}</p>
       {updated ? <p className={styles.meta}>Last reviewed {updated}</p> : null}
     </>
@@ -37,11 +45,11 @@ export function DocHeader({
 /**
  * Page-opening image, one per page, directly under the lede.
  *
- * The cover is generated editorial art that shows the page's own subject. The
- * homepage thumbnail, this first article image, and the Related-card all use
- * the same registered source so readers can follow a visual thread rather than
- * landing on an unrelated photograph. Product captures stay with
- * ArticleFigure, where the surrounding text describes the interface.
+ * This is the topic-specific editorial cover, not the homepage gallery image.
+ * The first image names the article's subject through recognizable symbols;
+ * product captures stay with ArticleFigure, where surrounding text describes
+ * the interface being shown. SVG covers are served without the optimizer and
+ * supply their own accessibility text and caption.
  */
 export function PageHero({
   src,
@@ -132,8 +140,8 @@ export function CardGrid({
 
 /**
  * Cross-links to the other pages in this group, minus the current one. Each
- * entry uses the registered article illustration, so the thumbnail, page
- * opener, and homepage arc card cannot drift apart.
+ * Related card keeps the polished rental photograph used in the landing arc;
+ * the article's own illustration remains its opening image after the click.
  */
 export function Related({ current }: { current: string }) {
   const others = MARKETING_ROUTES.filter((r) => r.href !== current);
@@ -144,33 +152,23 @@ export function Related({ current }: { current: string }) {
         More about Moche-AI
       </p>
       <ul className={styles.relatedList}>
-        {others.map((r) => {
-          const isVectorArt = typeof r.src === 'string' && r.src.endsWith('.svg');
-
-          return (
-            <li key={r.href}>
-              <Link href={r.href} className={styles.relatedCard}>
-                {/* alt="" because the card's heading is already the link name. */}
-                <span className={styles.relatedThumb}>
-                  <Image
-                    src={r.src}
-                    alt=""
-                    fill
-                    sizes="(max-width: 720px) 100vw, 340px"
-                    unoptimized={isVectorArt}
-                  />
+        {others.map((r) => (
+          <li key={r.href}>
+            <Link href={r.href} className={styles.relatedCard}>
+              {/* alt="" because the card's heading is already the link name. */}
+              <span className={styles.relatedThumb}>
+                <Image src={r.src} alt="" fill sizes="(max-width: 720px) 100vw, 340px" />
+              </span>
+              <span className={styles.relatedText}>
+                <span className={styles.relatedName}>
+                  {r.label}
+                  <ArrowUpRight size={14} aria-hidden />
                 </span>
-                <span className={styles.relatedText}>
-                  <span className={styles.relatedName}>
-                    {r.label}
-                    <ArrowUpRight size={14} aria-hidden />
-                  </span>
-                  <span className={styles.relatedDesc}>{r.description}</span>
-                </span>
-              </Link>
-            </li>
-          );
-        })}
+                <span className={styles.relatedDesc}>{r.description}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
       </ul>
     </nav>
   );
