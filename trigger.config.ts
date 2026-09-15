@@ -5,6 +5,9 @@ export default defineConfig({
   // Trigger.dev project (org: moche-ai-fdf9, project: mohe-ai-bJAE).
   project: "proj_mgggackrtgbpplbzskaq",
   dirs: ["./trigger"],
+  // Trigger.dev notified 2026-09-15: Node 21 is deprecated and new deployments
+  // on it fail from 2026-10-05. Pin the supported runtime.
+  runtime: "node-24",
   // Default max wall-clock time per run; individual tasks can override.
   maxDuration: 60,
   retries: {
