@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { LegalLinks } from '@/components/legal/LegalLinks';
 import { MARKETING_ROUTES } from '@/lib/marketing/hero-links';
+import { ProductHuntBadge } from '@/components/landing/ProductHuntBadge';
 import styles from './landing.module.css';
 
 // "Built in Somerville, MA" is required by LEGAL_COMPLIANCE_SPEC.md and must
@@ -15,6 +16,7 @@ export function LandingFooter() {
           <div className={styles.footerBrand}>
             <Logo href="/" size={24} />
             <p className={`muted ${styles.footerTagline}`}>Built in Somerville, MA</p>
+            <ProductHuntBadge />
           </div>
           <Link href="/signup" className={styles.footerCta}>
             <span>Ready when you are. Create your account</span>
