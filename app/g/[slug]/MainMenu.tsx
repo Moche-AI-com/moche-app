@@ -72,7 +72,9 @@ export function MainMenu(props: {
         ))}
       </div>
 
-      {!props.hostPreview && <ReviewNudge propertyName={props.propertyName} />}
+      {!props.hostPreview && (
+        <ReviewNudge propertyName={props.propertyName} onContactHost={() => props.onSelect('host')} />
+      )}
     </section>
   );
 }
