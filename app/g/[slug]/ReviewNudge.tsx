@@ -1,40 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, MessageSquare, Star, X } from 'lucide-react';
 
-type Stage = 'hidden' | 'question' | 'outcome' | 'feedback' | 'thanks';
+type Stage = 'hidden' | 'launcher' | 'question' | 'outcome' | 'feedback' | 'thanks';
 type Mood = 'great' | 'okay' | 'needs_attention';
 
 type EligibilityResponse = {
   eligible?: boolean;
+  automatic?: boolean;
+  shouldPrompt?: boolean;
   reviewUrl?: string;
 };
-
-function engagementKey() {
-  return `moche:review-nudge:engaged:${window.location.pathname}`;
-}
 
 function dismissedKey() {
   return `moche:review-nudge:dismissed:${window.location.pathname}`;
 }
 
-export function markReviewNudgeMoment() {
-  try {
-    window.sessionStorage.setItem(engagementKey(), '1');
-  } catch {
-    // Storage can be unavailable in private browsing; the portal still works.
-  }
+function postEvent(action: 'impression' | 'response' | 'dismiss' | 'click', details?: { mood?: Mood; category?: string; comment?: string }) {
+  return fetch('/api/guest/review-nudge', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    keepalive: action === 'click',
+    body: JSON.stringify({ action, ...details }),
+  }).then(() => undefined).catch(() => undefined);
 }
 
-function ReviewLink({ reviewUrl, primary, mood, onClick }: { reviewUrl: string | null; primary?: boolean; mood: Mood | null; onClick: (mood?: Mood) => void }) {
+function ReviewLink({ reviewUrl, mood, onClick }: { reviewUrl: string | null; mood: Mood | null; onClick: (mood?: Mood) => void }) {
   if (!reviewUrl) return null;
   return (
     <a
       href={reviewUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className={`gp-btn ${primary ? 'gp-btn-primary' : 'gp-btn-ghost'}`}
+      className="gp-btn gp-btn-primary"
       style={{ width: 'auto', textDecoration: 'none' }}
       onClick={() => onClick(mood ?? undefined)}
     >
@@ -50,21 +49,34 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
   const [category, setCategory] = useState('');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
+  const impressionSent = useRef(false);
+
+  function showQuestion() {
+    setStage('question');
+    if (!impressionSent.current) {
+      impressionSent.current = true;
+      void postEvent('impression');
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
     try {
-      if (window.sessionStorage.getItem(engagementKey()) !== '1') return;
       if (window.sessionStorage.getItem(dismissedKey()) === '1') return;
       timer = window.setTimeout(async () => {
         try {
           const response = await fetch('/api/guest/review-nudge', { cache: 'no-store' });
           if (!response.ok) return;
           const payload = (await response.json()) as EligibilityResponse;
-          if (!cancelled && payload.eligible && payload.reviewUrl) {
-            setReviewUrl(payload.reviewUrl);
+          if (cancelled || !payload.eligible || !payload.reviewUrl) return;
+          setReviewUrl(payload.reviewUrl);
+          if (payload.automatic && payload.shouldPrompt) {
             setStage('question');
+            impressionSent.current = true;
+            void postEvent('impression');
+          } else if (!payload.automatic) {
+            setStage('launcher');
           }
         } catch {
           // A feedback prompt must never interrupt the guest experience.
@@ -87,51 +99,46 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
     }
   }
 
-  async function record(action: 'response' | 'dismiss' | 'click', details?: { mood?: Mood; category?: string; comment?: string }) {
-    try {
-      await fetch('/api/guest/review-nudge', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        keepalive: action === 'click',
-        body: JSON.stringify({ action, ...details }),
-      });
-    } catch {
-      // Feedback collection is best effort and never blocks the portal.
-    }
-  }
-
   function dismiss() {
     rememberDismissal();
     setStage('hidden');
-    if (!mood) void record('dismiss');
+    if (!mood) void postEvent('dismiss');
   }
 
   function chooseMood(value: Mood) {
     setMood(value);
     rememberDismissal();
     setStage('outcome');
-    void record('response', { mood: value });
+    void postEvent('response', { mood: value });
   }
 
   async function submitFeedback() {
     if (!mood || busy) return;
     setBusy(true);
-    await record('response', { mood, category: category || undefined, comment: comment.trim() || undefined });
+    await postEvent('response', { mood, category: category || undefined, comment: comment.trim() || undefined });
     setBusy(false);
     setStage('thanks');
   }
 
   function openHostChat() {
-    if (mood) void record('response', { mood });
     setStage('hidden');
     onContactHost();
   }
 
   const recordClick = (value?: Mood) => {
-    void record('click', { mood: value });
+    void postEvent('click', { mood: value });
   };
 
   if (stage === 'hidden') return null;
+  if (stage === 'launcher') {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+        <button type="button" className="gp-msg-link" onClick={showQuestion} data-testid="review-nudge-launcher">
+          <MessageSquare size={14} aria-hidden style={{ verticalAlign: '-2px', marginRight: 5 }} /> Share feedback
+        </button>
+      </div>
+    );
+  }
 
   return (
     <aside className="gp-card" style={{ marginTop: '1rem', position: 'relative' }} aria-live="polite" data-testid="review-nudge">
@@ -144,12 +151,12 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
       {stage === 'question' && (
         <>
           <div className="gp-kicker"><MessageSquare size={14} aria-hidden /> Quick feedback</div>
-          <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>How is your stay going?</h2>
-          <p className="gp-muted" style={{ margin: '0 0 .9rem' }}>A quick answer helps improve this portal and the guest experience.</p>
+          <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>Did this portal help with your stay?</h2>
+          <p className="gp-muted" style={{ margin: '0 0 .9rem' }}>A quick answer helps improve the guest experience.</p>
           <div style={{ display: 'flex', gap: '.55rem', flexWrap: 'wrap' }}>
-            <button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={() => chooseMood('great')}>Great</button>
-            <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => chooseMood('okay')}>Okay</button>
-            <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => chooseMood('needs_attention')}>Needs attention</button>
+            <button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={() => chooseMood('great')}>Yes</button>
+            <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => chooseMood('okay')}>Somewhat</button>
+            <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => chooseMood('needs_attention')}>Not yet</button>
             <button type="button" className="gp-msg-link" onClick={dismiss}>Not now</button>
           </div>
         </>
@@ -162,20 +169,16 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
             {mood === 'great' ? 'Thank you' : 'We are listening'}
           </div>
           <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>
-            {mood === 'great' ? 'Glad to hear it!' : mood === 'okay' ? 'Thanks for letting us know.' : 'Let’s help make it right.'}
+            {mood === 'great' ? 'Glad it helped.' : mood === 'okay' ? 'Thanks for letting us know.' : 'Let’s help make it right.'}
           </h2>
           <p className="gp-muted" style={{ margin: '0 0 .9rem' }}>
-            {mood === 'great'
-              ? `You can share an honest review of ${propertyName}, or send private feedback to help us improve.`
-              : mood === 'okay'
-                ? `You can share an honest review of ${propertyName} or tell us privately what could be better.`
-                : 'Contact your host for help now, send private feedback, or share an honest property review.'}
+            Share an honest review of {propertyName}, send private portal feedback, or contact your host if you need help.
           </p>
           <div style={{ display: 'flex', gap: '.55rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <ReviewLink reviewUrl={reviewUrl} mood={mood} onClick={recordClick} />
             {mood === 'needs_attention' && (
               <button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={openHostChat}>Contact your host</button>
             )}
-            <ReviewLink reviewUrl={reviewUrl} primary={mood === 'great'} mood={mood} onClick={recordClick} />
             <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => setStage('feedback')}>Send private feedback</button>
             <button type="button" className="gp-msg-link" onClick={dismiss}>Done</button>
           </div>
