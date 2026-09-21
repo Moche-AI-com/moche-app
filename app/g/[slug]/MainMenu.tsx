@@ -3,6 +3,7 @@
 import type { PortalStep } from './GuestPortal';
 import type { PortalT } from '@/lib/guest/portal-strings';
 import { CardArt } from './CardArt';
+import { ReviewNudge, markReviewNudgeMoment } from './ReviewNudge';
 
 type MenuKey = Extract<PortalStep, 'ask' | 'host' | 'maintenance' | 'extras'>;
 
@@ -31,6 +32,11 @@ export function MainMenu(props: {
     { key: 'extras', title: t('cardExtrasTitle'), blurb: t('cardExtrasBlurb') },
   ];
 
+  function select(key: MenuKey) {
+    if (!props.hostPreview && (key === 'ask' || key === 'extras')) markReviewNudgeMoment();
+    props.onSelect(key);
+  }
+
   return (
     <section aria-label="Main menu">
       <h1 className="gp-step-title">
@@ -56,7 +62,7 @@ export function MainMenu(props: {
             type="button"
             className="gp-menu-card"
             style={{ animationDelay: `${index * 70}ms` }}
-            onClick={() => props.onSelect(key)}
+            onClick={() => select(key)}
             data-testid={`menu-${key}`}
           >
             <CardArt cardKey={key} />
@@ -65,6 +71,8 @@ export function MainMenu(props: {
           </button>
         ))}
       </div>
+
+      {!props.hostPreview && <ReviewNudge propertyName={props.propertyName} />}
     </section>
   );
 }
