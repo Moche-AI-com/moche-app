@@ -27,6 +27,22 @@ export function markReviewNudgeMoment() {
   }
 }
 
+function ReviewLink({ reviewUrl, primary, mood, onClick }: { reviewUrl: string | null; primary?: boolean; mood: Mood | null; onClick: (mood?: Mood) => void }) {
+  if (!reviewUrl) return null;
+  return (
+    <a
+      href={reviewUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`gp-btn ${primary ? 'gp-btn-primary' : 'gp-btn-ghost'}`}
+      style={{ width: 'auto', textDecoration: 'none' }}
+      onClick={() => onClick(mood ?? undefined)}
+    >
+      <Star size={16} aria-hidden /> Leave a property review <ExternalLink size={14} aria-hidden />
+    </a>
+  );
+}
+
 export function ReviewNudge({ propertyName, onContactHost }: { propertyName: string; onContactHost: () => void }) {
   const [stage, setStage] = useState<Stage>('hidden');
   const [mood, setMood] = useState<Mood | null>(null);
@@ -111,21 +127,9 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
     onContactHost();
   }
 
-  function ReviewLink({ primary = false }: { primary?: boolean }) {
-    if (!reviewUrl) return null;
-    return (
-      <a
-        href={reviewUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`gp-btn ${primary ? 'gp-btn-primary' : 'gp-btn-ghost'}`}
-        style={{ width: 'auto', textDecoration: 'none' }}
-        onClick={() => void record('click', { mood: mood ?? undefined })}
-      >
-        <Star size={16} aria-hidden /> Leave a property review <ExternalLink size={14} aria-hidden />
-      </a>
-    );
-  }
+  const recordClick = (value?: Mood) => {
+    void record('click', { mood: value });
+  };
 
   if (stage === 'hidden') return null;
 
@@ -171,7 +175,7 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
             {mood === 'needs_attention' && (
               <button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={openHostChat}>Contact your host</button>
             )}
-            <ReviewLink primary={mood === 'great'} />
+            <ReviewLink reviewUrl={reviewUrl} primary={mood === 'great'} mood={mood} onClick={recordClick} />
             <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => setStage('feedback')}>Send private feedback</button>
             <button type="button" className="gp-msg-link" onClick={dismiss}>Done</button>
           </div>
@@ -201,7 +205,7 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
             <button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={() => void submitFeedback()} disabled={busy}>
               {busy ? 'Sending…' : 'Send feedback'}
             </button>
-            <ReviewLink />
+            <ReviewLink reviewUrl={reviewUrl} mood={mood} onClick={recordClick} />
           </div>
         </>
       )}
@@ -212,7 +216,7 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
             <Check size={18} aria-hidden style={{ color: 'var(--gp-primary)' }} />
             <span>Thank you. Your feedback helps us improve the portal.</span>
           </div>
-          <ReviewLink />
+          <ReviewLink reviewUrl={reviewUrl} mood={mood} onClick={recordClick} />
         </>
       )}
     </aside>
