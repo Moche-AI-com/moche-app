@@ -15,7 +15,8 @@ const TERMINAL_PAGES = [
 ];
 
 const feedbackSchema = z.object({
-  action: z.enum(['positive', 'negative', 'dismiss', 'click']),
+  action: z.enum(['response', 'dismiss', 'click']),
+  mood: z.enum(['great', 'okay', 'needs_attention']).optional(),
   category: z.enum(['hard_to_find', 'unhelpful_answer', 'technical_problem', 'other']).optional(),
   comment: z.string().trim().max(800).optional(),
 }).strict();
@@ -28,6 +29,13 @@ function safeReviewUrl(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+function ratingForMood(mood: 'great' | 'okay' | 'needs_attention' | undefined) {
+  if (mood === 'great') return 5;
+  if (mood === 'okay') return 3;
+  if (mood === 'needs_attention') return 2;
+  return null;
 }
 
 export async function GET() {
@@ -63,7 +71,9 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: 'Session expired.' }, { status: 401 });
 
   const parsed = feedbackSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid feedback.' }, { status: 400 });
+  if (!parsed.success || (parsed.data.action === 'response' && !parsed.data.mood)) {
+    return NextResponse.json({ error: 'Invalid feedback.' }, { status: 400 });
+  }
 
   const admin = createAdminClient();
   const rate = await checkRateLimit(admin, {
@@ -83,26 +93,55 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Review feedback is not enabled.' }, { status: 404 });
   }
 
-  const { action, category, comment } = parsed.data;
+  const { action, mood, category, comment } = parsed.data;
   const page = action === 'dismiss'
     ? 'guest_portal_review_nudge_dismiss'
     : action === 'click'
       ? 'guest_portal_review_nudge_click'
       : 'guest_portal_review_nudge';
-  const rating = action === 'positive' || action === 'click' ? 5 : action === 'negative' ? 2 : null;
-  const detail = [category ? `Category: ${category}` : '', comment ?? ''].filter(Boolean).join(' — ') || null;
+  const detail = [mood ? `Mood: ${mood}` : '', category ? `Category: ${category}` : '', comment ?? '']
+    .filter(Boolean)
+    .join(' — ') || null;
+
+  if (action === 'response') {
+    const { data: existing } = await admin
+      .from('product_feedback')
+      .select('id')
+      .eq('source', 'guest')
+      .eq('property_id', session.propertyId)
+      .eq('guest_session_id', session.sessionId)
+      .eq('page', page)
+      .limit(1)
+      .maybeSingle();
+
+    const write = existing
+      ? admin.from('product_feedback').update({ rating: ratingForMood(mood), comment: detail } as never).eq('id', existing.id)
+      : admin.from('product_feedback').insert({
+          source: 'guest',
+          rating: ratingForMood(mood),
+          comment: detail,
+          property_id: session.propertyId,
+          guest_session_id: session.sessionId,
+          page,
+        } as never);
+    const { error } = await write;
+    if (error) {
+      log.warn('guest_review_nudge_feedback_failed', { propertyId: session.propertyId });
+      return NextResponse.json({ error: 'Could not save feedback.' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   const { error } = await admin.from('product_feedback').insert({
     source: 'guest',
-    rating,
+    rating: ratingForMood(mood),
     comment: detail,
     property_id: session.propertyId,
     guest_session_id: session.sessionId,
     page,
   } as never);
-
   if (error) {
-    log.warn('guest_review_nudge_feedback_failed', { propertyId: session.propertyId });
+    log.warn('guest_review_nudge_event_failed', { propertyId: session.propertyId });
     return NextResponse.json({ error: 'Could not save feedback.' }, { status: 500 });
   }
 
