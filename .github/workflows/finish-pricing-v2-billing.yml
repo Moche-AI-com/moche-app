@@ -45,8 +45,7 @@ jobs:
 
           example_path = Path('.env.example')
           example = example_path.read_text()
-          marker = '# Pricing V2 canonical flat-rate prices'
-          if marker not in example:
+          if '# Pricing V2 canonical flat-rate prices' not in example:
               example += """
 
           # Pricing V2 canonical flat-rate prices. Set these before merging Pricing V2.
@@ -98,6 +97,12 @@ jobs:
           """)
           PY
           rm .github/workflows/finish-pricing-v2-billing.yml
+          git diff --check
+          git config user.name "Moche-AI Automation"
+          git config user.email "noreply@moche-ai.com"
+          git add -A
+          git commit -m "fix: keep Pricing V2 billing mappings consistent"
+          git push origin HEAD:feat/pricing-v2
       - name: Install locked dependencies
         run: npm ci
       - name: Run complete test suite
@@ -110,11 +115,3 @@ jobs:
           NEXT_PUBLIC_APP_URL: https://example.com
           APP_URL: https://example.com
         run: npm run build
-      - name: Verify and commit
-        run: |
-          git diff --check
-          git config user.name "Moche-AI Automation"
-          git config user.email "noreply@moche-ai.com"
-          git add -A
-          git commit -m "fix: keep Pricing V2 billing mappings consistent"
-          git push origin HEAD:feat/pricing-v2
