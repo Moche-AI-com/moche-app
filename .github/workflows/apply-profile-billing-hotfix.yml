@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - hotfix/profile-billing-pricing-v2
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
