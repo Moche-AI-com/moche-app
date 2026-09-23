@@ -14,7 +14,6 @@ import {
   type PlanId,
 } from '@/lib/constants';
 import { isFoundingCouponRedeemable, isFoundingDiscountEligible } from '@/lib/billing/founding';
-import { countBillableProperties } from '@/lib/billing/quantity-sync';
 import { recordAcceptances } from '@/lib/legal/acceptance';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
@@ -141,12 +140,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // Per-property pricing (pitch-deck model, Aug 2026): self-serve tiers are priced
-    // per property per month, so the line-item quantity is the number of active
-    // properties on the account. Shared with lib/billing/quantity-sync.ts, which
-    // keeps this quantity current as properties are added, archived, or deleted, so
-    // the count at signup and the count afterwards can never diverge.
-    const quantity = await countBillableProperties(supabase, hostAccountId);
+    // Pricing V2 is flat-rate by plan; property limits are enforced by entitlements.
+    const quantity = 1;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

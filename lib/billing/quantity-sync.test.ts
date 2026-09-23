@@ -140,17 +140,17 @@ describe('countBillableProperties', () => {
 });
 
 describe('syncBillableQuantity', () => {
-  it('updates Stripe with no proration when the count has changed', async () => {
-    const stripe = stripeDouble({ itemQuantity: 1 });
+  it('normalizes legacy per-property subscriptions to quantity one without proration', async () => {
+    const stripe = stripeDouble({ itemQuantity: 4 });
     getStripeMock.mockReturnValue(stripe);
 
     await syncBillableQuantity(
-      db({ propertyCount: 4, subscription: { stripe_subscription_id: 'sub_1', quantity: 1 } }),
+      db({ propertyCount: 4, subscription: { stripe_subscription_id: 'sub_1', quantity: 4 } }),
       'acct-1',
     );
 
     expect(stripe.update).toHaveBeenCalledWith('sub_1', {
-      items: [{ id: 'si_1', quantity: 4 }],
+      items: [{ id: 'si_1', quantity: 1 }],
       // Non-negotiable: a host must never be charged mid-cycle for adding a property.
       proration_behavior: 'none',
     });
@@ -174,7 +174,7 @@ describe('syncBillableQuantity', () => {
   it('does not call Stripe when the stored quantity already matches', async () => {
     getStripeMock.mockReturnValue(stripeDouble());
     await syncBillableQuantity(
-      db({ propertyCount: 4, subscription: { stripe_subscription_id: 'sub_1', quantity: 4 } }),
+      db({ propertyCount: 4, subscription: { stripe_subscription_id: 'sub_1', quantity: 1 } }),
       'acct-1',
     );
     expect(getStripeMock).not.toHaveBeenCalled();

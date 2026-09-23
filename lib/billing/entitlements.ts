@@ -19,6 +19,7 @@ export interface Entitlements {
   // Pooled guest conversations per period for the whole host account. 0 means the
   // allowance is set by contract (sales-assisted tiers) or there is no plan.
   conversationAllowance: number;
+  smsAllowance: number;
   reviewNudge: boolean;
   smsEscalation: boolean;
   conciergeCustomization: boolean;
@@ -97,7 +98,8 @@ export function entitlementsFromSubscription(sub: Subscription | null): Entitlem
       active: false,
       status: sub?.status ?? 'none',
       propertyLimit: 1, // allow one draft property so hosts can build before paying
-      conversationAllowance: 0,
+      conversationAllowance: sub ? 0 : 30,
+      smsAllowance: 0,
       reviewNudge: false,
       smsEscalation: false,
       conciergeCustomization: false,
@@ -128,6 +130,7 @@ export function entitlementsFromSubscription(sub: Subscription | null): Entitlem
     status: sub!.status,
     propertyLimit,
     conversationAllowance: plan.conversationAllowance,
+    smsAllowance: plan.smsAllowance,
     reviewNudge: plan.reviewNudge,
     smsEscalation: plan.smsEscalation,
     conciergeCustomization: plan.conciergeCustomization,

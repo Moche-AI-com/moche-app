@@ -34,7 +34,7 @@ export const HOST_PRICING_BANDS: readonly PricingBand[] = [
 ] as const;
 
 /** Largest portfolio that can buy without talking to sales. */
-export const SELF_SERVE_PROPERTY_MAX = 24;
+export const SELF_SERVE_PROPERTY_MAX = 15;
 
 /**
  * Monthly total in whole dollars for `count` properties on the Host plan.
@@ -94,6 +94,7 @@ export interface Plan {
   propertyRange: [number, number];
   propertyLimit: number;
   conversationAllowance: number;
+  smsAllowance: number;
   selfServe: boolean;
   reviewNudge: boolean;
   smsEscalation: boolean;
@@ -117,89 +118,10 @@ export interface Plan {
  * meters SMS by tier and Guesty charges 1% of every reservation on Lite.
  */
 export const PLANS: Record<PlanId, Plan> = {
-  // Free is the ABSENCE of a subscription, which is already how
-  // entitlementsFromSubscription treats a null row. No Stripe object exists for
-  // it and selfServe is false, so it can never be checked out.
-  starter: {
-    id: 'starter',
-    name: 'Free',
-    monthly: 0,
-    annual: 0,
-    propertyRange: [1, 1],
-    propertyLimit: 1,
-    conversationAllowance: 0,
-    selfServe: false,
-    reviewNudge: false,
-    smsEscalation: false,
-    conciergeCustomization: false,
-    features: [
-      'One property',
-      'Build your Property Brain',
-      'Preview the guest portal exactly as a guest sees it',
-      'Host-approved memory updates',
-      'Go live whenever you are ready',
-    ],
-  },
-  pro: {
-    id: 'pro',
-    name: 'Host',
-    monthly: HOST_PRICING_BANDS[0].ratePerProperty,
-    annual: HOST_PRICING_BANDS[0].ratePerProperty * ANNUAL_MULTIPLIER,
-    bands: HOST_PRICING_BANDS,
-    propertyRange: [1, SELF_SERVE_PROPERTY_MAX],
-    propertyLimit: SELF_SERVE_PROPERTY_MAX,
-    conversationAllowance: 0,
-    selfServe: true,
-    reviewNudge: true,
-    smsEscalation: true,
-    conciergeCustomization: true,
-    features: [
-      'Live guest concierge, QR code and shareable link',
-      'Answers grounded in your verified property facts',
-      'Structured guest requests, escalation and maintenance triage',
-      'Guest review prompts and owner insight',
-      'Co-hosts, property cloning and SMS escalation',
-      'Unlimited guests, stays and messages',
-    ],
-  },
-  portfolio: {
-    id: 'portfolio',
-    name: 'Portfolio',
-    monthly: 0,
-    annual: 0,
-    propertyRange: [SELF_SERVE_PROPERTY_MAX + 1, 100],
-    propertyLimit: 100,
-    conversationAllowance: 0,
-    selfServe: false,
-    reviewNudge: true,
-    smsEscalation: true,
-    conciergeCustomization: true,
-    features: [
-      'Everything in Host',
-      '25 to 100 properties',
-      'Roles, bulk tools and PMS integrations',
-      'Volume rates below $11/property/mo, set by contract',
-    ],
-  },
-  enterprise: {
-    id: 'enterprise',
-    name: 'Enterprise',
-    monthly: 0,
-    annual: 0,
-    propertyRange: [101, Number.POSITIVE_INFINITY],
-    propertyLimit: Number.MAX_SAFE_INTEGER,
-    conversationAllowance: 0,
-    selfServe: false,
-    reviewNudge: true,
-    smsEscalation: true,
-    conciergeCustomization: true,
-    features: [
-      'Everything in Portfolio',
-      '100+ properties',
-      'SSO, SLA and API access',
-      'White label and custom terms',
-    ],
-  },
+  starter: { id: 'starter', name: 'Starter', monthly: 15, annual: 150, propertyRange: [1, 1], propertyLimit: 1, conversationAllowance: 200, smsAllowance: 50, selfServe: true, reviewNudge: true, smsEscalation: true, conciergeCustomization: true, features: ['1 live property', '200 AI guest conversations each month', '50 outbound SMS segments each month', 'Property Brain, guest portal and QR access', 'Email and SMS escalation'] },
+  pro: { id: 'pro', name: 'Pro', monthly: 39, annual: 390, propertyRange: [2, 5], propertyLimit: 5, conversationAllowance: 1000, smsAllowance: 250, selfServe: true, reviewNudge: true, smsEscalation: true, conciergeCustomization: true, features: ['Up to 5 live properties', '1,000 pooled AI guest conversations each month', '250 outbound SMS segments each month', 'Co-hosts, property cloning and analytics', 'Automated imports and priority support'] },
+  portfolio: { id: 'portfolio', name: 'Portfolio', monthly: 99, annual: 990, propertyRange: [6, 15], propertyLimit: 15, conversationAllowance: 4000, smsAllowance: 1000, selfServe: true, reviewNudge: true, smsEscalation: true, conciergeCustomization: true, features: ['Up to 15 live properties', '4,000 pooled AI guest conversations each month', '1,000 outbound SMS segments each month', 'Roles, bulk tools and portfolio analytics', 'Operational reporting and priority support'] },
+  enterprise: { id: 'enterprise', name: 'Scale', monthly: 199, annual: 0, propertyRange: [16, Number.POSITIVE_INFINITY], propertyLimit: Number.MAX_SAFE_INTEGER, conversationAllowance: 0, smsAllowance: 0, selfServe: false, reviewNudge: true, smsEscalation: true, conciergeCustomization: true, features: ['For 40+ properties or custom requirements', 'Contracted AI and communications allowance', 'Volume pricing and implementation support', 'Custom integrations and service terms'] },
 };
 
 export const SELF_SERVE_PLAN_IDS = (Object.keys(PLANS) as PlanId[]).filter(
