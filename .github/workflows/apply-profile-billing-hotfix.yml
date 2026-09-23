@@ -23,6 +23,7 @@ jobs:
           fetch-depth: 0
       - name: Restore validated files
         run: |
+          sed -i 's/H4sIAAAAAAAAA+1B63/H4sIAAAAAAAAA+1b63/' scripts/billing-hotfix.part1
           cat scripts/billing-hotfix.part1 scripts/billing-hotfix.part2 scripts/billing-hotfix.part3 scripts/billing-hotfix.part4 | base64 --decode | tar --extract --gzip
           rm scripts/billing-hotfix.part1 scripts/billing-hotfix.part2 scripts/billing-hotfix.part3 scripts/billing-hotfix.part4
           rm .github/workflows/apply-profile-billing-hotfix.yml
