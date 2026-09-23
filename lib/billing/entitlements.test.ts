@@ -56,22 +56,21 @@ describe('plan grid', () => {
     // See docs/pricing-model-2027.md. One free tier, one banded self-serve plan,
     // two contract tiers. Contract tiers carry 0 so they can never become a
     // self-serve checkout amount.
-    expect(PLANS.starter.monthly).toBe(0);
-    expect(PLANS.starter.annual).toBe(0);
-    expect(PLANS.pro.monthly).toBe(29);
-    expect(PLANS.pro.annual).toBe(290);
-    expect(PLANS.portfolio.monthly).toBe(0);
-    expect(PLANS.enterprise.monthly).toBe(0);
+    expect(PLANS.starter.monthly).toBe(15);
+    expect(PLANS.starter.annual).toBe(150);
+    expect(PLANS.pro.monthly).toBe(39);
+    expect(PLANS.pro.annual).toBe(390);
+    expect(PLANS.portfolio.monthly).toBe(99);
+    expect(PLANS.portfolio.annual).toBe(990);
+    expect(PLANS.enterprise.monthly).toBe(199);
     expect(GUIDED_SETUP_USD).toBe(199);
   });
 
-  it('leaves conversationAllowance unmetered on every tier', () => {
-    // Guest messages are unlimited on every paid plan and there is no
-    // per-conversation charge. Downstream code reads 0 as unmetered, so a
-    // non-zero value here would silently start advertising a cap.
-    for (const id of Object.keys(PLANS) as PlanId[]) {
-      expect(PLANS[id].conversationAllowance).toBe(0);
-    }
+  it('publishes pooled conversation allowances for self-serve plans', () => {
+    expect(PLANS.starter.conversationAllowance).toBe(200);
+    expect(PLANS.pro.conversationAllowance).toBe(1000);
+    expect(PLANS.portfolio.conversationAllowance).toBe(4000);
+    expect(PLANS.enterprise.conversationAllowance).toBe(0);
   });
 
   it('prices annual at exactly the monthly rate times the multiplier', () => {
@@ -111,7 +110,7 @@ describe('plan grid', () => {
     // Free is a single property. The Host plan runs to SELF_SERVE_PROPERTY_MAX,
     // and the contract ladder must continue from there without a gap.
     expect(PLANS.starter.propertyRange).toEqual([1, 1]);
-    expect(PLANS.pro.propertyRange).toEqual([1, SELF_SERVE_PROPERTY_MAX]);
+    expect(PLANS.pro.propertyRange).toEqual([2, 5]);
     expect(PLANS.portfolio.propertyRange[0]).toBe(PLANS.pro.propertyRange[1] + 1);
     expect(PLANS.enterprise.propertyRange[0]).toBe(PLANS.portfolio.propertyRange[1] + 1);
   });
@@ -119,9 +118,9 @@ describe('plan grid', () => {
   it('marks only the Host plan as self-serve', () => {
     // Free is the absence of a subscription, so it must never be checkout-able:
     // there is no Stripe object behind it.
-    expect(SELF_SERVE_PLAN_IDS).toEqual(['pro']);
-    expect(PLANS.starter.selfServe).toBe(false);
-    expect(PLANS.portfolio.selfServe).toBe(false);
+    expect(SELF_SERVE_PLAN_IDS).toEqual(['starter', 'pro', 'portfolio']);
+    expect(PLANS.starter.selfServe).toBe(true);
+    expect(PLANS.portfolio.selfServe).toBe(true);
     expect(PLANS.enterprise.selfServe).toBe(false);
   });
 });
@@ -169,8 +168,8 @@ describe('graduated per-property pricing', () => {
   });
 
   it('keeps the entry rate on the Host plan equal to the first band', () => {
-    expect(PLANS.pro.monthly).toBe(HOST_PRICING_BANDS[0].ratePerProperty);
-    expect(PLANS.pro.monthly).toBe(monthlyTotalForProperties(1));
+    expect(PLANS.pro.monthly).toBe(39);
+    expect(PLANS.pro.annual).toBe(390);
   });
 
   it('prices Concierge Setup per account, not per property', () => {
@@ -232,7 +231,7 @@ describe('entitlementsFromSubscription', () => {
     expect(ent.active).toBe(false);
     expect(ent.status).toBe('none');
     expect(ent.propertyLimit).toBe(1);
-    expect(ent.conversationAllowance).toBe(0);
+    expect(ent.conversationAllowance).toBe(30);
     expect(ent.isReadOnly).toBe(false);
     expect(ent.trialing).toBe(false);
   });

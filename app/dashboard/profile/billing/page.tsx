@@ -9,9 +9,6 @@ import {
   FOUNDING_ACCOUNT_CAP,
   FOUNDING_DISCOUNT_MONTHS,
   FOUNDING_DISCOUNT_PERCENT,
-  HOST_PRICING_BANDS,
-  effectiveRatePerProperty,
-  monthlyTotalForProperties,
   type PlanId,
 } from '@/lib/constants';
 import { serverEnv } from '@/lib/env';
@@ -178,7 +175,7 @@ export default async function ProfileBillingPage() {
                       have. */}
                   <p style={{ margin: '0 0 .1rem' }}>
                     <strong style={{ fontSize: '1.9rem' }}>
-                      ${monthlyTotalForProperties(billableProperties).toLocaleString()}
+                      ${plan.monthly.toLocaleString()}
                     </strong>
                     <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
                   </p>
@@ -186,7 +183,7 @@ export default async function ProfileBillingPage() {
                     {billableProperties === 1
                       ? '1 property'
                       : `${billableProperties} properties`}{' '}
-                    at ${effectiveRatePerProperty(billableProperties)} each on average
+                    at ${(plan.monthly / Math.max(1, plan.propertyLimit)).toFixed(2)} each on average
                     &middot; {propertyRangeLabel(plan)}
                   </p>
                 </>
@@ -219,7 +216,7 @@ export default async function ProfileBillingPage() {
                   planId={id}
                   isCurrent={isCurrent}
                   configured={billingConfigured}
-                  monthlyTotal={monthlyTotalForProperties(billableProperties)}
+                  monthlyTotal={plan.monthly}
                 />
               ) : (
                 <a
@@ -239,15 +236,7 @@ export default async function ProfileBillingPage() {
         Watching your usage? See <Link href="/dashboard/profile/usage">Usage</Link>.
       </p>
 
-      <p className="faint" style={{ fontSize: '.78rem', marginTop: '.5rem' }}>
-        The Host plan is priced in bands, so each property you add costs less than the one
-        before it: {`$${HOST_PRICING_BANDS[0].ratePerProperty}`} for your first, down to{' '}
-        {`$${HOST_PRICING_BANDS[HOST_PRICING_BANDS.length - 1].ratePerProperty}`} each in the
-        top band. Checkout bills the number of active properties on your account. Every plan
-        includes unlimited guests, stays, and conversations, with no per-conversation
-        charges. Setup is self serve and included, with no setup fee. Cancel anytime. Pay annually and you
-        are billed ten months for twelve, so two months are free. Prices in USD.
-      </p>
+      <p className="faint" style={{ fontSize: '.78rem', marginTop: '.5rem' }}>Pricing V2 is flat-rate by plan. Property limits and included AI/SMS usage are shown before Checkout; Stripe receives a quantity of one.</p>
     </div>
   );
 }

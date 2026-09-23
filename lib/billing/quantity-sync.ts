@@ -76,7 +76,8 @@ export async function syncBillableQuantity(
     // No subscription: free plan, pre-launch account, or checkout never completed.
     if (!sub?.stripe_subscription_id) return;
 
-    const quantity = await countBillableProperties(db, hostAccountId);
+    // Pricing V2 subscriptions always use one licensed Stripe item.
+    const quantity = 1;
     if (sub.quantity === quantity) return;
 
     const stripe = getStripe();
