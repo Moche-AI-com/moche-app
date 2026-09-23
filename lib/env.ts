@@ -235,10 +235,16 @@ export const serverEnv = {
   // still read as a fallback so an existing deployment does not lose its mapping
   // between this deploy and the env var rename.
   stripePrices: {
-    starter_monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY ?? '',
-    starter_annual: process.env.STRIPE_PRICE_STARTER_ANNUAL ?? '',
-    pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY ?? '',
-    pro_annual: process.env.STRIPE_PRICE_PRO_ANNUAL ?? '',
+    starter_monthly:
+    process.env.STRIPE_PRICE_V2_STARTER_MONTHLY ?? process.env.STRIPE_PRICE_STARTER_MONTHLY ?? '',
+    starter_annual:
+    process.env.STRIPE_PRICE_V2_STARTER_ANNUAL ?? process.env.STRIPE_PRICE_STARTER_ANNUAL ?? '',
+    pro_monthly:
+    process.env.STRIPE_PRICE_V2_PRO_MONTHLY ?? process.env.STRIPE_PRICE_PRO_MONTHLY ?? '',
+    pro_annual:
+    process.env.STRIPE_PRICE_V2_PRO_ANNUAL ?? process.env.STRIPE_PRICE_PRO_ANNUAL ?? '',
+    portfolio_monthly: process.env.STRIPE_PRICE_V2_PORTFOLIO_MONTHLY ?? '',
+    portfolio_annual: process.env.STRIPE_PRICE_V2_PORTFOLIO_ANNUAL ?? '',
     growth_lower_monthly:
       process.env.STRIPE_PRICE_GROWTH_LOWER_MONTHLY ?? process.env.STRIPE_PRICE_GROWTH_MONTHLY ?? '',
     growth_lower_annual:
