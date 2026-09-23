@@ -1,0 +1,143 @@
+name: Fix Profile Billing Pricing V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hotfix/profile-billing-pricing-v2
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/profile-billing-pricing-v2
+          fetch-depth: 0
+      - name: Correct Profile billing plan cards
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/dashboard/profile/billing/page.tsx')
+          s=p.read_text()
+          old_current="          const isCurrent = currentPlan === id;\n          const isFree = id === 'starter';"
+          if old_current not in s:
+              raise RuntimeError('current-plan anchor missing')
+          s=s.replace(old_current, "          const isCurrent = ent.active && currentPlan === id;", 1)
+          insert='''        <div
+                    className="card"
+                    style={{
+                      padding: '1.5rem 1.35rem',
+                      border: !ent.active ? '1px solid var(--teal)' : undefined,
+                      position: 'relative',
+                    }}
+                  >
+                    {!ent.active ? (
+                      <span className="badge badge-teal" style={{ position: 'absolute', top: '1rem', right: '1rem' }}>Current</span>
+                    ) : null}
+                    <h2 style={{ fontSize: '1.15rem', marginBottom: '.15rem' }}>Free</h2>
+                    <p style={{ margin: '0 0 .1rem' }}>
+                      <strong style={{ fontSize: '1.9rem' }}>$0</strong>
+                      <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
+                    </p>
+                    <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
+                      1 draft property &middot; no card, no expiry
+                    </p>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.25rem', display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
+                      {[
+                        '1 draft property',
+                        '30 AI preview conversations each month',
+                        'Guest portal and QR preview',
+                        'Moche branding',
+                        'No card required',
+                      ].map((feature) => (
+                        <li key={feature} className="muted" style={{ fontSize: '.85rem', display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}>
+                          <span style={{ color: 'var(--teal)' }}>&#10003;</span> {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="faint" style={{ fontSize: '.8rem', margin: 0, minHeight: 44 }}>
+                      {!ent.active
+                        ? 'This is where you are now. Choose a paid plan when you are ready to publish.'
+                        : 'Manage or cancel your paid subscription through the billing portal.'}
+                    </p>
+                  </div>
+          '''
+          anchor='        {planIds.map((id) => {'
+          if anchor not in s:
+              raise RuntimeError('plan map anchor missing')
+          s=s.replace(anchor, insert+anchor, 1)
+          start=s.index('              {isFree ? (')
+          mid=s.index('              ) : plan.selfServe ? (', start)
+          s=s[:start]+'              {plan.selfServe ? ('+s[mid+len('              ) : plan.selfServe ? ('):]
+          old_average='''                  <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
+                            {billableProperties === 1
+                              ? '1 property'
+                              : `${billableProperties} properties`}{' '}
+                            at ${(plan.monthly / Math.max(1, plan.propertyLimit)).toFixed(2)} each on average
+                            &middot; {propertyRangeLabel(plan)}
+                          </p>'''
+          new_flat='''                  <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
+                            {propertyRangeLabel(plan)} &middot; flat monthly rate
+                          </p>'''
+          if old_average not in s:
+              raise RuntimeError('average-price anchor missing')
+          s=s.replace(old_average, new_flat, 1)
+          start=s.index('              {isFree ? (')
+          mid=s.index('              ) : plan.selfServe ? (', start)
+          s=s[:start]+'              {plan.selfServe ? ('+s[mid+len('              ) : plan.selfServe ? ('):]
+          s=s.replace("  // An account with nothing added yet is quoted for one property rather than $0,\n  // which would read as though the plan were free.\n  const billableProperties = Math.max(1, gate.used);\n", '', 1)
+          old_comment='''                  {/* This card used to print `plan.monthly` as the flat rate for
+                              every property. Under graduated bands that number is only
+                              ever correct for a single-property account, so it showed
+                              the owner of ten properties a figure less than a third of
+                              their real bill. It now prices the portfolio they actually
+                              have. */}
+          '''
+          s=s.replace(old_comment, "                  {/* Pricing V2 charges one flat subscription amount; property limits are entitlements. */}\n", 1)
+          p.write_text(s)
+          Path('test/billing-page-pricing-v2.test.ts').write_text('''import { readFileSync } from 'node:fs';
+          import { describe, expect, it } from 'vitest';
+
+          const source = readFileSync('app/dashboard/profile/billing/page.tsx', 'utf8');
+
+          describe('Profile billing Pricing V2 presentation', () => {
+            it('keeps Free separate from paid Starter', () => {
+              expect(source).toContain('>Free</h2>');
+              expect(source).toContain('1 draft property');
+              expect(source).not.toContain("const isFree = id === 'starter'");
+            });
+
+            it('renders paid plan prices as flat rates without misleading averages', () => {
+              expect(source).toContain('${plan.monthly.toLocaleString()}');
+              expect(source).toContain('flat monthly rate');
+              expect(source).not.toContain('each on average');
+            });
+          });
+          ''')
+          PY
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run complete test suite
+        run: npm test
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXT_PUBLIC_APP_URL: https://example.com
+          APP_URL: https://example.com
+        run: npm run build
+      - name: Commit validated hotfix
+        run: |
+          rm .github/workflows/fix-profile-billing-pricing-v2.yml
+          git diff --check
+          git config user.name "Moche-AI Automation"
+          git config user.email "noreply@moche-ai.com"
+          git add -A
+          git commit -m "fix: align Profile billing with Pricing V2"
+          git push origin HEAD:hotfix/profile-billing-pricing-v2
