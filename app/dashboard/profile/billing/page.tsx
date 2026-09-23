@@ -53,9 +53,6 @@ export default async function ProfileBillingPage() {
   const billingConfigured = !!serverEnv.stripeSecretKey;
   const currentPlan = ent.planId;
   const planIds = Object.keys(PLANS) as PlanId[];
-  // An account with nothing added yet is quoted for one property rather than $0,
-  // which would read as though the plan were free.
-  const billableProperties = Math.max(1, gate.used);
 
   return (
     <div>
@@ -133,10 +130,47 @@ export default async function ProfileBillingPage() {
       ) : null}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '1rem' }}>
+        <div
+          className="card"
+          style={{
+            padding: '1.5rem 1.35rem',
+            border: !ent.active ? '1px solid var(--teal)' : undefined,
+            position: 'relative',
+          }}
+        >
+          {!ent.active ? (
+            <span className="badge badge-teal" style={{ position: 'absolute', top: '1rem', right: '1rem' }}>Current</span>
+          ) : null}
+          <h2 style={{ fontSize: '1.15rem', marginBottom: '.15rem' }}>Free</h2>
+          <p style={{ margin: '0 0 .1rem' }}>
+            <strong style={{ fontSize: '1.9rem' }}>$0</strong>
+            <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
+          </p>
+          <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
+            1 draft property &middot; no card, no expiry
+          </p>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.25rem', display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
+            {[
+              '1 draft property',
+              '30 AI preview conversations each month',
+              'Guest portal and QR preview',
+              'Moche branding',
+              'No card required',
+            ].map((feature) => (
+              <li key={feature} className="muted" style={{ fontSize: '.85rem', display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}>
+                <span style={{ color: 'var(--teal)' }}>&#10003;</span> {feature}
+              </li>
+            ))}
+          </ul>
+          <p className="faint" style={{ fontSize: '.8rem', margin: 0, minHeight: 44 }}>
+            {!ent.active
+              ? 'This is where you are now. Choose a paid plan when you are ready to publish.'
+              : 'Manage or cancel your paid subscription through the billing portal.'}
+          </p>
+        </div>
         {planIds.map((id) => {
           const plan = PLANS[id];
-          const isCurrent = currentPlan === id;
-          const isFree = id === 'starter';
+          const isCurrent = ent.active && currentPlan === id;
           return (
             <div
               key={id}
@@ -151,28 +185,9 @@ export default async function ProfileBillingPage() {
                 <span className="badge badge-teal" style={{ position: 'absolute', top: '1rem', right: '1rem' }}>Current</span>
               ) : null}
               <h2 style={{ fontSize: '1.15rem', marginBottom: '.15rem' }}>{plan.name}</h2>
-              {isFree ? (
+              {plan.selfServe ? (
                 <>
-                  {/* Free is the absence of a subscription, not a product. It has
-                      no Stripe price and no checkout, so it gets neither a
-                      per-property rate nor a Contact sales button: both would be
-                      inviting the owner to buy something that does not exist. */}
-                  <p style={{ margin: '0 0 .1rem' }}>
-                    <strong style={{ fontSize: '1.9rem' }}>$0</strong>
-                    <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
-                  </p>
-                  <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
-                    {propertyRangeLabel(plan)} &middot; no card, no expiry
-                  </p>
-                </>
-              ) : plan.selfServe ? (
-                <>
-                  {/* This card used to print `plan.monthly` as the flat rate for
-                      every property. Under graduated bands that number is only
-                      ever correct for a single-property account, so it showed
-                      the owner of ten properties a figure less than a third of
-                      their real bill. It now prices the portfolio they actually
-                      have. */}
+                  {/* Pricing V2 charges one flat subscription amount; property limits are entitlements. */}
                   <p style={{ margin: '0 0 .1rem' }}>
                     <strong style={{ fontSize: '1.9rem' }}>
                       ${plan.monthly.toLocaleString()}
@@ -180,11 +195,7 @@ export default async function ProfileBillingPage() {
                     <span className="muted" style={{ fontSize: '.85rem' }}>/mo</span>
                   </p>
                   <p className="faint" style={{ fontSize: '.78rem', margin: '0 0 1rem' }}>
-                    {billableProperties === 1
-                      ? '1 property'
-                      : `${billableProperties} properties`}{' '}
-                    at ${(plan.monthly / Math.max(1, plan.propertyLimit)).toFixed(2)} each on average
-                    &middot; {propertyRangeLabel(plan)}
+                    {propertyRangeLabel(plan)} &middot; flat monthly rate
                   </p>
                 </>
               ) : (
@@ -204,13 +215,7 @@ export default async function ProfileBillingPage() {
                   </li>
                 ))}
               </ul>
-              {isFree ? (
-                <p className="faint" style={{ fontSize: '.8rem', margin: 0, minHeight: 44 }}>
-                  {isCurrent
-                    ? 'This is where you are now. Upgrade when you add a second property.'
-                    : 'Cancel a paid plan to return here.'}
-                </p>
-              ) : plan.selfServe ? (
+              {plan.selfServe ? (
                 <BillingActions
                   mode="checkout"
                   planId={id}
