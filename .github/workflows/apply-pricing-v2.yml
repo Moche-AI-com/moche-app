@@ -6,6 +6,7 @@ on:
       - feat/pricing-v2
     paths:
       - scripts/pricing-v2-transfer.part3
+      - .github/workflows/apply-pricing-v2.yml
 
 permissions:
   contents: write
