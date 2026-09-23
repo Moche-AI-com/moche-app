@@ -1,3 +1,4 @@
+# Triggered after repository Actions write and pull-request permissions were enabled.
 name: Apply Pricing V2
 
 on:
