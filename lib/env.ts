@@ -243,16 +243,16 @@ export const serverEnv = {
     process.env.STRIPE_PRICE_V2_PRO_MONTHLY ?? process.env.STRIPE_PRICE_PRO_MONTHLY ?? '',
     pro_annual:
     process.env.STRIPE_PRICE_V2_PRO_ANNUAL ?? process.env.STRIPE_PRICE_PRO_ANNUAL ?? '',
-    portfolio_monthly: process.env.STRIPE_PRICE_V2_PORTFOLIO_MONTHLY ?? '',
-    portfolio_annual: process.env.STRIPE_PRICE_V2_PORTFOLIO_ANNUAL ?? '',
     growth_lower_monthly:
       process.env.STRIPE_PRICE_GROWTH_LOWER_MONTHLY ?? process.env.STRIPE_PRICE_GROWTH_MONTHLY ?? '',
     growth_lower_annual:
       process.env.STRIPE_PRICE_GROWTH_LOWER_ANNUAL ?? process.env.STRIPE_PRICE_GROWTH_ANNUAL ?? '',
     growth_upper_monthly: process.env.STRIPE_PRICE_GROWTH_UPPER_MONTHLY ?? '',
     growth_upper_annual: process.env.STRIPE_PRICE_GROWTH_UPPER_ANNUAL ?? '',
-    portfolio_monthly: process.env.STRIPE_PRICE_PORTFOLIO_MONTHLY ?? '',
-    portfolio_annual: process.env.STRIPE_PRICE_PORTFOLIO_ANNUAL ?? '',
+    portfolio_monthly:
+      process.env.STRIPE_PRICE_V2_PORTFOLIO_MONTHLY ?? process.env.STRIPE_PRICE_PORTFOLIO_MONTHLY ?? '',
+    portfolio_annual:
+      process.env.STRIPE_PRICE_V2_PORTFOLIO_ANNUAL ?? process.env.STRIPE_PRICE_PORTFOLIO_ANNUAL ?? '',
     enterprise_monthly: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY ?? '',
     enterprise_annual: process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL ?? '',
     custom_monthly: process.env.STRIPE_PRICE_CUSTOM_MONTHLY ?? '',
