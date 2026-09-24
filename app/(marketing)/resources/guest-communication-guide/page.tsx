@@ -5,8 +5,8 @@ import { marketingMetadata } from '@/lib/marketing/metadata';
 import { SITE_NAME, SITE_URL } from '@/lib/seo';
 import { DocHeader, Related, CtaBand } from '../../_parts';
 import productDashboard from '@/public/premium/product-dashboard-desktop.png';
-import productBrain from '@/public/premium/product-brain-desktop.png';
-import productPortal from '@/public/premium/product-portal-desktop.png';
+import guestWifi from '@/public/premium/Guest_Portal_Wifi_Example.png';
+import guestAsk from '@/public/premium/Guest_Portal_Ask_AI.png';
 import styles from '../../marketing.module.css';
 import pageStyles from './guide.module.css';
 
@@ -101,10 +101,10 @@ export default function GuestCommunicationGuidePage() {
           <Link href="/how-it-works">See how the approval process works</Link>.
         </p>
         <figure className={pageStyles.figure}>
-          <a href={productBrain.src} target="_blank" rel="noopener noreferrer" aria-label="Open the Property Brain screenshot at full size">
-            <Image src={productBrain} alt="Moche-AI Property Brain with property knowledge organized for host review" sizes="(max-width: 820px) 100vw, 800px" className={pageStyles.image} />
+          <a href={guestWifi.src} target="_blank" rel="noopener noreferrer" aria-label="Open the guest Wi-Fi questions screenshot at full size">
+            <Image src={guestWifi} alt="Illustrative Moche-AI guest portal showing suggested Wi-Fi questions and a way to ask a custom question" sizes="(max-width: 820px) 100vw, 800px" className={pageStyles.image} />
           </a>
-          <figcaption>One host-approved source for each property is easier to correct than answers scattered across old threads.</figcaption>
+          <figcaption>Illustrative guest view: Wi-Fi questions are easy to find, while the property facts behind the answers remain host-approved.</figcaption>
         </figure>
 
         <h2>Make answers reachable during the stay</h2>
@@ -116,10 +116,10 @@ export default function GuestCommunicationGuidePage() {
           assistant should say so and escalate rather than guess.
         </p>
         <figure className={pageStyles.figure}>
-          <a href={productPortal.src} target="_blank" rel="noopener noreferrer" aria-label="Open the guest portal screenshot at full size">
-            <Image src={productPortal} alt="Moche-AI guest portal with options to ask questions and contact the host" sizes="(max-width: 820px) 100vw, 800px" className={pageStyles.image} />
+          <a href={guestAsk.src} target="_blank" rel="noopener noreferrer" aria-label="Open the guest Ask a Question screenshot at full size">
+            <Image src={guestAsk} alt="Illustrative Moche-AI Ask a Question interface with Wi-Fi, check-in, parking, local recommendations and house-rule topics" sizes="(max-width: 820px) 100vw, 800px" className={pageStyles.image} />
           </a>
-          <figcaption>The guest portal places self-service answers beside a clear route to a real person.</figcaption>
+          <figcaption>Illustrative guest view: questions can start from familiar stay topics, with a route to the host when the assistant cannot answer confidently.</figcaption>
         </figure>
 
         <h2>Know where automation should stop</h2>
