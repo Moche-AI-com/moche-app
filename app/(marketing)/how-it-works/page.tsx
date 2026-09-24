@@ -1,232 +1,128 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { SITE_URL } from '@/lib/seo';
-import { DocHeader, Related, CtaBand, PageHero, ArticleFigure } from '../_parts';
-import productGoLive from '@/public/premium/product-go-live-desktop.png';
-import productBrain from '@/public/premium/product-brain-desktop.png';
+import { SITE_NAME, SITE_URL } from '@/lib/seo';
+import { DocHeader, Related, CtaBand } from '../_parts';
+import guestCodeEntry from '@/public/premium/Guest_Sign_Code_Entry.png';
+import guestPortal from '@/public/premium/Guest_Portal_Light_Theme.png';
 import styles from '../marketing.module.css';
+import pageStyles from './how-it-works.module.css';
 
 export const metadata: Metadata = marketingMetadata({
-  title: 'How Moche-AI works',
-  description:
-    'A grounded guest assistant for short-term rentals: load your property details, give guests one link, get cited answers that escalate when confidence is low.',
+  title: 'How Moche-AI Works for Short-Term Rental Hosts',
+  description: 'See how Moche-AI turns host-approved property details into an in-stay guest portal, source-backed answers, and a clear route to the host when a human should decide.',
   path: '/how-it-works',
 });
 
-// The informative article. The homepage has a three-step "How it works" section,
-// which is a summary; this page is the canonical explanation and goes a layer
-// deeper into the retrieval and escalation behaviour, because that is the part a
-// technically literate host actually wants to interrogate before trusting it.
-//
-// The homepage section keeps its #how-it-works anchor. That is a fragment, not a
-// competing URL, so there is no canonical conflict.
-//
-// Claims are constrained to what is already published: the three setup steps and
-// the six system parts (System.tsx), the escalation and citation behaviour and
-// the 15 to 20 minute setup figure (Faq.tsx), the model routing and PII handling
-// (/legal/security and /legal/ai-policy).
-
-const FAQS = [
-  {
-    q: 'Where do the answers come from?',
-    a: 'Only from the documents and property details you have loaded and approved. Answers can cite which source they came from, so you can check them.',
-  },
-  {
-    q: 'What happens when the assistant does not know?',
-    a: 'It escalates to you rather than guessing. Low confidence, safety topics, and urgent maintenance route to a human every time.',
-  },
-  {
-    q: 'Do I have to connect my Airbnb or Vrbo account?',
-    a: 'No. Moche-AI is platform-agnostic. Guests reach the portal by a link or QR code for their stay, with no guest login, no channel connection, and no property management system requirement.',
-  },
-  {
-    q: 'How long does setup take?',
-    a: 'Setup is self serve, and you can publish with the essentials and keep adding detail afterwards. A completeness score tracks what is still missing and suggests which gaps are worth filling first.',
-  },
-  {
-    q: 'Can I run it alongside a messaging tool I already use?',
-    a: 'Yes. Pre-arrival messaging tools handle booking confirmations and check-in reminders. Moche-AI is the in-stay layer for the questions that come up once guests are physically inside the property.',
-  },
-] as const;
-
 export default function HowItWorksPage() {
-  // FAQPage structured data. These five questions are the ones hosts ask before
-  // signing up, and they are the ones most likely to be typed into a search box
-  // verbatim, so they are marked up rather than left as plain prose.
-  const faqJsonLd = {
+  const articleJsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    '@id': `${SITE_URL}/how-it-works#faq`,
-    mainEntity: FAQS.map((f) => ({
-      '@type': 'Question',
-      name: f.q,
-      acceptedAnswer: { '@type': 'Answer', text: f.a },
-    })),
+    '@type': 'Article',
+    headline: 'How Moche-AI works for short-term rental hosts',
+    description: metadata.description,
+    inLanguage: 'en-US',
+    dateModified: '2026-09-24',
+    author: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
+    publisher: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}/how-it-works` },
   };
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <DocHeader
         eyebrow="How it works"
-        title="A guest assistant that can only answer from what you approved"
-        lede="Moche-AI turns your scattered property knowledge into one structured source, then answers guest questions from it and cites where each answer came from. This page explains the mechanics end to end."
-        updated="August 2026"
+        title="A guest portal built from the details you approve"
+        lede="Moche-AI turns property knowledge into a practical in-stay experience: guests can find answers, and hosts remain responsible for the decisions that need a person."
       />
 
-      <PageHero
-        src={productGoLive}
-        alt="The Moche-AI go-live readiness screen showing a property brain at 98% completeness and ready to publish"
-        caption="The go-live readiness screen. A Property Brain at 98% completeness — every section checked, the guest portal one click from being live."
-        priority
-      />
-
-      <div className={styles.body}>
-        <h2>The three steps to being live</h2>
-        <ol className={styles.steps}>
-          <li>
-            <h3>Load what you already know</h3>
-            <p>
-              The manual, the Wi-Fi details, the appliance quirks, check-in, parking, house rules.
-              Upload documents or type them in. A completeness score shows which gaps are worth filling
-              first, so you are not staring at an empty form wondering what matters.
-            </p>
-          </li>
-          <li>
-            <h3>Give guests one link</h3>
-            <p>
-              One link or QR code per stay. No app to install, no guest account to create, no channel
-              connection. The same flow works whether the booking came from Airbnb, Vrbo, or your own
-              direct site.
-            </p>
-          </li>
-          <li>
-            <h3>Stay in the loop, not in the thread</h3>
-            <p>
-              Routine questions answer themselves from your material. Anything the system is not
-              confident about, or anything touching safety, comes to you with the context already
-              attached.
-            </p>
-          </li>
-        </ol>
-
-        <h2>What is actually running underneath</h2>
-        <p>
-          Chat is the interface, not the product. Six parts do the work:
+      <article className={`${styles.body} ${pageStyles.story}`}>
+        <p className={pageStyles.lead}>
+          A short-term rental is full of answers guests need at inconvenient moments: where to park,
+          how to enter, which Wi-Fi network to use, and what to do when something is not working.
+          Moche-AI gives each property a host-approved source for those details, then makes that
+          source reachable during a stay.
         </p>
-        {/* .wide: a two-column comparison read inside a 68ch measure wraps every cell
-            to three or four lines, which is exactly the shape a table exists to avoid. */}
-        <table className={styles.wide}>
-          <thead>
-            <tr>
-              <th>Part</th>
-              <th>What it does</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Property Brain</td>
-              <td>The per-property knowledge base every answer is drawn from.</td>
-            </tr>
-            <tr>
-              <td>Guest portal</td>
-              <td>One link per stay, on any booking platform.</td>
-            </tr>
-            <tr>
-              <td>Concierge requests</td>
-              <td>Late checkout, towels, recommendations. Captured as structured requests and routed.</td>
-            </tr>
-            <tr>
-              <td>Maintenance triage</td>
-              <td>Issues arrive with detail and priority already attached.</td>
-            </tr>
-            <tr>
-              <td>Review prompts</td>
-              <td>Timed to the moment a guest will actually leave one.</td>
-            </tr>
-            <tr>
-              <td>Owner insight</td>
-              <td>What guests keep asking, per property, over time.</td>
-            </tr>
-          </tbody>
-        </table>
 
-        <ArticleFigure
-          src={productBrain}
-          alt="The Property Brain manager showing a property's answers grouped by section with a coverage map"
-          caption="The first row of the table, as a real screen: the Property Brain, with every answer filed under its section."
-        />
-
-        <h2>How a single answer is produced</h2>
+        <h2>Start with the property, not the chat</h2>
         <p>
-          This is the part worth understanding, because it is where most guest-facing assistants go
-          wrong.
+          Hosts add the practical details they already know: arrival instructions, Wi-Fi, parking,
+          house rules, appliance notes, and local guidance. Moche-AI organizes that information
+          by property so that an answer for one home is not accidentally used for another. The host
+          can review and correct the knowledge before it reaches guests.
         </p>
-        <ol>
-          <li>
-            A guest asks a question in the portal for their specific stay. The request is scoped to
-            that property and that stay, not to your whole portfolio.
-          </li>
-          <li>
-            The relevant passages are retrieved from that property&rsquo;s approved material. Nothing
-            outside it is eligible.
-          </li>
-          <li>
-            An answer is composed from those passages, with the source available so it can be checked
-            rather than taken on faith.
-          </li>
-          <li>
-            If the retrieved material does not support a confident answer, the question escalates to
-            you instead of being filled in from general knowledge.
-          </li>
-        </ol>
-        <div className={styles.callout}>
-          <p>
-            <strong>Inform, never invent.</strong> An assistant that is confidently wrong about a
-            lockbox code costs more trust than a hundred correct answers earn. The design tradeoff is
-            made in favour of saying &ldquo;let me get the host&rdquo; more often than a general
-            chatbot would.
-          </p>
+        <p>
+          That matters because the useful unit is not a generic answer; it is the right answer for
+          the particular place a guest has booked. If a detail changes, update the property record
+          instead of trying to find every old message where it was pasted.
+        </p>
+
+        <h2>Give each stay a simple way in</h2>
+        <p>
+          Guests reach the portal through a link or QR code for their stay. They do not need to
+          download an app or create an account, and hosts do not need to connect an Airbnb, Vrbo,
+          or property-management-system account. The portal is an in-stay experience; it does not
+          replace a host&apos;s booking-platform inbox or its response obligations.
+        </p>
+        <figure className={`${pageStyles.figure} ${pageStyles.portrait}`}>
+          <a href={guestCodeEntry.src} target="_blank" rel="noopener noreferrer" aria-label="Open the illustrative stay-code entry screen at full size">
+            <Image src={guestCodeEntry} alt="Illustrative Moche-AI guest portal screen for entering a stay code" sizes="(max-width: 640px) 100vw, 560px" className={pageStyles.image} />
+          </a>
+          <figcaption>Illustrative guest access: a stay code opens the property-specific portal without a guest account.
+          </figcaption>
+        </figure>
+
+        <h2>Make approved answers easy to find</h2>
+        <p>
+          Inside the portal, guests can start with familiar topics such as Wi-Fi, check-in, parking,
+          house rules, appliance help, and local recommendations. They can also ask a question.
+          The assistant uses the material approved for that property; it is not meant to invent a
+          missing lockbox code, safety instruction, or appliance detail from general knowledge.
+        </p>
+        <figure className={`${pageStyles.figure} ${pageStyles.portrait}`}>
+          <a href={guestPortal.src} target="_blank" rel="noopener noreferrer" aria-label="Open the illustrative guest portal screen at full size">
+            <Image src={guestPortal} alt="Illustrative Moche-AI light guest portal with choices to ask questions, message a host, request service, and view extras" sizes="(max-width: 640px) 100vw, 560px" className={pageStyles.image} />
+          </a>
+          <figcaption>Illustrative guest portal: self-service information sits alongside direct access to the host and other stay options.
+          </figcaption>
+        </figure>
+
+        <h2>Keep a human in the loop</h2>
+        <p>
+          The correct answer is sometimes that the portal does not know. When approved material does
+          not support a confident answer, the assistant should say so and route the guest back to
+          the host rather than guess. Hosts also decide requests that carry a cost, such as early
+          check-in or late checkout, and remain responsible for complaints, access failures, safety
+          concerns, urgent maintenance, refunds, and emergencies.
+        </p>
+        <p>
+          This is the operating principle behind Moche-AI: <strong>inform, never invent.</strong>
+          Automation can make routine information easier to reach. It should not make a human
+          decision where the cost of being wrong is a guest&apos;s money, safety, or access to a home.
+        </p>
+
+        <h2>What Moche-AI is—and is not</h2>
+        <p>
+          Moche-AI is the in-stay layer for host-approved property knowledge and guest questions.
+          It is not a channel manager, pricing tool, or property-management system. Keep using the
+          tools that send booking confirmations and pre-arrival messages; use Moche-AI to make the
+          property-specific information guests need once they arrive easier to find.
+        </p>
+        <p>
+          You can build and preview one draft property without a card. An active paid plan is
+          required to publish a property for guests. See <Link href="/guest-experience">what guests see</Link>,
+          read the <Link href="/resources/guest-communication-guide">guest communication guide</Link>,
+          or review <Link href="/security">trust and safety information</Link> before you share
+          a portal.
+        </p>
+        <p className={pageStyles.reviewed}>Last reviewed September 2026.</p>
+
+        <div className={pageStyles.endMatter}>
+          <CtaBand text="Build and preview one draft property free, no card. Choose a paid plan to publish." />
+          <Related current="/how-it-works" />
         </div>
-        <p>
-          The assistant can also propose an update to a property&rsquo;s knowledge base when it notices
-          a gap, for example a question three guests have asked that nothing covers. It cannot publish
-          that update itself. A human approves it first. See{' '}
-          <Link href="/security">trust and safety</Link> for the data handling and model routing behind
-          all of this.
-        </p>
-
-        <h2>What guests see, and what they do not</h2>
-        <p>
-          Guests see a portal for their stay, in a browser, with no account. They do not see your other
-          properties, other guests, your notes to yourself, or anything you have not published to the
-          Brain. Contact identifiers are stored as hashes rather than in the clear. The full walkthrough
-          is on <Link href="/guest-experience">the guest experience page</Link>.
-        </p>
-
-        <h2>Questions hosts ask about the mechanics</h2>
-        {FAQS.map((f) => (
-          <section key={f.q}>
-            <h3>{f.q}</h3>
-            <p>{f.a}</p>
-          </section>
-        ))}
-
-        <h2>Where it fits with the tools you already run</h2>
-        <p>
-          Moche-AI is not a channel manager, a pricing tool, or a property management system, and it
-          does not try to replace one. It is the in-stay layer. If you already use a pre-arrival
-          messaging tool, keep it. The overlap is close to zero: those tools send scheduled messages
-          before arrival, and this one answers unscheduled questions during the stay. The{' '}
-          <Link href="/resources/guest-communication-guide">guest communication guide</Link> covers how
-          to split the two without duplicating messages.
-        </p>
-
-        <CtaBand text="Load one property and see the completeness score for yourself. Free plan, no card." />
-        <Related current="/how-it-works" />
-      </div>
+      </article>
     </>
   );
 }
