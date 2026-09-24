@@ -3,25 +3,7 @@ import { SITE_URL, IS_PRODUCTION_HOST } from '@/lib/seo';
 import { LEGAL_DOCS } from '@/lib/legal/registry';
 import { MARKETING_ROUTES } from '@/lib/marketing/hero-links';
 
-// /sitemap.xml
-//
-// Only public, indexable documents are listed: the landing page, the marketing
-// pages the hero links to, the legal index, and each legal document. The
-// marketing routes come from MARKETING_ROUTES rather than a second hand-written
-// list, so adding a hero destination publishes it here automatically instead of
-// leaving the page live but unlisted. /signup is excluded from that list: it is
-// a conversion endpoint, not a document.
-//
-// Auth-gated routes (/dashboard/*) and
-// per-guest routes (/stay/*, /g/*, /answer/*) are deliberately absent —
-// listing a guest portal URL here would publish a real stay.
-//
-// Legal `lastModified` comes from LEGAL_DOCS.lastUpdated, so republishing a
-// document with a bumped date is reflected here automatically instead of
-// drifting out of sync with a hand-maintained list.
-//
-// On non-production origins this returns an empty sitemap to match robots.ts,
-// which disallows everything there.
+// Only public indexable pages. No redirects, auth pages, or per-guest URLs.
 export default function sitemap(): MetadataRoute.Sitemap {
   if (!IS_PRODUCTION_HOST) return [];
 
@@ -42,15 +24,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly' as const,
       priority: 0.7,
     })),
-    {
-      // The founding host terms are a public, indexable document, linked from the
-      // founding section on the landing page. It sits outside LEGAL_DOCS because it
-      // summarizes an offer rather than being a governing agreement.
-      url: `${SITE_URL}/founding-terms`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.3,
-    },
     {
       url: `${SITE_URL}/legal`,
       lastModified: legalIndexLastModified ? new Date(legalIndexLastModified) : new Date(),

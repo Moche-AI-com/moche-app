@@ -1,4 +1,5 @@
 import { LegalDocHeader } from '@/components/legal/LegalDocHeader';
+import { PLANS, FOUNDING_ACCOUNT_CAP, FOUNDING_DISCOUNT_MONTHS, FOUNDING_DISCOUNT_PERCENT } from '@/lib/constants';
 
 export default function TermsPage() {
   return (
@@ -65,6 +66,45 @@ export default function TermsPage() {
         Fees, renewal, cancellation, and refunds are governed by our{' '}
         <a href="/legal/refund">Refund &amp; Billing Policy</a>. Payments are processed by Stripe;
         we do not store your card details.
+      </p>
+
+      <h2 id="pricing-and-founding">6.1 Pricing, Free plan &amp; founding offer</h2>
+      <p>
+        The Free tier lets you build one draft property and preview up to 30 AI conversations
+        each month without a card. Publishing a guest portal requires an active paid plan.
+        Selecting a plan on the landing page or creating an account does not create a paid
+        subscription or charge you; you review and confirm your chosen plan in Billing.
+      </p>
+      <p>
+        Self-serve subscriptions charge a flat plan price, not a separate amount multiplied
+        by your property count. Starter is ${PLANS.starter.monthly}/month or
+        ${PLANS.starter.annual}/year for up to {PLANS.starter.propertyLimit} live property;
+        Pro is ${PLANS.pro.monthly}/month or ${PLANS.pro.annual}/year for up to{' '}
+        {PLANS.pro.propertyLimit} live properties; Portfolio is
+        ${PLANS.portfolio.monthly}/month or ${PLANS.portfolio.annual}/year for up to{' '}
+        {PLANS.portfolio.propertyLimit} live properties. Scale starts at
+        ${PLANS.enterprise.monthly}/month, with custom allowances and contract terms agreed
+        through sales. Current prices and included AI-conversation and outbound-SMS allowances
+        appear on the <a href="/#pricing">pricing section</a> and in Billing before checkout.
+      </p>
+      <p>
+        Paid subscriptions are charged in USD in advance on the monthly or annual cycle you
+        select and renew automatically until cancelled. Applicable taxes may be added at
+        checkout. No reservation percentage, per-property multiplier, or setup fee is added
+        to the self-serve subscription price. During the initial launch, usage overages are
+        tracked but not automatically charged. You can manage or cancel from Profile &rarr;
+        Billing; renewal and refund details are in the{' '}
+        <a href="/legal/refund">Refund &amp; Billing Policy</a>.
+      </p>
+      <p>
+        If the founding promotion is still available when an eligible account starts its
+        first paid subscription, {FOUNDING_DISCOUNT_PERCENT}% off applies automatically for
+        the first {FOUNDING_DISCOUNT_MONTHS} consecutive months of paid billing. The offer
+        is limited to the first {FOUNDING_ACCOUNT_CAP} eligible accounts that start a paid
+        plan; Free signup does not reserve a discounted place. No code is required. Your
+        checkout shows whether the discount applies and the amount due before payment.
+        Cancelling and subscribing again does not restart the discount period; after it
+        ends, the standard plan price applies.
       </p>
 
       <h2>7. Acceptable use</h2>
