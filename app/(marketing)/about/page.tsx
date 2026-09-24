@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, CtaBand, PageHero, ArticleFigure } from '../_parts';
-import productLanding from '@/public/premium/product-landing-desktop.png';
-import productStays from '@/public/premium/product-stays-desktop.png';
+import { DocHeader, Related, CtaBand, ArticleFigure } from '../_parts';
+import productBrain from '@/public/premium/product-brain-desktop.png';
+import productPortal from '@/public/premium/product-portal-desktop.png';
+import productUpdates from '@/public/premium/product-updates-desktop.png';
 import styles from '../marketing.module.css';
 
 export const metadata: Metadata = marketingMetadata({
-  title: 'About Moche-AI',
+  title: 'Our Story | Why Moche-AI Built a Better Guest Experience',
   description:
-    'Moche-AI is an independent, founder-led guest operations product for short-term rental hosts. Read why we built it and what we refuse to claim.',
+    'Why Moche-AI helps short-term rental hosts turn approved property knowledge into useful guest answers, with a clear path to a human when AI should not guess.',
   path: '/about',
 });
 
@@ -17,145 +18,94 @@ export default function AboutPage() {
   return (
     <>
       <DocHeader
-        eyebrow="Our story"
-        title="We built the thing we kept asking other hosts for"
-        lede="Moche-AI is an independent guest operations product for short-term rental hosts, built in Somerville, Massachusetts. This page explains where it came from, how we make decisions, and what we will not claim."
-        updated="September 2026"
-      />
-
-      <PageHero
-        src={productLanding}
-        alt="The Moche-AI landing page showing the product promise and hero arc"
-        caption="The front door of the product this page describes — what a host sees before they ever sign up."
-        priority
+        eyebrow="About Moche-AI"
+        title="Our story: better answers for every stay"
+        lede="We built Moche-AI to help short-term rental hosts make their property knowledge useful to guests, without giving up control of what the assistant says."
       />
 
       <div className={styles.body}>
-        <h2>The problem we started with</h2>
         <p>
-          Every short-term rental accumulates a body of knowledge that lives nowhere. The Wi-Fi
-          password is in a text message from 2023. The trick to the dishwasher is in the host&rsquo;s
-          head. Parking is explained in a paragraph pasted into the last eleven booking threads. The
-          guest who arrives at 11pm and cannot find the light switch does not have access to any of
-          it, so they message the host, and the host answers the same question they answered a week
-          ago.
+          A great guest experience depends on details: where to park, how to connect to Wi-Fi,
+          what to do when something stops working, and whom to contact when the answer is not in
+          the guide. For a host, those details are often scattered across documents, old messages,
+          and memory.
         </p>
         <p>
-          Hosts already carry a hard clock on that. Airbnb asks hosts to reply to reservation
-          requests, inquiries and guest messages{' '}
-          <a href="https://www.airbnb.com/help/article/2414" rel="nofollow noopener" target="_blank">
-            within 24 hours
-          </a>
-          , counts anything slower as a late response, and says response rate can affect where a
-          listing sits in search results. Superhost status requires replying to{' '}
-          <a href="https://www.airbnb.com/help/article/829" rel="nofollow noopener" target="_blank">
-            90% of new messages
-          </a>{' '}
-          on top of a 4.8 rating and a cancellation rate under 1%. The work is not optional, and it
-          does not scale with the number of properties.
+          Moche-AI was built to put that knowledge to work without asking hosts to surrender
+          control of what guests are told. We are an independent guest-operations product built in
+          Somerville, Massachusetts, for short-term rental hosts.
         </p>
 
+        <h2>The problem we set out to solve</h2>
+        <p>
+          Guests need useful answers at the moment a question arises, not only when someone is
+          available to reply. Hosts, meanwhile, should not have to rewrite the same instructions
+          for every stay. A generic chatbot is not enough: if it invents a check-in detail or an
+          appliance instruction, a fast answer becomes a worse guest experience. That is why we
+          start with the property&apos;s knowledge, not with the chat window.
+        </p>
+
+        <h2>Property knowledge comes first</h2>
+        <p>
+          Each property has a Property Brain for the details its host provides and approves:
+          check-in instructions, Wi-Fi, house rules, appliance notes, and the particulars that
+          make a stay run smoothly. The guest assistant draws on that property-specific
+          information and can cite the source behind an answer. If the approved material does not
+          support an answer, the assistant should say so and bring in the host rather than fill
+          the gap with a guess. <Link href="/how-it-works">See how Moche-AI works</Link>.
+        </p>
         <ArticleFigure
-          src={productStays}
-          alt="A guest conversation in the host inbox showing a guest question and the assistant's answer with a cited source"
-          caption="A guest asking a question mid-stay — the exact moment this product exists for."
+          src={productBrain}
+          alt="Moche-AI Property Brain showing host-managed property knowledge organized by topic"
+          caption="Hosts organize and approve the details guests can ask about before those details become guest-facing answers."
         />
 
-        <h2>What we decided to build instead of a chatbot</h2>
+        <h2>A guest experience that keeps people connected</h2>
         <p>
-          The obvious product is a bot bolted onto a messaging inbox. We did not build that, because
-          the failure mode of a bot is that it is confidently wrong in front of a paying guest, and a
-          single invented answer about a lockbox code costs more trust than a hundred correct ones
-          earn.
+          Guests access their stay&apos;s portal through a link or QR code, without installing an
+          app or connecting the host&apos;s booking platform. From there, they can find property
+          information, ask questions, contact the host, and use the guest-facing options available
+          for their stay. Moche-AI supports the host&apos;s work; it does not replace their judgment
+          or turn an urgent situation into an automated conversation.
         </p>
-        <p>
-          So the product is the knowledge base first and the chat second. Each property gets a
-          Property Brain: the manual, the quirks, the check-in instructions, the house rules, the
-          appliance notes, all in one structured place that the host owns and approves. Guest answers
-          are drawn from that and can cite which document they came from. When confidence is low, the
-          question escalates to the host instead of being guessed at.
-        </p>
-        <div className={styles.callout}>
-          <p>
-            <strong>The instruction the whole product is built around: inform, never invent.</strong>{' '}
-            If the answer is not in the material a host approved, the correct behaviour is to say so
-            and hand the question to a human.
-          </p>
-        </div>
-        <p>
-          It is also deliberately platform-agnostic. There is no Airbnb login to connect, no Vrbo
-          integration, and no property management system requirement. Guests reach the portal by a
-          link or QR code for their stay. That decision costs us some convenience features. It buys
-          hosts the guarantee that their property knowledge is not held inside somebody else&rsquo;s
-          API. <Link href="/how-it-works">How it works</Link> covers the mechanics in full.
-        </p>
+        <ArticleFigure
+          src={productPortal}
+          alt="Moche-AI guest portal with property information and routes to ask questions or contact the host"
+          caption="The guest portal puts property answers and a route to the host in one place."
+        />
 
-        <h2>How we operate</h2>
-        <ul>
-          <li>
-            <strong>Independent and founder-led.</strong> Moche-AI is a small independent team, not a
-            venture-scaled organisation with a sales floor. When you email support, the reply comes
-            from someone who works on the product.
-          </li>
-          <li>
-            <strong>Built in Somerville, MA.</strong> One place, one legal entity, published in our{' '}
-            <Link href="/legal">legal center</Link>.
-          </li>
-          <li>
-            <strong>Host approves, machine proposes.</strong> The assistant can suggest an update to a
-            property&rsquo;s knowledge base. It cannot publish one to guests. A human accepts it
-            first.
-          </li>
-          <li>
-            <strong>Your data leaves with you.</strong> Property Brain documents and the structured
-            profile export on request, and account deletion is a real two-step flow rather than a
-            support ticket. Both are documented in the{' '}
-            <Link href="/legal/support">support policy</Link>.
-          </li>
-        </ul>
-
-        <h2>Where we are right now</h2>
+        <h2>Hosts stay in control</h2>
         <p>
-          Moche-AI is in public beta. The official launch is January 1, 2027. Anyone can sign up
-          today and build one draft property without a card. Preview the guest portal and AI answers
-          free; an active paid plan is required to publish for guests. Starter, Pro and Portfolio
-          have flat monthly or annual prices and included property and usage limits, displayed{' '}
-          <Link href="/#pricing">on our pricing section</Link>. Scale has contracted terms.
+          An assistant may help identify a gap in a property&apos;s information, but a proposed
+          update does not become guest-facing knowledge until a host approves it. Hosts can review
+          what the system knows, correct outdated details, and decide when a question needs a
+          human response. The principle behind that approval step is simple: <strong>inform, never
+          invent.</strong>
+        </p>
+        <ArticleFigure
+          src={productUpdates}
+          alt="Moche-AI knowledge updates queue showing proposed changes awaiting host approval"
+          caption="Proposed knowledge updates wait for a host to review them; they do not publish themselves."
+        />
+
+        <h2>Clear about where we stand</h2>
+        <p>
+          Moche-AI is in public beta, with an official launch planned for January 1, 2027. You
+          can sign up and build one draft property without a card, then preview the guest portal
+          and AI answers. An active paid plan is required to publish a property for guests. Plan
+          prices and included limits are displayed in the <Link href="/#pricing">pricing
+          section</Link>. We will not claim customer counts or security certifications we cannot
+          substantiate, or suggest that an assistant is always right.
         </p>
         <p>
-          We are telling you this on the page that exists to earn your trust because the alternative
-          is worse: a product that implies scale it does not have is a product that will disappoint
-          you in month two.
+          Read our <Link href="/security">trust and safety information</Link> for the controls
+          we describe and the claims we do not make. Our <Link href="/legal">Legal Center</Link>
+          publishes the governing policies and their versions. If you need help, spot an incorrect
+          guest answer, or want to exercise a data right, <Link href="/support">reach
+          support</Link>. You should be able to reach a person and inspect our commitments without
+          needing a founder biography.
         </p>
-
-        <h2>What we will not claim</h2>
-        <p>A short list, kept here on purpose so it can be held against us:</p>
-        <ul>
-          <li>
-            No customer counts, review counts, or &ldquo;trusted by thousands of hosts&rdquo; line
-            until there is a number we can show you.
-          </li>
-          <li>
-            No claim that the assistant is always right. It answers from your material, cites it, and
-            escalates when it is unsure. That is the honest ceiling.
-          </li>
-          <li>
-            No security certification we do not hold. Our{' '}
-            <Link href="/security">trust and safety page</Link> states the controls that are actually
-            in place and names the ones that are not.
-          </li>
-          <li>
-            No pretending a guest assistant replaces you in an emergency. Safety and urgent
-            maintenance route to a human every time.
-          </li>
-        </ul>
-
-        <h2>Talk to us</h2>
-        <p>
-          If something on this page reads as marketing rather than fact, say so and we will either
-          substantiate it or remove it. <Link href="/support">Support</Link> has the ways to reach us,
-          including for security reports and data rights requests.
-        </p>
+        <p>Last reviewed September 2026.</p>
 
         <CtaBand text="Build and preview one draft property free, no card. Choose a paid plan to publish." />
         <Related current="/about" />
