@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related } from '../_parts';
 import guestPortal from '@/public/premium/product-guest-experience-desktop.png';
-import escalations from '@/public/premium/product-escalations-desktop.png';
+import guestLocalRecs from '@/public/premium/Guest Portal_Local_Recs.png';
 import styles from '../marketing.module.css';
 import pageStyles from './support.module.css';
 
@@ -42,18 +42,19 @@ export default function SupportPage() {
           or one-time code. <a href={emailFor('Account access issue')}>Email about account access</a>.
         </p>
 
-        <h2>An incorrect guest answer</h2>
+        <h2>An incorrect guest answer or recommendation</h2>
         <p>
-          Tell us the property, what the guest asked, the answer shown, and what the correct answer
-          should be. Check whether the property instructions are current, but do not assume stale
-          content is the only possible cause. If the guest needs immediate help, contact them directly
-          rather than waiting for an investigation. <a href={emailFor('Incorrect guest answer')}>Report an incorrect answer</a>.
+          Tell us the property, what the guest asked or viewed, the answer or recommendation shown,
+          and what the correct information should be. Check whether the property instructions are
+          current, but do not assume stale content is the only possible cause. If the guest needs
+          immediate help, contact them directly rather than waiting for an investigation.
+          <a href={emailFor('Incorrect guest answer')}> Report an incorrect answer</a>.
         </p>
         <figure className={pageStyles.figure}>
-          <a href={escalations.src} target="_blank" rel="noopener noreferrer" aria-label="Open illustrative host escalations inbox at full size">
-            <Image src={escalations} alt="Illustrative Moche-AI host escalations inbox with guest questions needing review" sizes="(max-width: 640px) 100vw, 800px" className={pageStyles.image} />
+          <a href={guestLocalRecs.src} target="_blank" rel="noopener noreferrer" aria-label="Open illustrative guest local recommendations screen at full size">
+            <Image src={guestLocalRecs} alt="Illustrative Moche-AI guest local-recommendations screen" sizes="(max-width: 640px) 100vw, 800px" className={pageStyles.image} />
           </a>
-          <figcaption>Illustrative host inbox: a question the assistant cannot confidently answer needs human attention.</figcaption>
+          <figcaption>Illustrative guest view: a property-specific recommendation is the kind of detail a host can report and correct.</figcaption>
         </figure>
 
         <h2>A guest portal problem</h2>
