@@ -1,187 +1,111 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, PageHero, ArticleFigure } from '../_parts';
-import productGuestExperience from '@/public/premium/product-guest-experience-desktop.png';
-import productEscalations from '@/public/premium/product-escalations-desktop.png';
+import { DocHeader, Related } from '../_parts';
+import guestPortal from '@/public/premium/product-guest-experience-desktop.png';
+import guestLocalRecs from '@/public/premium/Guest Portal_Local_Recs.png';
 import styles from '../marketing.module.css';
+import pageStyles from './support.module.css';
 
 export const metadata: Metadata = marketingMetadata({
-  title: 'Support',
-  description:
-    'Get help with Moche-AI: fix a login problem, report an incorrect guest answer, resolve a failed payment, export or delete your data, or report a security issue.',
+  title: 'Support for Moche-AI Hosts',
+  description: 'Get help with account access, guest portal issues, incorrect answers, billing, data rights, and private security reporting. Learn what to include without sharing guest secrets.',
   path: '/support',
 });
 
-// Public help entry point. This is not a knowledge base; it is a router. The
-// repo already carries the real playbooks in docs/support/*.md and the binding
-// response targets and data-rights process in /legal/support, so duplicating
-// either here would create a second version that drifts out of date.
-//
-// Each row below maps to an existing playbook: login-issue, incorrect-ai-answer,
-// failed-payment, data-deletion-request, emergency-safety, security-incident.
-//
-// Response targets are deliberately NOT restated as numbers on this page. They
-// are published, versioned, and contractually meaningful in /legal/support, and
-// a marketing page quoting a stale SLA is a promise the company did not make.
-
-const SUPPORT_EMAIL = 'hostspark.org@gmail.com';
-
-function mailto(subject: string, body: string) {
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
-
-const TOPICS = [
-  {
-    title: 'I cannot sign in',
-    detail:
-      'Password reset, a magic link that expired, or an email address you no longer control. Include the email on the account and we can verify ownership and restore access.',
-    action: 'Email about account access',
-    href: mailto(
-      'Account access issue',
-      'Account email:\n\nWhat happens when I try to sign in:\n\nBrowser and device:\n\n',
-    ),
-  },
-  {
-    title: 'The assistant gave a guest a wrong answer',
-    detail:
-      'Send the property, the question, and what the guest was told. Answers are drawn from your own approved documents, so a wrong answer almost always traces to a stale or missing document in the Property Brain, which is fixable at the source.',
-    action: 'Report an incorrect answer',
-    href: mailto(
-      'Incorrect guest answer',
-      'Property:\n\nWhat the guest asked:\n\nWhat the assistant said:\n\nWhat the correct answer is:\n\n',
-    ),
-  },
-  {
-    title: 'A payment failed or I was billed incorrectly',
-    detail:
-      'Billing runs through Stripe and we never store card details. Card data cannot be updated by us on your behalf, so include the invoice reference and we will point you at the right place to retry it.',
-    action: 'Email about billing',
-    href: mailto('Billing issue', 'Account email:\n\nInvoice reference:\n\nWhat happened:\n\n'),
-  },
-  {
-    title: 'I want to export or delete my data',
-    detail:
-      'Both are self-serve from Dashboard, then Profile. Export downloads a JSON copy of your account, properties, and content. Deletion is a two-step request and confirm flow. Records that tax and compliance law requires us to keep are listed in the support policy.',
-    action: 'Read the data rights process',
-    href: '/legal/support',
-    internal: true,
-  },
-  {
-    title: 'A guest has an emergency or urgent safety issue',
-    detail:
-      'Moche-AI is not an emergency service and never handles a safety situation on its own. Contact local emergency services first. Safety and urgent maintenance topics escalate to the host rather than being answered by the assistant.',
-    action: 'Read the AI use policy',
-    href: '/legal/ai-policy',
-    internal: true,
-  },
-  {
-    title: 'I found a security vulnerability',
-    detail:
-      'Report it directly and privately. Include the affected URL or endpoint, the steps to reproduce, and what you were able to access. Please do not test against another host\u2019s property or a live guest stay.',
-    action: 'Report a security issue',
-    href: mailto(
-      'Security report',
-      'Affected URL or endpoint:\n\nSteps to reproduce:\n\nWhat I was able to access:\n\nDate and time (with timezone):\n\n',
-    ),
-  },
-] as const;
+const emailFor = (subject: string) =>
+  `mailto:hostspark.org@gmail.com?subject=${encodeURIComponent(subject)}`;
 
 export default function SupportPage() {
   return (
     <>
       <DocHeader
-        eyebrow="Support"
-        title="Get help with Moche-AI"
-        lede="Pick the closest topic below. Each one goes to the person who can actually resolve it, with the details we need to skip the first round of back and forth."
-        updated="August 2026"
+        eyebrow="Help for hosts"
+        title="When a stay or account needs a person"
+        lede="Choose the closest issue, send the details that help us investigate, and keep passwords, entry codes, and guest personal information out of the report."
       />
 
-      <PageHero
-        src={productGuestExperience}
-        alt="The guest-side view of Moche-AI showing the portal a guest sees during their stay"
-        caption="The guest's side of the product — what your guest is looking at when they hit the problem you are writing in about."
-        priority
-      />
-
-      <div className={styles.body}>
-        <div className={styles.callout}>
-          <p>
-            Support runs by email while we are pre-launch. Published response targets, escalation
-            paths, and the full data rights process live in the{' '}
-            <Link href="/legal/support">support policy</Link>, which is versioned and dated so you can
-            see exactly what has been committed to.
-          </p>
-        </div>
-
-        <h2>Common topics</h2>
-        {/* A grid, not six stacked sections: a host arriving here already knows which
-            of these is their problem, and reading five that are not theirs to find it
-            is the part that made this page feel like work. */}
-        <ul className={`${styles.topics} ${styles.wide}`}>
-          {TOPICS.map((topic) => (
-            <li key={topic.title}>
-              <h3>{topic.title}</h3>
-              <p>{topic.detail}</p>
-              <p className={styles.topicAction}>
-                {'internal' in topic && topic.internal ? (
-                  <Link href={topic.href}>{topic.action}</Link>
-                ) : (
-                  <a href={topic.href}>{topic.action}</a>
-                )}
-              </p>
-            </li>
-          ))}
-        </ul>
-
-        <ArticleFigure
-          src={productEscalations}
-          alt="The escalations inbox showing guest questions the assistant could not answer, waiting for the host"
-          caption="When the assistant cannot answer, the question lands here — the escalations inbox, waiting on you."
-        />
-
-        <h2>What to include when you write in</h2>
-        <p>
-          The single biggest cause of a slow resolution is a report we cannot reproduce. If you can,
-          send:
-        </p>
-        <ul>
-          <li>The email address on the account.</li>
-          <li>The property name, and the stay or guest link if the issue is guest-facing.</li>
-          <li>What you expected to happen and what happened instead.</li>
-          <li>The date, time, and timezone.</li>
-          <li>Browser and device, for anything visual or interactive.</li>
-        </ul>
-        <p>
-          Please do not send passwords, access codes, or a guest&rsquo;s personal details. We do not
-          need them, and we keep that class of data out of logs and telemetry by design.
+      <article className={`${styles.body} ${pageStyles.story}`}>
+        <p className={pageStyles.lead}>
+          Start with the issue you can describe. Support can help investigate product and account
+          problems; a host handles property decisions, and local emergency services handle emergencies.
+          Hosts can reach support from the dashboard or by email. The <Link href="/legal/support">support policy</Link>
+          has current response targets and data-rights procedures; targets are goals, not a guaranteed
+          resolution time.
         </p>
 
-        <h2>Questions that are already answered</h2>
+        <h2>Account access</h2>
         <p>
-          Before writing in, these cover most of what hosts ask first:
+          If a sign-in link expired or you cannot access your account, tell us the account email,
+          what you see when you try to sign in, and your browser and device. Never send a password
+          or one-time code. <a href={emailFor('Account access issue')}>Email about account access</a>.
         </p>
-        <ul>
-          <li>
-            <Link href="/how-it-works">How it works</Link>, including where answers come from and when
-            the assistant escalates instead of answering.
-          </li>
-          <li>
-            <Link href="/guest-experience">What your guests see</Link>, if you are deciding whether to
-            put the link in front of a booking.
-          </li>
-          <li>
-            <Link href="/security">Trust and safety</Link>, for data handling, AI routing, and what we
-            do and do not certify.
-          </li>
-          <li>
-            The <Link href="/#faq">FAQ on the homepage</Link>, for setup time, cancellation, and
-            running Moche-AI alongside an existing messaging tool.
-          </li>
-        </ul>
 
-        <Related current="/support" />
-      </div>
+        <h2>An incorrect guest answer or recommendation</h2>
+        <p>
+          Tell us the property, what the guest asked or viewed, the answer or recommendation shown,
+          and what the correct information should be. Check whether the property instructions are
+          current, but do not assume stale content is the only possible cause. If the guest needs
+          immediate help, contact them directly rather than waiting for an investigation.
+          <a href={emailFor('Incorrect guest answer')}> Report an incorrect answer</a>.
+        </p>
+        <figure className={pageStyles.figure}>
+          <a href={guestLocalRecs.src} target="_blank" rel="noopener noreferrer" aria-label="Open illustrative guest local recommendations screen at full size">
+            <Image src={guestLocalRecs} alt="Illustrative Moche-AI guest local-recommendations screen" sizes="(max-width: 640px) 100vw, 800px" className={pageStyles.image} />
+          </a>
+          <figcaption>Illustrative guest view: a property-specific recommendation is the kind of detail a host can report and correct.</figcaption>
+        </figure>
+
+        <h2>A guest portal problem</h2>
+        <p>
+          If the stay link does not open, a guest cannot find a topic, or an action fails, tell us
+          the property name, the action attempted, the approximate time and timezone, and the browser
+          and device. A redacted screenshot may help. Do not email a live guest link, access code,
+          or guest contact details. <a href={emailFor('Guest portal issue')}>Email about the guest portal</a>.
+        </p>
+        <figure className={pageStyles.figure}>
+          <a href={guestPortal.src} target="_blank" rel="noopener noreferrer" aria-label="Open illustrative guest portal at full size">
+            <Image src={guestPortal} alt="Illustrative Moche-AI guest portal in a browser" sizes="(max-width: 640px) 100vw, 800px" className={pageStyles.image} />
+          </a>
+          <figcaption>Illustrative guest view: name the step that fails so support can reproduce the issue.</figcaption>
+        </figure>
+
+        <h2>Billing and data rights</h2>
+        <p>
+          For a failed payment or unexpected invoice, send your account email, invoice reference,
+          and what happened. Stripe handles payment cards; do not send a card number or security code.
+          <a href={emailFor('Billing issue')}> Email about billing</a>.
+        </p>
+        <p>
+          Hosts can export or request deletion from Dashboard, then Profile. The
+          <Link href="/legal/support"> data-rights process</Link> also explains how guests or people
+          without dashboard access can make a request and how legally required records are handled.
+        </p>
+
+        <h2>Safety and security reports</h2>
+        <p>
+          For a guest emergency, contact local emergency services first and the host directly;
+          this support inbox and the AI assistant are not emergency response channels. Read the
+          <Link href="/legal/ai-policy"> AI use policy</Link> for the assistant&apos;s limits.
+        </p>
+        <p>
+          Report a suspected vulnerability privately with the affected area, reproduction steps,
+          and date and time. Do not test against another host&apos;s property or a live guest stay.
+          <a href={emailFor('Security report')}> Report a security issue</a>.
+        </p>
+
+        <h2>Before you write in</h2>
+        <p>
+          Include what you expected, what happened instead, when it happened, and the browser or
+          device if relevant. Use a property name rather than a guest&apos;s personal details.
+          For product walkthroughs, see <Link href="/how-it-works">how it works</Link>,
+          <Link href="/guest-experience"> the guest experience</Link>, and
+          <Link href="/security"> trust and safety</Link>.
+        </p>
+        <p className={pageStyles.reviewed}>Last reviewed September 2026.</p>
+        <div className={pageStyles.endMatter}><Related current="/support" /></div>
+      </article>
     </>
   );
 }
