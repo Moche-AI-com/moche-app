@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { PLANS, type BillingInterval, type PlanId } from '@/lib/constants';
+import { PLANS, FOUNDING_ACCOUNT_CAP, FOUNDING_DISCOUNT_PERCENT, FOUNDING_DISCOUNT_MONTHS, type BillingInterval, type PlanId } from '@/lib/constants';
 import s from './Pricing.module.css';
 
 const PAID: PlanId[] = ['starter', 'pro', 'portfolio'];
@@ -94,7 +94,7 @@ export function Pricing() {
         <div className={s.notes}>
           <p>Prices in USD, before any applicable tax. No reservation percentage or per-property multiplier at checkout.</p>
           <p>At launch, usage overages are tracked but not automatically charged. Confirm a paid plan after creating your account; signing up alone does not start a subscription.</p>
-          <p>Founding hosts: 50% off the first 12 months of billing after launch, locked at signup for the first 25 accounts.</p>
+          <p>If available at paid checkout, eligible founding hosts receive {FOUNDING_DISCOUNT_PERCENT}% off their first {FOUNDING_DISCOUNT_MONTHS} months of billing. Limited to the first {FOUNDING_ACCOUNT_CAP} eligible paid accounts; free signup does not reserve a discount. <Link href="/founding-terms">Terms</Link>.</p>
         </div>
       </div>
     </section>
