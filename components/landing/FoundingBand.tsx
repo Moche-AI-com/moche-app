@@ -10,42 +10,17 @@ import {
   FOUNDING_DISCOUNT_PERCENT,
 } from '@/lib/constants';
 
-// This section previously offered a card-required 30-day trial next to a mailto
-// "apply as a founding host" link. Three problems, all now fixed:
-//
-//   1. It asked for a card directly below a Pricing section promising no card is
-//      charged before launch. Whichever statement a visitor believed, one of them
-//      cost us their trust.
-//   2. The mailto was the only route into the programme and captured nothing. A
-//      visitor who clicked it left the site and landed in a drafts folder.
-//   3. A 30-day trial is meaningless next to a free plan with no time limit.
-//
-// The programme is now the signup itself: no application, no email, no card. The
-// thing being offered is a rate that survives launch, which is worth something
-// precisely because it is redeemed later. See docs/pricing-model-2027.md.
 const PERKS = [
-  `${FOUNDING_DISCOUNT_PERCENT}% off your first ${FOUNDING_DISCOUNT_MONTHS} months of billing, locked in when you sign up`,
-  'A free plan you can publish on from day one — one property, live guest portal, no card on file',
+  `If available at paid checkout, ${FOUNDING_DISCOUNT_PERCENT}% off your first ${FOUNDING_DISCOUNT_MONTHS} months of billing`,
+  'Build one draft property and preview the guest portal free — no card required',
   'Early access to new features before general release',
   'A direct line to the founder, not a ticket queue',
 ] as const;
 
-// Stating the three steps is not decoration. The old section asked for a signup
-// without saying what happened after it, and the honest answer (you build today,
-// publish whenever you are ready) is more persuasive than the ask was.
 const STEPS = [
-  {
-    title: 'Create your account',
-    body: 'Email and a password. Nothing else, and no card.',
-  },
-  {
-    title: 'Add your properties and build the Brain',
-    body: 'Add each property once, then preview the guest portal exactly as a guest will see it.',
-  },
-  {
-    title: 'Go live whenever you are ready',
-    body: 'Publish your guest portal today — links and QR codes work immediately. Your founding rate is locked for your first paid plan.',
-  },
+  { title: 'Create your account', body: 'Email and a password. No card required to start building.' },
+  { title: 'Build your Property Brain', body: 'Add a property and preview what guests will see.' },
+  { title: 'Choose a plan when ready', body: 'Review your price and any founding discount at checkout, then publish for guests.' },
 ] as const;
 
 export function FoundingBand() {
@@ -56,12 +31,12 @@ export function FoundingBand() {
           <div className={styles.foundingCopy}>
             <span className={styles.eyebrow}>Founding Host Program</span>
             <h2 id="founding-heading" className={styles.foundingTitle}>
-              Sign up now, pay half for your first year
+              Build free. Save on your first paid year if the founding offer is open.
             </h2>
             <p className="muted">
-              Every account created before our official launch on January 1, 2027 is a founding
-              account. There is no application and no waiting list. Sign up free, publish today,
-              and the discount applies to the first paid plan you ever choose.
+              Moche-AI is in public beta ahead of our January 1, 2027 launch.
+              Create an account and preview your guest experience free. A paid plan is
+              required to publish; eligible founding discounts are confirmed at checkout.
             </p>
             <ul className={styles.foundingList}>
               {PERKS.map((perk) => (
@@ -71,13 +46,10 @@ export function FoundingBand() {
                 </li>
               ))}
             </ul>
-
             <ol className={styles.foundingSteps}>
               {STEPS.map((step, index) => (
                 <li key={step.title} className={styles.foundingStep}>
-                  <span className={styles.foundingStepNum} aria-hidden>
-                    {index + 1}
-                  </span>
+                  <span className={styles.foundingStepNum} aria-hidden>{index + 1}</span>
                   <span className={styles.foundingStepBody}>
                     <strong className={styles.foundingStepTitle}>{step.title}</strong>
                     {step.body}
@@ -85,23 +57,16 @@ export function FoundingBand() {
                 </li>
               ))}
             </ol>
-
             <div className={styles.foundingActions}>
-              <Link href="/signup" className="btn btn-primary btn-lg">
-                Become a founding host
-              </Link>
+              <Link href="/signup" className="btn btn-primary btn-lg">Start building free</Link>
             </div>
             <p className={`muted ${styles.foundingTrial}`}>
-              The founding rate is limited to the first {FOUNDING_ACCOUNT_CAP} accounts. After
-              your {FOUNDING_DISCOUNT_MONTHS} discounted months you move to standard pricing,
-              and you can cancel at any point before or after launch.{' '}
-              <Link href="/founding-terms">Founding host terms</Link>.
+              The founding discount is limited to the first {FOUNDING_ACCOUNT_CAP} eligible
+              accounts to start a paid plan. After {FOUNDING_DISCOUNT_MONTHS} discounted
+              months, standard pricing applies. See <Link href="/founding-terms">founding host terms</Link>.
             </p>
           </div>
           <div className={styles.foundingMedia}>
-            {/* A place, not a UI surface: this panel sells the programme and the
-                promise, so it keeps the photography rather than a product
-                capture. The dashboard shot lives in the articles instead. */}
             <Image
               src={kitchen}
               alt="A bright, modern rental kitchen prepared for arriving guests"
