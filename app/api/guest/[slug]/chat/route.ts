@@ -19,6 +19,8 @@ import { behavioralEscalation } from '@/lib/guest/behavioral-triggers';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const UNAVAILABLE_ANSWER = 'I cannot confirm an answer right now. Please contact your host directly. If this is an emergency, contact local emergency services immediately.';
+
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
   if (!session) return NextResponse.json({ error: 'Your session has expired. Please verify again.' }, { status: 401 });
@@ -100,22 +102,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     log.warn('guest_ai_unavailable', { propertyId: session.propertyId, code: 'provider_or_retrieval' });
     const emergency = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|intruder|burglar|bleeding|unconscious|heart attack|can'?t breathe|emergency|ambulance|assault)\b/i.test(question);
     answer = {
-      text: 'I cannot confirm an answer right now, so I have passed your question to your host. If this is an emergency, contact local emergency services immediately.',
-      confidence: 0, intent: fallbackClassifyIntent(question), model: 'error', sources: [],
-      shouldEscalate: true, isEmergency: emergency, suggestions: [], places: [],
+      text: UNAVAILABLE_ANSWER, confidence: 0, intent: fallbackClassifyIntent(question),
+      model: 'error', sources: [], shouldEscalate: true, isEmergency: emergency,
+      suggestions: [], places: [],
       unknownNote: 'AI retrieval or its provider was unavailable; please answer the guest directly.',
     };
   }
   const latencyMs = Date.now() - started;
-  await admin.from('messages').insert({
-    conversation_id: conversationId, property_id: session.propertyId, role: 'assistant',
-    content: answer.text, intent: answer.intent, confidence: answer.confidence,
-    sources: answer.sources as never, model: answer.model, latency_ms: latencyMs,
-  } as never);
   if (guestLanguage) {
     void admin.from('stays').update({ guest_language: guestLanguage.code } as never).eq('id', session.stayId);
   }
 
+  let escalationConfirmed = false;
   if (answer.shouldEscalate || behavioral.escalate) {
     const hostLanguage = settings?.host_language ?? DEFAULT_HOST_LANGUAGE;
     const asked = answer.unknownNote ? `${question}\n\n(Concierge could not answer: ${answer.unknownNote})` : question;
@@ -123,28 +121,44 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       : behavioral.trigger === 'repeat_question' ? 'Guest has asked this question more than once.' : null;
     const askedWithTrigger = triggerNote ? `${asked}\n\n(${triggerNote})` : asked;
     const translated = await translateForHost(askedWithTrigger, guestLanguage?.code ?? null, hostLanguage);
-    const { data: esc } = await admin.from('escalations').insert({
+    const { data: esc, error: escError } = await admin.from('escalations').insert({
       property_id: session.propertyId, stay_id: session.stayId, conversation_id: conversationId,
       question: translated.text, status: 'open', guest_session_id: session.sessionId,
       guest_identity_id: guestIdentityId,
     } as never).select('id').single();
     const escId = (esc as { id: string } | null)?.id;
-    const { data: prop } = await admin.from('properties').select('host_account_id')
-      .eq('id', session.propertyId).maybeSingle();
-    if (prop) {
-      const answerUrl = escId ? `${publicEnv.appUrl}/answer/${signEscalationLinkToken(escId)}` : undefined;
-      await notify(admin, {
-        hostAccountId: (prop as { host_account_id: string }).host_account_id, kind: 'escalation',
-        title: 'A guest question needs your input', body: notificationBody(translated, question),
-        propertyId: session.propertyId, link: escId ? `/dashboard/escalations/${escId}` : '/dashboard/escalations',
-        actionUrl: answerUrl,
-      });
+    if (escError || !escId) {
+      log.warn('guest_escalation_persist_failed', { propertyId: session.propertyId, code: 'write_failed' });
+      answer = { ...answer, text: UNAVAILABLE_ANSWER, confidence: 0, model: 'error', suggestions: [], places: [] };
+    } else {
+      escalationConfirmed = true;
+      const { data: prop } = await admin.from('properties').select('host_account_id')
+        .eq('id', session.propertyId).maybeSingle();
+      if (prop) {
+        const answerUrl = `${publicEnv.appUrl}/answer/${signEscalationLinkToken(escId)}`;
+        try {
+          await notify(admin, {
+            hostAccountId: (prop as { host_account_id: string }).host_account_id, kind: 'escalation',
+            title: 'A guest question needs your input', body: notificationBody(translated, question),
+            propertyId: session.propertyId, link: `/dashboard/escalations/${escId}`, actionUrl: answerUrl,
+          });
+        } catch {
+          log.warn('guest_escalation_notify_failed', { propertyId: session.propertyId, code: 'delivery_unavailable' });
+        }
+      }
+      log.info('guest_escalation_created', { escalationId: escId, confidence: answer.confidence,
+        trigger: behavioral.trigger ?? 'low_confidence' });
+      try { await capture('escalation_created', session.propertyId, { property_id: session.propertyId }); } catch {
+        log.warn('guest_escalation_analytics_failed', { propertyId: session.propertyId });
+      }
     }
-    log.info('guest_escalation_created', { escalationId: escId, confidence: answer.confidence,
-      trigger: behavioral.trigger ?? 'low_confidence' });
-    await capture('escalation_created', session.propertyId, { property_id: session.propertyId });
   }
 
+  await admin.from('messages').insert({
+    conversation_id: conversationId, property_id: session.propertyId, role: 'assistant',
+    content: answer.text, intent: answer.intent, confidence: answer.confidence,
+    sources: answer.sources as never, model: answer.model, latency_ms: latencyMs,
+  } as never);
   const maintenance = await maybeCreateServiceRequest(admin, {
     propertyId: session.propertyId, stayId: session.stayId, conversationId, question, answer,
   });
@@ -156,7 +170,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const finalAnswer = maintenance.guestLine ? `${answer.text}\n\n${maintenance.guestLine}` : answer.text;
   return NextResponse.json({
     ok: true, answer: finalAnswer, confidence: Number(answer.confidence.toFixed(2)),
-    escalated: answer.shouldEscalate || behavioral.escalate, isEmergency: answer.isEmergency,
+    escalated: escalationConfirmed, isEmergency: answer.isEmergency,
     serviceRequestCreated: maintenance.created, suggestions: answer.suggestions, places: answer.places,
+    unavailable: answer.model === 'error',
   });
 }
