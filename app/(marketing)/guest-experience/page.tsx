@@ -33,7 +33,7 @@ export default function GuestExperiencePage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <DocHeader
-        eyebrow="Guest view"
+        eyebrow="Guest experience"
         title="What a guest sees after opening your stay link"
         lede="A useful guest portal should make the everyday details easy to find, and make it just as easy to reach a person when a question needs one. Here is the journey from the guest side."
       />
