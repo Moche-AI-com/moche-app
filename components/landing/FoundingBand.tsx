@@ -63,7 +63,7 @@ export function FoundingBand() {
             <p className={`muted ${styles.foundingTrial}`}>
               The founding discount is limited to the first {FOUNDING_ACCOUNT_CAP} eligible
               accounts to start a paid plan. After {FOUNDING_DISCOUNT_MONTHS} discounted
-              months, standard pricing applies. See <Link href="/founding-terms">founding host terms</Link>.
+              months, standard pricing applies. See <Link href="/legal/terms#pricing-and-founding">founding host terms</Link>.
             </p>
           </div>
           <div className={styles.foundingMedia}>

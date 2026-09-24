@@ -1,12 +1,5 @@
-// Single source of truth for legal document metadata (slug, title, version,
-// last-updated date). The legal layout reads from here so every page's version
-// string and "Last Updated" date live in ONE place, and the re-acceptance gate
-// compares a user's accepted version against CURRENT_VERSIONS below.
-//
-// When publishing a new version: bump `version` + `lastUpdated` here, then insert
-// the matching row into the `legal_documents` table (see supabase-migrations-LEGAL.sql)
-// so the DB-backed re-acceptance flow picks it up.
-
+// Single source of truth for legal document metadata. Bumping a clickwrap version
+// requires existing hosts to re-accept it; publish legal changes deliberately.
 export type LegalSlug =
   | 'terms'
   | 'privacy'
@@ -24,24 +17,20 @@ export type LegalSlug =
 export interface LegalDocMeta {
   slug: LegalSlug;
   title: string;
-  /** Short label for the TOC sidebar. */
   navLabel: string;
   version: string;
-  /** ISO date (YYYY-MM-DD) shown as "Last Updated". */
   lastUpdated: string;
-  /** One-line summary used in the index page and <meta description>. */
   summary: string;
 }
 
-// Order here drives the TOC sidebar and the legal-center index ordering.
 export const LEGAL_DOCS: LegalDocMeta[] = [
   {
     slug: 'terms',
     title: 'Terms of Service',
     navLabel: 'Terms of Service',
-    version: 'v1.2.0',
-    lastUpdated: '2026-08-04',
-    summary: 'The agreement governing host use of Moche-AI, including AI-output disclaimers, SMS/WhatsApp messaging terms, and liability limits.',
+    version: 'v1.3.0',
+    lastUpdated: '2026-09-24',
+    summary: 'The agreement governing host use, including AI limits, subscriptions, founding discount eligibility, SMS messaging, and liability.',
   },
   {
     slug: 'privacy',
@@ -146,8 +135,6 @@ export function getLegalDoc(slug: LegalSlug): LegalDocMeta {
   return BY_SLUG[slug];
 }
 
-// Current published version per slug — the re-acceptance gate compares a user's
-// last accepted version to this. Kept in sync with LEGAL_DOCS above.
 export const CURRENT_VERSIONS: Record<LegalSlug, string> = LEGAL_DOCS.reduce(
   (acc, d) => {
     acc[d.slug] = d.version;
@@ -156,8 +143,4 @@ export const CURRENT_VERSIONS: Record<LegalSlug, string> = LEGAL_DOCS.reduce(
   {} as Record<LegalSlug, string>,
 );
 
-// The documents a host must (re)accept via clickwrap. Guests get the in-portal
-// AI disclosure instead; these are the host-facing agreements. The Acceptable Use
-// Policy is included so we have explicit, auditable consent to the usage rules we
-// enforce (incl. the flowed-down Llama 3 AUP) before an account can be created.
 export const CLICKWRAP_SLUGS: LegalSlug[] = ['terms', 'privacy', 'acceptable-use'];
