@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ANNUAL_MULTIPLIER, type BillingInterval, type PlanId } from '@/lib/constants';
+import { useBillingIntent } from './BillingIntentProvider';
 
 const MONTHS_PER_YEAR = 12;
-/** Annual bills ten months for twelve, so this is the "save 2 months" figure. */
 const FREE_MONTHS_ON_ANNUAL = MONTHS_PER_YEAR - ANNUAL_MULTIPLIER;
 
 type Props =
@@ -14,21 +14,20 @@ type Props =
       planId: PlanId;
       isCurrent: boolean;
       configured: boolean;
-      /** Monthly total for the account's current billable property count. */
       monthlyTotal: number;
     }
   | { mode: 'portal'; configured: boolean }
   | { mode: 'refund'; configured: boolean };
 
 export function BillingActions(props: Props) {
+  const intent = useBillingIntent();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
-  // Annual was previously unreachable: this component posted a hardcoded
-  // `interval: 'monthly'` while the billing copy advertised two months free on
-  // annual. The checkout route already accepted both, so the offer existed
-  // everywhere except the one screen where a host could buy it.
-  const [interval, setInterval] = useState<BillingInterval>('monthly');
+  const selectedAtSignup = props.mode === 'checkout' && intent?.planId === props.planId;
+  const [interval, setInterval] = useState<BillingInterval>(
+    selectedAtSignup ? intent.interval : 'monthly',
+  );
 
   async function go(endpoint: string, body: Record<string, unknown>) {
     setLoading(true);
@@ -80,22 +79,25 @@ export function BillingActions(props: Props) {
 
   return (
     <div>
+      {selectedAtSignup ? (
+        <p className="alert alert-info" style={{ fontSize: '.78rem', margin: '0 0 .7rem', padding: '.5rem .7rem' }}>
+          Your selection from signup. Review the current price and accept the terms before checkout.
+        </p>
+      ) : null}
       <fieldset
         style={{ border: 0, padding: 0, margin: '0 0 .7rem', display: 'flex', flexDirection: 'column', gap: '.35rem' }}
       >
         <legend className="faint" style={{ fontSize: '.72rem', padding: 0, marginBottom: '.2rem' }}>
           Billing period
         </legend>
-        {(
-          [
-            { value: 'monthly' as const, label: `$${monthlyTotal.toLocaleString()} per month`, note: null },
-            {
-              value: 'annual' as const,
-              label: `$${annualTotal.toLocaleString()} per year`,
-              note: `${FREE_MONTHS_ON_ANNUAL} months free, $${annualSaving.toLocaleString()} less than monthly`,
-            },
-          ]
-        ).map((option) => (
+        {([
+          { value: 'monthly' as const, label: `$${monthlyTotal.toLocaleString()} per month`, note: null },
+          {
+            value: 'annual' as const,
+            label: `$${annualTotal.toLocaleString()} per year`,
+            note: `${FREE_MONTHS_ON_ANNUAL} months free, $${annualSaving.toLocaleString()} less than monthly`,
+          },
+        ]).map((option) => (
           <label
             key={option.value}
             style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', fontSize: '.8rem' }}
@@ -121,7 +123,6 @@ export function BillingActions(props: Props) {
           </label>
         ))}
       </fieldset>
-      {/* Clickwrap: unchecked by default, required before a paid subscription starts. */}
       <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', fontSize: '.75rem', marginBottom: '.6rem' }} className="muted">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: '.15rem' }} data-testid="checkout-accept-terms" />
         <span>
@@ -164,8 +165,6 @@ function fmtAmount(amount: number | null, currency: string | null): string {
   }
 }
 
-// Self-serve refund per /legal/refund. Checks eligibility on open, then a two-tap
-// confirm before issuing. Ineligible cases show the policy reason and route to support.
 function RefundAction({ configured }: { configured: boolean }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
