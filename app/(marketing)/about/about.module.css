@@ -5,7 +5,7 @@
 
 .story > p,
 .story > h2 {
-  max-width: 68ch;
+  max-width: 720px;
   margin-left: auto;
   margin-right: auto;
 }
