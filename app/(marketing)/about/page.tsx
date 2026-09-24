@@ -13,17 +13,6 @@ export const metadata: Metadata = marketingMetadata({
   path: '/about',
 });
 
-// The brand article. Written to be the page a cautious host reads before
-// trusting an unfamiliar product with their property data, so it is deliberately
-// specific about what the company is and is not: in public beta, independent,
-// small, and unwilling to publish numbers it cannot show.
-//
-// Every factual claim here is already published elsewhere in this repo (the
-// January 1 2027 launch date and the free plan in Pricing.tsx, the
-// "inform, never invent" instruction in Faq.tsx, "Built in Somerville, MA" in
-// LandingFooter.tsx, the security posture in /legal/security). No headcount,
-// funding, customer count, or vanity metric appears, because none of those are
-// verifiable from anything the company has actually published.
 export default function AboutPage() {
   return (
     <>
@@ -31,7 +20,7 @@ export default function AboutPage() {
         eyebrow="Our story"
         title="We built the thing we kept asking other hosts for"
         lede="Moche-AI is an independent guest operations product for short-term rental hosts, built in Somerville, Massachusetts. This page explains where it came from, how we make decisions, and what we will not claim."
-        updated="August 2026"
+        updated="September 2026"
       />
 
       <PageHero
@@ -128,9 +117,10 @@ export default function AboutPage() {
         <h2>Where we are right now</h2>
         <p>
           Moche-AI is in public beta. The official launch is January 1, 2027. Anyone can sign up
-          today: one property is free forever, no card required, and you can publish a live guest
-          portal from day one. Paid plans are per property and published openly on the homepage
-          rather than hidden behind a call.
+          today and build one draft property without a card. Preview the guest portal and AI answers
+          free; an active paid plan is required to publish for guests. Starter, Pro and Portfolio
+          have flat monthly or annual prices and included property and usage limits, displayed{' '}
+          <Link href="/#pricing">on our pricing section</Link>. Scale has contracted terms.
         </p>
         <p>
           We are telling you this on the page that exists to earn your trust because the alternative
@@ -139,9 +129,7 @@ export default function AboutPage() {
         </p>
 
         <h2>What we will not claim</h2>
-        <p>
-          A short list, kept here on purpose so it can be held against us:
-        </p>
+        <p>A short list, kept here on purpose so it can be held against us:</p>
         <ul>
           <li>
             No customer counts, review counts, or &ldquo;trusted by thousands of hosts&rdquo; line
@@ -169,7 +157,7 @@ export default function AboutPage() {
           including for security reports and data rights requests.
         </p>
 
-        <CtaBand text="Free plan, live guest portal, no card. Official launch January 1, 2027." />
+        <CtaBand text="Build and preview one draft property free, no card. Choose a paid plan to publish." />
         <Related current="/about" />
       </div>
     </>
