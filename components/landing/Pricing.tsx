@@ -94,7 +94,7 @@ export function Pricing() {
         <div className={s.notes}>
           <p>Prices in USD, before any applicable tax. No reservation percentage or per-property multiplier at checkout.</p>
           <p>At launch, usage overages are tracked but not automatically charged. Confirm a paid plan after creating your account; signing up alone does not start a subscription.</p>
-          <p>If available at paid checkout, eligible founding hosts receive {FOUNDING_DISCOUNT_PERCENT}% off their first {FOUNDING_DISCOUNT_MONTHS} months of billing. Limited to the first {FOUNDING_ACCOUNT_CAP} eligible paid accounts; free signup does not reserve a discount. <Link href="/founding-terms">Terms</Link>.</p>
+          <p>If available at paid checkout, eligible founding hosts receive {FOUNDING_DISCOUNT_PERCENT}% off their first {FOUNDING_DISCOUNT_MONTHS} months of billing. Limited to the first {FOUNDING_ACCOUNT_CAP} eligible paid accounts; free signup does not reserve a discount. <Link href="/legal/terms#pricing-and-founding">Terms</Link>.</p>
         </div>
       </div>
     </section>
