@@ -1,131 +1,52 @@
-.article {
+.story {
   width: 100%;
-  padding-bottom: 4rem;
+  padding-bottom: 3.5rem;
 }
 
-.article :where(h2, p, figure) {
-  max-width: none;
+.story > p,
+.story > h2 {
+  max-width: 68ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.intro {
-  max-width: 80ch;
-  margin: 0 auto 2.5rem;
-  padding: clamp(1.5rem, 3.5vw, 3rem);
-  border: 1px solid #dce9e6;
-  border-radius: 1.5rem;
-  background: linear-gradient(135deg, #f5fbf9 0%, #ffffff 72%);
+.story > p {
+  margin-top: 0;
+  margin-bottom: 1.3rem;
+  font-size: 1.05rem;
+  line-height: 1.85;
 }
 
-.intro p {
-  margin: 0;
-  font-size: clamp(1.05rem, 1.35vw, 1.2rem);
+.story > .lead {
+  font-size: clamp(1.12rem, 1.6vw, 1.28rem);
   line-height: 1.75;
+  font-weight: 500;
 }
 
-.intro p + p {
-  margin-top: 1rem;
+.story > h2 {
+  margin-top: 3.6rem;
+  margin-bottom: 1rem;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  line-height: 1.25;
 }
 
-.contents {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .65rem;
-  max-width: 1060px;
-  margin: 0 auto 2.75rem;
-  padding: 0 0 1.35rem;
-  border-bottom: 1px solid #e2e9e7;
-  font-size: .88rem;
-}
-
-.contents span {
-  margin-right: .35rem;
-  font-weight: 700;
-  color: #33534e;
-}
-
-.contents a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.5rem;
-  padding: .35rem .7rem;
-  border: 1px solid #dce9e6;
-  border-radius: 999px;
-  color: #205d58;
-  text-decoration: none;
-}
-
-.contents a:hover, .contents a:focus-visible {
-  background: #eaf6f3;
-  text-decoration: underline;
-}
-
-.problem, .feature, .disclosure {
-  max-width: 1060px;
-  margin: 0 auto 1.5rem;
-  scroll-margin-top: 6rem;
-}
-
-.problem {
-  display: grid;
-  grid-template-columns: minmax(140px, .28fr) minmax(0, 1fr);
-  gap: clamp(1rem, 3vw, 3rem);
-  padding: clamp(1.5rem, 3vw, 2.5rem) 0;
-}
-
-.sectionNumber {
-  margin-bottom: .8rem;
-  color: #21665f;
-  font-size: .78rem;
-  font-weight: 800;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-}
-
-.article h2 {
-  margin: 0 0 1rem;
-  font-size: clamp(1.55rem, 2.6vw, 2.15rem);
-  line-height: 1.22;
-}
-
-.article section p {
-  margin: 0 0 1rem;
-  line-height: 1.75;
-}
-
-.feature {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(1.25rem, 3vw, 3rem);
-  padding: clamp(1.2rem, 2.7vw, 2rem);
-  border: 1px solid #e0e9e6;
-  border-radius: 1.35rem;
-  background: #ffffff;
-  box-shadow: 0 8px 28px rgba(22, 54, 48, .045);
-}
-
-.reverse .copy { order: 2; }
-.reverse .figure { order: 1; }
-
-.copy { min-width: 0; }
-
-.figure {
-  min-width: 0;
-  margin: 0;
-  padding: .7rem;
-  border: 1px solid #e5ecea;
-  border-radius: 1rem;
-  background: #f6f9f8;
+.story > .figure {
+  max-width: 800px;
+  margin: 2.2rem auto 3.4rem;
 }
 
 .figure a {
   display: block;
   overflow: hidden;
-  border-radius: .6rem;
+  border: 1px solid #e1e9e6;
+  border-radius: .8rem;
+  background: #f7f9f8;
 }
 
-.figure a:focus-visible { outline: 3px solid #21665f; outline-offset: 3px; }
+.figure a:focus-visible {
+  outline: 3px solid #21665f;
+  outline-offset: 3px;
+}
 
 .image {
   display: block;
@@ -134,42 +55,28 @@
 }
 
 .figure figcaption {
-  padding: .8rem .35rem .2rem;
-  color: #50635f;
-  font-size: .8rem;
-  line-height: 1.5;
+  max-width: 68ch;
+  margin: .75rem auto 0;
+  color: #52635f;
+  font-size: .84rem;
+  line-height: 1.6;
 }
 
-.disclosure {
-  margin-top: 2.75rem;
-  padding: clamp(1.5rem, 3.5vw, 3rem);
-  border: 1px solid #dce9e6;
-  border-radius: 1.35rem;
-  background: #f5faf8;
-}
-
-.disclosure p { max-width: 78ch; }
-
-.disclosure .reviewed {
-  margin-top: 1.5rem;
-  margin-bottom: 0;
-  color: #50635f;
-  font-size: .82rem;
+.story > .reviewed {
+  margin-top: 2rem;
+  color: #52635f;
+  font-size: .85rem;
 }
 
 .endMatter {
-  max-width: 1060px;
-  margin: 2.5rem auto 0;
+  max-width: 800px;
+  margin: 3rem auto 0;
 }
 
-@media (max-width: 760px) {
-  .article { padding-bottom: 2rem; }
-  .contents { gap: .5rem; margin-bottom: 1.5rem; }
-  .contents span { width: 100%; }
-  .problem, .feature { grid-template-columns: 1fr; }
-  .problem { gap: .25rem; padding: 1rem .25rem 1.5rem; }
-  .feature { padding: 1rem; }
-  .reverse .copy, .reverse .figure { order: initial; }
-  .figure { padding: .45rem; }
-  .intro, .disclosure { padding: 1.4rem; }
+@media (max-width: 640px) {
+  .story { padding-bottom: 2rem; }
+  .story > p { font-size: 1rem; line-height: 1.75; }
+  .story > .lead { font-size: 1.12rem; }
+  .story > h2 { margin-top: 2.8rem; }
+  .story > .figure { margin-top: 1.6rem; margin-bottom: 2.8rem; }
 }
