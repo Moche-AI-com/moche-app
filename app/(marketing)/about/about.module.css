@@ -1,0 +1,175 @@
+.article {
+  width: 100%;
+  padding-bottom: 4rem;
+}
+
+.article :where(h2, p, figure) {
+  max-width: none;
+}
+
+.intro {
+  max-width: 80ch;
+  margin: 0 auto 2.5rem;
+  padding: clamp(1.5rem, 3.5vw, 3rem);
+  border: 1px solid #dce9e6;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, #f5fbf9 0%, #ffffff 72%);
+}
+
+.intro p {
+  margin: 0;
+  font-size: clamp(1.05rem, 1.35vw, 1.2rem);
+  line-height: 1.75;
+}
+
+.intro p + p {
+  margin-top: 1rem;
+}
+
+.contents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .65rem;
+  max-width: 1060px;
+  margin: 0 auto 2.75rem;
+  padding: 0 0 1.35rem;
+  border-bottom: 1px solid #e2e9e7;
+  font-size: .88rem;
+}
+
+.contents span {
+  margin-right: .35rem;
+  font-weight: 700;
+  color: #33534e;
+}
+
+.contents a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: .35rem .7rem;
+  border: 1px solid #dce9e6;
+  border-radius: 999px;
+  color: #205d58;
+  text-decoration: none;
+}
+
+.contents a:hover, .contents a:focus-visible {
+  background: #eaf6f3;
+  text-decoration: underline;
+}
+
+.problem, .feature, .disclosure {
+  max-width: 1060px;
+  margin: 0 auto 1.5rem;
+  scroll-margin-top: 6rem;
+}
+
+.problem {
+  display: grid;
+  grid-template-columns: minmax(140px, .28fr) minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 3rem);
+  padding: clamp(1.5rem, 3vw, 2.5rem) 0;
+}
+
+.sectionNumber {
+  margin-bottom: .8rem;
+  color: #21665f;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.article h2 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+  line-height: 1.22;
+}
+
+.article section p {
+  margin: 0 0 1rem;
+  line-height: 1.75;
+}
+
+.feature {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(1.25rem, 3vw, 3rem);
+  padding: clamp(1.2rem, 2.7vw, 2rem);
+  border: 1px solid #e0e9e6;
+  border-radius: 1.35rem;
+  background: #ffffff;
+  box-shadow: 0 8px 28px rgba(22, 54, 48, .045);
+}
+
+.reverse .copy { order: 2; }
+.reverse .figure { order: 1; }
+
+.copy { min-width: 0; }
+
+.figure {
+  min-width: 0;
+  margin: 0;
+  padding: .7rem;
+  border: 1px solid #e5ecea;
+  border-radius: 1rem;
+  background: #f6f9f8;
+}
+
+.figure a {
+  display: block;
+  overflow: hidden;
+  border-radius: .6rem;
+}
+
+.figure a:focus-visible { outline: 3px solid #21665f; outline-offset: 3px; }
+
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.figure figcaption {
+  padding: .8rem .35rem .2rem;
+  color: #50635f;
+  font-size: .8rem;
+  line-height: 1.5;
+}
+
+.disclosure {
+  margin-top: 2.75rem;
+  padding: clamp(1.5rem, 3.5vw, 3rem);
+  border: 1px solid #dce9e6;
+  border-radius: 1.35rem;
+  background: #f5faf8;
+}
+
+.disclosure p { max-width: 78ch; }
+
+.disclosure .reviewed {
+  margin-top: 1.5rem;
+  margin-bottom: 0;
+  color: #50635f;
+  font-size: .82rem;
+}
+
+.endMatter {
+  max-width: 1060px;
+  margin: 2.5rem auto 0;
+}
+
+@media (max-width: 760px) {
+  .article { padding-bottom: 2rem; }
+  .contents { gap: .5rem; margin-bottom: 1.5rem; }
+  .contents span { width: 100%; }
+  .problem, .feature { grid-template-columns: 1fr; }
+  .problem { gap: .25rem; padding: 1rem .25rem 1.5rem; }
+  .feature { padding: 1rem; }
+  .reverse .copy, .reverse .figure { order: initial; }
+  .figure { padding: .45rem; }
+  .intro, .disclosure { padding: 1.4rem; }
+}
