@@ -4,57 +4,62 @@ import { EMBED_DIM } from './provider';
 import { serverEnv } from '@/lib/env';
 import { Constants } from '@/lib/database.types';
 import { fallbackClassifyIntent } from './fallback';
+import { redactPII, containsLikelyPII } from './redaction';
 
-// OpenAI-style adapter. Works with any OpenAI-compatible endpoint via AI_BASE_URL.
-// Reads AI_API_KEY, AI_EMBED_MODEL (1536-dim default), AI_CHAT_MODEL.
-
-// Chat completions go to AI_BASE_URL (the OpenRouter endpoint in production).
+// Chat and embeddings are independent. Never change chat routing when fixing embeddings.
 async function post(path: string, body: unknown): Promise<Response> {
   return postTo(serverEnv.aiBaseUrl, serverEnv.aiApiKey, path, body);
-}
-
-// Embeddings go to AI_EMBED_BASE_URL, which is a separate provider because OpenRouter
-// routes chat completions only and has no /embeddings endpoint.
-async function postEmbed(path: string, body: unknown): Promise<Response> {
-  return postTo(serverEnv.aiEmbedBaseUrl, serverEnv.aiEmbedApiKey, path, body);
 }
 
 async function postTo(baseUrl: string, apiKey: string, path: string, body: unknown): Promise<Response> {
   const url = `${baseUrl.replace(/\/$/, '')}${path}`;
   return fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
-    // Reasonable timeout guard via AbortController.
     signal: AbortSignal.timeout(30_000),
   });
 }
 
+// Default remains the existing direct embedding provider. An explicit opt-in can
+// use the already-configured OpenRouter key when the direct embedding key is broken.
+// Never silently substitute a different embedding family or vector dimension.
+function embeddingConfig(): { baseUrl: string; apiKey: string; model: string; viaRouter: boolean } {
+  if (process.env.AI_EMBED_USE_OPENROUTER === 'true') {
+    if (!serverEnv.openrouterApiKey) throw new Error('OpenRouter embedding route is not configured.');
+    return { baseUrl: 'https://openrouter.ai/api/v1', apiKey: serverEnv.openrouterApiKey,
+      model: 'openai/text-embedding-3-small', viaRouter: true };
+  }
+  return { baseUrl: serverEnv.aiEmbedBaseUrl, apiKey: serverEnv.aiEmbedApiKey,
+    model: serverEnv.aiEmbedModel, viaRouter: false };
+}
+
 async function embedWithUsageImpl(texts: string[]): Promise<EmbedResult> {
-  if (texts.length === 0) {
-    return { vectors: [], model: serverEnv.aiEmbedModel, totalTokens: 0 };
+  const route = embeddingConfig();
+  if (texts.length === 0) return { vectors: [], model: route.model, totalTokens: 0 };
+  const input = route.viaRouter ? texts.map(redactPII) : texts;
+  if (route.viaRouter && input.some(containsLikelyPII)) {
+    throw new Error('Embedding input contains residual PII.');
   }
-  const res = await postEmbed('/embeddings', {
-    model: serverEnv.aiEmbedModel,
-    input: texts,
+  const res = await postTo(route.baseUrl, route.apiKey, '/embeddings', {
+    model: route.model, input,
+    ...(route.viaRouter ? { provider: { zdr: true, data_collection: 'deny' } } : {}),
   });
-  if (!res.ok) {
-    throw new Error(`Embedding request failed: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`Embedding request failed: ${res.status}`);
   const json = (await res.json()) as {
     data: Array<{ embedding: number[]; index: number }>;
     usage?: { total_tokens?: number };
   };
+  if (!Array.isArray(json.data) || json.data.length !== texts.length) {
+    throw new Error('Embedding response has an unexpected vector count.');
+  }
   const sorted = json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
   for (const v of sorted) {
-    if (v.length !== EMBED_DIM) {
-      throw new Error(`Expected ${EMBED_DIM}-dim embeddings, got ${v.length}`);
+    if (!Array.isArray(v) || v.length !== EMBED_DIM || v.some((n) => !Number.isFinite(n))) {
+      throw new Error(`Expected ${EMBED_DIM}-dim finite embeddings.`);
     }
   }
-  return { vectors: sorted, model: serverEnv.aiEmbedModel, totalTokens: json.usage?.total_tokens ?? 0 };
+  return { vectors: sorted, model: route.model, totalTokens: json.usage?.total_tokens ?? 0 };
 }
 
 export const openaiProvider: AIProvider = {
@@ -72,25 +77,18 @@ export const openaiProvider: AIProvider = {
 
   async generate(messages: ChatMessage[], opts?: GenerateOptions): Promise<GenerateResult> {
     const res = await post('/chat/completions', {
-      model: serverEnv.aiChatModel,
-      messages,
-      temperature: opts?.temperature ?? 0.3,
-      max_tokens: opts?.maxTokens ?? 600,
+      model: serverEnv.aiChatModel, messages,
+      temperature: opts?.temperature ?? 0.3, max_tokens: opts?.maxTokens ?? 600,
     });
-    if (!res.ok) {
-      throw new Error(`Chat request failed: ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`Chat request failed: ${res.status}`);
     const json = (await res.json()) as {
       choices: Array<{ message: { content: string } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
     return {
-      text: json.choices[0]?.message?.content ?? '',
-      model: serverEnv.aiChatModel,
-      usage: {
-        promptTokens: json.usage?.prompt_tokens ?? 0,
-        completionTokens: json.usage?.completion_tokens ?? 0,
-      },
+      text: json.choices[0]?.message?.content ?? '', model: serverEnv.aiChatModel,
+      usage: { promptTokens: json.usage?.prompt_tokens ?? 0,
+        completionTokens: json.usage?.completion_tokens ?? 0 },
     };
   },
 
@@ -98,16 +96,9 @@ export const openaiProvider: AIProvider = {
     const allowed = Constants.public.Enums.intent_type;
     try {
       const res = await post('/chat/completions', {
-        model: serverEnv.aiChatModel,
-        temperature: 0,
-        max_tokens: 12,
+        model: serverEnv.aiChatModel, temperature: 0, max_tokens: 12,
         messages: [
-          {
-            role: 'system',
-            content:
-              `Classify the guest message into exactly one intent from this list: ${allowed.join(', ')}. ` +
-              'Respond with only the intent word.',
-          },
+          { role: 'system', content: `Classify the guest message into exactly one intent from this list: ${allowed.join(', ')}. Respond with only the intent word.` },
           { role: 'user', content: text },
         ],
       });
