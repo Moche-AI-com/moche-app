@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  answer: vi.fn(), escalationInserts: vi.fn(), notify: vi.fn(),
+  answer: vi.fn(), escalationInserts: vi.fn(), notify: vi.fn(), failEscalation: false,
 }));
 const property = { id: 'property-1', slug: 'demo', display_name: 'Synthetic Demo', host_account_id: 'host-1' };
 vi.mock('@/lib/guest/session', () => ({
@@ -32,7 +32,9 @@ const client = {
       maybeSingle: async () => ({ data: table === 'properties' ? property
         : table === 'conversations' ? { id: 'conversation-1' }
         : table === 'guest_access_sessions' ? { guest_identity_id: null } : null }),
-      single: async () => ({ data: { id: 'escalation-1' }, error: null }),
+      single: async () => table === 'escalations' && mocks.failEscalation
+        ? { data: null, error: { message: 'Synthetic write failure' } }
+        : { data: { id: 'escalation-1' }, error: null },
       then: (resolve: (v: unknown) => void) => resolve({ data: [], error: null }),
     };
     return q;
@@ -41,19 +43,36 @@ const client = {
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => client }));
 import { POST } from '@/app/api/guest/[slug]/chat/route';
 
-beforeEach(() => { vi.clearAllMocks(); });
+function request() {
+  return new Request('https://example.test/api/guest/demo/chat', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Where is parking?' }) });
+}
+
+beforeEach(() => { vi.clearAllMocks(); mocks.failEscalation = false; });
 describe('guest AI outage', () => {
-  it('does not return a 500 or invented property answer when retrieval rejects', async () => {
+  it('escalates and avoids invented property guidance when retrieval rejects', async () => {
     mocks.answer.mockRejectedValue(new Error('Embedding request failed: 401'));
-    const req = new Request('https://example.test/api/guest/demo/chat', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Where is parking?' }) });
-    const response = await POST(req, { params: Promise.resolve({ slug: 'demo' }) });
+    const response = await POST(request(), { params: Promise.resolve({ slug: 'demo' }) });
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.escalated).toBe(true);
-    expect(body.answer).toMatch(/host/);
+    expect(body.answer).toMatch(/contact your host directly/i);
     expect(body.answer).not.toContain('Embedding request failed');
     expect(mocks.escalationInserts).toHaveBeenCalledOnce();
     expect(mocks.notify).toHaveBeenCalledOnce();
+  });
+
+  it('does not claim delivery when escalation persistence fails', async () => {
+    mocks.answer.mockRejectedValue(new Error('Embedding request failed: 401'));
+    mocks.failEscalation = true;
+    const response = await POST(request(), { params: Promise.resolve({ slug: 'demo' }) });
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.escalated).toBe(false);
+    expect(body.unavailable).toBe(true);
+    expect(body.answer).toMatch(/contact your host directly/i);
+    expect(body.answer).not.toMatch(/passed your question|notified your host/i);
+    expect(mocks.escalationInserts).toHaveBeenCalledOnce();
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 });
