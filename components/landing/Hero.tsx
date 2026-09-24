@@ -5,10 +5,6 @@ import { HERO_LINKS } from '@/lib/marketing/hero-links';
 import { Reveal } from './Reveal';
 import styles from './landing.module.css';
 
-// Gallery-led hero. The rental photography is fanned in an arc above the
-// headline: it is the brand-facing promise, separate from each article's more
-// descriptive opening illustration. Every frame is a destination, and the
-// centre frame carries the primary conversion action.
 export function Hero() {
   return (
     <section className={styles.hero}>
@@ -21,16 +17,14 @@ export function Hero() {
             className={styles.heroFanFrame}
             data-rank={frame.rank}
             data-cta={frame.cta ? '' : undefined}
-            style={
-              {
-                '--fan-x': `${frame.x}%`,
-                '--fan-y': `${frame.y}%`,
-                '--fan-rot': `${frame.rot}deg`,
-                '--fan-rank': frame.rank,
-                '--fan-i': i,
-                '--fan-pos': frame.pos,
-              } as React.CSSProperties
-            }
+            style={{
+              '--fan-x': `${frame.x}%`,
+              '--fan-y': `${frame.y}%`,
+              '--fan-rot': `${frame.rot}deg`,
+              '--fan-rank': frame.rank,
+              '--fan-i': i,
+              '--fan-pos': frame.pos,
+            } as React.CSSProperties}
           >
             <Image
               src={frame.src}
@@ -40,7 +34,6 @@ export function Hero() {
               className={styles.heroFanImage}
               priority={frame.rank < 2}
             />
-            {/* Scrim sits between the photograph and the always-visible label. */}
             <span className={styles.heroFanScrim} aria-hidden />
             <span className={styles.heroFanLabel}>
               {frame.label}
@@ -49,7 +42,6 @@ export function Hero() {
           </Link>
         ))}
       </nav>
-
       <div className={`wrap ${styles.heroCopy}`}>
         <Reveal as="p" eager className={styles.heroKicker}>
           Elevate your stay, get more reviews, and handle fewer questions.
@@ -61,9 +53,7 @@ export function Hero() {
           Instant, trustworthy guest answers from the property details you approve.
         </Reveal>
         <Reveal eager delay={200} className={styles.heroActions}>
-          <Link href="/signup" className="btn btn-primary btn-lg">
-            Start free today
-          </Link>
+          <Link href="/signup" className="btn btn-primary btn-lg">Start free today</Link>
           <a
             href="mailto:hostspark.org@gmail.com?subject=Request%20a%20demo&body=Hi%20Moche-AI%20team%2C%0A%0AI%27d%20like%20to%20see%20a%20demo.%20Here%27s%20a%20bit%20about%20my%20properties%3A%0A%0A"
             className="btn btn-ghost btn-lg"
@@ -72,8 +62,8 @@ export function Hero() {
           </a>
         </Reveal>
         <Reveal as="p" eager delay={270} className={styles.heroTrialNote}>
-          Moche-AI is in public beta — sign up free and publish your guest portal today. Official
-          launch January 1, 2027.
+          Moche-AI is in public beta — build and preview one property free, no card required.
+          Choose a paid plan when you are ready to publish. Official launch January 1, 2027.
         </Reveal>
       </div>
     </section>

@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { useFormState } from 'react-dom';
 import { MessageSquare } from 'lucide-react';
 import { signupAction, type FormState } from '../actions';
+import { PLANS } from '@/lib/constants';
+import { parsePricingIntent } from '@/lib/billing/pricing-intent';
 import {
   SubmitButton,
   FormMessage,
@@ -23,8 +25,6 @@ export default function SignupPage() {
   );
 }
 
-// Red asterisk marking required fields; the legend line under the intro explains
-// it, and each required input also carries aria-required for assistive tech.
 function RequiredMark() {
   return (
     <span aria-hidden="true" style={{ color: 'var(--coral, #ff6b54)' }}>
@@ -35,16 +35,15 @@ function RequiredMark() {
 
 function SignupForm() {
   const [state, formAction] = useFormState<FormState, FormData>(signupAction, {});
-  const prefillEmail = useSearchParams().get('email') ?? '';
-
+  const params = useSearchParams();
+  const prefillEmail = params.get('email') ?? '';
+  const intent = parsePricingIntent(params.get('plan'), params.get('interval'));
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [smsOptIn, setSmsOptIn] = useState(false);
   const [phone, setPhone] = useState('');
-  // Inline errors appear only after a field's first blur, so nobody is told their
-  // email is invalid halfway through typing it; from then on they update live.
   const [emailTouched, setEmailTouched] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
 
@@ -52,8 +51,6 @@ function SignupForm() {
   const emailValid = isValidEmail(email.trim());
   const passwordValid = passwordMeetsRequirements(password);
   const phoneDigits = phone.replace(/\D/g, '').length;
-  // A2P 10DLC: a phone number is required only while the SMS opt-in box is
-  // checked (mirrors the superRefine on signupSchema in lib/validation.ts).
   const phoneValid = !smsOptIn || phoneDigits >= 10;
   const formValid = fullNameValid && emailValid && passwordValid && acceptTerms && phoneValid;
 
@@ -67,8 +64,6 @@ function SignupForm() {
       ? 'Enter the mobile number where you want to receive text messages.'
       : undefined;
 
-  // Plain-language list of what is still blocking the button, rendered beneath
-  // it by SubmitButton's aria-live hint so the reason is never a mystery.
   const missing: string[] = [];
   if (!fullNameValid) missing.push('your full name');
   if (!emailValid) missing.push('a valid email address');
@@ -83,10 +78,22 @@ function SignupForm() {
     <>
       <h1 style={{ fontSize: '1.6rem', marginBottom: '.4rem' }}>Create your host account</h1>
       <p className="muted" style={{ marginBottom: '.3rem', fontSize: '.9rem' }}>Start building your Property Brain.</p>
+      {intent ? (
+        <div className="alert alert-info" style={{ margin: '.75rem 0 1rem', fontSize: '.85rem', lineHeight: 1.5 }}>
+          <strong>Your selection: {PLANS[intent.planId].name}, {intent.interval}.</strong>{' '}
+          Create your free account first. You can review the current price and confirm a subscription in Billing after email verification. No payment is taken now.
+        </div>
+      ) : null}
       <p className="muted" style={{ marginBottom: '1.5rem', fontSize: '.78rem' }}>
         Fields marked<RequiredMark /> are required.
       </p>
       <form action={formAction}>
+        {intent ? (
+          <>
+            <input type="hidden" name="plan" value={intent.planId} />
+            <input type="hidden" name="interval" value={intent.interval} />
+          </>
+        ) : null}
         <FormMessage error={state.error} />
         <div className="field">
           <label className="label" htmlFor="fullName">Full name<RequiredMark /></label>
@@ -166,9 +173,6 @@ function SignupForm() {
           <Link href="/legal/ai-policy" target="_blank" rel="noopener noreferrer" className="gradient-text">AI Policy</Link>. By continuing you also acknowledge our{' '}
           <Link href="/legal/cookies" target="_blank" rel="noopener noreferrer" className="gradient-text">Cookie Notice</Link>. Each opens in a new tab so you can read it in full.
         </p>
-
-        {/* A2P 10DLC opt-in — SEPARATE from Terms, UNCHECKED by default, active
-            consent. Never a condition of signup (checkbox is not `required`). */}
         <div
           style={{
             border: '1px solid rgba(157,176,198,0.18)',
@@ -225,7 +229,6 @@ function SignupForm() {
             <FieldError id="signup-phone-error" message={phoneError} />
           </div>
         </div>
-
         <SubmitButton testId="signup-submit" disabled={!formValid} disabledHint={disabledHint}>
           Create account
         </SubmitButton>

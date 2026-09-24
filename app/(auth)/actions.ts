@@ -12,6 +12,7 @@ import { createUserAndSendConfirmation, sendPasswordReset } from '@/lib/auth/aut
 import { createAndSendHostOtp, verifyHostOtp } from '@/lib/auth/host-otp';
 import { verifyTrustedDeviceValue, signTrustedDeviceValue } from '@/lib/crypto';
 import { TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_TTL_DAYS } from '@/lib/constants';
+import { parsePricingIntent, pricingIntentQuery } from '@/lib/billing/pricing-intent';
 import { log } from '@/lib/log';
 
 function safeNext(raw: FormDataEntryValue | null): string {
@@ -49,6 +50,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     return { error: parsed.error.issues[0]?.message ?? 'Please check your details.' };
   }
   const { email, password, fullName, accountName, smsOptIn, phone } = parsed.data;
+  const pricingIntent = parsePricingIntent(formData.get('plan'), formData.get('interval'));
 
   // Account creation + confirmation email both require the service-role client
   // (Supabase's built-in SMTP sender is disabled in favour of our Resend transport).
@@ -58,18 +60,19 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   }
   const admin = createAdminClient();
 
-  // Creates the (unconfirmed) auth user via admin.generateLink and emails the
-  // confirmation link through Resend. Returns a friendly message on any failure —
-  // this path must NEVER surface a raw/stringified error object to the UI.
+  // Intent is account metadata for UI preselection only, never an entitlement.
+  // The existing checkout route still calculates the price and requires terms.
   const result = await createUserAndSendConfirmation(admin, {
     email,
     password,
-    data: { full_name: fullName, account_name: accountName ?? `${fullName}'s properties` },
+    data: {
+      full_name: fullName,
+      account_name: accountName ?? `${fullName}'s properties`,
+      ...(pricingIntent ? { pricing_intent: pricingIntent } : {}),
+    },
   });
 
   if (!result.ok) {
-    // Map known reasons to friendly copy; default to a generic retry message so
-    // an empty/opaque error can never render as "{}".
     const reason = result.reason.toLowerCase();
     if (reason.includes('already') && reason.includes('regist')) {
       return { error: 'An account with this email already exists. Try signing in instead.' };
@@ -80,14 +83,9 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     return { error: 'We couldn\u2019t create your account just now. Please try again shortly.' };
   }
 
-  // Persist consent + acceptances (best-effort — never block a successful signup).
   const h = await headers();
   const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   const userAgent = h.get('user-agent');
-
-  // A2P 10DLC: record explicit SMS/WhatsApp opt-in only when actively given.
-  // The number is stored unverified — sending is still gated on the phone
-  // verification step in Dashboard -> Settings.
   if (smsOptIn) {
     const { error: consentError } = await admin
       .from('profiles')
@@ -101,8 +99,7 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   }
 
   await recordAcceptances(admin, { userId: result.userId, context: 'signup', ip, userAgent });
-
-  redirect('/verify-email');
+  redirect(pricingIntent ? `/verify-email?${pricingIntentQuery(pricingIntent)}` : '/verify-email');
 }
 
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -119,8 +116,6 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   }
   const next = safeNext(formData.get('next'));
 
-  // Optional SMS 2FA: only for hosts who verified a phone AND enabled the toggle.
-  // A valid trusted-device cookie skips the step. This never touches guest auth.
   const { data: profile } = await supabase
     .from('profiles')
     .select('phone, phone_verified_at, two_factor_enabled')
@@ -144,9 +139,6 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   redirect(next);
 }
 
-// Step two of login 2FA: verify the SMS code, then trust this device so the user
-// is not challenged again for TRUSTED_DEVICE_TTL_DAYS. Requires an active session
-// (created by the password step) — this does not bypass password auth.
 export async function verifyLoginOtpAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const ctx = await requireSession();
   const parsed = hostLoginOtpSchema.safeParse({ code: formData.get('code') });
@@ -167,7 +159,6 @@ export async function verifyLoginOtpAction(_prev: FormState, formData: FormData)
   redirect(safeNext(formData.get('next')));
 }
 
-// Resend a fresh login OTP (rate-limited inside createAndSendHostOtp).
 export async function resendLoginOtpAction(_prev: FormState, _formData: FormData): Promise<FormState> {
   const ctx = await requireSession();
   if (!ctx.profile.phone || !ctx.profile.phone_verified_at) {
@@ -194,12 +185,9 @@ export async function logoutAction(): Promise<void> {
 export async function resetRequestAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = resetRequestSchema.safeParse({ email: formData.get('email') });
   if (!parsed.success) return { error: 'Enter a valid email address.' };
-  // Send the recovery link via our Resend transport (Supabase built-in SMTP is
-  // disabled). Silently no-ops for unknown emails to avoid account enumeration.
   if (hasServiceRole()) {
     await sendPasswordReset(createAdminClient(), { email: parsed.data.email, next: '/reset/update' });
   }
-  // Identical response regardless of whether the email exists.
   return { success: 'If an account exists for that email, a reset link is on its way.' };
 }
 

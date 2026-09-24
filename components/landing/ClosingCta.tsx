@@ -8,40 +8,17 @@ import {
 } from '@/lib/constants';
 
 const MAILTO = 'mailto:hostspark.org@gmail.com';
+const DEMO_MAILTO = `${MAILTO}?subject=${encodeURIComponent('Beta access — request a demo')}&body=${encodeURIComponent("Hi Moche-AI team,\n\nI'd like a demo before I start. Here's a bit about my properties:\n\n")}`;
+const SALES_MAILTO = `${MAILTO}?subject=${encodeURIComponent('Beta access — talk to sales')}&body=${encodeURIComponent("Hi Moche-AI team,\n\nI'd like to talk through a plan for my portfolio. Here's how it's structured:\n\n")}`;
 
-const DEMO_MAILTO = `${MAILTO}?subject=${encodeURIComponent(
-  'Beta access — request a demo',
-)}&body=${encodeURIComponent(
-  "Hi Moche-AI team,\n\nI'd like a demo before I start. Here's a bit about my properties:\n\n",
-)}`;
-
-const SALES_MAILTO = `${MAILTO}?subject=${encodeURIComponent(
-  'Beta access — talk to sales',
-)}&body=${encodeURIComponent(
-  "Hi Moche-AI team,\n\nI'd like to talk through a plan for my portfolio. Here's how it's structured:\n\n",
-)}`;
-
-// Closing CTA. Sits after the FAQ, which is where a visitor who read the whole
-// page ends up with nothing left to click -- the previous last thing on the
-// page was a question about cancellation.
-//
-// It does not repeat the founding band's job. That section mid-page argues for
-// the programme; this one only makes the three ways in impossible to miss, and
-// states the beta incentive plainly next to them.
-//
-// Every incentive below is already promised elsewhere on the page (the hero beta
-// note and the founding band's perk list). Nothing new is offered, and the
-// numbers come from constants so this can never drift from the offer the
-// checkout actually applies.
 const INCENTIVES = [
   {
     label: `${FOUNDING_DISCOUNT_PERCENT}% off for ${FOUNDING_DISCOUNT_MONTHS} months`,
-    detail: `Locked in at signup for the first ${FOUNDING_ACCOUNT_CAP} accounts. Start on the free plan — no card required — and cancel at any point.`,
+    detail: `Available to the first ${FOUNDING_ACCOUNT_CAP} eligible accounts that start a paid plan, if the offer is still open at checkout. Creating a free account does not reserve it.`,
   },
   {
-    label: 'Setup you can finish today',
-    detail:
-      'Add a property, confirm the details, and publish the guest portal. Self serve, with no setup fee.',
+    label: 'Start building today',
+    detail: 'Add a draft property and preview its guest portal for free. Choose a paid plan to publish; no setup fee.',
   },
   {
     label: 'Support that is a person',
@@ -54,29 +31,19 @@ export function ClosingCta() {
     <section className={styles.closing} id="get-started" aria-labelledby="closing-heading">
       <div className="wrap">
         <div className={styles.closingInner}>
-          <Reveal as="span" className={styles.eyebrow}>
-            Beta access &amp; founding members
-          </Reveal>
+          <Reveal as="span" className={styles.eyebrow}>Beta access &amp; founding members</Reveal>
           <Reveal as="h2" id="closing-heading" className={styles.closingTitle}>
             Elevate your stay, get more reviews, and handle fewer questions.
           </Reveal>
           <Reveal as="p" delay={70} className={styles.closingLead}>
-            Start free today, or have us walk you through it first. Either way you can be live
-            before your next check-in.
+            Build and preview free, or have us walk you through it first.
+            Choose a paid plan when you are ready to publish for guests.
           </Reveal>
-
           <Reveal delay={140} className={styles.closingActions}>
-            <Link href="/signup" className="btn btn-primary btn-lg">
-              Start free today
-            </Link>
-            <a href={DEMO_MAILTO} className="btn btn-ghost btn-lg">
-              Request a demo
-            </a>
-            <a href={SALES_MAILTO} className={styles.closingTextLink}>
-              Contact sales
-            </a>
+            <Link href="/signup" className="btn btn-primary btn-lg">Start free today</Link>
+            <a href={DEMO_MAILTO} className="btn btn-ghost btn-lg">Request a demo</a>
+            <a href={SALES_MAILTO} className={styles.closingTextLink}>Contact sales</a>
           </Reveal>
-
           <dl className={styles.closingPerks}>
             {INCENTIVES.map((item, i) => (
               <Reveal key={item.label} delay={200 + i * 60} className={styles.closingPerk}>
