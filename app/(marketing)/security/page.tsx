@@ -1,197 +1,129 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
-import { DocHeader, Related, PageHero, ArticleFigure } from '../_parts';
-import productHowItWorks from '@/public/premium/product-how-it-works-desktop.png';
-import productUpdates from '@/public/premium/product-updates-desktop.png';
+import { SITE_NAME, SITE_URL } from '@/lib/seo';
+import { DocHeader, Related } from '../_parts';
+import approvalQueue from '@/public/premium/product-updates-desktop.png';
 import styles from '../marketing.module.css';
+import pageStyles from './security.module.css';
 
 export const metadata: Metadata = marketingMetadata({
-  title: 'Trust & safety',
-  description:
-    'How Moche-AI protects host and guest data: per-account isolation, hashed guest identifiers, redaction before model calls, and what we do not yet certify.',
+  title: 'How Moche-AI Protects Host and Guest Data',
+  description: 'A plain-language look at property and stay access, data protection, AI model routing, human oversight, and the security assurances Moche-AI does and does not make.',
   path: '/security',
 });
 
-// The public trust page. This is a plain-language summary of the binding
-// document at /legal/security, and it links out to it rather than restating it,
-// because two versions of a security posture is a compliance problem waiting to
-// happen.
-//
-// Every control listed here is one that /legal/security already states. The "not
-// yet" section is the point of the page: a trust page that only lists strengths
-// tells a reader nothing, and a host evaluating an unfamiliar vendor is looking
-// specifically for whether the vendor will admit a gap.
 export default function SecurityPage() {
+  const articleJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How Moche-AI protects host and guest data',
+    description: metadata.description,
+    inLanguage: 'en-US',
+    dateModified: '2026-09-24',
+    author: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
+    publisher: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}/security` },
+  };
+
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <DocHeader
-        eyebrow="Trust & safety"
-        title="What we do with your data, in plain language"
-        lede="You are handing an unfamiliar product the operating details of your properties and the contact details of your guests. This page states what is protected, how, and what we do not yet claim."
-        updated="August 2026"
+        eyebrow="Trust in practice"
+        title="The boundaries around your property and guest data"
+        lede="Hosts need to know who can reach their property details, where guest questions go, and when a person stays in control. Here is the plain-language view, including what we do not claim."
       />
 
-      <PageHero
-        src={productHowItWorks}
-        alt="The Moche-AI data flow showing how a guest question is retrieved, answered or escalated"
-        caption="The pipeline the controls below govern: a question comes in, an answer comes out only from approved material, or it escalates."
-        priority
-      />
-
-      <div className={styles.body}>
-        <div className={styles.callout}>
-          <p>
-            This page is the readable summary. The binding, versioned document is the{' '}
-            <Link href="/legal/security">Security Overview</Link> in our legal center, alongside the{' '}
-            <Link href="/legal/dpa">Data Processing Addendum</Link>,{' '}
-            <Link href="/legal/subprocessors">subprocessor list</Link>, and{' '}
-            <Link href="/legal/ai-policy">AI disclosure and use policy</Link>. Where the two differ,
-            the legal document governs.
-          </p>
-        </div>
-
-        <h2>Separation between accounts</h2>
-        <ul>
-          <li>
-            Database row-level security scopes every host to their own account and their own
-            properties. It is enforced at the database, not only in application code.
-          </li>
-          <li>
-            Guests are not database users. Guest reads and writes are explicitly scoped to one property
-            and one stay, so a guest link cannot reach another property or another stay.
-          </li>
-          <li>
-            The privileged service key is server-only and is never exposed to a browser.
-          </li>
-          <li>
-            Security-relevant actions are written to an append-only audit log.
-          </li>
-        </ul>
-
-        <h2>Guest data</h2>
-        <ul>
-          <li>
-            Guest contact identifiers are stored as hashes rather than in the clear.
-          </li>
-          <li>
-            Our logger redacts secrets, tokens, email addresses, and long digit sequences before
-            anything is written out. Access codes, phone numbers, and message bodies are kept out of
-            error tracking and analytics by design.
-          </li>
-          <li>
-            Automated abuse on guest verification is rate limited.
-          </li>
-          <li>
-            All traffic is served over HTTPS. Data at rest is encrypted by our database and hosting
-            providers.
-          </li>
-        </ul>
-
-        <h2>AI routing, and what models are allowed to keep</h2>
-        <p>
-          This is the question hosts ask most, so it gets a direct answer.
+      <article className={`${styles.body} ${pageStyles.story}`}>
+        <p className={pageStyles.lead}>
+          A guest needs the right instructions for one stay. A host needs confidence that this link
+          will not expose another property, another guest, or an internal note. Security is not a
+          badge on a page; it is the set of boundaries around that ordinary interaction.
         </p>
-        <ul>
-          <li>
-            Personally identifiable information is redacted from content before it is sent to any
-            external model router.
-          </li>
-          <li>
-            Model requests are routed through a gateway where we request no data retention and opt out
-            of provider model training. Your property documents are not training data.
-          </li>
-          <li>
-            The current model-per-task register is published in the{' '}
-            <Link href="/legal/ai-policy">AI disclosure and use policy</Link> rather than left vague.
-          </li>
-          <li>
-            Answers are generated only from material you approved for that property, and can cite the
-            source. When confidence is low the question escalates to you.{' '}
-            <Link href="/how-it-works">How it works</Link> covers the mechanism.
-          </li>
-        </ul>
-
-        <ArticleFigure
-          src={productUpdates}
-          alt="The knowledge queue showing AI-drafted updates waiting for host approval before publishing"
-          caption="The approval step, made visible: drafted updates wait in the queue until a host approves them. Nothing auto-publishes."
-        />
-
-        <h2>Payments</h2>
         <p>
-          Card data is handled solely by Stripe, which is PCI-DSS compliant, and is never stored by us.
-          We cannot see or update your card details, which is also why a billing fix has to be done by
-          you rather than by support on your behalf.
+          This article summarizes the published controls. For the detailed, maintained terms, read
+          the <Link href="/legal/security">Security Overview</Link>, <Link href="/legal/dpa">Data Processing Addendum</Link>,
+          <Link href="/legal/ai-policy"> AI Disclosure &amp; Use Policy</Link>, and <Link href="/legal/subprocessors">subprocessor list</Link>.
+          Where this summary differs from a legal document, the legal document governs.
         </p>
 
-        <h2>Infrastructure and monitoring</h2>
-        <ul>
-          <li>
-            The platform runs on managed, patched infrastructure. Dependencies are tracked and updated.
-          </li>
-          <li>
-            Application errors and traces are captured for debugging, with the redaction rules above
-            applied first.
-          </li>
-        </ul>
+        <h2>Access follows the account and stay</h2>
+        <p>
+          Database row-level security scopes host access to the host&apos;s own account and properties.
+          Guests are not database users: guest reads and writes are explicitly scoped by property
+          and stay. The service-role key is kept on the server, not sent to a browser. These controls
+          are intended to keep a stay link from becoming a route to a different home or guest record.
+        </p>
+        <p>
+          The published Security Overview also describes encryption in transit and at rest through
+          the database and hosting providers. Guest contact identifiers are stored as irreversible
+          hashes rather than plaintext. A guest link should still be shared with the intended guest,
+          not posted publicly.
+        </p>
 
-        <h2>Your rights over your data</h2>
-        <ul>
-          <li>
-            <strong>Export.</strong> Download a JSON copy of your account, properties, and content from
-            Dashboard, then Profile. Card data is not included because Stripe holds it, not us.
-          </li>
-          <li>
-            <strong>Deletion.</strong> A two-step request and confirm flow removes personal and property
-            data. Billing, legal-acceptance, and audit records are retained where tax and compliance law
-            requires it.
-          </li>
-          <li>
-            <strong>Breach notification.</strong> We commit to a 72-hour notification window, consistent
-            with GDPR Article 33.
-          </li>
-          <li>
-            Data rights requests are acknowledged promptly and fulfilled within statutory timeframes.
-            The process is documented in the <Link href="/legal/support">support policy</Link>.
-          </li>
-        </ul>
+        <h2>AI has a narrower job</h2>
+        <p>
+          Moche-AI uses host-provided property material to answer in-stay questions. When the
+          material does not support a confident answer, the assistant should decline to guess and
+          route the issue to the host. Safety concerns and emergencies are for people and local
+          emergency services, not for a chatbot to resolve. See <Link href="/how-it-works">how answers work</Link>
+          for the guest-facing boundary.
+        </p>
+        <p>
+          The <Link href="/legal/ai-policy">AI policy</Link> describes redaction before external
+          model routing and a check that blocks a routed request if personal data is still detected.
+          It also describes a fallback provider. For retention, the distinction matters: routed
+          OpenRouter requests are configured to request zero data retention and no model training,
+          while the <Link href="/legal/dpa">DPA</Link> lists direct OpenAI API input and output retention
+          of up to 30 days for abuse monitoring. We do not describe all AI processing as zero-retention.
+        </p>
+
+        <h2>A host decides what goes live</h2>
+        <p>
+          A suggested update to property knowledge is not the same as an approved guest answer.
+          Drafted updates wait for a host to review them before publication. Hosts also decide
+          requests involving availability, timing, or money. The assistant does not make a booking,
+          take payment, or dispatch someone for a guest.
+        </p>
+        <figure className={pageStyles.figure}>
+          <a href={approvalQueue.src} target="_blank" rel="noopener noreferrer" aria-label="Open illustrative host approval queue at full size">
+            <Image src={approvalQueue} alt="Illustrative host knowledge-update queue with drafts awaiting review" sizes="(max-width: 640px) 100vw, 800px" className={pageStyles.image} />
+          </a>
+          <figcaption>Illustrative host-side approval queue: an AI-drafted knowledge change is reviewed before guests see it.</figcaption>
+        </figure>
+
+        <h2>Payments, rights, and incidents</h2>
+        <p>
+          Stripe handles payment card data; Moche-AI does not store the card number. Hosts can
+          consult the <Link href="/legal/privacy">Privacy Policy</Link> and <Link href="/legal/dpa">DPA</Link>
+          for data rights and retention, including records that may need to remain for legal or
+          accounting reasons after an account closes.
+        </p>
+        <p>
+          The DPA commits Moche-AI, as a processor, to notify an affected customer-controller
+          without undue delay and within 72 hours of becoming aware of a personal-data breach
+          affecting that customer&apos;s data. That is a commitment to the controller, not a promise
+          that every guest is notified directly within 72 hours.
+        </p>
 
         <h2>What we do not claim</h2>
         <p>
-          A trust page that lists only strengths is not a trust page. As of this review date:
+          Moche-AI does not currently hold SOC 2, ISO 27001, or a comparable third-party
+          certification. Controls modeled on those frameworks are not independent attestation.
+          We do not claim that AI answers can never be wrong, or that the portal is an emergency
+          response service. Read the <Link href="/legal/security">Security Overview</Link> for the
+          current assurance status rather than relying on a logo or a vague guarantee.
         </p>
-        <ul>
-          <li>
-            <strong>We do not hold SOC 2, ISO 27001, or any third-party security certification.</strong>{' '}
-            Our controls are modeled on recognised frameworks, but modeled on is not audited against,
-            and we will not blur the two. Current assurance status is stated in the{' '}
-            <Link href="/legal/security">Security Overview</Link>.
-          </li>
-          <li>
-            We do not offer a paid bug bounty. We do read and act on responsible disclosures, and{' '}
-            <Link href="/support">support</Link> has the reporting path.
-          </li>
-          <li>
-            We do not claim the assistant cannot be wrong. It is constrained to your approved material
-            and it escalates when unsure, which reduces the failure rate but does not make it zero.
-          </li>
-          <li>
-            We do not claim to be an emergency service. Safety situations route to a human, and guests
-            are directed to local emergency services.
-          </li>
-        </ul>
-
-        <h2>Reporting a problem</h2>
         <p>
-          If you find a vulnerability, report it privately with the affected endpoint, reproduction
-          steps, and what you were able to access. Please do not test against another host&rsquo;s
-          property or a live guest stay. The reporting path is on the{' '}
-          <Link href="/support">support page</Link>.
+          If you discover a vulnerability, report it privately through <Link href="/support">support</Link>
+          with the affected area and steps to reproduce. Please do not test against another host&apos;s
+          property or a live guest stay.
         </p>
-
-        <Related current="/security" />
-      </div>
+        <p className={pageStyles.reviewed}>Last reviewed September 2026.</p>
+        <div className={pageStyles.endMatter}><Related current="/security" /></div>
+      </article>
     </>
   );
 }
