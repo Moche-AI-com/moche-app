@@ -7,55 +7,40 @@ import { getPropertyAccess } from '@/lib/auth/guards';
 import { loadGuestLocalPlaces } from '@/lib/local/canonical';
 import { LocalGuide } from './LocalGuide';
 
-// Same luxury concierge typography as the portal shell — the Local Guide is a
-// guest-facing portal page, so it shares the brand variables and fonts.
 const displaySerif = Cormorant_Garamond({
   subsets: ['latin'],
   weight: ['500', '600', '700'],
   variable: '--font-portal-serif',
 });
-const bodySans = Inter({
-  subsets: ['latin'],
-  variable: '--font-portal-sans',
-});
+const bodySans = Inter({ subsets: ['latin'], variable: '--font-portal-sans' });
 
 export const dynamic = 'force-dynamic';
-
 export const metadata: Metadata = {
   title: 'Local Guide',
-  // Guest surfaces are private per-stay; never index them.
   robots: { index: false, follow: false },
 };
 
-export default async function LocalGuidePage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function LocalGuidePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const admin = createAdminClient();
-
   const { data: property } = await admin
     .from('properties')
     .select('id, slug, display_name, city, region, country, brand_primary, brand_accent, logo_url, status')
     .eq('slug', slug)
     .is('deleted_at', null)
     .maybeSingle();
-  if (!property || property.status !== 'live') notFound();
+  if (!property) notFound();
 
-  // Guests need their verified session for THIS property. A logged-in host of
-  // the property can preview the guide (same bypass as the portal shell).
-  // Anyone else is sent back to the portal gate to verify first.
   const session = await getGuestSession();
-  const verified = !!session && session.propertyId === property.id;
-  if (!verified) {
-    const hostAccess = await getPropertyAccess(property.id);
-    if (!hostAccess) redirect(`/g/${property.slug}`);
-  }
+  const verifiedGuest = !!session && session.propertyId === property.id;
+  // An existing guest session does not grant access to a paused or draft property.
+  // The host may preview it while setting it up, but only with property-scoped access.
+  const hostAccess = !verifiedGuest || property.status !== 'live'
+    ? await getPropertyAccess(property.id)
+    : null;
+  if (property.status !== 'live' && !hostAccess) notFound();
+  if (!verifiedGuest && !hostAccess) redirect(`/g/${property.slug}`);
 
-  // Canonical places first, legacy nearby_places/recommendations merge as the
-  // fallback (see lib/local/canonical.ts). A data failure degrades to an empty
-  // guide with a helpful note, never a broken page.
   const { places, loadError } = await loadGuestLocalPlaces(admin, property.id)
     .then((places) => ({ places, loadError: false }))
     .catch(() => ({ places: [], loadError: true }));
