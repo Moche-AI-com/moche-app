@@ -26,6 +26,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   if (error) return reply({ error: 'Nearby places are temporarily unavailable.' }, 503);
   if (!property || property.id !== session.propertyId || property.slug !== slug || property.status !== 'live')
     return reply({ error: 'not_found' }, 404);
+  // Both flags must be explicitly configured. Other properties cannot incur POI charges.
+  if (process.env.LOCAL_LIVE_MAPBOX_PROPERTY_ID !== property.id) return reply({ error: 'not_found' }, 404);
   const q = new URL(request.url).searchParams.get('q')?.trim() ?? '';
   if (q.length < 2 || q.length > 80) return reply({ error: 'Enter 2–80 characters to search.' }, 400);
   if (!validCoordinates(property.lat, property.lng) || !hasMapbox())

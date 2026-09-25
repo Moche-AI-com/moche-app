@@ -21,6 +21,7 @@ const context = { params: Promise.resolve({ slug: 'house' }) };
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('LOCAL_LIVE_MAPBOX_ENABLED', 'true');
+  vi.stubEnv('LOCAL_LIVE_MAPBOX_PROPERTY_ID', property.id);
   mocks.session.mockResolvedValue({ sessionId: 'session-1', propertyId: property.id });
   mocks.admin.mockReturnValue(client());
   mocks.enabled.mockReturnValue(true);
@@ -44,13 +45,19 @@ describe('temporary Mapbox guest search', () => {
     expect((await GET(request(), context)).status).toBe(404);
     expect(mocks.search).not.toHaveBeenCalled();
   });
+  it('never searches when the configured preview property differs', async () => {
+    vi.stubEnv('LOCAL_LIVE_MAPBOX_PROPERTY_ID', 'different-property');
+    expect((await GET(request(), context)).status).toBe(404);
+    expect(mocks.rate).not.toHaveBeenCalled();
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
   it('validates the query and fails closed on rate denial', async () => {
     expect((await GET(request('a'), context)).status).toBe(400);
     mocks.rate.mockResolvedValue({ allowed: false });
     expect((await GET(request(), context)).status).toBe(429);
     expect(mocks.search).not.toHaveBeenCalled();
   });
-  it('returns sanitized, no-store, non-endorsed results without a database write', async () => {
+  it('returns sanitized, no-store, non-endorsed results without a place write', async () => {
     const response = await GET(request(), context);
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toContain('no-store');

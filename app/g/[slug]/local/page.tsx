@@ -38,7 +38,7 @@ export default async function LocalGuidePage({ params }: { params: Promise<{ slu
       location={[property.city, property.region, property.country].filter(Boolean).join(', ')}
       brandPrimary={property.brand_primary} brandAccent={property.brand_accent}
       logoUrl={property.logo_url} places={places} loadError={loadError}
-      liveNearbyEnabled={verifiedGuest && property.status === 'live' && process.env.LOCAL_LIVE_MAPBOX_ENABLED === 'true'}
+      liveNearbyEnabled={verifiedGuest && property.status === 'live' && process.env.LOCAL_LIVE_MAPBOX_ENABLED === 'true' && process.env.LOCAL_LIVE_MAPBOX_PROPERTY_ID === property.id}
     />
   );
 }
