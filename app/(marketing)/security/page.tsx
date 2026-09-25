@@ -74,10 +74,9 @@ export default function SecurityPage() {
         <p>
           The <Link href="/legal/ai-policy">AI policy</Link> describes redaction before external
           model routing and a check that blocks a routed request if personal data is still detected.
-          It also describes a fallback provider. For retention, the distinction matters: routed
-          OpenRouter requests are configured to request zero data retention and no model training,
-          while the <Link href="/legal/dpa">DPA</Link> lists direct OpenAI API input and output retention
-          of up to 30 days for abuse monitoring. We do not describe all AI processing as zero-retention.
+          It also describes fallback behavior and requests to providers not to log, retain, or train
+          on prompts and responses. Consult the published AI policy and
+          <Link href="/legal/subprocessors"> subprocessor list</Link> for the current processing details.
         </p>
 
         <h2>A host decides what goes live</h2>
