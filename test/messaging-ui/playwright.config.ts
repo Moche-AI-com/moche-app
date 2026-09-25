@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import path from 'node:path';
 export default defineConfig({
   testDir: '.', testMatch: '*.spec.ts', fullyParallel: true,
+  reporter: [['list'], ['github']],
   use: { baseURL: 'http://127.0.0.1:3220' },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
