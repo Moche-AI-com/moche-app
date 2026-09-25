@@ -19,6 +19,18 @@ test('failed save retains every draft field, especially guest visibility', async
   await expect(page.getByLabel('Favorite', { exact: true })).toBeChecked();
 });
 
+test('guest-visible places need an address or map pin, but drafts can be saved', async ({ page }) => {
+  await page.getByRole('button', { name: 'Add your own place', exact: true }).click();
+  await page.getByLabel('Place name', { exact: true }).fill('Name-only café');
+  await page.getByRole('button', { name: 'Add place', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Add an address or map pin');
+  await page.getByLabel('Guest visibility').selectOption('suggested');
+  await page.getByRole('button', { name: 'Add place', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Place saved.');
+  await page.getByRole('button', { name: 'Needs review (1)' }).click();
+  await expect(page.locator('#place-created')).toContainText('Name-only café');
+});
+
 test('map click populates a manual point, while clear and cancel preserve details', async ({ page }) => {
   await page.getByRole('button', { name: 'Add your own place', exact: true }).click();
   await page.getByLabel('Place name', { exact: true }).fill('Manual Cafe');
@@ -76,6 +88,7 @@ test('a map failure leaves manual entry usable', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Retry map' })).toBeVisible();
   await page.getByRole('button', { name: 'Add your own place', exact: true }).click();
   await page.getByLabel('Place name', { exact: true }).fill('Offline map cafe');
+  await page.getByLabel('Address', { exact: true }).fill('100 Offline Street');
   await page.getByRole('button', { name: 'Add place', exact: true }).click();
   await expect(page.locator('#place-created')).toContainText('Offline map cafe');
 });

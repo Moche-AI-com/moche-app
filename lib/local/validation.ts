@@ -44,6 +44,8 @@ export const localPlaceSchema = z.object({
   status: z.enum(['suggested', 'approved', 'hidden']).default('approved'),
 }).strict().refine((v) => (v.lat === null) === (v.lng === null), {
   message: 'Enter both latitude and longitude, or leave both blank.', path: ['lat'],
+}).refine((v) => v.status !== 'approved' || !!v.address || validCoordinates(v.lat, v.lng), {
+  message: 'Add an address or map pin before sharing with guests.', path: ['address'],
 });
 
 export type LocalPlaceInput = z.infer<typeof localPlaceSchema>;
