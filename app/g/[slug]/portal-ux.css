@@ -32,8 +32,8 @@
   caret-color: var(--gp-primary);
 }
 
-/* Keep card question sheets and the appliance picker in the mobile viewport,
-   with internal scrolling when a long list or the on-screen keyboard needs it. */
+/* Center card sheets in the visible viewport. A 78dvh cap leaves room for
+   mobile browser chrome and safe areas; long content scrolls within the sheet. */
 @media (max-width: 519px) {
   .gp-v2 .gp-modal-backdrop {
     box-sizing: border-box;
@@ -45,8 +45,8 @@
   .gp-v2 .gp-modal {
     box-sizing: border-box;
     width: min(100%, 460px);
-    max-height: calc(100vh - 24px);
-    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(78vh - 8px);
+    max-height: min(78dvh, calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
     margin: auto;
     overflow: hidden;
   }

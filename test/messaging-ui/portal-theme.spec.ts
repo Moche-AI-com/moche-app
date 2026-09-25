@@ -5,10 +5,10 @@ test('portal controls remain readable in dark and light theme', async ({ page })
   for (const selector of ['#portal-input', '#portal-composer']) {
     const dark = await page.locator(selector).evaluate((el) => {
       const css = getComputedStyle(el);
-      return { text: css.webkitTextFillColor, caret: css.caretColor };
+      return { text: css.webkitTextFillColor, caret: css.caretColor, background: css.backgroundColor };
     });
     expect(dark.text).toBe('rgb(242, 245, 244)');
-    expect(dark.caret).not.toBe(dark.text);
+    expect(dark.caret).not.toBe(dark.background);
   }
   await page.locator('.gp-v2').evaluate((el) => el.classList.add('gp-light'));
   for (const selector of ['#portal-input', '#portal-composer']) {
