@@ -1,0 +1,38 @@
+.back {
+  position: fixed;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  background: #182333;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.back:hover {
+  background: #30425a;
+  color: #fff;
+}
+
+.back:focus-visible {
+  outline: 3px solid #f9be5b;
+  outline-offset: 3px;
+}
+
+.clearance {
+  height: 5rem;
+}
+
+@media print {
+  .back, .clearance { display: none; }
+}
