@@ -17,22 +17,30 @@ function place(overrides: Partial<RankedPlace> = {}): RankedPlace {
 }
 
 describe('canonical guest ranking', () => {
-  it('excludes hidden places and orders status before other signals', () => {
+  it('excludes hidden favorites and never treats approval status as host endorsement', () => {
     const ranked = rankPlacesForGuest([
-      place({ recommendationId: 'hidden', status: 'hidden' }),
+      place({ recommendationId: 'hidden', status: 'hidden', isFavorite: true }),
       place({ recommendationId: 'suggested', status: 'suggested', isFavorite: true }),
       place({ recommendationId: 'approved', status: 'approved' }),
     ]);
-    expect(ranked.map((row) => row.recommendationId)).toEqual(['approved', 'suggested']);
+    expect(ranked.map((row) => row.recommendationId)).toEqual(['suggested', 'approved']);
   });
 
-  it('prioritizes matching intent tags, then host context and favorites', () => {
+  it('prioritizes matching intent, then favorites, then host context', () => {
     const ranked = rankPlacesForGuest([
-      place({ recommendationId: 'favorite', isFavorite: true }),
       place({ recommendationId: 'context', hostNote: 'Ask for the patio' }),
-      place({ recommendationId: 'intent', intentTags: ['dinner'] }),
+      place({ recommendationId: 'favorite', isFavorite: true }),
+      place({ recommendationId: 'intent', status: 'suggested', intentTags: ['dinner'] }),
     ], ['dinner']);
-    expect(ranked.map((row) => row.recommendationId)).toEqual(['intent', 'context', 'favorite']);
+    expect(ranked.map((row) => row.recommendationId)).toEqual(['intent', 'favorite', 'context']);
+  });
+
+  it('does not prioritize approval over a more relevant suggestion', () => {
+    const ranked = rankPlacesForGuest([
+      place({ recommendationId: 'approved', status: 'approved', isFavorite: true }),
+      place({ recommendationId: 'suggested', status: 'suggested', intentTags: ['coffee'] }),
+    ], ['coffee']);
+    expect(ranked.map((row) => row.recommendationId)).toEqual(['suggested', 'approved']);
   });
 
   it('sorts distance with nulls last and newer records before older records', () => {
