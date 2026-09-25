@@ -20,6 +20,7 @@ test('portal controls remain readable in dark and light theme', async ({ page })
 test('card dialog is visible and internally scrollable without page scrolling', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'mobile viewport assertion');
   await page.goto('/portal-fixture');
+  await page.locator('.gp-modal-body > div').evaluate((el) => { (el as HTMLElement).style.height = '1600px'; });
   await page.locator('#open-card').click();
   await expect(page.getByRole('dialog', { name: 'Question card' })).toBeVisible();
   const rect = await page.locator('.gp-modal').boundingBox();
