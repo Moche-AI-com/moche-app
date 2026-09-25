@@ -1,12 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
-import {
-  PLANS,
-  TOP_TIER_PLAN_ID,
-  FOUNDING_TRIAL_PROPERTY_LIMIT,
-  type PlanId,
-} from '@/lib/constants';
+import { PLANS, TOP_TIER_PLAN_ID, FOUNDING_TRIAL_PROPERTY_LIMIT, type PlanId } from '@/lib/constants';
 
 type Client = SupabaseClient<Database>;
 type Subscription = Database['public']['Tables']['subscriptions']['Row'];
@@ -16,8 +11,6 @@ export interface Entitlements {
   active: boolean;
   status: Subscription['status'] | 'none';
   propertyLimit: number;
-  // Pooled guest conversations per period for the whole host account. 0 means the
-  // allowance is set by contract (sales-assisted tiers) or there is no plan.
   conversationAllowance: number;
   smsAllowance: number;
   reviewNudge: boolean;
@@ -27,153 +20,84 @@ export interface Entitlements {
   cloning: boolean;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
-  // True while the Founding Member trial is running. Trials grant top-tier FEATURES
-  // with a lower property cap, so callers that care about the cap must read
-  // propertyLimit rather than inferring it from planId.
   trialing: boolean;
   trialEnd: string | null;
-  // Read-only degradation: the account keeps its data and every static guest-facing
-  // surface, but guest AI is refused and write paths surface an upgrade prompt.
   isReadOnly: boolean;
 }
 
 const ACTIVE_STATUSES: Subscription['status'][] = ['trialing', 'active', 'past_due'];
-
-// Statuses where the guest concierge keeps running. Deliberately the same list as
-// ACTIVE_STATUSES today: trialing, active, and past_due (dunning grace). It exists
-// as a separate constant so a future change (e.g. pausing guest AI during dunning)
-// is a one-line edit with its own review, not an accidental side effect of editing
-// paused. Uses the EXISTING subscription_status enum — no new states invented.
 const GUEST_AI_ENABLED_STATUSES: Subscription['status'][] = ['trialing', 'active', 'past_due'];
+const READ_ONLY_STATUSES: Subscription['status'][] = ['unpaid', 'canceled', 'incomplete_expired', 'paused'];
 
-// Statuses that put an account into read-only on their own, independent of the
-// explicit subscriptions.is_read_only latch. past_due is deliberately NOT here: it
-// is a dunning grace period, and cutting a paying host's guests off mid-stay over a
-// card that expired is worse than carrying them for the dunning window.
-const READ_ONLY_STATUSES: Subscription['status'][] = [
-  'unpaid',
-  'canceled',
-  'incomplete_expired',
-  'paused',
-];
-
-// Read-only is the OR of the explicit latch and the status-derived value. Support
-// can force it on, and an exhausted dunning cycle produces it without anyone
-// having to remember to set a column.
 export function isReadOnly(sub: Subscription | null): boolean {
-  if (!sub) return false; // never subscribed is not read-only, it is pre-trial
+  if (!sub) return false;
   return sub.is_read_only || READ_ONLY_STATUSES.includes(sub.status);
 }
 
-// Whether the guest AI concierge should run for a host account's subscription.
-// A missing subscription (free tier / never subscribed) is NOT guest-AI enabled:
-// the public concierge is a paid capability. Derived from the DB, never the client.
-//
-// Read-only wins over an otherwise-enabled status, which is how an explicit
-// is_read_only latch takes effect on a row that still says 'active'.
 export function guestAiEnabled(sub: Subscription | null): boolean {
   if (!sub) return false;
   if (isReadOnly(sub)) return false;
   return GUEST_AI_ENABLED_STATUSES.includes(sub.status);
 }
 
-// Entitlements are DERIVED FROM THE DATABASE, never trusted from the client.
-// A missing/inactive subscription grants the minimum (1 property, no paid features).
 export function entitlementsFromSubscription(sub: Subscription | null): Entitlements {
   const active = !!sub && ACTIVE_STATUSES.includes(sub.status);
   const readOnly = isReadOnly(sub);
   const trialing = !!sub && sub.status === 'trialing';
   const planId = (sub?.plan as PlanId | undefined) ?? null;
   const storedPlan = planId && PLANS[planId] ? PLANS[planId] : null;
-
-  // During a Founding Member trial the host gets the top tier's features even if
-  // the price they checked out on is a cheaper tier, because the offer is "one
-  // month on the top tier". The property CAP still comes from the subscription row
-  // (trial_property_limit), not from the top tier's own much higher limit.
   const plan = trialing ? PLANS[TOP_TIER_PLAN_ID] : storedPlan;
-
   if (!active || !plan || readOnly) {
     return {
-      planId: readOnly ? planId : null,
-      active: false,
-      status: sub?.status ?? 'none',
-      propertyLimit: 1, // allow one draft property so hosts can build before paying
-      conversationAllowance: sub ? 0 : 30,
-      smsAllowance: 0,
-      reviewNudge: false,
-      smsEscalation: false,
-      conciergeCustomization: false,
-      coHosts: false,
-      cloning: false,
-      currentPeriodEnd: sub?.current_period_end ?? null,
-      cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false,
-      trialing: false,
-      trialEnd: sub?.trial_end ?? null,
-      isReadOnly: readOnly,
+      planId: readOnly ? planId : null, active: false, status: sub?.status ?? 'none',
+      propertyLimit: 1, conversationAllowance: sub ? 0 : 30, smsAllowance: 0,
+      reviewNudge: false, smsEscalation: false, conciergeCustomization: false,
+      coHosts: false, cloning: false, currentPeriodEnd: sub?.current_period_end ?? null,
+      cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false, trialing: false,
+      trialEnd: sub?.trial_end ?? null, isReadOnly: readOnly,
     };
   }
-
-  // Per-property pricing: the paid quantity on the Stripe line item IS the property
-  // cap (the webhook persists it on the subscriptions row). plan.propertyLimit is the
-  // tier's ceiling, so the cap can never exceed the tier's band even if a Stripe
-  // quantity is edited by hand. Known follow-up: adding a property mid-plan does not
-  // yet raise the quantity automatically; today that is a support-assisted change.
-  const paidQuantity =
-    sub!.quantity && Number.isFinite(sub!.quantity) && sub!.quantity > 0 ? sub!.quantity : 1;
+  const paidQuantity = sub!.quantity && Number.isFinite(sub!.quantity) && sub!.quantity > 0 ? sub!.quantity : 1;
   const propertyLimit = trialing
     ? (sub!.trial_property_limit ?? FOUNDING_TRIAL_PROPERTY_LIMIT)
     : Math.min(paidQuantity, plan.propertyLimit);
-
   return {
-    planId: plan.id,
-    active: true,
-    status: sub!.status,
-    propertyLimit,
-    conversationAllowance: plan.conversationAllowance,
-    smsAllowance: plan.smsAllowance,
-    reviewNudge: plan.reviewNudge,
-    smsEscalation: plan.smsEscalation,
-    conciergeCustomization: plan.conciergeCustomization,
-    coHosts: plan.id !== 'starter',
-    cloning: plan.id !== 'starter',
-    currentPeriodEnd: sub!.current_period_end,
-    cancelAtPeriodEnd: sub!.cancel_at_period_end,
-    trialing,
-    trialEnd: sub!.trial_end,
+    planId: plan.id, active: true, status: sub!.status, propertyLimit,
+    conversationAllowance: plan.conversationAllowance, smsAllowance: plan.smsAllowance,
+    reviewNudge: plan.reviewNudge, smsEscalation: plan.smsEscalation,
+    conciergeCustomization: plan.conciergeCustomization, coHosts: plan.id !== 'starter',
+    cloning: plan.id !== 'starter', currentPeriodEnd: sub!.current_period_end,
+    cancelAtPeriodEnd: sub!.cancel_at_period_end, trialing, trialEnd: sub!.trial_end,
     isReadOnly: false,
   };
 }
 
 export async function getEntitlements(client: Client, hostAccountId: string): Promise<Entitlements> {
-  const { data: sub } = await client
-    .from('subscriptions')
-    .select('*')
-    .eq('host_account_id', hostAccountId)
-    .maybeSingle();
+  const { data: sub } = await client.from('subscriptions').select('*')
+    .eq('host_account_id', hostAccountId).maybeSingle();
   return entitlementsFromSubscription(sub ?? null);
 }
 
-// Guest-AI gate for a host account: true when billing status permits serving the
-// guest concierge. Reused by the guest chat path to fail gracefully instead of
-// calling the model for an unpaid/canceled/read-only account.
+// Only a service-role server client can read app_settings. Demo access is scoped
+// to a single host account, requires an explicit grant, and has no expiration.
+// Any real subscription takes precedence, including canceled and read-only rows.
 export async function isGuestAiEnabled(client: Client, hostAccountId: string): Promise<boolean> {
-  const { data: sub } = await client
-    .from('subscriptions')
-    .select('*')
-    .eq('host_account_id', hostAccountId)
-    .maybeSingle();
-  return guestAiEnabled(sub ?? null);
+  const { data: sub, error: subError } = await client.from('subscriptions').select('*')
+    .eq('host_account_id', hostAccountId).maybeSingle();
+  if (subError) return false;
+  if (sub) return guestAiEnabled(sub);
+  const { data: grant, error: grantError } = await client.from('app_settings').select('value')
+    .eq('key', `guest_ai_demo:${hostAccountId}`).maybeSingle();
+  if (grantError) return false;
+  const value = grant?.value;
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && 'enabled' in value && value.enabled === true;
 }
 
-// Enforces the property cap. Counts non-archived, non-deleted properties.
 export async function canCreateProperty(client: Client, hostAccountId: string): Promise<{ ok: boolean; limit: number; used: number }> {
   const ent = await getEntitlements(client, hostAccountId);
-  const { count } = await client
-    .from('properties')
-    .select('id', { count: 'exact', head: true })
-    .eq('host_account_id', hostAccountId)
-    .is('deleted_at', null)
-    .neq('status', 'archived');
+  const { count } = await client.from('properties').select('id', { count: 'exact', head: true })
+    .eq('host_account_id', hostAccountId).is('deleted_at', null).neq('status', 'archived');
   const used = count ?? 0;
   return { ok: used < ent.propertyLimit, limit: ent.propertyLimit, used };
 }
