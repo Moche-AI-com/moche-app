@@ -11,6 +11,7 @@ import { publicEnv } from '@/lib/env';
 import { capture } from '@/lib/posthog-server';
 import type { ChatMessage } from '@/lib/ai';
 import { fallbackClassifyIntent } from '@/lib/ai/fallback';
+import { redactCredentials } from '@/lib/brain/redact';
 import { log } from '@/lib/log';
 import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { translateForHost, notificationBody } from '@/lib/guest/translate';
@@ -74,9 +75,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .filter((m) => m.role === 'guest' || m.role === 'assistant')
     .map((m) => ({ role: m.role === 'guest' ? 'user' : 'assistant', content: m.content }));
   const behavioral = behavioralEscalation(question, history);
-  await admin.from('messages').insert({
+  const guestWrite = await admin.from('messages').insert({
     conversation_id: conversationId, property_id: session.propertyId, role: 'guest', content: question,
   } as never);
+  if (guestWrite.error) {
+    log.warn('guest_ai_message_write_failed', { propertyId: session.propertyId, code: 'guest_write' });
+    return NextResponse.json({ error: 'Your message could not be saved. Please retry.' }, { status: 503 });
+  }
 
   const started = Date.now();
   let answer: ConciergeAnswer;
@@ -154,20 +159,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
   }
 
-  await admin.from('messages').insert({
-    conversation_id: conversationId, property_id: session.propertyId, role: 'assistant',
-    content: answer.text, intent: answer.intent, confidence: answer.confidence,
-    sources: answer.sources as never, model: answer.model, latency_ms: latencyMs,
-  } as never);
   const maintenance = await maybeCreateServiceRequest(admin, {
     propertyId: session.propertyId, stayId: session.stayId, conversationId, question, answer,
   });
+  const finalAnswer = redactCredentials(maintenance.guestLine ? `${answer.text}\n\n${maintenance.guestLine}` : answer.text).text;
+  const assistantWrite = await (admin as any).from('messages').insert({
+    conversation_id: conversationId, property_id: session.propertyId, role: 'assistant',
+    content: finalAnswer, intent: answer.intent, confidence: answer.confidence,
+    sources: answer.sources, model: answer.model, latency_ms: latencyMs, guest_replay_safe: true,
+  });
+  if (assistantWrite.error) {
+    log.warn('guest_ai_message_write_failed', { propertyId: session.propertyId, code: 'assistant_write' });
+    return NextResponse.json({ error: 'The answer could not be saved. Check your conversation before retrying.' }, { status: 503 });
+  }
   if (maintenance.created) {
     await capture('service_request_created', session.propertyId, {
       property_id: session.propertyId, service_type: answer.intent, urgency: maintenance.urgency,
     });
   }
-  const finalAnswer = maintenance.guestLine ? `${answer.text}\n\n${maintenance.guestLine}` : answer.text;
   return NextResponse.json({
     ok: true, answer: finalAnswer, confidence: Number(answer.confidence.toFixed(2)),
     escalated: escalationConfirmed, isEmergency: answer.isEmergency,
