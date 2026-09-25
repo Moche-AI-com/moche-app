@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { marketingMetadata } from '@/lib/marketing/metadata';
 import { DocHeader, Related } from '../_parts';
-import guestPortal from '@/public/premium/product-guest-experience-desktop.png';
+import guestEntry from '@/public/premium/Guest_Sign_Signin.png';
 import guestLocalRecs from '@/public/premium/Guest Portal_Local_Recs.png';
 import styles from '../marketing.module.css';
 import pageStyles from './support.module.css';
@@ -64,11 +64,11 @@ export default function SupportPage() {
           and device. A redacted screenshot may help. Do not email a live guest link, access code,
           or guest contact details. <a href={emailFor('Guest portal issue')}>Email about the guest portal</a>.
         </p>
-        <figure className={pageStyles.figure}>
-          <a href={guestPortal.src} target="_blank" rel="noopener noreferrer" aria-label="Open illustrative guest portal at full size">
-            <Image src={guestPortal} alt="Illustrative Moche-AI guest portal in a browser" sizes="(max-width: 640px) 100vw, 800px" className={pageStyles.image} />
+        <figure className={pageStyles.figure} style={{ maxWidth: 560 }}>
+          <a href={guestEntry.src} target="_blank" rel="noopener noreferrer" aria-label="Open illustrative guest stay-access screen at full size">
+            <Image src={guestEntry} alt="Illustrative guest stay-access screen before entering the portal" sizes="(max-width: 640px) 100vw, 560px" className={pageStyles.image} />
           </a>
-          <figcaption>Illustrative guest view: name the step that fails so support can reproduce the issue.</figcaption>
+          <figcaption>Illustrative guest access: if a stay link or entry step fails, tell support which step the guest reaches.</figcaption>
         </figure>
 
         <h2>Billing and data rights</h2>
