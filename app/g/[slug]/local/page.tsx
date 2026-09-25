@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { getPropertyAccess } from '@/lib/auth/guards';
 import { loadGuestLocalPlaces } from '@/lib/local/canonical';
+import { guestGuideAccess } from '@/lib/local/guide-access';
 import { LocalGuide } from './LocalGuide';
 
 const displaySerif = Cormorant_Garamond({
@@ -33,13 +34,12 @@ export default async function LocalGuidePage({ params }: { params: Promise<{ slu
 
   const session = await getGuestSession();
   const verifiedGuest = !!session && session.propertyId === property.id;
-  // An existing guest session does not grant access to a paused or draft property.
-  // The host may preview it while setting it up, but only with property-scoped access.
   const hostAccess = !verifiedGuest || property.status !== 'live'
     ? await getPropertyAccess(property.id)
     : null;
-  if (property.status !== 'live' && !hostAccess) notFound();
-  if (!verifiedGuest && !hostAccess) redirect(`/g/${property.slug}`);
+  const access = guestGuideAccess(property.status, verifiedGuest, !!hostAccess);
+  if (access === 'not_found') notFound();
+  if (access === 'verify') redirect(`/g/${property.slug}`);
 
   const { places, loadError } = await loadGuestLocalPlaces(admin, property.id)
     .then((places) => ({ places, loadError: false }))
