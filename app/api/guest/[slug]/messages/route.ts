@@ -26,21 +26,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   if (after && Number.isNaN(Date.parse(after))) {
     return NextResponse.json({ error: 'Invalid history cursor.' }, { status: 400 });
   }
-  let priorGuestContent = '';
+  let priorWifiContext = false;
   if (after) {
-    const { data: prior, error: priorError } = await admin.from('messages')
-      .select('content').eq('conversation_id', conversationId).eq('property_id', session.propertyId)
-      .eq('role', 'guest').lte('created_at', after)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (priorError) return NextResponse.json({ error: 'Could not load chat history.' }, { status: 503 });
-    priorGuestContent = prior?.content ?? '';
+    const { data: priorWifi, error } = await admin.from('messages')
+      .select('id').eq('conversation_id', conversationId).eq('property_id', session.propertyId)
+      .lte('created_at', after)
+      .or(['wi%fi', 'wireless', 'internet', 'network', 'ssid', 'router']
+        .map((topic) => `content.ilike.%${topic}%`).join(','))
+      .limit(1).maybeSingle();
+    if (error) return NextResponse.json({ error: 'Could not load chat history.' }, { status: 503 });
+    priorWifiContext = !!priorWifi;
   }
   let query = (admin as any).from('messages')
-    .select('id, role, content, created_at, model, intent, guest_replay_safe')
+    .select('id, role, content, created_at, model, guest_replay_safe')
     .eq('conversation_id', conversationId).eq('property_id', session.propertyId)
     .order('created_at', { ascending: true }).limit(100);
   if (after) query = query.gt('created_at', after);
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: 'Could not load chat history.' }, { status: 503 });
-  return NextResponse.json({ messages: serializeGuestHistory((data ?? []) as GuestHistoryRow[], priorGuestContent) });
+  return NextResponse.json({ messages: serializeGuestHistory((data ?? []) as GuestHistoryRow[], priorWifiContext) });
 }
