@@ -55,7 +55,7 @@ function db(rows: Record<string, unknown[]>, failure?: string) {
 }
 function form(overrides: Record<string, string> = {}) {
   const data = new FormData();
-  for (const [key, value] of Object.entries({ propertyId: PROPERTY, name: 'New Coffee', category: 'cafe', status: 'approved', ...overrides })) data.set(key, value);
+  for (const [key, value] of Object.entries({ propertyId: PROPERTY, name: 'New Coffee', category: 'cafe', address: '1 Main', status: 'approved', ...overrides })) data.set(key, value);
   return data;
 }
 beforeEach(() => {
@@ -122,13 +122,18 @@ describe('safe host saves', () => {
     expect(await addManualLocalPlaceAction({}, form({ lat: '91', lng: '0' }))).toHaveProperty('error');
     expect(calls.filter((c) => c.op !== 'select')).toHaveLength(0);
   });
+  it('rejects an unlocated guest-visible place before any privileged write', async () => {
+    const { client, calls } = db({}); mocks.admin.mockReturnValue(client);
+    expect(await addManualLocalPlaceAction({}, form({ address: '' }))).toMatchObject({ error: 'Add an address or map pin before sharing with guests.' });
+    expect(calls).toHaveLength(0);
+  });
   it('denies a missing property membership without writes', async () => {
     mocks.access.mockResolvedValue(null);
     expect(await addManualLocalPlaceAction({}, form())).toHaveProperty('error');
     expect(mocks.admin).not.toHaveBeenCalled();
   });
   it('does not reuse a matching manual record from another property', async () => {
-    const { client, calls } = db({ places: [{ id: 'other-account-place', provider: 'manual', name: 'New Coffee', normalized_name: 'new coffee', category: 'cafe', address: null }] });
+    const { client, calls } = db({ places: [{ id: 'other-account-place', provider: 'manual', name: 'New Coffee', normalized_name: 'new coffee', category: 'cafe', address: '1 Main' }] });
     mocks.admin.mockReturnValue(client);
     expect(await addManualLocalPlaceAction({}, form())).toMatchObject({ ok: true });
     expect(calls.find((c) => c.table === 'places' && c.op === 'insert')).toBeTruthy();

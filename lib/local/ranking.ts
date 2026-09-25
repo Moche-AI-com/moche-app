@@ -19,28 +19,22 @@ function intentScore(place: RankedPlace, guestIntentTags: readonly string[]): nu
   return place.intentTags.filter((tag) => wanted.has(tag)).length;
 }
 
-function statusScore(status: PlaceRecommendationStatus): number {
-  return status === 'approved' ? 2 : status === 'suggested' ? 1 : 0;
-}
-
 function freshness(value: string | null): number {
   const time = value ? Date.parse(value) : Number.NEGATIVE_INFINITY;
   return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
 }
 
-/** Host-approved places always lead; each later tier only breaks a tie. */
+/** Rank guest-eligible places by relevance, explicit host favorites, then useful context.
+ * Approval status is not host endorsement; callers must exclude hidden rows. */
 export function comparePlacesForGuest(a: RankedPlace, b: RankedPlace, guestIntentTags: readonly string[] = []): number {
-  const status = statusScore(b.status) - statusScore(a.status);
-  if (status) return status;
-
   const intent = intentScore(b, guestIntentTags) - intentScore(a, guestIntentTags);
   if (intent) return intent;
+
+  if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
 
   const hostContext = Number(Boolean(b.hostNote?.trim()) || b.tags.length > 0)
     - Number(Boolean(a.hostNote?.trim()) || a.tags.length > 0);
   if (hostContext) return hostContext;
-
-  if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
 
   const distanceA = a.distanceMiles ?? Number.POSITIVE_INFINITY;
   const distanceB = b.distanceMiles ?? Number.POSITIVE_INFINITY;
