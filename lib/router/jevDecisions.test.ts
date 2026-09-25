@@ -24,16 +24,25 @@ describe('Jev decisions adapter', () => {
     vi.stubGlobal('fetch', fetcher);
     await expect(decideChoice(input)).resolves.toMatchObject({ choice: 'maintenance', confidence: 0.9 });
     expect(fetcher.mock.calls[0][0]).toBe('https://openrouter.ai/api/alpha/decisions');
+    expect(fetcher.mock.calls[0][1].redirect).toBe('error');
     const body = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(body).toMatchObject({ model: 'typesafe/jev-1.13',
       questions: { label: { type: 'choice' } } });
   });
 
-  it('redacts personal information before the request', async () => {
+  it('redacts personal information from state, instructions, and criteria', async () => {
     const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => answer });
     vi.stubGlobal('fetch', fetcher);
-    await decideChoice({ ...input, state: { message: 'Reach me at guest@example.com' } });
-    expect(fetcher.mock.calls[0][1].body).not.toContain('guest@example.com');
+    await decideChoice({
+      state: { message: 'Reach me at guest@example.com' },
+      instructions: 'Email host@example.com with the category.',
+      criteria: { maintenance: 'Ask owner@example.com about repair.', other: 'Any other request.' },
+    });
+    const body = fetcher.mock.calls[0][1].body as string;
+    expect(body).not.toContain('guest@example.com');
+    expect(body).not.toContain('host@example.com');
+    expect(body).not.toContain('owner@example.com');
+    expect(body).toContain('[redacted-email]');
   });
 
   it('fails before sending when the key is missing', async () => {

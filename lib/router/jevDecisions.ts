@@ -34,14 +34,20 @@ export async function decideChoice(request: ChoiceRequest): Promise<ChoiceDecisi
       stateEntries.some(([key, value]) => !/^[a-z][a-z0-9_]{0,39}$/.test(key) || typeof value !== 'string' || value.length > 4000)) {
     throw new Error('Invalid Jev state.');
   }
+  // All caller-supplied fields must pass the same outbound privacy gate.
   const state = Object.fromEntries(stateEntries.map(([key, value]) => [key, redactPII(value)]));
-  if (Object.values(state).some(containsLikelyPII)) throw new Error('Jev input contains residual PII.');
+  const instructions = redactPII(request.instructions);
+  const criteria = Object.fromEntries(entries.map(([key, value]) => [key, redactPII(value)]));
+  if ([...Object.values(state), instructions, ...Object.values(criteria)].some(containsLikelyPII)) {
+    throw new Error('Jev input contains residual PII.');
+  }
   const res = await fetch(DECISIONS_URL, {
     method: 'POST',
+    redirect: 'error',
     headers: { Authorization: `Bearer ${serverEnv.openrouterApiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: JEV_MODEL, state,
-      questions: { label: { type: 'choice', instructions: request.instructions, criteria: request.criteria } },
+      questions: { label: { type: 'choice', instructions, criteria } },
     }),
     signal: AbortSignal.timeout(8000),
   });
