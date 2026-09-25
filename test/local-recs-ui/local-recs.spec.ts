@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('failed save retains every draft field, especially guest visibility', async ({ page }) => {
-  await page.getByRole('button', { name: 'Add manually', exact: true }).click();
+  await page.getByRole('button', { name: 'Add your own place', exact: true }).click();
   await page.getByLabel('Place name', { exact: true }).fill('Fail save');
   await page.getByLabel('Host note · shared with guests').fill('Do not lose this note');
   await page.getByLabel('Guest visibility').selectOption('hidden');
@@ -20,7 +20,7 @@ test('failed save retains every draft field, especially guest visibility', async
 });
 
 test('map click populates a manual point, while clear and cancel preserve details', async ({ page }) => {
-  await page.getByRole('button', { name: 'Add manually', exact: true }).click();
+  await page.getByRole('button', { name: 'Add your own place', exact: true }).click();
   await page.getByLabel('Place name', { exact: true }).fill('Manual Cafe');
   await page.getByRole('button', { name: 'Choose on map' }).click();
   await page.getByTestId('local-map').click({ position: { x: 60, y: 200 } });
@@ -33,13 +33,24 @@ test('map click populates a manual point, while clear and cancel preserve detail
   await expect(page.getByLabel('Place name', { exact: true })).toHaveValue('Manual Cafe');
 });
 
+test('visibility views and search keep hidden places recoverable', async ({ page }) => {
+  await expect(page.getByRole('button', { name: 'Hidden (1)' })).toBeVisible();
+  await page.getByRole('button', { name: 'Hidden (1)' }).click();
+  await expect(page.locator('#place-saved')).toContainText('Saved Cafe');
+  await page.getByLabel('Search hidden').fill('unknown');
+  await expect(page.locator('#place-saved')).toHaveCount(0);
+  await expect(page.getByText('No places match this search.')).toBeVisible();
+  await page.getByLabel('Search hidden').fill('Saved');
+  await expect(page.locator('#place-saved')).toBeVisible();
+});
+
 test('keyboard selects a hidden pin and saving updates its card and popup note', async ({ page }) => {
   const pin = page.getByRole('button', { name: /Saved Cafe.*Open place details/ });
   await pin.focus(); await page.keyboard.press('Enter');
   await page.getByLabel('Host note · shared with guests').fill('Updated note');
   await page.getByLabel('Guest visibility').selectOption('approved');
   await page.getByRole('button', { name: 'Save place', exact: true }).click();
-  await expect(page.locator('#place-saved')).toContainText('Your note: Updated note');
+  await expect(page.locator('#place-saved')).toContainText('Your tip: Updated note');
   await expect(pin).toHaveAttribute('title', 'Saved CafeUpdated note');
 });
 
@@ -63,7 +74,7 @@ test('temporary search selection never prefills the manual form', async ({ page 
 test('a map failure leaves manual entry usable', async ({ page }) => {
   await page.goto('/?mapFail');
   await expect(page.getByRole('button', { name: 'Retry map' })).toBeVisible();
-  await page.getByRole('button', { name: 'Add manually', exact: true }).click();
+  await page.getByRole('button', { name: 'Add your own place', exact: true }).click();
   await page.getByLabel('Place name', { exact: true }).fill('Offline map cafe');
   await page.getByRole('button', { name: 'Add place', exact: true }).click();
   await expect(page.locator('#place-created')).toContainText('Offline map cafe');
