@@ -1,0 +1,55 @@
+/* The dashboard's baseline -webkit-text-fill-color uses --text, which follows a
+   separate theme from the guest portal. Scope the override to the guest shell. */
+.gp-v2 input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']),
+.gp-v2 textarea,
+.gp-v2 select {
+  color: var(--gp-text);
+  -webkit-text-fill-color: var(--gp-text);
+  caret-color: var(--gp-primary);
+  background-color: var(--gp-surface-2);
+}
+.gp-v2 input::placeholder,
+.gp-v2 textarea::placeholder {
+  color: var(--gp-faint);
+  opacity: 1;
+}
+.gp-v2 input:disabled,
+.gp-v2 textarea:disabled,
+.gp-v2 select:disabled {
+  -webkit-text-fill-color: var(--gp-muted);
+}
+.gp-v2 input:-webkit-autofill,
+.gp-v2 input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--gp-text);
+  box-shadow: 0 0 0 1000px var(--gp-surface-2) inset;
+}
+/* The chat pill is deliberately transparent over the themed surface. */
+.gp-v2 .gp-composer input,
+.gp-v2 .gp-composer textarea {
+  background-color: transparent;
+  color: var(--gp-text);
+  -webkit-text-fill-color: var(--gp-text);
+  caret-color: var(--gp-primary);
+}
+
+/* Keep card question sheets and the appliance picker in the mobile viewport,
+   with internal scrolling when a long list or the on-screen keyboard needs it. */
+@media (max-width: 519px) {
+  .gp-v2 .gp-modal-backdrop {
+    box-sizing: border-box;
+    align-items: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+  .gp-v2 .gp-modal {
+    box-sizing: border-box;
+    width: min(100%, 460px);
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    margin: auto;
+    overflow: hidden;
+  }
+  .gp-v2 .gp-modal-head { flex-shrink: 0; }
+  .gp-v2 .gp-modal-body { min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+}
