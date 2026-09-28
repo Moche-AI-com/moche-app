@@ -58,6 +58,18 @@ export default async function AddKnowledgePage({ params }: { params: Promise<{ i
         </div>
       ) : (
         <div style={{ marginTop: '1.25rem' }}>
+          {access.can.editProperty && (
+            <div className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.05rem', margin: '0 0 .4rem' }}>Adding an appliance?</h2>
+              <p className="faint" style={{ fontSize: '.85rem', margin: '0 0 .75rem' }}>
+                Search for the exact model to fill in its brand, model, and type. Add its location,
+                then review matching manual sections before the concierge can use them.
+              </p>
+              <Link className="btn btn-ghost btn-sm" href={`/dashboard/properties/${propertyId}/appliances`}>
+                Search and add appliances →
+              </Link>
+            </div>
+          )}
           <AddKnowledgeClient
             propertyId={propertyId}
             sections={sections}

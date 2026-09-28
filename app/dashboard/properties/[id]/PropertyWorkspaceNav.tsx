@@ -93,13 +93,12 @@ export function propertySectionLabel(pathname: string, propertyId: string): stri
     return SECTION_LABELS.local;
   }
   if (path.startsWith(`${base}/extras`)) return SECTION_LABELS.extras;
-  if (path.startsWith(`${base}/brain`)) return SECTION_LABELS.brain;
+  // Appliances is a knowledge-management destination, not configuration.
+  if (path.startsWith(`${base}/brain`) || path.startsWith(`${base}/appliances`)) return SECTION_LABELS.brain;
   // Guest chat moved again — out of the Stays tab and into the Property Inbox.
   if (path.startsWith(`${base}/inbox`) || path.startsWith(`${base}/guest-chat`)) return SECTION_LABELS.inbox;
   if (path.startsWith(`${base}/welcome-card`)) return 'Welcome card';
-  if (path.startsWith(`${base}/settings`) || path.startsWith(`${base}/appliances`)) {
-    return SECTION_LABELS.settings;
-  }
+  if (path.startsWith(`${base}/settings`)) return SECTION_LABELS.settings;
   return SECTION_LABELS.overview;
 }
 

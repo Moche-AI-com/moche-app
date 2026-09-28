@@ -1,0 +1,25 @@
+name: Appliance guidance SQL
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/appliance-guidance-sql.yml'
+      - 'scripts/verify-appliance-guidance-sql.sh'
+      - 'supabase/migrations/20260928145500_appliance_guest_guidance.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appliance-sql:
+    name: Appliance guidance migration and RLS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql postgresql-contrib
+      - name: Apply exact migration twice and check tenant isolation
+        run: bash scripts/verify-appliance-guidance-sql.sh
