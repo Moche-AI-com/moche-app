@@ -47,6 +47,7 @@ describe('property workspace navigation', () => {
     expect(propertySectionLabel(`${base}/nearby`, propertyId)).toBe('Local Recs');
     expect(propertySectionLabel(`${base}/recommendations?view=all`, propertyId)).toBe('Local Recs');
     expect(propertySectionLabel(`${base}/brain`, propertyId)).toBe('Manage Brain');
+    expect(propertySectionLabel(`${base}/appliances`, propertyId)).toBe('Manage Brain');
     expect(propertySectionLabel(`${base}/inbox`, propertyId)).toBe('Inbox');
   });
 
@@ -59,13 +60,14 @@ describe('property workspace navigation', () => {
     expect(activeKeys).toEqual(['local']);
   });
 
-  it('marks Manage Brain active on the Brain route and nothing else', () => {
+  it('marks Manage Brain active on its Brain and appliance routes', () => {
     const sections = propertySections(propertyId, true, true);
-    const activeKeys = sections
-      .filter((section) => isPropertySectionActive(`${base}/brain`, section, propertyId))
-      .map((section) => section.key);
-
-    expect(activeKeys).toEqual(['brain']);
+    for (const path of [`${base}/brain`, `${base}/appliances`]) {
+      const activeKeys = sections
+        .filter((section) => isPropertySectionActive(path, section, propertyId))
+        .map((section) => section.key);
+      expect(activeKeys).toEqual(['brain']);
+    }
   });
 
   it('marks Inbox active on the Inbox route and nothing else', () => {
