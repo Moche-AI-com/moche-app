@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { computeBrainHealth } from '@/lib/brain/health';
+import { propertyWorkspaceSummary } from '@/lib/brain/property-workspace-summary';
+import { loadCompleteness } from '@/lib/brain/values';
 import { createClient } from '@/lib/supabase/server';
 import { serverEnv } from '@/lib/env';
 import { STATUS_BADGE } from '@/lib/constants';
 import { PropertyStatusControls } from './StatusControls';
 import { PropertyWorkspaceNav } from './PropertyWorkspaceNav';
+
+export const dynamic = 'force-dynamic';
 
 export default async function PropertyWorkspaceLayout({
   children,
@@ -16,11 +20,23 @@ export default async function PropertyWorkspaceLayout({
 }) {
   const { property, can } = await requirePropertyAccess((await params).id);
   const supabase = createClient();
-  const { data: items } = await supabase
-    .from('brain_items')
-    .select('category, status, deleted_at, visibility')
-    .eq('property_id', property.id);
-  const health = computeBrainHealth(items ?? []);
+  // Match Manage Brain's request-scoped, RLS-enforced completeness read. A failed
+  // read must never become a reassuring or misleading 0% score.
+  const completeness = await loadCompleteness(supabase, property.id);
+  const summary = propertyWorkspaceSummary(completeness);
+
+  // The old category check remains a separate, optional server publish gate.
+  // Only read it when that gate is enabled; it must not supply the percentage.
+  const legacyItems = serverEnv.requireBrainToPublish
+    ? await supabase
+        .from('brain_items')
+        .select('category, status, deleted_at, visibility')
+        .eq('property_id', property.id)
+    : null;
+  if (legacyItems?.error) throw legacyItems.error;
+  const legacyBrainReady = legacyItems
+    ? computeBrainHealth(legacyItems.data ?? []).canGoLive
+    : true;
   const location = [property.city, property.region, property.country].filter(Boolean).join(', ') || 'No location set';
 
   return (
@@ -30,9 +46,7 @@ export default async function PropertyWorkspaceLayout({
           back-to-properties link that used to sit here duplicated the
           breadcrumb's first crumb. */}
 
-      {/* Slim command strip, not a hero card: identity + status actions on the
-          left, Brain health as a compact meter on the right. Grid rules live in
-          globals.css (.property-workspace-header) so the 860px collapse applies. */}
+      {/* Slim command strip with the same registry score shown in Manage Brain. */}
       <header className="property-workspace-header">
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
@@ -47,32 +61,33 @@ export default async function PropertyWorkspaceLayout({
               <PropertyStatusControls
                 propertyId={property.id}
                 status={property.status}
-                canGoLive={health.canGoLive}
+                canGoLive={legacyBrainReady}
                 brainRequired={serverEnv.requireBrainToPublish}
+                completenessRequired={serverEnv.requireCompletenessToPublish}
+                checklistComplete={summary.checklistComplete}
+                checklistDetail={summary.checklistDetail}
               />
             </div>
           )}
         </div>
 
-        {/* The whole meter is the Manage Brain link — the gradient bar carries
-            the score at a glance, so the number never needs its own card. */}
         <Link
           href={`/dashboard/properties/${property.id}/brain`}
           className="brain-meter"
-          aria-label={`Brain health ${health.score} out of 100. Manage Brain.`}
+          aria-label={`Guest-ready ${summary.pct} percent. ${summary.checklistDetail}. Manage Brain.`}
         >
           <span className="brain-meter-top">
-            <span className="brain-meter-label">Brain health</span>
+            <span className="brain-meter-label">Guest-ready</span>
             <span
               className="brain-meter-score"
-              style={{ color: health.score >= 70 ? 'var(--teal)' : health.score >= 40 ? 'var(--iris)' : 'var(--coral)' }}
+              style={{ color: summary.checklistComplete ? 'var(--teal)' : summary.pct >= 40 ? 'var(--iris)' : 'var(--coral)' }}
             >
-              {health.score}
-              <small>/100</small>
+              {summary.pct}
+              <small>%</small>
             </span>
           </span>
           <span className="dash-topic-track brain-meter-track" aria-hidden>
-            <span className="dash-topic-fill" style={{ width: `${health.score}%` }} />
+            <span className="dash-topic-fill" style={{ width: `${summary.pct}%` }} />
           </span>
           <span className="brain-meter-cta">Manage Brain →</span>
         </Link>
