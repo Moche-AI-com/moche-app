@@ -4,7 +4,8 @@ import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { getEntitlements } from '@/lib/billing/entitlements';
 import { planBannerFor } from '@/lib/dashboard/plan-banner';
-import { computeBrainHealth } from '@/lib/brain/health';
+import { loadCompleteness } from '@/lib/brain/values';
+import { propertyWorkspaceSummary } from '@/lib/brain/property-workspace-summary';
 import { loadValueMetrics, loadGuestFeedback } from '@/lib/dashboard/overview';
 import { loadActivityTrend, loadTopTopics, loadActivityFeed } from '@/lib/dashboard/insights';
 import { ValueBand, GuestFeedbackPanel } from './DashboardOverview';
@@ -62,10 +63,9 @@ export default async function DashboardHome({
   const scopedOpenEsc = activeFilter ? (openEsc ?? []).filter((e) => e.property_id === activeFilter) : openEsc;
   const scopedServices = activeFilter ? (services ?? []).filter((s) => s.property_id === activeFilter) : services;
 
-  // Active stays + per-property brain health across all accessible properties.
+  // Active stays and knowledge counts across accessible properties.
   let activeStays = 0;
   let totalKnowledge = 0;
-  const brainByProperty = new Map<string, number>();
   const itemsByProperty = new Map<string, number>();
   // Upcoming arrivals — checking in within the next 3 days, soonest first.
   let upcomingCheckIns = 0;
@@ -88,7 +88,6 @@ export default async function DashboardHome({
     activeStays = stayCount ?? 0;
     for (const pid of propertyIds) {
       const items = (brainItems ?? []).filter((b) => b.property_id === pid);
-      brainByProperty.set(pid, computeBrainHealth(items).score);
       const liveCount = items.filter((b) => !b.deleted_at).length;
       itemsByProperty.set(pid, liveCount);
       totalKnowledge += liveCount;
@@ -104,10 +103,17 @@ export default async function DashboardHome({
     }
   }
 
-  // Portfolio-wide Brain health — average score + how many properties are lagging.
-  const healthScores = [...brainByProperty.values()];
-  const avgBrainHealthPct = healthScores.length > 0 ? Math.round(healthScores.reduce((a, b) => a + b, 0) / healthScores.length) : null;
-  const propertiesNeedingAttention = healthScores.filter((h) => h < 60).length;
+  // Read exactly the same request-scoped registry score as the property workspace.
+  // Bound concurrent reads for large portfolios. A failed read throws rather than
+  // presenting a misleading 0% or falling back to the retired category score.
+  const guestReadyByProperty = new Map<string, ReturnType<typeof propertyWorkspaceSummary>>();
+  for (let offset = 0; offset < propertyIds.length; offset += 6) {
+    const batch = await Promise.all(propertyIds.slice(offset, offset + 6).map(async (id) => {
+      const completeness = await loadCompleteness(supabase, id);
+      return [id, propertyWorkspaceSummary(completeness)] as const;
+    }));
+    for (const [id, summary] of batch) guestReadyByProperty.set(id, summary);
+  }
 
   const escCount = scopedOpenEsc?.length ?? 0;
   const svcCount = scopedServices?.length ?? 0;
@@ -254,8 +260,6 @@ export default async function DashboardHome({
                 knowledgeItemsHref={knowledgeItemsHref}
                 upcomingCheckIns={upcomingCheckIns}
                 nextArrival={nextArrival}
-                avgBrainHealthPct={avgBrainHealthPct}
-                propertiesNeedingAttention={propertiesNeedingAttention}
               />
             ),
           },
@@ -299,9 +303,10 @@ export default async function DashboardHome({
                 ) : (
                   <div className="dash-props-grid">
                     {properties!.map((p) => {
-                      const health = brainByProperty.get(p.id) ?? 0;
+                      const summary = guestReadyByProperty.get(p.id);
+                      if (!summary) throw new Error('Missing Guest-ready score for accessible property');
                       const items = itemsByProperty.get(p.id) ?? 0;
-                      const tier = health >= 70 ? 'var(--teal)' : health >= 40 ? 'var(--iris)' : 'var(--coral)';
+                      const tier = summary.checklistComplete ? 'var(--teal)' : summary.pct >= 40 ? 'var(--iris)' : 'var(--coral)';
                       const address = cardAddress(p);
                       return (
                         <Link key={p.id} href={`/dashboard/properties/${p.id}`} className="card card-interactive rise-in dash-prop-card">
@@ -323,10 +328,10 @@ export default async function DashboardHome({
                             <span className="faint" style={{ fontSize: '.76rem' }}>
                               {items} knowledge item{items === 1 ? '' : 's'}
                             </span>
-                            <span style={{ fontSize: '.78rem', fontWeight: 600, color: tier }}>{health}% Brain</span>
+                            <span style={{ fontSize: '.78rem', fontWeight: 600, color: tier }}>{summary.pct}% Guest-ready</span>
                           </div>
-                          <div style={{ height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
-                            <div style={{ width: `${Math.max(health, 3)}%`, height: '100%', background: health >= 70 ? 'var(--grad)' : tier, transition: 'width 600ms var(--ease-out)' }} />
+                          <div role="progressbar" aria-label={`${p.display_name} Guest-ready`} aria-valuenow={summary.pct} aria-valuemin={0} aria-valuemax={100} style={{ height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
+                            <div style={{ width: `${summary.pct}%`, height: '100%', background: summary.checklistComplete ? 'var(--grad)' : tier, transition: 'width 600ms var(--ease-out)' }} />
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '.3rem', marginTop: '.9rem', color: 'var(--teal)', fontSize: '.8rem', fontWeight: 600 }}>
                             Open <ArrowUpRight size={14} aria-hidden />
