@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { ApplianceClient } from './ApplianceClient';
+import { AppliancePrefillPanel } from './AppliancePrefillPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,10 @@ export default async function AppliancesPage({ params }: { params: Promise<{ id:
     <div>
       <Link href={`/dashboard/properties/${propertyId}/brain`} className="faint">← Manage Brain</Link>
       <h1 style={{ fontSize: '1.8rem', margin: '.5rem 0 1rem' }}>Appliances</h1>
+      {access.can.editProperty && <AppliancePrefillPanel
+        propertyId={propertyId}
+        appliances={(inventory.data ?? []).filter((item: { model_number: string | null }) => !!item.model_number).map((item: { id: string; display_name: string; model_number: string }) => ({ id: item.id, name: item.display_name, model: item.model_number }))}
+      />}
       <ApplianceClient
         propertyId={propertyId}
         canEdit={access.can.editProperty}
