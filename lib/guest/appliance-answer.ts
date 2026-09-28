@@ -7,7 +7,6 @@ import { normalizeQuestion } from '@/lib/brain/cache';
 import { redactCredentials } from '@/lib/brain/redact';
 import { approvedApplianceAnswers } from '@/lib/appliances/guidance';
 import { requiresLicensedTechnician } from '@/lib/property-import/appliance-safety';
-import { routedCompletion } from '@/lib/router/modelRouter';
 import { logAiUsage } from '@/lib/ai/usage';
 import { buildRestrictedTopicsClause } from '@/lib/concierge/tone';
 import { DEFAULT_MASTER_CONCIERGE_PROMPT } from '@/lib/constants';
@@ -91,6 +90,9 @@ export async function answerSelectedAppliance(
     ...rows.slice(0, 12).map((row, i) => `[${i + 1}] ${row.question} — ${row.answer}`),
   ].filter(Boolean).join('\n').slice(0, 10000);
   const started = Date.now();
+  // Load the provider only if a selected appliance needs synthesis. Importing the
+  // guest chat route must not initialize a model for unrelated requests/tests.
+  const { routedCompletion } = await import('@/lib/router/modelRouter');
   const result = await routedCompletion([
     { role: 'system', content: [
       master,

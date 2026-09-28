@@ -66,7 +66,7 @@ export function AppliancePrefillPanel({ propertyId, appliances }: { propertyId: 
       {saveState.success && <p role="status" className="success">{saveState.success}</p>}
       {suggestion.draft!.answers.length > 0 && <>
         <h3 style={{ fontSize: '1rem' }}>Suggested common questions</h3>
-        <p className="faint" style={{ fontSize: '.8rem' }}>These are not saved or published. Review the source beside each one, then write the final answer on this appliance's card below.</p>
+        <p className="faint" style={{ fontSize: '.8rem' }}>These are not saved or published. Review the source beside each one, then write the final answer on this appliance’s card below.</p>
         {suggestion.draft!.answers.map((item, index) => <div key={`${item.sourceIndex}-${index}`} className="card" style={{ padding: '.75rem', marginBottom: '.5rem' }}>
           <strong>{item.question}</strong><p style={{ whiteSpace: 'pre-wrap' }}>{item.answer}</p>
           <span className="faint">Source [{item.sourceIndex}]</span>
