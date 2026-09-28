@@ -1,0 +1,23 @@
+name: Appliance approval guard
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/appliance-approval-guard.yml'
+      - 'scripts/verify-appliance-approval-guard.sh'
+      - 'supabase/migrations/20260928145500_appliance_guest_guidance.sql'
+      - 'supabase/migrations/20260928190000_appliance_approval_write_guard.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  approval-guard:
+    name: Appliance approval guard in isolated PostgreSQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql postgresql-contrib
+      - name: Verify draft and trusted approval boundaries
+        run: bash scripts/verify-appliance-approval-guard.sh
