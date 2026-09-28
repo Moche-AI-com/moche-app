@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { guestChatSchema } from '@/lib/validation';
-import { answerGuestQuestion, type ConciergeAnswer } from '@/lib/guest/concierge';
+import { answerGuestQuestion, type ConciergeAnswer, type ConciergeConfig } from '@/lib/guest/concierge';
+import { answerSelectedAppliance } from '@/lib/guest/appliance-answer';
 import { isGuestAiEnabled } from '@/lib/billing/entitlements';
 import { maybeCreateServiceRequest } from '@/lib/guest/maintenance';
 import { notify } from '@/lib/notify';
@@ -32,12 +34,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const parsed = guestChatSchema.safeParse(payload);
   if (!parsed.success) return NextResponse.json({ error: 'Enter a message.' }, { status: 400 });
   const question = parsed.data.message;
+  // applianceId is an optional UI hint, never authority. Bind it to the verified
+  // guest property and visibility before creating a conversation or using AI.
+  const rawApplianceId = payload && typeof payload === 'object' && 'applianceId' in payload
+    ? (payload as { applianceId?: unknown }).applianceId : undefined;
+  const applianceId = rawApplianceId === undefined ? null : z.string().uuid().safeParse(rawApplianceId);
+  if (applianceId !== null && !applianceId.success) {
+    return NextResponse.json({ error: 'Choose a valid appliance.' }, { status: 400 });
+  }
+  const selectedId = applianceId === null ? null : applianceId.data;
   const admin = createAdminClient();
   const guestLanguage = resolveLanguage(parsed.data.language);
   const { data: property } = await admin.from('properties')
     .select('id, display_name, slug, host_account_id').eq('id', session.propertyId).maybeSingle();
   if (!property || property.slug !== (await params).slug) {
     return NextResponse.json({ error: 'Session mismatch.' }, { status: 403 });
+  }
+  let applianceName: string | null = null;
+  if (selectedId) {
+    const { data: selected, error: selectedError } = await (admin as any).from('property_appliances')
+      .select('display_name').eq('id', selectedId).eq('property_id', session.propertyId)
+      .eq('guest_visible', true).maybeSingle();
+    if (selectedError) return NextResponse.json({ error: 'Appliance search is unavailable.' }, { status: 503 });
+    if (!selected) return NextResponse.json({ error: 'Appliance not found for this stay.' }, { status: 404 });
+    applianceName = selected.display_name;
   }
   const aiEnabled = await isGuestAiEnabled(admin, property.host_account_id);
   if (!aiEnabled) {
@@ -83,26 +103,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: 'Your message could not be saved. Please retry.' }, { status: 503 });
   }
 
+  const concierge: ConciergeConfig = {
+    conciergeName: settings?.concierge_name ?? undefined,
+    tone: settings?.concierge_tone ?? undefined,
+    legacyToneNote: settings?.legacy_tone_note ?? undefined,
+    legacyToneAckAt: settings?.legacy_tone_ack_at ?? undefined,
+    responseLength: settings?.response_length ?? undefined,
+    restrictedTopics: settings?.restricted_topics ?? undefined,
+    restrictedTopicKeys: settings?.restricted_topic_keys ?? undefined,
+    language: guestLanguage?.code ?? settings?.language ?? undefined,
+    systemPromptOverride: settings?.system_prompt_override ?? undefined,
+  };
   const started = Date.now();
   let answer: ConciergeAnswer;
   try {
-    answer = await answerGuestQuestion(admin, {
-      propertyId: session.propertyId, propertyName: property.display_name, question, history,
-      aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
-      confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
-      concierge: {
-        conciergeName: settings?.concierge_name ?? undefined,
-        tone: settings?.concierge_tone ?? undefined,
-        legacyToneNote: settings?.legacy_tone_note ?? undefined,
-        legacyToneAckAt: settings?.legacy_tone_ack_at ?? undefined,
-        responseLength: settings?.response_length ?? undefined,
-        restrictedTopics: settings?.restricted_topics ?? undefined,
-        restrictedTopicKeys: settings?.restricted_topic_keys ?? undefined,
-        language: guestLanguage?.code ?? settings?.language ?? undefined,
-        systemPromptOverride: settings?.system_prompt_override ?? undefined,
-      },
-      source: 'guest_chat',
-    });
+    answer = selectedId
+      ? await answerSelectedAppliance(admin, {
+          propertyId: session.propertyId, applianceId: selectedId,
+          propertyName: property.display_name, question, concierge,
+          aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
+          confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
+        })
+      : await answerGuestQuestion(admin, {
+          propertyId: session.propertyId, propertyName: property.display_name, question, history,
+          aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
+          confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
+          concierge, source: 'guest_chat',
+        });
   } catch {
     log.warn('guest_ai_unavailable', { propertyId: session.propertyId, code: 'provider_or_retrieval' });
     const emergency = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|intruder|burglar|bleeding|unconscious|heart attack|can'?t breathe|emergency|ambulance|assault)\b/i.test(question);
@@ -121,7 +148,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   let escalationConfirmed = false;
   if (answer.shouldEscalate || behavioral.escalate) {
     const hostLanguage = settings?.host_language ?? DEFAULT_HOST_LANGUAGE;
-    const asked = answer.unknownNote ? `${question}\n\n(Concierge could not answer: ${answer.unknownNote})` : question;
+    const scopedQuestion = applianceName ? `${applianceName}: ${question}` : question;
+    const asked = answer.unknownNote ? `${scopedQuestion}\n\n(Concierge could not answer: ${answer.unknownNote})` : scopedQuestion;
     const triggerNote = behavioral.trigger === 'human_request' ? 'Guest asked to reach a human.'
       : behavioral.trigger === 'repeat_question' ? 'Guest has asked this question more than once.' : null;
     const askedWithTrigger = triggerNote ? `${asked}\n\n(${triggerNote})` : asked;
@@ -166,7 +194,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const assistantWrite = await (admin as any).from('messages').insert({
     conversation_id: conversationId, property_id: session.propertyId, role: 'assistant',
     content: finalAnswer, intent: answer.intent, confidence: answer.confidence,
-    sources: answer.sources, model: answer.model, latency_ms: latencyMs, guest_replay_safe: true,
+    sources: selectedId
+      ? [...answer.sources, { applianceId: selectedId, category: 'appliances', brainItemId: null, similarity: 1 }]
+      : answer.sources,
+    model: answer.model, latency_ms: latencyMs, guest_replay_safe: true,
   });
   if (assistantWrite.error) {
     log.warn('guest_ai_message_write_failed', { propertyId: session.propertyId, code: 'assistant_write' });
