@@ -14,16 +14,16 @@ import { log } from '@/lib/log';
 export interface AppliancePrefillState {
   error?: string;
   draft?: ApplianceDraft;
-  sources?: { label: string; url: string | null }[];
+  sources?: { ref: string; label: string; url: string | null }[];
 }
 
-type CandidateSource = { label: string; text: string; url: string | null };
+type CandidateSource = { ref: string; label: string; text: string; url: string | null };
 
-function safeSource(label: string, text: string, url: string | null): CandidateSource | null {
+function safeSource(ref: string, label: string, text: string, url: string | null): CandidateSource | null {
   const excerpt = text.trim().slice(0, 1800);
   if (excerpt.length < 20 || requiresLicensedTechnician(`${label}\n${excerpt}`)
     || redactCredentials(`${label}\n${excerpt}`).redactions.length) return null;
-  return { label: label.slice(0, 180), text: excerpt, url };
+  return { ref, label: label.slice(0, 180), text: excerpt, url };
 }
 
 /** Suggestion only: no writes to property_appliances, appliance_answers or Brain. */
@@ -54,11 +54,11 @@ export async function suggestApplianceGuidanceAction(
       === appliance.model_number.replace(/\s+/g, '').toLowerCase();
     if (sameModel) {
       const { data: catalogRows, error: catalogError } = await admin.from('appliance_catalog_knowledge')
-        .select('question, answer, source_url').eq('catalog_id', catalog.id)
+        .select('id, question, answer, source_url').eq('catalog_id', catalog.id)
         .order('created_at', { ascending: true }).limit(5);
       if (catalogError) return { error: 'Could not read this model’s source material.' };
       for (const row of catalogRows ?? []) {
-        const candidate = safeSource(row.question, row.answer, row.source_url);
+        const candidate = safeSource(`catalog:${row.id}`, row.question, row.answer, row.source_url);
         if (candidate) sources.push(candidate);
       }
     }
@@ -68,14 +68,14 @@ export async function suggestApplianceGuidanceAction(
   // older approved sections after that link has been cleared.
   if (appliance.manual_url) {
     const { data: manualRows, error: manualError } = await client.from('appliance_manual_sections')
-      .select('section_title, body, page_ref, requires_licensed_technician')
+      .select('id, section_title, body, page_ref, requires_licensed_technician')
       .eq('property_id', propertyId).eq('appliance_id', applianceId)
       .not('approved_at', 'is', null).eq('requires_licensed_technician', false)
       .order('created_at', { ascending: false }).limit(5);
     if (manualError) return { error: 'Could not read the approved manual sections.' };
     for (const row of manualRows ?? []) {
       if (row.page_ref !== appliance.manual_url) continue;
-      const candidate = safeSource(row.section_title, row.body, row.page_ref);
+      const candidate = safeSource(`manual:${row.id}`, row.section_title, row.body, row.page_ref);
       if (candidate) sources.push(candidate);
     }
   }
@@ -103,7 +103,7 @@ export async function suggestApplianceGuidanceAction(
       completionTokens: result.usage?.completionTokens ?? 0,
       latencyMs: Date.now() - started, source: 'appliance_prefill_draft',
     });
-    return { draft, sources: bounded.map(({ label, url }) => ({ label, url })) };
+    return { draft, sources: bounded.map(({ ref, label, url }) => ({ ref, label, url })) };
   } catch {
     log.warn('appliance_prefill_failed', { propertyId, code: 'completion_unavailable' });
     return { error: 'AI suggestions are unavailable right now. Nothing was saved.' };
