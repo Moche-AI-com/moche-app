@@ -8,17 +8,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { acquire } from '@/lib/acquisition';
 import { isSsrfError } from '@/lib/ingest/firecrawl';
 import { redactCredentials } from '@/lib/brain/redact';
+import { hasExactModelManualEvidence } from '@/lib/appliances/manual-evidence';
 import { segmentApplianceManual } from '@/lib/property-import/appliance-safety';
 import type { ApplianceFormState } from './actions';
 
 const modelKey = (text: string) => text.replace(/[^a-z0-9]/gi, '').toLowerCase();
-export function hasExactModelManualEvidence(input: { model: string; title: string; text: string; url: string }): boolean {
-  const model = modelKey(input.model);
-  if (model.length < 6 || !input.url.startsWith('https://')) return false;
-  const evidence = `${input.title} ${input.text}`;
-  return modelKey(evidence).includes(model)
-    && /manual|user guide|owner.s guide|operating instructions/i.test(`${input.title} ${input.url} ${input.text.slice(0, 2000)}`);
-}
 
 /** Fetch a catalog-linked candidate; never call it a verified manual or publish it. */
 export async function discoverOemManualAction(_prev: ApplianceFormState, formData: FormData): Promise<ApplianceFormState> {

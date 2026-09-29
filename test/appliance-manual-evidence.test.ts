@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasExactModelManualEvidence } from '@/app/dashboard/properties/[id]/appliances/discover-manual-action';
+import { hasExactModelManualEvidence } from '@/lib/appliances/manual-evidence';
 
 describe('exact-model manual evidence', () => {
   const good = { model: 'WFW5605MW', title: 'WFW5605MW Washer User Guide',
