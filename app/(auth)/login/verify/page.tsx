@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/guards';
 import { hasServiceRole } from '@/lib/env';
@@ -42,6 +43,9 @@ export default async function LoginVerifyPage({
         We texted a 6-digit code to your phone ending in {last4}. Enter it to finish signing in.
       </p>
       <LoginOtpForm next={next} />
+      <p style={{ marginTop: '1rem', textAlign: 'center' }}>
+        <Link href="/">Back to home</Link>
+      </p>
     </>
   );
 }
