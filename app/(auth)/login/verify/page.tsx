@@ -42,6 +42,9 @@ export default async function LoginVerifyPage({
         We texted a 6-digit code to your phone ending in {last4}. Enter it to finish signing in.
       </p>
       <LoginOtpForm next={next} />
+      <p style={{ marginTop: '1rem', textAlign: 'center' }}>
+        <a href="/home">Back to home</a>
+      </p>
     </>
   );
 }
