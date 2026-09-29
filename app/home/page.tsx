@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { getUser } from '@/lib/auth/guards';
+import { switchAccountAction } from '@/app/(auth)/switch-account-action';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { Hero } from '@/components/landing/Hero';
 import { WhoStrip } from '@/components/landing/WhoStrip';
@@ -18,10 +20,20 @@ export const metadata: Metadata = {
   alternates: { canonical: SITE_URL },
 };
 
-export default function PublicHome() {
+export default async function PublicHome() {
+  const user = await getUser();
   return (
     <main>
       <LandingHeader />
+      {user && (
+        <section className="wrap" aria-label="Account options" style={{ paddingBlock: '1rem' }}>
+          <p>You are signed in. If you are still being asked for a verification code, sign out before using another account or creating a new one.</p>
+          <form action={switchAccountAction} style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-ghost" type="submit" name="destination" value="login">Use another account</button>
+            <button className="btn btn-ghost" type="submit" name="destination" value="signup">Create a new account</button>
+          </form>
+        </section>
+      )}
       <Hero />
       <WhoStrip />
       <Benefits />
