@@ -47,16 +47,17 @@ export const metadata: Metadata = {
 
 // This is the ONLY homepage. middleware.ts no longer rewrites anonymous
 // visitors to public/landing.html (that file stays on disk as an archive).
-// Authenticated hosts still fall through here and get redirected to /dashboard.
+// Authenticated hosts still redirect to /dashboard unless they deliberately
+// navigate here from the verification screen.
 //
 // Section order: hero, why, how it works, offer, objections, price, close.
 // Pre-launch, pricing is deliberately moved below the FAQ: the page leads with
 // the product and the founding offer, answers objections, and only then shows
 // price — signups are the goal, not monetization, and the cards stay for
 // transparency rather than as the conversion push.
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: { view?: string } }) {
   const user = await getUser();
-  if (user) redirect('/dashboard');
+  if (user && searchParams.view !== 'landing') redirect('/dashboard');
 
   return (
     <main>

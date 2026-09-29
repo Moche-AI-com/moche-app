@@ -44,7 +44,7 @@ export default async function LoginVerifyPage({
       </p>
       <LoginOtpForm next={next} />
       <p style={{ marginTop: '1rem', textAlign: 'center' }}>
-        <Link href="/">Back to home</Link>
+        <Link href="/?view=landing">Back to home</Link>
       </p>
     </>
   );
