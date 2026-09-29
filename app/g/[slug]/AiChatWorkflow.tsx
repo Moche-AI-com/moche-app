@@ -10,6 +10,7 @@ import type { CardCopy } from '@/lib/guest/card-copy';
 import { messageNotificationNotice } from '@/lib/notifications/message-notice';
 import { CardArt } from './CardArt';
 import { useLocalizedAssistantCards } from './useLocalizedAssistantCards';
+import { LocalizedApplianceQuestions } from './LocalizedApplianceQuestions';
 
 type ChatMsg = { id: string; role: 'user' | 'assistant' | 'host'; content: string; createdAt?: string; isEmergency?: boolean; escalated?: boolean };
 type Appliance = { id: string; category: string; name: string; brand: string | null; locationNote: string | null; questions?: { id: string; text: string }[] };
