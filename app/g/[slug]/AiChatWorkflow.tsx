@@ -100,8 +100,8 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
     try {
       const res = await fetch(`/api/guest/${props.slug}/host-chat/sync-escalation`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question, answer }) });
       const json = await res.json().catch(() => ({}));
-      setEscalationNotice(res.ok && json.messageStored ? messageNotificationNotice(json.notification?.sms) : t('askEscNotice'));
-    } catch { setEscalationNotice(t('askEscNotice')); }
+      setEscalationNotice(res.ok && json.messageStored ? messageNotificationNotice(json.notification?.sms) : t('askError'));
+    } catch { setEscalationNotice(t('askError')); }
   }
   function growComposer() {
     const el = inputRef.current; if (!el) return;
