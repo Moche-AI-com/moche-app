@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth/guards';
 import { hasServiceRole } from '@/lib/env';
@@ -44,7 +43,7 @@ export default async function LoginVerifyPage({
       </p>
       <LoginOtpForm next={next} />
       <p style={{ marginTop: '1rem', textAlign: 'center' }}>
-        <Link href="/?view=landing">Back to home</Link>
+        <a href="/home">Back to home</a>
       </p>
     </>
   );
