@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth/guards';
 import { hasServiceRole } from '@/lib/env';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { hasActiveHostOtp, createAndSendHostOtp } from '@/lib/auth/host-otp';
+import { switchAccountAction } from '../../switch-account-action';
 import { LoginOtpForm } from './LoginOtpForm';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,10 @@ export default async function LoginVerifyPage({
       <p style={{ marginTop: '1rem', textAlign: 'center' }}>
         <a href="/home">Back to home</a>
       </p>
+      <form action={switchAccountAction} style={{ display: 'flex', gap: '.75rem', justifyContent: 'center', flexWrap: 'wrap', marginTop: '1rem' }}>
+        <button className="btn btn-ghost" type="submit" name="destination" value="login">Use another account</button>
+        <button className="btn btn-ghost" type="submit" name="destination" value="signup">Create a new account</button>
+      </form>
     </>
   );
 }
