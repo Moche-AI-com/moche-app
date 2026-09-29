@@ -32,6 +32,13 @@
   caret-color: var(--gp-primary);
 }
 
+/* The pill itself supplies the keyboard focus indicator. Avoid drawing an
+   additional rectangular outline around the field inside it. */
+.gp-v2 .gp-composer input:focus-visible,
+.gp-v2 .gp-composer textarea:focus-visible {
+  outline: none;
+}
+
 /* Center card sheets in the visible viewport. A 78dvh cap leaves room for
    mobile browser chrome and safe areas; long content scrolls within the sheet. */
 @media (max-width: 519px) {
