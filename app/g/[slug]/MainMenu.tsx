@@ -19,7 +19,7 @@ export function MainMenu(props: { propertyName: string; guestName: string | null
   const [retry, setRetry] = useState(0);
   const code = resolveLanguage(requested)?.code.toLowerCase();
   const needsRemote = !props.hostPreview && !!code && !PORTAL_STRING_LOCALES.includes(code);
-  const menu = translated?.language === code ? translated.menu : null;
+  const menu = translated && translated.language.toLowerCase() === code ? translated.menu : null;
 
   useEffect(() => {
     if (props.hostPreview) return;
