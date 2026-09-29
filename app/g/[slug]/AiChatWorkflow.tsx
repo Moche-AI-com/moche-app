@@ -51,6 +51,7 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const localized = useLocalizedAssistantCards(props.slug, props.language, !props.hostPreview);
   const cards = props.hostPreview ? fallbackCards(t) : localized.cards;
+  const cardCopyUnavailable = !props.hostPreview && (localized.loading || localized.error);
   const [activeCardKey, setActiveCardKey] = useState<string | null>(null);
   const activeCard = cards.find((card) => card.key === activeCardKey) ?? null;
   const [input, setInput] = useState('');
@@ -131,7 +132,7 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
     finally { setBusy(false); }
   }
   function openCard(card: CardCopy) {
-    if (busy) return;
+    if (busy || cardCopyUnavailable) return;
     if (card.key === 'local') { setSelectedAppliance(null); router.push(`/g/${props.slug}/local`); return; }
     if (card.key === 'appliances' && !props.hostPreview) {
       setSelectedAppliance(null); setActiveAppliance(null); setApplianceQuery(''); setHostPinged(null); setPickerError(null);
@@ -140,6 +141,7 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
     setSelectedAppliance(null); setActiveCardKey(card.key);
   }
   function askFromSheet(question: string) {
+    if (cardCopyUnavailable) return;
     setActiveCardKey(null); setActiveAppliance(null); setAppliancePickerOpen(false); void sendMessage(question);
   }
   async function pingHostForAppliances() {
@@ -165,7 +167,7 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
     <AiDisclosure />
     {!props.hostPreview && localized.loading && <p className="gp-muted" role="status">{t('loading')}</p>}
     {!props.hostPreview && localized.error && <button type="button" className="gp-msg-link" onClick={localized.retry}>{t('askError')}</button>}
-    {cards.length > 0 && <div className="gp-assist-grid">{cards.map((card, index) => <button key={card.key} type="button" className="gp-assist-card" style={{ animationDelay: `${index * 60}ms` }} onClick={() => openCard(card)} disabled={busy}>
+    {cards.length > 0 && <div className="gp-assist-grid">{cards.map((card, index) => <button key={card.key} type="button" className="gp-assist-card" style={{ animationDelay: `${index * 60}ms` }} onClick={() => openCard(card)} disabled={busy || cardCopyUnavailable}>
       <CardArt cardKey={card.key} size={26} /><span className="gp-assist-title">{card.title}</span><span className="gp-assist-desc">{card.description}</span>
     </button>)}</div>}
     {escalationNotice && <div role="status" className="gp-notice"><TriangleAlert size={17} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} /><div>{escalationNotice}<button type="button" onClick={props.onOpenHostChat} className="gp-msg-link" style={{ marginLeft: '.5rem' }}>{t('askOpenHostChat')}</button></div></div>}
@@ -192,12 +194,12 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
     </form>
     {activeCard && <PortalModal title={activeCard.title} onClose={() => setActiveCardKey(null)}>
       <p className="gp-modal-sub">{t('askSheetSub')}</p>
-      <div className="gp-prompt-list">{(activeCard.prompts.length ? activeCard.prompts : [activeCard.prompt]).map((question) => <button key={question} type="button" className="gp-prompt-item" onClick={() => askFromSheet(question)}>{question}</button>)}</div>
+      <div className="gp-prompt-list">{(activeCard.prompts.length ? activeCard.prompts : [activeCard.prompt]).map((question) => <button key={question} type="button" className="gp-prompt-item" disabled={cardCopyUnavailable} onClick={() => askFromSheet(question)}>{question}</button>)}</div>
     </PortalModal>}
     {appliancePickerOpen && <PortalModal title={activeAppliance ? activeAppliance.name : t('askAppliances')} onClose={() => { setAppliancePickerOpen(false); setActiveAppliance(null); }}>
       {activeAppliance ? <>
         <p className="gp-modal-sub">{[activeAppliance.brand, activeAppliance.locationNote].filter(Boolean).join(' · ') || t('askSheetSub')}</p>
-        <div className="gp-prompt-list">{(activeAppliance.questions ?? []).map((item) => <button key={item.id} type="button" className="gp-prompt-item" onClick={() => askFromSheet(item.text)}>{item.text}</button>)}</div>
+        <div className="gp-prompt-list">{(activeAppliance.questions ?? []).map((item) => <button key={item.id} type="button" className="gp-prompt-item" disabled={cardCopyUnavailable} onClick={() => askFromSheet(item.text)}>{item.text}</button>)}</div>
         {(activeAppliance.questions ?? []).length === 0 && <p className="gp-muted">{t('askTitle')}</p>}
         <div style={{ marginTop: 10, display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
           <button type="button" className="gp-msg-link" onClick={() => { setAppliancePickerOpen(false); setActiveAppliance(null); inputRef.current?.focus(); }}>{t('askTitle')}</button>
