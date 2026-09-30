@@ -53,3 +53,23 @@ export function safeDashboardPath(link: string | null | undefined): string {
   if (/[\\\u0000-\u001f]/.test(link) || link.includes('//')) return fallback;
   return link;
 }
+
+// Absolute app URL for a fixed server route. HTTPS only, no credentials;
+// returns null when the app URL is unusable so callers fall back safely.
+export function appRouteUrl(appUrl: string, path: string): string | null {
+  try {
+    const base = new URL(appUrl);
+    if (base.protocol !== 'https:' || base.username || base.password) return null;
+    return new URL(path, base).toString();
+  } catch {
+    return null;
+  }
+}
+
+// Reads the conversation id out of a host conversation deep link, e.g.
+// /dashboard/properties/:id/stays/:id/conversations/:id?message=:id
+export function conversationIdFromLink(link: string | null | undefined): string | null {
+  if (typeof link !== 'string') return null;
+  const match = /\/conversations\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?=[/?#]|$)/i.exec(link);
+  return match ? match[1].toLowerCase() : null;
+}

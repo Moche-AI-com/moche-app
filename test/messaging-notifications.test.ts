@@ -25,16 +25,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SMS safety and acceptance semantics', () => {
-  it('pings eligible host for a direct message with the exact message deep link', async () => {
+  it('pings eligible host for a direct message through the tracked open link', async () => {
     const link = `/dashboard/properties/${ids.property}/stays/${ids.stay}/conversations/${ids.conversation}?message=${ids.message}`;
-    const result = await notify(messagingDb(messagingSeed()) as never, {
+    const db = messagingDb(messagingSeed());
+    const result = await notify(db as never, {
       hostAccountId: ids.account, propertyId: ids.property, kind: 'host_message',
       title: 'New guest message', link,
     });
     expect(fetch).toHaveBeenCalledTimes(1);
     const payload = new URLSearchParams(vi.mocked(fetch).mock.calls[0][1]?.body as string);
-    expect(payload.get('Body')).toContain(`https://example.test${link}`);
+    const [row] = db.rows.notifications;
+    expect(row.link).toBe(link);
+    expect(row.conversation_id).toBe(ids.conversation);
+    expect(payload.get('Body')).toContain(`https://example.test/api/notifications/${row.id}/open`);
     expect(payload.get('Body')).not.toMatch(/token|Bearer|synthetic-auth/);
+    expect(payload.get('StatusCallback')).toBe('https://example.test/api/webhooks/twilio/status');
     expect(result).toMatchObject({ inApp: 'stored', sms: 'accepted' });
     expect(JSON.stringify(result)).not.toContain('delivered');
   });
@@ -131,5 +136,43 @@ describe('SMS safety and acceptance semantics', () => {
       propertyId: ids.property, stayId: ids.stay, conversationId: ids.conversation, messageId: ids.message, slug: 'synthetic-villa',
     })).status).toBe('not_eligible');
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('delivery tracking and SMS caps (#195)', () => {
+  const link = `/dashboard/properties/${ids.property}/stays/${ids.stay}/conversations/${ids.conversation}`;
+  const base = { hostAccountId: ids.account, propertyId: ids.property, kind: 'host_message' as const, title: 'New guest message', link };
+
+  it('records in-app and SMS delivery rows with the Twilio SID and no contact data', async () => {
+    const db = messagingDb(messagingSeed());
+    await notify(db as never, base);
+    const rows: any[] = db.rows.notification_deliveries;
+    expect(rows.map((r) => r.channel).sort()).toEqual(['in_app', 'sms']);
+    expect(rows.find((r) => r.channel === 'sms')).toMatchObject({ status: 'queued', provider_ref: 'SMsynthetic', recipient_profile_id: ids.owner });
+    expect(JSON.stringify(rows)).not.toContain('+15005550006');
+  });
+
+  it('sends one text for a burst of messages in the same conversation', async () => {
+    const db = messagingDb(messagingSeed());
+    const results: Awaited<ReturnType<typeof notify>>[] = [];
+    for (let i = 0; i < 5; i++) results.push(await notify(db as never, base));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(results.every((r) => r.sms === 'accepted')).toBe(true);
+    const rows: any[] = db.rows.notification_deliveries;
+    expect(rows.filter((r) => r.status === 'suppressed' && r.reason === 'sms_conversation_window')).toHaveLength(4);
+  });
+
+  it('lets emergencies (P1) through the conversation window', async () => {
+    const db = messagingDb(messagingSeed());
+    await notify(db as never, { ...base, urgency: 'p1' });
+    await notify(db as never, { ...base, urgency: 'p1' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('still texts the host when delivery bookkeeping fails', async () => {
+    const db = messagingDb(messagingSeed(), { notification_deliveries: 'synthetic failure' });
+    const result = await notify(db as never, base);
+    expect(result).toMatchObject({ inApp: 'stored', sms: 'accepted' });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
