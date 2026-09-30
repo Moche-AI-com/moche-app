@@ -52,20 +52,13 @@ create index if not exists notification_escalations_due_idx
 
 alter table public.notification_escalations enable row level security;
 
-create or replace function public.touch_updated_at() returns trigger
-  language plpgsql set search_path = '' as $$
-begin
-  new.updated_at := now();
-  return new;
-end $$;
+drop trigger if exists notification_deliveries_set_updated_at on public.notification_deliveries;
+create trigger notification_deliveries_set_updated_at before update on public.notification_deliveries
+  for each row execute function public.set_updated_at();
 
-drop trigger if exists notification_deliveries_touch on public.notification_deliveries;
-create trigger notification_deliveries_touch before update on public.notification_deliveries
-  for each row execute function public.touch_updated_at();
-
-drop trigger if exists notification_escalations_touch on public.notification_escalations;
-create trigger notification_escalations_touch before update on public.notification_escalations
-  for each row execute function public.touch_updated_at();
+drop trigger if exists notification_escalations_set_updated_at on public.notification_escalations;
+create trigger notification_escalations_set_updated_at before update on public.notification_escalations
+  for each row execute function public.set_updated_at();
 
 -- Acknowledging a notification cancels its pending escalation steps.
 create or replace function public.cancel_escalations_on_ack() returns trigger
