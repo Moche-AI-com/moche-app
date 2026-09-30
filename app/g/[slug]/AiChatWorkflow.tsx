@@ -9,6 +9,7 @@ import type { PortalT } from '@/lib/guest/portal-strings';
 import type { CardCopy } from '@/lib/guest/card-copy';
 import { messageNotificationNotice } from '@/lib/notifications/message-notice';
 import { CardArt } from './CardArt';
+import { EscalationFollowUp } from './EscalationFollowUp';
 import { useLocalizedAssistantCards } from './useLocalizedAssistantCards';
 import { LocalizedApplianceQuestions } from './LocalizedApplianceQuestions';
 
@@ -58,6 +59,9 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [escalationNotice, setEscalationNotice] = useState<string | null>(null);
+  // True only once the escalation was actually stored for the host, so the
+  // "how should we notify you?" card never appears after a failed sync.
+  const [showFollowUp, setShowFollowUp] = useState(false);
   const [appliancePickerOpen, setAppliancePickerOpen] = useState(false);
   const [appliances, setAppliances] = useState<Appliance[] | null>(null);
   const [appliancesLoading, setAppliancesLoading] = useState(false);
@@ -102,8 +106,10 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
     try {
       const res = await fetch(`/api/guest/${props.slug}/host-chat/sync-escalation`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question, answer }) });
       const json = await res.json().catch(() => ({}));
-      setEscalationNotice(res.ok && json.messageStored ? messageNotificationNotice(json.notification?.sms) : t('askError'));
-    } catch { setEscalationNotice(t('askError')); }
+      const stored = res.ok && json.messageStored === true;
+      setEscalationNotice(stored ? messageNotificationNotice(json.notification?.sms) : t('askError'));
+      setShowFollowUp(stored);
+    } catch { setEscalationNotice(t('askError')); setShowFollowUp(false); }
   }
   function growComposer() {
     const el = inputRef.current; if (!el) return;
@@ -111,7 +117,7 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
   }
   async function sendMessage(raw: string) {
     const trimmed = raw.trim(); if (!trimmed || busy) return;
-    setBusy(true); setError(null); setEscalationNotice(null);
+    setBusy(true); setError(null); setEscalationNotice(null); setShowFollowUp(false);
     const selectedForTurn = selectedAppliance;
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'user', content: trimmed }]); setInput('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
@@ -171,6 +177,7 @@ export function AiChatWorkflow(props: { slug: string; propertyId: string; hostPr
       <CardArt cardKey={card.key} size={26} /><span className="gp-assist-title">{card.title}</span><span className="gp-assist-desc">{card.description}</span>
     </button>)}</div>}
     {escalationNotice && <div role="status" className="gp-notice"><TriangleAlert size={17} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} /><div>{escalationNotice}<button type="button" onClick={props.onOpenHostChat} className="gp-msg-link" style={{ marginLeft: '.5rem' }}>{t('askOpenHostChat')}</button></div></div>}
+    {showFollowUp && !props.hostPreview && <EscalationFollowUp slug={props.slug} t={t} onOpenHostChat={props.onOpenHostChat} />}
     <div aria-live="polite" className="gp-chat-panel">
       {messages.length === 0 && !busy ? <p className="gp-muted">{t('askEmpty')}</p> : messages.map((message) => <div key={message.id} className={`gp-msg-row ${message.role === 'user' ? 'gp-msg-row-user' : ''}`}>
         <div className={`gp-msg ${message.role === 'user' ? 'gp-msg-user' : message.role === 'host' ? 'gp-msg-host' : ''}`}>
