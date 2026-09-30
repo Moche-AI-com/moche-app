@@ -6,6 +6,7 @@ import { isProductionRuntime, resolveTwilioAuth, serverEnv, publicEnv } from '@/
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestMessagingReadiness } from '@/lib/guest/messaging-readiness';
 import { sendGuestPush } from '@/lib/guest/push';
+import { sendGuestReplyEmail } from '@/lib/guest/email-alerts';
 import { normalizeSmsPhone } from '@/lib/notifications/phone';
 import { isSmsSuppressed } from '@/lib/notifications/sms-suppression';
 import { guestConversationLink, safeNotificationUrl } from '@/lib/notifications/links';
@@ -357,9 +358,11 @@ export async function notifyGuestReply(p: { contact: string; propertyName: strin
 /** Resolve the destination from the EXACT conversation participant, never from
  * the most recently opted-in person on the stay. URLs carry no access tokens.
  *
- * Channel order (issue #133, item 5): web-push FIRST — the browser subscription
- * the guest created on this device, no phone number or SMS consent needed.
- * SMS below remains for guests who explicitly opted in with a verified phone. */
+ * Channel order (issue #133 item 5, #195): web-push FIRST (the browser
+ * subscription the guest created on this device), then SMS for guests who
+ * explicitly opted in with a verified phone, then a confirmed + consented email
+ * address. An ambiguous SMS outcome ('unknown') may already have been
+ * delivered, so it is not followed by an email. */
 export async function notifyGuestConversationReply(client: Client, p: {
   propertyId: string; stayId: string; conversationId: string; messageId: string; slug: string;
 }): Promise<SmsResult> {
@@ -373,24 +376,27 @@ export async function notifyGuestConversationReply(client: Client, p: {
       .eq('property_id', p.propertyId).eq('role', 'host').maybeSingle();
     if (messageError || !message) return { status: 'not_eligible' };
 
+    const conversationPath = guestConversationLink(p.slug, p.conversationId, p.messageId);
+    const conversationUrl = safeNotificationUrl(publicEnv.appUrl, conversationPath);
     const pushed = await sendGuestPush(client, {
       sessionId: conversation.guest_session_id,
       propertyId: p.propertyId,
       stayId: p.stayId,
       title: 'Moche-AI',
       body: 'Your host replied.',
-      url: safeNotificationUrl(publicEnv.appUrl, guestConversationLink(p.slug, p.conversationId, p.messageId)) ?? '',
+      url: conversationUrl ?? '',
     });
     if (pushed === 'sent') return { status: 'accepted' };
 
-    const readiness = await getGuestMessagingReadiness(client, {
-      propertyId: p.propertyId, stayId: p.stayId, sessionId: conversation.guest_session_id,
-    });
-    if (!readiness.ready) return { status: 'not_eligible' };
-    return notifyGuestReply({
-      contact: readiness.contact, propertyName: '',
-      portalUrl: guestConversationLink(p.slug, p.conversationId, p.messageId),
-    }, client);
+    const scope = { propertyId: p.propertyId, stayId: p.stayId, sessionId: conversation.guest_session_id };
+    const readiness = await getGuestMessagingReadiness(client, scope);
+    let sms: SmsResult = { status: 'not_eligible' };
+    if (readiness.ready) {
+      sms = await notifyGuestReply({ contact: readiness.contact, propertyName: '', portalUrl: conversationPath }, client);
+      if (sms.status === 'accepted' || sms.status === 'unknown') return sms;
+    }
+    if (conversationUrl && await sendGuestReplyEmail(client, scope, conversationUrl)) return { status: 'accepted' };
+    return sms;
   } catch { return { status: 'unknown' }; }
 }
 
