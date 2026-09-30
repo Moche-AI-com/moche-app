@@ -101,16 +101,27 @@ export async function checkSmsCaps(
   try {
     if (input.conversationId) {
       const since = new Date(now - SMS_CONVERSATION_WINDOW_MS).toISOString();
-      const { count, error } = await db(client)
-        .from('notification_deliveries')
-        .select('id, notifications!inner(conversation_id)', { count: 'exact', head: true })
-        .eq('recipient_profile_id', input.recipientProfileId)
-        .eq('channel', 'sms')
-        .in('status', LIVE_SMS_STATUSES)
+      // Two plain queries (no embedded join) so the check is index-friendly and portable.
+      const { data: recent, error: recentError } = await db(client)
+        .from('notifications')
+        .select('id')
+        .eq('conversation_id', input.conversationId)
         .gte('created_at', since)
-        .eq('notifications.conversation_id', input.conversationId);
-      if (error) throw error;
-      if ((count ?? 0) > 0) return { allowed: false, reason: 'sms_conversation_window' };
+        .limit(100);
+      if (recentError) throw recentError;
+      const recentIds = ((recent ?? []) as { id: string }[]).map((r) => r.id);
+      if (recentIds.length > 0) {
+        const { count, error } = await db(client)
+          .from('notification_deliveries')
+          .select('id', { count: 'exact', head: true })
+          .in('notification_id', recentIds)
+          .eq('recipient_profile_id', input.recipientProfileId)
+          .eq('channel', 'sms')
+          .in('status', LIVE_SMS_STATUSES)
+          .gte('created_at', since);
+        if (error) throw error;
+        if ((count ?? 0) > 0) return { allowed: false, reason: 'sms_conversation_window' };
+      }
     }
     const hourAgo = new Date(now - 60 * 60 * 1000).toISOString();
     const { count, error } = await db(client)
@@ -184,19 +195,23 @@ export async function acknowledgeConversation(
   return Array.isArray(data) ? data.length : 0;
 }
 
-// Acknowledge one notification for its own recipient only. Returns the stored
-// link (caller must sanitize) or null when the row isn't the caller's.
+// Acknowledge one notification. Allowed for its own recipient, or for a member
+// of the owning account when the notification was account-wide (no recipient).
+// Returns the stored link (caller must sanitize) or null when not allowed.
 export async function acknowledgeNotification(
   client: AdminClient,
-  input: { notificationId: string; profileId: string; now?: Date },
+  input: { notificationId: string; profileId: string; accountId?: string | null; now?: Date },
 ): Promise<{ link: string | null } | null> {
   const { data: row, error } = await db(client)
     .from('notifications')
-    .select('id, link, conversation_id, acknowledged_at')
+    .select('id, link, conversation_id, acknowledged_at, recipient_profile_id, host_account_id')
     .eq('id', input.notificationId)
-    .eq('recipient_profile_id', input.profileId)
     .maybeSingle();
   if (error || !row) return null;
+  const recipient = (row.recipient_profile_id as string | null) ?? null;
+  const allowed = recipient === input.profileId
+    || (recipient === null && !!input.accountId && row.host_account_id === input.accountId);
+  if (!allowed) return null;
   if (!row.acknowledged_at) {
     const stamp = (input.now ?? new Date()).toISOString();
     const { error: ackError } = await db(client)

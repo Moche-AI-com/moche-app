@@ -1,4 +1,5 @@
 import 'server-only';
+import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import { log } from '@/lib/log';
@@ -18,6 +19,13 @@ import {
   NOTIFICATION_CATEGORIES,
   SMS_FANOUT_KINDS,
 } from '@/lib/notifications/categories';
+import { checkSmsCaps, recordDelivery } from '@/lib/notifications/deliveries';
+import {
+  appRouteUrl,
+  conversationIdFromLink,
+  type DeliveryStatus,
+  type Urgency,
+} from '@/lib/notifications/delivery-status';
 
 type Client = SupabaseClient<Database>;
 type NotificationKind = Database['public']['Enums']['notification_kind'];
@@ -30,12 +38,17 @@ interface NotifyParams {
   link?: string;
   propertyId?: string | null;
   recipientProfileId?: string | null;
+  // #195: urgency tier (p1 bypasses SMS caps) and owning conversation. When
+  // conversationId is omitted it is read from a conversation deep link.
+  urgency?: Urgency | null;
+  conversationId?: string | null;
   // Legacy compatibility only. Bearer answer URLs are no longer sent; use link.
   actionUrl?: string;
 }
 
 export type SmsStatus = 'accepted' | 'failed' | 'unknown' | 'disabled' | 'not_eligible' | 'not_attempted' | 'partial';
-export interface SmsResult { status: SmsStatus }
+// sid is the provider message id (not PII); used to match Twilio status callbacks.
+export interface SmsResult { status: SmsStatus; sid?: string }
 export interface NotificationResult {
   inApp: 'stored' | 'failed';
   sms: SmsStatus;
@@ -59,7 +72,12 @@ const EMAIL_REPLY_TO = TRANSACTIONAL_SENDER.replyTo;
 // Auth is resolved by resolveTwilioAuth (API-Key first, Auth-Token fallback). The
 // Account SID sits in the URL path; credentials travel only in the Basic auth header
 // over TLS. Message bodies and phone numbers are NEVER logged.
-async function sendSms(to: string, message: string, client?: Client): Promise<SmsResult> {
+async function sendSms(
+  to: string,
+  message: string,
+  client?: Client,
+  opts?: { statusCallbackUrl?: string | null },
+): Promise<SmsResult> {
   // Next production builds also run for Vercel previews. BOTH runtime signals
   // and the existing NOTIFY_SMS_ENABLED switch are required for every SMS path.
   if (!isProductionRuntime() || !serverEnv.smsDeliveryEnabled) {
@@ -73,6 +91,8 @@ async function sendSms(to: string, message: string, client?: Client): Promise<Sm
     return { status: 'disabled' };
   }
   const body = new URLSearchParams({ To: phone, From: auth.fromNumber, Body: message });
+  // #195: delivery receipts post back to /api/webhooks/twilio/status.
+  if (opts?.statusCallbackUrl) body.set('StatusCallback', opts.statusCallbackUrl);
   try {
     if (await isSmsSuppressed(client ?? createAdminClient(), phone)) return { status: 'not_eligible' };
     const res = await fetch(
@@ -98,7 +118,7 @@ async function sendSms(to: string, message: string, client?: Client): Promise<Sm
     const accepted = await res.json().catch(() => null);
     if (!accepted?.sid) return { status: 'unknown' };
     if (['failed', 'undelivered', 'canceled'].includes(accepted.status)) return { status: 'failed' };
-    return { status: 'accepted' };
+    return { status: 'accepted', sid: String(accepted.sid) };
   } catch {
     log.error('sms_send_outcome_unknown', {});
     return { status: 'unknown' };
@@ -239,19 +259,47 @@ async function loadCategoryPref(client: Client, profileId: string, categoryKey: 
   }
 }
 
+// #195: map a transport outcome to a delivery row. 'accepted' and 'unknown'
+// stay queued until Twilio's status callback advances them; both count toward
+// SMS caps so an ambiguous send is never followed by a duplicate.
+function smsDeliveryOutcome(status: SmsStatus): { status: DeliveryStatus; reason: string | null } {
+  switch (status) {
+    case 'accepted': return { status: 'queued', reason: null };
+    case 'unknown': return { status: 'queued', reason: 'outcome_unknown' };
+    case 'failed': return { status: 'failed', reason: 'provider_failed' };
+    case 'disabled': return { status: 'skipped', reason: 'sms_disabled' };
+    default: return { status: 'skipped', reason: 'not_eligible' };
+  }
+}
+
+// Delivery bookkeeping must never block or fail a real alert.
+async function track(fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn();
+  } catch {
+    log.warn('notify_tracking_failed', {});
+  }
+}
+
 // Store the in-app row before external fan-out, returning both outcomes.
 // Each SMS requires production + configured transport + the recipient's own
 // verified phone, explicit opt-in and no STOP suppression. Direct host_message
 // and escalation texts are core reliability, not a paid plan feature (a guest
 // is waiting on a person either way); other kinds retain plan gating. Every
 // non-always-on kind keeps its per-category channel preferences.
+// #195: every attempt is recorded in notification_deliveries, SMS respects the
+// per-conversation window and hourly cap (P1 exempt), and host links go through
+// the tracked /api/notifications/[id]/open route so opening counts as seen.
 export async function notify(client: Client, p: NotifyParams): Promise<NotificationResult> {
   const result: NotificationResult = { inApp: 'failed', sms: 'not_attempted', smsAccepted: 0, emailAccepted: 0 };
+  const notificationId = randomUUID();
+  const conversationId = p.conversationId ?? conversationIdFromLink(p.link);
   // 1. Durable in-app row (source of truth). Always written, even for members
   //    who muted the category: the bell and history filter at READ time, so the
   //    account keeps a complete record and a muted member can still find it.
   try {
     const { error } = await client.from('notifications').insert({
+      id: notificationId,
       host_account_id: p.hostAccountId,
       kind: p.kind,
       title: p.title,
@@ -259,7 +307,10 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
       link: p.link ?? null,
       property_id: p.propertyId ?? null,
       recipient_profile_id: p.recipientProfileId ?? null,
-    });
+      // #195 columns (not yet in database.types).
+      urgency: p.urgency ?? null,
+      conversation_id: conversationId,
+    } as never);
     if (error) {
       log.warn('notify_failed', { kind: p.kind });
       return result;
@@ -269,6 +320,9 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
     log.warn('notify_failed', { kind: p.kind });
     return result;
   }
+  await track(() => recordDelivery(client, {
+    notificationId, recipientProfileId: p.recipientProfileId ?? null, channel: 'in_app', status: 'delivered',
+  }));
 
   try {
   const wantsEmail = EMAIL_FANOUT_KINDS.has(p.kind);
@@ -287,6 +341,9 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
   const ent = wantsSmsKind && serverEnv.notifySmsEnabled && p.kind !== 'host_message' && p.kind !== 'escalation' ? await getEntitlements(client, p.hostAccountId) : null;
   const statuses: SmsStatus[] = [];
   const url = safeNotificationUrl(publicEnv.appUrl, p.link);
+  // Tracked open link (same destination after sign-in); falls back to the direct link.
+  const openUrl = url ? (appRouteUrl(publicEnv.appUrl, `/api/notifications/${notificationId}/open`) ?? url) : null;
+  const statusCallbackUrl = appRouteUrl(publicEnv.appUrl, '/api/webhooks/twilio/status');
 
   for (const recipient of recipients) {
     // 3. Preference gate. Always-on paths skip it entirely. A member whose
@@ -304,8 +361,13 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
 
     // 4. Email to this member.
     if (wantsEmail && recipient.email && (category?.alwaysOn || !pref || pref.email_enabled)) {
-      const text = `${p.body ?? p.title}${url ? `\n\nOpen your dashboard: ${url}` : ''}`;
-      if (await sendHostEmail(recipient.email, `Moche-AI: ${p.title}`, text)) result.emailAccepted++;
+      const text = `${p.body ?? p.title}${openUrl ? `\n\nOpen your dashboard: ${openUrl}` : ''}`;
+      const emailed = await sendHostEmail(recipient.email, `Moche-AI: ${p.title}`, text);
+      if (emailed) result.emailAccepted++;
+      await track(() => recordDelivery(client, {
+        notificationId, recipientProfileId: recipient.profileId, channel: 'email',
+        status: emailed ? 'sent' : 'failed', reason: emailed ? null : 'email_failed',
+      }));
     }
 
     // 5. Text to this eligible member, never using another profile's consent.
@@ -318,14 +380,33 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
       recipient.phoneVerifiedAt &&
       (category?.alwaysOn || pref?.sms_enabled === true)
     ) {
+      // #195 caps: 1 text per conversation per 10 min, 10 per host per hour, P1 exempt.
+      const cap = await checkSmsCaps(client, {
+        recipientProfileId: recipient.profileId, conversationId, urgency: p.urgency ?? null,
+      });
+      if (!cap.allowed) {
+        const capReason = cap.reason;
+        await track(() => recordDelivery(client, {
+          notificationId, recipientProfileId: recipient.profileId, channel: 'sms', status: 'suppressed', reason: capReason,
+        }));
+        // Within the conversation window this host was already texted about this
+        // conversation, so the guest-facing outcome is still "host was alerted".
+        statuses.push(capReason === 'sms_conversation_window' ? 'accepted' : 'not_eligible');
+        continue;
+      }
       // No guest names, message bodies, access codes or bearer answer links.
       const what = p.kind === 'host_message' ? 'You have a new guest message.'
         : p.kind === 'escalation' ? 'A guest question needs your answer.'
         : 'You have a new notification.';
-      const msg = `Moche-AI: ${what}${url ? ` Open: ${url}` : ''} Reply STOP to opt out.`;
-      const sent = await sendSms(recipient.phone, msg, client);
+      const msg = `Moche-AI: ${what}${openUrl ? ` Open: ${openUrl}` : ''} Reply STOP to opt out.`;
+      const sent = await sendSms(recipient.phone, msg, client, { statusCallbackUrl });
       statuses.push(sent.status);
       if (sent.status === 'accepted') result.smsAccepted++;
+      const outcome = smsDeliveryOutcome(sent.status);
+      await track(() => recordDelivery(client, {
+        notificationId, recipientProfileId: recipient.profileId, channel: 'sms',
+        status: outcome.status, reason: outcome.reason, providerRef: sent.sid ?? null,
+      }));
     }
   }
   result.sms = statuses.length === 0 ? 'not_eligible'
