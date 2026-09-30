@@ -5,6 +5,9 @@ import { getUser, requirePropertyAccess } from '@/lib/auth/guards';
 import { hashContact } from '@/lib/crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendServiceReportShare } from '@/lib/notify';
+import { normalizeSmsPhone } from '@/lib/notifications/phone';
+import { smsFailureMessage } from '@/lib/notifications/delivery-outcome';
+import { diagnoseSmsFailure } from '@/lib/notifications/diagnose-sms';
 import { shareContactReady, type ShareReportContact } from '@/lib/service-requests/share-report';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
@@ -69,10 +72,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Check the recipients and message, then try again.' }, { status: 400 });
   }
   const payload = parsed.data;
+  // SMS recipients are normalized up front (bare US numbers become +1), so an
+  // unusable number gets a clear message before anything is sent or logged.
+  let smsTo: string | null = null;
   if (payload.channel === 'sms') {
-    const digits = payload.to[0].replace(/\D/g, '');
-    if (digits.length < 7 || digits.length > 15) {
-      return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 400 });
+    smsTo = normalizeSmsPhone(payload.to[0]);
+    if (!smsTo) {
+      const { error, status } = smsFailureMessage('invalid_phone');
+      return NextResponse.json({ error }, { status });
     }
   }
 
@@ -119,11 +126,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         })
       : await sendServiceReportShare({
           channel: 'sms',
-          contact: payload.to[0],
+          contact: smsTo as string,
           text: payload.message,
         });
+  // Only diagnose on failure; the reason is a fixed code, never provider output.
+  const smsReason = !sent && smsTo ? await diagnoseSmsFailure(admin, smsTo) : null;
 
-  const destinations = payload.channel === 'email' ? [...payload.to, ...payload.cc] : payload.to;
+  const destinations = payload.channel === 'email' ? [...payload.to, ...payload.cc] : [smsTo as string];
   for (const destination of destinations) {
     const { contactHash, last4 } = hashContact(destination);
     const { error: logError } = await db.from('service_report_shares').insert({
@@ -134,7 +143,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       destination_last4: last4,
       body_snapshot: payload.message,
       status: sent ? 'sent' : 'failed',
-      error: sent ? null : 'provider_send_failed',
+      error: sent ? null : (smsReason ?? 'email_send_failed'),
       sent_by: user?.id ?? null,
     });
     if (logError) log.warn('service_report_share_log_failed', { propertyId: id, ticketId, error: logError.message });
@@ -151,15 +160,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   if (!sent) {
-    return NextResponse.json(
-      {
-        error:
-          payload.channel === 'sms'
-            ? 'The text could not be sent — SMS may not be configured yet. Try email instead.'
-            : 'The email could not be sent. Check the addresses and try again.',
-      },
-      { status: 502 },
-    );
+    if (payload.channel === 'sms') {
+      const { error, status } = smsFailureMessage(smsReason ?? 'provider_failed');
+      return NextResponse.json({ error, reason: smsReason ?? 'provider_failed' }, { status });
+    }
+    return NextResponse.json({ error: 'The email could not be sent. Check the addresses and try again.' }, { status: 502 });
   }
   return NextResponse.json({ ok: true, sent: destinations.length });
 }

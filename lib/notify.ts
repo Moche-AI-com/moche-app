@@ -241,8 +241,9 @@ async function loadCategoryPref(client: Client, profileId: string, categoryKey: 
 // Store the in-app row before external fan-out, returning both outcomes.
 // Each SMS requires production + configured transport + the recipient's own
 // verified phone, explicit opt-in and no STOP suppression. Direct host_message
-// notifications are not a paid escalation feature; other kinds retain plan and
-// per-category channel preferences.
+// and escalation texts are core reliability, not a paid plan feature (a guest
+// is waiting on a person either way); other kinds retain plan gating. Every
+// non-always-on kind keeps its per-category channel preferences.
 export async function notify(client: Client, p: NotifyParams): Promise<NotificationResult> {
   const result: NotificationResult = { inApp: 'failed', sms: 'not_attempted', smsAccepted: 0, emailAccepted: 0 };
   // 1. Durable in-app row (source of truth). Always written, even for members
@@ -280,9 +281,9 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
   if (recipients.length === 0) return { ...result, sms: 'not_eligible' };
 
   // Entitlements are account-level; resolve once, and only when an SMS could fly.
-  // The direct guest/host line is not an escalation plan feature. Other SMS
+  // Direct guest/host messages and escalations are not plan features. Other SMS
   // categories retain their paid entitlement; all retain global consent gates.
-  const ent = wantsSmsKind && serverEnv.notifySmsEnabled && p.kind !== 'host_message' ? await getEntitlements(client, p.hostAccountId) : null;
+  const ent = wantsSmsKind && serverEnv.notifySmsEnabled && p.kind !== 'host_message' && p.kind !== 'escalation' ? await getEntitlements(client, p.hostAccountId) : null;
   const statuses: SmsStatus[] = [];
   const url = safeNotificationUrl(publicEnv.appUrl, p.link);
 
@@ -310,14 +311,17 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
     if (
       wantsSmsKind &&
       serverEnv.notifySmsEnabled &&
-      (p.kind === 'host_message' || ent?.smsEscalation) &&
+      (p.kind === 'host_message' || p.kind === 'escalation' || ent?.smsEscalation) &&
       recipient.phone &&
       recipient.smsOptIn &&
       recipient.phoneVerifiedAt &&
       (category?.alwaysOn || pref?.sms_enabled === true)
     ) {
       // No guest names, message bodies, access codes or bearer answer links.
-      const msg = `Moche-AI: You have a new ${p.kind === 'host_message' ? 'guest message' : 'notification'}.${url ? ` Open: ${url}` : ''} Reply STOP to opt out.`;
+      const what = p.kind === 'host_message' ? 'You have a new guest message.'
+        : p.kind === 'escalation' ? 'A guest question needs your answer.'
+        : 'You have a new notification.';
+      const msg = `Moche-AI: ${what}${url ? ` Open: ${url}` : ''} Reply STOP to opt out.`;
       const sent = await sendSms(recipient.phone, msg, client);
       statuses.push(sent.status);
       if (sent.status === 'accepted') result.smsAccepted++;

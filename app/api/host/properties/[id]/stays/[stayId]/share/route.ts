@@ -5,6 +5,9 @@ import { getUser, requirePropertyAccess } from '@/lib/auth/guards';
 import { hashContact } from '@/lib/crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendGuestPortalShare } from '@/lib/notify';
+import { normalizeSmsPhone } from '@/lib/notifications/phone';
+import { smsFailureMessage } from '@/lib/notifications/delivery-outcome';
+import { diagnoseSmsFailure } from '@/lib/notifications/diagnose-sms';
 import { publicEnv } from '@/lib/env';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
@@ -50,11 +53,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (channel === 'email' && !destination.includes('@')) {
     return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
   }
+  // SMS destinations are normalized up front (bare US numbers become +1), so an
+  // unusable number gets a clear message before anything is sent or logged.
+  let contact = destination;
   if (channel === 'sms') {
-    const digits = destination.replace(/\D/g, '');
-    if (digits.length < 7 || digits.length > 15) {
-      return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 400 });
+    const phone = normalizeSmsPhone(destination);
+    if (!phone) {
+      const { error, status } = smsFailureMessage('invalid_phone');
+      return NextResponse.json({ error }, { status });
     }
+    contact = phone;
   }
 
   const { data: stay } = await db
@@ -97,13 +105,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const portalUrl = `${publicEnv.appUrl.replace(/\/$/, '')}/g/${property.slug}`;
   const sent = await sendGuestPortalShare({
     channel,
-    contact: destination,
+    contact,
     propertyName: property.display_name,
     portalUrl,
     code,
   });
+  // Only diagnose on failure; the reason is a fixed code, never provider output.
+  const smsReason = !sent && channel === 'sms' ? await diagnoseSmsFailure(admin, contact) : null;
 
-  const { contactHash, last4 } = hashContact(destination);
+  const { contactHash, last4 } = hashContact(contact);
   const user = await getUser();
   const { error: logError } = await db.from('stay_share_invites').insert({
     property_id: id,
@@ -112,7 +122,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     destination_hash: contactHash,
     destination_last4: last4,
     status: sent ? 'sent' : 'failed',
-    error: sent ? null : 'provider_send_failed',
+    error: sent ? null : (smsReason ?? 'email_send_failed'),
     sent_by: user?.id ?? null,
   });
   if (logError) log.warn('stay_share_invite_log_failed', { propertyId: id, stayId, error: logError.message });
@@ -127,15 +137,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   if (!sent) {
-    return NextResponse.json(
-      {
-        error:
-          channel === 'sms'
-            ? 'The text could not be sent — SMS may not be configured yet. Try email instead.'
-            : 'The email could not be sent. Check the address and try again.',
-      },
-      { status: 502 },
-    );
+    if (channel === 'sms') {
+      const { error, status } = smsFailureMessage(smsReason ?? 'provider_failed');
+      return NextResponse.json({ error, reason: smsReason ?? 'provider_failed' }, { status });
+    }
+    return NextResponse.json({ error: 'The email could not be sent. Check the address and try again.' }, { status: 502 });
   }
   return NextResponse.json({ ok: true });
 }
