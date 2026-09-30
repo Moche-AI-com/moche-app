@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyCredentialQuestion, doorCodeEscalationQuestion, wifiGuidanceReply } from './credential-questions';
+import { classifyCredentialQuestion, doorCodeEscalationQuestion, doorCodeEscalationReply } from './credential-questions';
 
 describe('credential questions', () => {
   it.each([
@@ -18,7 +18,7 @@ describe('credential questions', () => {
     'wi-fi pw pls',
     'password for the wifi',
     'Internet password?',
-  ])('guides Wi-Fi password questions: %s', (q) => {
+  ])('classifies Wi-Fi password questions (left to wifi-instructions): %s', (q) => {
     expect(classifyCredentialQuestion(q)).toBe('wifi_password');
   });
 
@@ -32,9 +32,8 @@ describe('credential questions', () => {
     expect(classifyCredentialQuestion(q)).toBeNull();
   });
 
-  it('never echoes a credential, only the host location hint', () => {
-    expect(wifiGuidanceReply('on the card on the fridge')).toContain('on the card on the fridge');
-    expect(wifiGuidanceReply(null)).toContain('router');
+  it('never contains a code in the guest reply', () => {
+    expect(doorCodeEscalationReply()).not.toMatch(/\d/);
   });
 
   it('marks lockouts urgent', () => {

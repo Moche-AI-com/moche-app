@@ -1,10 +1,14 @@
-// Credential policy: Moche-AI never stores or recites Wi-Fi passwords or door
-// codes. A Wi-Fi password question gets host-written guidance on where to look
-// inside the home; a door or entry code question is escalated to the host, who
-// answers the guest directly in Host Chat.
+// Credential policy: Moche-AI never stores or recites door/entry codes or Wi-Fi
+// passwords.
 //
-// Pure and deterministic so the chat route can run it BEFORE retrieval or any
-// model call: the answer never depends on what the model decides to say.
+// - Door/entry code questions are detected here and escalated to the host by
+//   app/api/guest/[slug]/chat/route.ts BEFORE retrieval or any model call.
+// - Wi-Fi password questions are already handled inside the concierge by
+//   lib/guest/wifi-instructions.ts (host-written location guidance only, and it
+//   deliberately never suggests a 'typical' location). This module only
+//   classifies them so callers do not intercept them.
+//
+// Pure and deterministic so the answer never depends on what a model decides.
 
 export type CredentialKind = 'wifi_password' | 'door_code';
 
@@ -26,18 +30,11 @@ export function classifyCredentialQuestion(text: string): CredentialKind | null 
   return null;
 }
 
-/** locationHint is host-authored, e.g. 'on the welcome card on the fridge'. Never the password itself. */
-export function wifiGuidanceReply(locationHint?: string | null): string {
-  const hint = locationHint?.trim();
-  if (hint) return `For your security, the Wi-Fi password isn’t shared in chat. You’ll find it ${hint}.`;
-  return 'For your security, the Wi-Fi password isn’t shared in chat. Check the label on the router or the welcome card in the home. If you still can’t find it, tap Contact host.';
-}
-
 export function doorCodeEscalationReply(): string {
   return 'For your security, entry codes aren’t shared in chat. I’ve let your host know, and they’ll reply to you here shortly.';
 }
 
-/** Escalation text the host sees. Door questions are urgent when the guest is locked out. */
+/** Context for the host-facing escalation. Door questions are urgent when the guest may be locked out. */
 export function doorCodeEscalationQuestion(guestText: string): { question: string; urgent: boolean } {
   const urgent = /\b(locked out|can[’']?t get in|cannot get in|outside|at the door)\b/i.test(guestText);
   return { question: `Guest is asking for entry access: "${guestText.slice(0, 300)}"`, urgent };

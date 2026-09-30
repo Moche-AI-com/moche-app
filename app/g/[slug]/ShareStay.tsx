@@ -9,8 +9,9 @@ type Invite = { url: string; propertyName: string; checkOut: string; spotsLeft: 
 // 'Invite your group' tile for MainMenu. Loads the stay's single live party link
 // when the panel opens, so the Share tap calls navigator.share synchronously
 // inside the user gesture (Safari drops activation across an await). Copy and
-// Text are fallbacks for browsers without the Web Share API.
-export function ShareStay({ slug }: { slug: string }) {
+// Text are fallbacks for browsers without the Web Share API. Mounted only for
+// signed-in guests (never in host preview).
+export function ShareStay({ slug }: { slug?: string }) {
   const [open, setOpen] = useState(false);
   const [invite, setInvite] = useState<Invite | null>(null);
   const [busy, setBusy] = useState(false);
@@ -20,10 +21,13 @@ export function ShareStay({ slug }: { slug: string }) {
   async function openPanel() {
     setOpen(true);
     if (invite || busy) return;
+    // Same fallback MainMenu uses: /g/{slug}/...
+    const resolvedSlug = slug ?? window.location.pathname.split('/')[2];
+    if (!resolvedSlug) { setError('Could not create an invite.'); return; }
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/guest/${encodeURIComponent(slug)}/party-invite`, { method: 'POST', credentials: 'same-origin' });
+      const res = await fetch(`/api/guest/${encodeURIComponent(resolvedSlug)}/party-invite`, { method: 'POST', credentials: 'same-origin' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) setError(body.error ?? 'Could not create an invite.');
       else setInvite(body as Invite);
@@ -65,7 +69,7 @@ export function ShareStay({ slug }: { slug: string }) {
   const message = invite ? `${partyShareText(invite.propertyName, invite.checkOut)} ${invite.url}` : '';
 
   return (
-    <section className="card" style={{ padding: '1rem', position: 'relative' }} data-testid="invite-group-panel" aria-label="Invite your group">
+    <section className="card" style={{ padding: '1rem', position: 'relative', textAlign: 'left' }} data-testid="invite-group-panel" aria-label="Invite your group">
       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} aria-label="Close" style={{ position: 'absolute', top: '.5rem', right: '.5rem' }}>
         <X size={15} aria-hidden />
       </button>

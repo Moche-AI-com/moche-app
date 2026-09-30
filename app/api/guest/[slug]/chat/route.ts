@@ -18,6 +18,7 @@ import { log } from '@/lib/log';
 import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { translateForHost, notificationBody } from '@/lib/guest/translate';
 import { behavioralEscalation } from '@/lib/guest/behavioral-triggers';
+import { classifyCredentialQuestion, doorCodeEscalationQuestion, doorCodeEscalationReply } from '@/lib/guest/credential-questions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -116,29 +117,45 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   };
   const started = Date.now();
   let answer: ConciergeAnswer;
-  try {
-    answer = selectedId
-      ? await answerSelectedAppliance(admin, {
-          propertyId: session.propertyId, applianceId: selectedId,
-          propertyName: property.display_name, question, concierge,
-          aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
-          confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
-        })
-      : await answerGuestQuestion(admin, {
-          propertyId: session.propertyId, propertyName: property.display_name, question, history,
-          aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
-          confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
-          concierge, source: 'guest_chat',
-        });
-  } catch {
-    log.warn('guest_ai_unavailable', { propertyId: session.propertyId, code: 'provider_or_retrieval' });
-    const emergency = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|intruder|burglar|bleeding|unconscious|heart attack|can'?t breathe|emergency|ambulance|assault)\b/i.test(question);
+  // Credential policy: Moche-AI never stores or shares door/entry codes. These
+  // questions skip retrieval and the model entirely and go straight to the host
+  // through the normal escalation path below. Wi-Fi password questions are
+  // handled inside the concierge by lib/guest/wifi-instructions.ts.
+  const doorRequest = classifyCredentialQuestion(question) === 'door_code' ? doorCodeEscalationQuestion(question) : null;
+  if (doorRequest) {
     answer = {
-      text: UNAVAILABLE_ANSWER, confidence: 0, intent: fallbackClassifyIntent(question),
-      model: 'error', sources: [], shouldEscalate: true, isEmergency: emergency,
+      text: doorCodeEscalationReply(), confidence: 1, intent: 'checkin',
+      model: 'policy', sources: [], shouldEscalate: true, isEmergency: false,
       suggestions: [], places: [],
-      unknownNote: 'AI retrieval or its provider was unavailable; please answer the guest directly.',
+      unknownNote: doorRequest.urgent
+        ? 'URGENT: the guest may be locked out. Moche-AI does not store or share entry codes; please reply to the guest directly.'
+        : 'Guest asked for an entry code. Moche-AI does not store or share entry codes; please reply to the guest directly.',
     };
+  } else {
+    try {
+      answer = selectedId
+        ? await answerSelectedAppliance(admin, {
+            propertyId: session.propertyId, applianceId: selectedId,
+            propertyName: property.display_name, question, concierge,
+            aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
+            confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
+          })
+        : await answerGuestQuestion(admin, {
+            propertyId: session.propertyId, propertyName: property.display_name, question, history,
+            aiTemperature: typeof settings?.ai_temperature === 'number' ? settings.ai_temperature : undefined,
+            confidenceThreshold: typeof settings?.confidence_threshold === 'number' ? settings.confidence_threshold : undefined,
+            concierge, source: 'guest_chat',
+          });
+    } catch {
+      log.warn('guest_ai_unavailable', { propertyId: session.propertyId, code: 'provider_or_retrieval' });
+      const emergency = /\b(fire|smoke|gas leak|carbon monoxide|break[- ]?in|intruder|burglar|bleeding|unconscious|heart attack|can'?t breathe|emergency|ambulance|assault)\b/i.test(question);
+      answer = {
+        text: UNAVAILABLE_ANSWER, confidence: 0, intent: fallbackClassifyIntent(question),
+        model: 'error', sources: [], shouldEscalate: true, isEmergency: emergency,
+        suggestions: [], places: [],
+        unknownNote: 'AI retrieval or its provider was unavailable; please answer the guest directly.',
+      };
+    }
   }
   const latencyMs = Date.now() - started;
   if (guestLanguage) {
@@ -172,7 +189,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         try {
           await notify(admin, {
             hostAccountId: (prop as { host_account_id: string }).host_account_id, kind: 'escalation',
-            title: 'A guest question needs your input', body: notificationBody(translated, question),
+            title: doorRequest?.urgent ? 'Urgent: a guest may be locked out' : 'A guest question needs your input',
+            body: notificationBody(translated, question),
             propertyId: session.propertyId, link: `/dashboard/escalations/${escId}`, actionUrl: answerUrl,
           });
         } catch {
@@ -180,7 +198,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         }
       }
       log.info('guest_escalation_created', { escalationId: escId, confidence: answer.confidence,
-        trigger: behavioral.trigger ?? 'low_confidence' });
+        trigger: doorRequest ? 'entry_code_policy' : behavioral.trigger ?? 'low_confidence' });
       try { await capture('escalation_created', session.propertyId, { property_id: session.propertyId }); } catch {
         log.warn('guest_escalation_analytics_failed', { propertyId: session.propertyId });
       }
