@@ -176,6 +176,10 @@ FIELDS += [
 ]
 
 # --- 2. Access & Security --------------------------------------------------
+# Door codes are host-only (docs/decisions/2026-10-01-door-codes-host-only.md):
+# the host may keep the code for their own records, but it is never a guest-facing
+# field and never required. entry_instructions is the guest-safe hard block, the
+# same pattern as wifi_password / wifi_password_location above.
 FIELDS += [
     f("checkin_time", "Check-in time", "access_security", "time",
       "public_guest", "guest_public", ["booking", "pre-arrival"], 365,
@@ -196,11 +200,17 @@ FIELDS += [
       "brain_values", "value", "How do guests get in — smart lock, keypad, lockbox, key handoff, or doorman?",
       enum_values=["smart_lock", "keypad", "lockbox", "physical_key", "doorman", "other"],
       gap_weight=2.0, requires_on_failure=True, on_failure_field="access_backup_method"),
-    f("door_code_or_entry_method", "Door / access code", "access_security", "secret",
-      "stay_scoped_secret", "guest_instay", ["check-in", "mid-stay"], 90,
+    f("door_code_or_entry_method", "Door / access code (host only)", "access_security", "secret",
+      "host_only", "host_private", ["check-in", "mid-stay"], 90,
       "brain_values", "secret_ref_or_ciphertext",
-      "What is the door or building access code? Stored encrypted; never auto-sent.",
-      vault=True, gap_weight=3.0, hard_block=True,
+      "Optional, for your own records. Stored encrypted and never shown to guests or the AI. Guests who ask for a code are routed to you.",
+      vault=True, gap_weight=0.0, hard_block=False,
+      requires_on_failure=True, on_failure_field="access_backup_method"),
+    f("entry_instructions", "Guest entry instructions", "access_security", "text",
+      "guest_after_verification", "guest_instay", ["pre-arrival", "check-in"], 365,
+      "brain_values", "value",
+      "How do guests get inside? Describe the steps without the code itself, e.g. 'Your host texts your door code on arrival day' or 'The lockbox is to the left of the front door.' Never type the code here.",
+      gap_weight=3.0, hard_block=True,
       requires_on_failure=True, on_failure_field="access_backup_method"),
     f("access_code_lifecycle", "Access code lifecycle", "access_security", "text",
       "host_only", "host_private", ["pre-arrival"], 90,
@@ -484,10 +494,15 @@ def validate(fields):
         if x["scrape_hint"] is not None and not isinstance(x["scrape_hint"], str):
             errors.append(f"{fid}: scrape_hint must be a static string")
 
+    # Door codes are host-only and never guest-addressable (2026-10-01).
+    door = next((x for x in fields if x["field_id"] == "door_code_or_entry_method"), None)
+    if door is not None and (door["sensitivity_tier"] != "host_only" or door["hard_block"] or door["gap_weight"] != 0.0):
+        errors.append("door_code_or_entry_method must be host_only, unscored, and not a hard block")
+
     hard = sorted(x["field_id"] for x in fields if x["hard_block"])
     expected_hard = sorted([
         "checkout_time",
-        "door_code_or_entry_method",
+        "entry_instructions",
         "maintenance_emergency_contact",
         "nearest_grocery",
         "parking",

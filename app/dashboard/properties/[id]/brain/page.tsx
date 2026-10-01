@@ -37,6 +37,9 @@
 //
 // Layout order is deliberate: status strip (can this go live), Coverage Map
 // (orientation + navigation), the manager (the doing surface), then support.
+//
+// 2026-10-01: HostDoorCodePanel joins the support grid for owners and Brain
+// editors. Door codes are host-only (docs/decisions/2026-10-01-door-codes-host-only.md).
 
 import Link from 'next/link';
 import { requirePropertyAccess } from '@/lib/auth/guards';
@@ -59,9 +62,12 @@ import { CoverageMap } from './CoverageMap';
 import { ImportProvenancePanel } from './ImportProvenancePanel';
 import { BrainManager } from './BrainManager';
 import { EnhanceBrainPanel, type EnhanceQuestion } from './EnhanceBrainPanel';
+import { HostDoorCodePanel } from './HostDoorCodePanel';
 import layout from './brain-layout.module.css';
 
 export const dynamic = 'force-dynamic';
+
+const DOOR_CODE_FIELD = 'door_code_or_entry_method';
 
 export default async function BrainPage({
   params,
@@ -137,6 +143,11 @@ export default async function BrainPage({
     .eq('property_id', propertyId);
   const predicateAnswers = new Map((predicateRows ?? []).map((r) => [r.predicate, r.applies]));
 
+  // Only whether a door code exists is known here; the value itself never leaves
+  // Vault except through the audited reveal route.
+  const doorCodeStatus = completeness.statuses[DOOR_CODE_FIELD];
+  const hasDoorCode = !!doorCodeStatus && doorCodeStatus !== 'missing';
+
   // Import provenance: source URL, fetch time, and the attestation the host gave.
   // security invoker RPC, so a caller who cannot see the jobs gets no rows.
   const { data: importRows } = await supabase.rpc('property_import_provenance', {
@@ -149,8 +160,10 @@ export default async function BrainPage({
 
   // Enhance Brain queue: heaviest gaps first, blocking ones promoted client-side. Each
   // gap already names its registry domain, which is also its section id, so placement is
-  // derived rather than guessed.
+  // derived rather than guessed. The door code is never asked here: it is a host-only
+  // Vault secret, and Enhance answers are stored as free-text Brain items.
   const enhanceQuestions: EnhanceQuestion[] = [...completeness.gaps]
+    .filter((g) => g.fieldId !== DOOR_CODE_FIELD)
     .sort((a, b) => b.gapWeight - a.gapWeight)
     .slice(0, 12)
     .map((g) => ({
@@ -279,6 +292,9 @@ export default async function BrainPage({
             questions={enhanceQuestions}
             sections={sections}
           />
+        )}
+        {access.can.editBrain && (
+          <HostDoorCodePanel propertyId={propertyId} hasCode={hasDoorCode} />
         )}
         <CompletenessPanel
           propertyId={propertyId}

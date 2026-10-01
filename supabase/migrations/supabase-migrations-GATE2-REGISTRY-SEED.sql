@@ -7,7 +7,7 @@
 -- reconciles the table to the JSON, including removing fields deleted from the
 -- registry. Apply after supabase-migrations-GATE2-REGISTRY.sql.
 --
--- registry_checksum: 32ecab3a106c0a23aac93d09d2408665914b4232b8ce83c3422ef3561c7ada87
+-- registry_checksum: 652f1b2a82cb37ab4e5dad1e012125e9c08a40cf55ec8494b0321248a2f485e3
 
 BEGIN;
 
@@ -1094,25 +1094,25 @@ INSERT INTO public.field_registry (
     registry_version
 ) VALUES (
     'door_code_or_entry_method',
-    'Door / access code',
+    'Door / access code (host only)',
     'access_security',
     false,
     'secret',
     NULL,
-    'stay_scoped_secret'::public.sensitivity_tier,
-    'guest_instay'::public.audience_tier,
+    'host_only'::public.sensitivity_tier,
+    'host_private'::public.audience_tier,
     '{"check-in","mid-stay"}'::text[],
     90,
     'brain_values',
     'secret_ref_or_ciphertext',
     true,
-    3.0,
-    true,
+    0.0,
+    false,
     'always',
     true,
     'access_backup_method',
     NULL,
-    'What is the door or building access code? Stored encrypted; never auto-sent.',
+    'Optional, for your own records. Stored encrypted and never shown to guests or the AI. Guests who ask for a code are routed to you.',
     1
 )
 ON CONFLICT (field_id) DO UPDATE SET
@@ -1179,6 +1179,72 @@ INSERT INTO public.field_registry (
     NULL,
     'Accessibility features section.',
     'Is there an elevator, or how many flights of stairs?',
+    1
+)
+ON CONFLICT (field_id) DO UPDATE SET
+  label = EXCLUDED.label,
+  domain = EXCLUDED.domain,
+  system_section = EXCLUDED.system_section,
+  type = EXCLUDED.type,
+  enum_values = EXCLUDED.enum_values,
+  sensitivity_tier = EXCLUDED.sensitivity_tier,
+  default_audience = EXCLUDED.default_audience,
+  phase = EXCLUDED.phase,
+  ttl_days = EXCLUDED.ttl_days,
+  storage_table = EXCLUDED.storage_table,
+  storage_column = EXCLUDED.storage_column,
+  storage_vault = EXCLUDED.storage_vault,
+  gap_weight = EXCLUDED.gap_weight,
+  hard_block = EXCLUDED.hard_block,
+  applicability = EXCLUDED.applicability,
+  requires_on_failure = EXCLUDED.requires_on_failure,
+  on_failure_field = EXCLUDED.on_failure_field,
+  scrape_hint = EXCLUDED.scrape_hint,
+  interview_prompt = EXCLUDED.interview_prompt,
+  registry_version = EXCLUDED.registry_version;
+INSERT INTO public.field_registry (
+    field_id,
+    label,
+    domain,
+    system_section,
+    type,
+    enum_values,
+    sensitivity_tier,
+    default_audience,
+    phase,
+    ttl_days,
+    storage_table,
+    storage_column,
+    storage_vault,
+    gap_weight,
+    hard_block,
+    applicability,
+    requires_on_failure,
+    on_failure_field,
+    scrape_hint,
+    interview_prompt,
+    registry_version
+) VALUES (
+    'entry_instructions',
+    'Guest entry instructions',
+    'access_security',
+    false,
+    'text',
+    NULL,
+    'guest_after_verification'::public.sensitivity_tier,
+    'guest_instay'::public.audience_tier,
+    '{"pre-arrival","check-in"}'::text[],
+    365,
+    'brain_values',
+    'value',
+    false,
+    3.0,
+    true,
+    'always',
+    true,
+    'access_backup_method',
+    NULL,
+    'How do guests get inside? Describe the steps without the code itself, e.g. ''Your host texts your door code on arrival day'' or ''The lockbox is to the left of the front door.'' Never type the code here.',
     1
 )
 ON CONFLICT (field_id) DO UPDATE SET
@@ -3667,6 +3733,7 @@ WHERE field_id NOT IN (
   'deposit_damage_policy',
   'door_code_or_entry_method',
   'elevator_stairs',
+  'entry_instructions',
   'entry_method',
   'extra_guest_policy',
   'floor_number',
