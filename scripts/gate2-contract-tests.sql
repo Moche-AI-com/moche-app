@@ -6,6 +6,10 @@
 -- write path works when it should (Section 0.1a).
 --
 -- Run via scripts/verify-gate2-sql.sh. Exits non-zero on the first failure.
+--
+-- 2026-10-01: door codes are host-only. A1 counts entry_instructions (56 fields)
+-- and B2 stores the door code at host_only / host_private. Door-code specifics
+-- live in scripts/gate2-door-code-contract-tests.sql.
 
 \set ON_ERROR_STOP on
 \timing off
@@ -78,7 +82,7 @@ GRANT SELECT ON public.properties, public.property_members TO authenticated;
 -- ===========================================================================
 
 SELECT pg_temp.expect_eq(
-  (SELECT count(*)::int FROM public.field_registry), 55,
+  (SELECT count(*)::int FROM public.field_registry), 56,
   'A1 registry materialized with every declared field');
 
 SELECT pg_temp.expect_eq(
@@ -156,8 +160,8 @@ SELECT pg_temp.expect_ok($$
   INSERT INTO public.brain_values
     (property_id, field_id, secret_ref_or_ciphertext, sensitivity_tier, audience, source)
   VALUES ('11111111-1111-1111-1111-111111111111','door_code_or_entry_method',
-          'vault://moche/prop-a/door_code','stay_scoped_secret','guest_instay','host_verified')$$,
-  'B2 positive control: a Vault-pointer secret is accepted');
+          'vault://moche/prop-a/door_code','host_only','host_private','host_verified')$$,
+  'B2 positive control: a host-only Vault-pointer secret is accepted');
 
 SELECT pg_temp.expect_fail($$
   INSERT INTO public.brain_values
