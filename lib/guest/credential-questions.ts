@@ -10,6 +10,8 @@
 //
 // Pure and deterministic so the answer never depends on what a model decides.
 
+import { partyT } from './party-strings';
+
 export type CredentialKind = 'wifi_password' | 'door_code';
 
 const DOOR_PATTERNS: RegExp[] = [
@@ -30,8 +32,9 @@ export function classifyCredentialQuestion(text: string): CredentialKind | null 
   return null;
 }
 
-export function doorCodeEscalationReply(): string {
-  return 'For your security, entry codes aren’t shared in chat. I’ve let your host know, and they’ll reply to you here shortly.';
+/** Guest-facing reply in the guest's chosen language (English when unknown or automatic). */
+export function doorCodeEscalationReply(language?: string | null): string {
+  return partyT(language)('doorCodeReply');
 }
 
 /** Context for the host-facing escalation. Door questions are urgent when the guest may be locked out. */

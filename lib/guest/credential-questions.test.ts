@@ -32,8 +32,16 @@ describe('credential questions', () => {
     expect(classifyCredentialQuestion(q)).toBeNull();
   });
 
-  it('never contains a code in the guest reply', () => {
-    expect(doorCodeEscalationReply()).not.toMatch(/\d/);
+  it.each([null, 'auto', 'es', 'fr', 'de', 'it', 'pt', 'pt-BR', 'nl', 'zh-Hans', 'ja'])(
+    'never contains a code in the guest reply (%s)',
+    (lang) => {
+      expect(doorCodeEscalationReply(lang)).not.toMatch(/\d/);
+    },
+  );
+
+  it('replies in the guest language', () => {
+    expect(doorCodeEscalationReply('es')).toContain('anfitrión');
+    expect(doorCodeEscalationReply(null)).toContain('entry codes');
   });
 
   it('marks lockouts urgent', () => {

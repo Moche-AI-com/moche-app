@@ -3,15 +3,24 @@
 import { useState } from 'react';
 import { Copy, MessageSquare, Share2, Users, X } from 'lucide-react';
 import { partyShareText, smsShareHref } from '@/lib/guest/party-invite-url';
+import { partyT } from '@/lib/guest/party-strings';
 
 type Invite = { url: string; propertyName: string; checkOut: string; spotsLeft: number };
+
+const ERROR_KEYS: Record<string, string> = {
+  disabled: 'inviteErrDisabled',
+  full: 'inviteErrFull',
+  ended: 'inviteErrEnded',
+};
 
 // 'Invite your group' tile for MainMenu. Loads the stay's single live party link
 // when the panel opens, so the Share tap calls navigator.share synchronously
 // inside the user gesture (Safari drops activation across an await). Copy and
 // Text are fallbacks for browsers without the Web Share API. Mounted only for
-// signed-in guests (never in host preview).
-export function ShareStay({ slug }: { slug?: string }) {
+// signed-in guests (never in host preview). All copy follows the guest's
+// chosen portal language (lib/guest/party-strings.ts).
+export function ShareStay({ slug, language }: { slug?: string; language?: string | null }) {
+  const t = partyT(language);
   const [open, setOpen] = useState(false);
   const [invite, setInvite] = useState<Invite | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,36 +32,40 @@ export function ShareStay({ slug }: { slug?: string }) {
     if (invite || busy) return;
     // Same fallback MainMenu uses: /g/{slug}/...
     const resolvedSlug = slug ?? window.location.pathname.split('/')[2];
-    if (!resolvedSlug) { setError('Could not create an invite.'); return; }
+    if (!resolvedSlug) { setError(t('inviteErrGeneric')); return; }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/guest/${encodeURIComponent(resolvedSlug)}/party-invite`, { method: 'POST', credentials: 'same-origin' });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) setError(body.error ?? 'Could not create an invite.');
+      if (!res.ok) setError(t(ERROR_KEYS[body.code as string] ?? 'inviteErrGeneric'));
       else setInvite(body as Invite);
     } catch {
-      setError('Could not create an invite. Check your connection.');
+      setError(t('inviteErrNetwork'));
     } finally {
       setBusy(false);
     }
   }
 
+  const message = invite
+    ? `${partyShareText(t, invite.propertyName, invite.checkOut, language)} ${invite.url}`
+    : '';
+
   function nativeShare() {
     if (!invite) return;
     navigator
-      .share({ title: invite.propertyName, text: partyShareText(invite.propertyName, invite.checkOut), url: invite.url })
+      .share({ title: invite.propertyName, text: partyShareText(t, invite.propertyName, invite.checkOut, language), url: invite.url })
       .catch(() => { /* sheet dismissed */ });
   }
 
   async function copy() {
     if (!invite) return;
     try {
-      await navigator.clipboard.writeText(`${partyShareText(invite.propertyName, invite.checkOut)} ${invite.url}`);
+      await navigator.clipboard.writeText(message);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError('Copy failed. Press and hold the link to copy it.');
+      setError(t('inviteErrCopy'));
     }
   }
 
@@ -61,41 +74,37 @@ export function ShareStay({ slug }: { slug?: string }) {
   if (!open) {
     return (
       <button type="button" className="gp-msg-link" onClick={openPanel} data-testid="button-invite-group" style={{ display: 'inline-flex', gap: '.4rem', alignItems: 'center' }}>
-        <Users size={15} aria-hidden /> Invite your group
+        <Users size={15} aria-hidden /> {t('inviteButton')}
       </button>
     );
   }
 
-  const message = invite ? `${partyShareText(invite.propertyName, invite.checkOut)} ${invite.url}` : '';
-
   return (
-    <section className="card" style={{ padding: '1rem', position: 'relative', textAlign: 'left' }} data-testid="invite-group-panel" aria-label="Invite your group">
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} aria-label="Close" style={{ position: 'absolute', top: '.5rem', right: '.5rem' }}>
+    <section className="card" style={{ padding: '1rem', position: 'relative', textAlign: 'left' }} data-testid="invite-group-panel" aria-label={t('inviteTitle')}>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} aria-label={t('close')} style={{ position: 'absolute', top: '.5rem', right: '.5rem' }}>
         <X size={15} aria-hidden />
       </button>
-      <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>Invite your group</h2>
-      <p className="gp-muted" style={{ margin: '0 0 .8rem' }}>
-        Send this link to the people staying with you. Each person adds their own name, and your host can see who joined.
-      </p>
-      {busy && <p className="gp-muted">Creating your link…</p>}
+      <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>{t('inviteTitle')}</h2>
+      <p className="gp-muted" style={{ margin: '0 0 .8rem' }}>{t('inviteSub')}</p>
+      {busy && <p className="gp-muted">{t('inviteCreating')}</p>}
       {error && <p className="gp-muted" role="alert">{error}</p>}
       {invite && (
         <>
           <div style={{ display: 'flex', gap: '.55rem', flexWrap: 'wrap' }}>
             {canNativeShare && (
               <button type="button" className="btn btn-primary" onClick={nativeShare} data-testid="button-invite-share">
-                <Share2 size={15} aria-hidden /> Share
+                <Share2 size={15} aria-hidden /> {t('inviteShare')}
               </button>
             )}
             <button type="button" className="btn" onClick={copy} data-testid="button-invite-copy">
-              <Copy size={15} aria-hidden /> {copied ? 'Copied' : 'Copy link'}
+              <Copy size={15} aria-hidden /> {copied ? t('inviteCopied') : t('inviteCopy')}
             </button>
             <a className="btn" href={smsShareHref(message)} data-testid="button-invite-sms">
-              <MessageSquare size={15} aria-hidden /> Text
+              <MessageSquare size={15} aria-hidden /> {t('inviteText')}
             </a>
           </div>
           <p className="gp-muted" style={{ fontSize: '.8rem', marginTop: '.7rem' }}>
-            {invite.spotsLeft} {invite.spotsLeft === 1 ? 'spot' : 'spots'} left · Link stops working after checkout.
+            {invite.spotsLeft === 1 ? t('inviteSpotsOne') : t('inviteSpotsMany', { count: invite.spotsLeft })} · {t('inviteExpiry')}
           </p>
         </>
       )}
