@@ -293,12 +293,12 @@
     },
     {
       "field_id": "door_code_or_entry_method",
-      "label": "Door / access code",
+      "label": "Door / access code (host only)",
       "domain": "access_security",
       "system_section": false,
       "type": "secret",
-      "sensitivity_tier": "stay_scoped_secret",
-      "default_audience": "guest_instay",
+      "sensitivity_tier": "host_only",
+      "default_audience": "host_private",
       "phase": [
         "check-in",
         "mid-stay"
@@ -309,13 +309,39 @@
         "column": "secret_ref_or_ciphertext",
         "vault": true
       },
+      "gap_weight": 0.0,
+      "hard_block": false,
+      "applicability": "always",
+      "requires_on_failure": true,
+      "on_failure_field": "access_backup_method",
+      "scrape_hint": null,
+      "interview_prompt": "Optional, for your own records. Stored encrypted and never shown to guests or the AI. Guests who ask for a code are routed to you."
+    },
+    {
+      "field_id": "entry_instructions",
+      "label": "Guest entry instructions",
+      "domain": "access_security",
+      "system_section": false,
+      "type": "text",
+      "sensitivity_tier": "guest_after_verification",
+      "default_audience": "guest_instay",
+      "phase": [
+        "pre-arrival",
+        "check-in"
+      ],
+      "ttl_days": 365,
+      "storage_target": {
+        "table": "brain_values",
+        "column": "value",
+        "vault": false
+      },
       "gap_weight": 3.0,
       "hard_block": true,
       "applicability": "always",
       "requires_on_failure": true,
       "on_failure_field": "access_backup_method",
       "scrape_hint": null,
-      "interview_prompt": "What is the door or building access code? Stored encrypted; never auto-sent."
+      "interview_prompt": "How do guests get inside? Describe the steps without the code itself, e.g. 'Your host texts your door code on arrival day' or 'The lockbox is to the left of the front door.' Never type the code here."
     },
     {
       "field_id": "entry_method",
