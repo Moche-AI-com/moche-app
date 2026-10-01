@@ -422,6 +422,84 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
   }
 }
 
+// #195 PR 4: reminder / backup text for an alert nobody has seen yet. Same
+// consent, STOP, preference, entitlement and cap gates as notify(). Called only
+// by lib/notifications/escalation-runner.ts after it has claimed the step, so a
+// step is never sent twice. No guest names, message bodies or codes.
+export type ReminderStep = 'sms_15m' | 'backup_30m' | 'p1_repeat_5m' | 'p1_backup_10m';
+export interface ReminderNotification {
+  id: string;
+  host_account_id: string;
+  kind: NotificationKind;
+  link: string | null;
+  property_id: string | null;
+  recipient_profile_id: string | null;
+  conversation_id: string | null;
+  urgency: Urgency | null;
+}
+
+export async function sendNotificationReminder(
+  client: Client,
+  n: ReminderNotification,
+  step: ReminderStep,
+): Promise<{ sent: number; reason: string | null }> {
+  if (!serverEnv.notifySmsEnabled || !SMS_FANOUT_KINDS.has(n.kind)) return { sent: 0, reason: 'sms_not_applicable' };
+  const backup = step === 'backup_30m' || step === 'p1_backup_10m';
+  // Account-wide alerts already reached every eligible member, so there is
+  // nobody further to escalate to.
+  if (backup && !n.recipient_profile_id) return { sent: 0, reason: 'no_backup_for_account_wide' };
+  const category = NOTIFICATION_CATEGORIES.find((c) => c.key === CATEGORY_FOR_KIND[n.kind]);
+  if (!category) return { sent: 0, reason: 'no_category' };
+  if (n.kind !== 'host_message' && n.kind !== 'escalation') {
+    const ent = await getEntitlements(client, n.host_account_id);
+    if (!ent?.smsEscalation) return { sent: 0, reason: 'not_entitled' };
+  }
+  const all = await loadRecipientContacts(client, n.host_account_id, backup ? null : n.recipient_profile_id, n.property_id);
+  const recipients = backup ? all.filter((r) => r.profileId !== n.recipient_profile_id) : all;
+  if (recipients.length === 0) return { sent: 0, reason: 'no_recipients' };
+
+  const direct = safeNotificationUrl(publicEnv.appUrl, n.link ?? undefined);
+  // The original recipient gets the tracked link (opening = seen). Backup members
+  // get the direct link: the tracked route only acknowledges for the alert's own
+  // recipient, and opening the conversation acknowledges it via host_read_at.
+  const tracked = direct ? (appRouteUrl(publicEnv.appUrl, `/api/notifications/${n.id}/open`) ?? direct) : null;
+  const link = backup ? direct : tracked;
+  const statusCallbackUrl = appRouteUrl(publicEnv.appUrl, '/api/webhooks/twilio/status');
+  const what = n.urgency === 'p1' ? 'URGENT: a guest reported an urgent issue and is still waiting.'
+    : n.kind === 'escalation' ? 'A guest question still needs an answer.'
+    : 'A guest message is still waiting for a reply.';
+  const msg = `Moche-AI ${backup ? '(backup)' : 'reminder'}: ${what}${link ? ` Open: ${link}` : ''} Reply STOP to opt out.`;
+  const attempt = backup ? 3 : 2;
+
+  let sent = 0;
+  for (const recipient of recipients) {
+    const phone = recipient.phone;
+    if (!phone || !recipient.smsOptIn || !recipient.phoneVerifiedAt) continue;
+    if (!category.alwaysOn) {
+      const pref = await loadCategoryPref(client, recipient.profileId, category.key, n.kind);
+      if (!pref || !pref.enabled || !pref.sms_enabled) continue;
+    }
+    const cap = await checkSmsCaps(client, {
+      recipientProfileId: recipient.profileId, conversationId: n.conversation_id, urgency: n.urgency,
+    });
+    if (!cap.allowed) {
+      const capReason = cap.reason;
+      await track(() => recordDelivery(client, {
+        notificationId: n.id, recipientProfileId: recipient.profileId, channel: 'sms', status: 'suppressed', reason: capReason, attempt,
+      }));
+      continue;
+    }
+    const result = await sendSms(phone, msg, client, { statusCallbackUrl });
+    if (result.status === 'accepted') sent++;
+    const outcome = smsDeliveryOutcome(result.status);
+    await track(() => recordDelivery(client, {
+      notificationId: n.id, recipientProfileId: recipient.profileId, channel: 'sms',
+      status: outcome.status, reason: outcome.reason, providerRef: result.sid ?? null, attempt,
+    }));
+  }
+  return { sent, reason: null };
+}
+
 // Sends a host phone-verification / login 2FA OTP over SMS, reusing the same Twilio
 // fetch path as every other SMS here (no second client). The full code is NEVER logged.
 export async function sendHostOtp(phone: string, code: string): Promise<boolean> {
