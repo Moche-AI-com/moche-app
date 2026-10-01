@@ -50,6 +50,10 @@ echo "== contract tests =="
 "$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
   -f "$REPO/scripts/gate2-contract-tests.sql"
 
+echo "== door-code host-only contract tests =="
+"$PGBIN/psql" -p "$PGPORT" -h /tmp -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+  -f "$REPO/scripts/gate2-door-code-contract-tests.sql"
+
 echo "== messaging phone/consent migration and real RLS contract tests =="
 psql -f "$REPO/scripts/messaging-local-stubs.sql"
 psql -f "$REPO/supabase/migrations/20260908134135_guest_messaging_phone_consent.sql"
