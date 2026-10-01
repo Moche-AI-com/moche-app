@@ -4,11 +4,13 @@ import { requireLaunchAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { Breadcrumbs } from '@/components/dashboard/Breadcrumbs';
+import { TextAlertsBanner } from '@/components/dashboard/TextAlertsBanner';
 import { PostHogIdentify } from '@/components/PostHogIdentify';
 import { outstandingReacceptances } from '@/lib/legal/acceptance';
 import { verifyTrustedDeviceValue } from '@/lib/crypto';
 import { TRUSTED_DEVICE_COOKIE } from '@/lib/constants';
 import { hiddenKindsForPrefs } from '@/lib/notifications/categories';
+import { textAlertGap } from '@/lib/notifications/host-reachability';
 import { ReacceptanceGate } from './ReacceptanceGate';
 import { FeedbackControl } from './FeedbackControl';
 
@@ -75,6 +77,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     if (row.display_name) propertyNames[row.id] = row.display_name;
   }
 
+  // #195 launch: prompt hosts who cannot be texted when a guest needs them.
+  const textGap = textAlertGap(ctx.profile);
+
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       <PostHogIdentify userId={ctx.user.id} email={ctx.profile.email} />
@@ -86,6 +91,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         isOwner={ctx.account.owner_id === ctx.user.id}
       />
       <main className="wrap" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
+        {textGap ? <TextAlertsBanner reason={textGap} /> : null}
         <Breadcrumbs names={propertyNames} />
         {children}
       </main>
