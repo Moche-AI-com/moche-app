@@ -50,6 +50,9 @@ function timeLabel(value: string) {
 // Host preview: no polling and no real thread. Sends go to the sandbox endpoint
 // (which writes nothing and notifies nobody), and a clearly-marked auto-reply
 // shows how a host response renders in the thread.
+//
+// #195 launch: when the server flags a message urgent it returns
+// emergencyNotice; it stays on screen for the rest of the visit.
 export function HostChatWorkflow(props: {
   slug: string;
   propertyId?: string;
@@ -76,6 +79,7 @@ export function HostChatWorkflow(props: {
   const [canSend, setCanSend] = useState(hostPreview);
   const [conversationId, setConversationId] = useState(props.initialConversationId ?? null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [emergencyNotice, setEmergencyNotice] = useState<string | null>(null);
   const [recoveryRequired, setRecoveryRequired] = useState(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [recovering, setRecovering] = useState(false);
@@ -215,6 +219,7 @@ export function HostChatWorkflow(props: {
       if (inputRef.current) inputRef.current.style.height = 'auto';
       if (json.message) setMessages((current) => [...current, json.message]);
       if (!hostPreview) setNotice([messageNotificationNotice(json.notification?.sms), ...(Array.isArray(json.workflowWarnings) ? json.workflowWarnings : [])].join(' '));
+      if (!hostPreview && typeof json.emergencyNotice === 'string') setEmergencyNotice(json.emergencyNotice);
       if (hostPreview) {
         // Show the host how a reply renders, clearly marked as simulated.
         window.setTimeout(() => {
@@ -288,6 +293,12 @@ export function HostChatWorkflow(props: {
         </div>
       )}
       {!loading && !canSend && !hostPreview && (!recoveryRequired || !recoveryReady) && <GuestMessagingSetup slug={props.slug} onReady={() => void load()} />}
+      {emergencyNotice && (
+        <p role="alert" className="gp-alert-text" data-testid="host-chat-emergency-notice" style={{ display: 'flex', gap: '.4rem', alignItems: 'flex-start' }}>
+          <TriangleAlert size={16} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>{emergencyNotice}</span>
+        </p>
+      )}
       {notice && <p role="status" className="gp-muted">{notice}</p>}
       <div aria-live="polite" className="gp-chat-panel" style={{ minHeight: 320, maxHeight: '52vh' }}>
         {loading ? (
