@@ -19,10 +19,10 @@ const ALL_IDS = REGISTRY_FIELDS.map((f) => f.field_id);
 const ALL_PREDICATES = [...new Set(REGISTRY_FIELDS.map((f) => f.applicability))];
 
 describe('registry shape (Amendment 001-A.2)', () => {
-  it('keeps six hard blocks while requiring Wi-Fi location rather than its secret', () => {
+  it('keeps six hard blocks, requiring guest-safe guidance rather than secrets', () => {
     expect([...HARD_BLOCK_FIELD_IDS].sort()).toEqual([
       'checkout_time',
-      'door_code_or_entry_method',
+      'entry_instructions',
       'maintenance_emergency_contact',
       'nearest_grocery',
       'parking',
@@ -31,6 +31,16 @@ describe('registry shape (Amendment 001-A.2)', () => {
     expect(scoredSet(ALL_PREDICATES).some((f) => f.field_id === 'wifi_password')).toBe(false);
     expect(REGISTRY_FIELDS.find((f) => f.field_id === 'wifi_password')?.type).toBe('secret');
     expect(REGISTRY_FIELDS.find((f) => f.field_id === 'wifi_password_location')?.type).toBe('text');
+  });
+
+  it('keeps the door code host-only, optional, and out of the score', () => {
+    const door = REGISTRY_FIELDS.find((f) => f.field_id === 'door_code_or_entry_method');
+    expect(door?.type).toBe('secret');
+    expect(door?.sensitivity_tier).toBe('host_only');
+    expect(door?.default_audience).toBe('host_private');
+    expect(door?.hard_block).toBe(false);
+    expect(scoredSet(ALL_PREDICATES).some((f) => f.field_id === 'door_code_or_entry_method')).toBe(false);
+    expect(REGISTRY_FIELDS.find((f) => f.field_id === 'entry_instructions')?.type).toBe('text');
   });
 
   it('excludes hidden system sections from the scored set', () => {
@@ -134,6 +144,15 @@ describe('the publish gate (Amendment 001-A.4)', () => {
     expect(result.canPublish).toBe(false);
     expect(result.blockedReason).toBe('hard_blocks_outstanding');
     expect(result.hardBlocksOutstanding.map((g) => g.fieldId)).toEqual(['nearest_grocery']);
+  });
+
+  it('does not block publishing on a missing door code', () => {
+    const statuses = statusesFor(ALL_IDS, 'satisfied');
+    delete (statuses as Record<string, FieldStatus>).door_code_or_entry_method;
+
+    const result = computeCompleteness({ statuses, applicable: ALL_PREDICATES });
+    expect(result.canPublish).toBe(true);
+    expect(result.hardBlocksOutstanding).toEqual([]);
   });
 
   it('blocks a property with every hard block satisfied but a low score', () => {
