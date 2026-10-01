@@ -54,7 +54,7 @@ export function MainMenu(props: { propertyName: string; guestName: string | null
     {props.hostPreview ? <div style={{ marginBottom: '1rem' }}><div className="gp-banner gp-banner-host" role="note">{t('menuHostPreview')}</div><button type="button" className="gp-msg-link" onClick={props.onPreviewSignIn} data-testid="button-preview-signin-flow">{t('menuPreviewSignIn')}</button></div> : null}
     {needsRemote && !menu ? <div role="status" className="gp-muted">{loading ? t('loading') : failed ? <button type="button" className="gp-msg-link" onClick={() => setRetry((value) => value + 1)}>{t('askError')}</button> : t('loading')}</div>
       : <div className="gp-menu-grid">{cards.map(({ key, title, blurb }, index) => <button key={key} type="button" className="gp-menu-card" style={{ animationDelay: `${index * 70}ms` }} onClick={() => props.onSelect(key)} data-testid={`menu-${key}`}><CardArt cardKey={key} /><span className="gp-menu-title">{title}</span><span className="gp-menu-blurb">{blurb}</span></button>)}</div>}
-    {!props.hostPreview && <div style={{ margin: '1rem 0', textAlign: 'center' }}><ShareStay slug={props.slug} /></div>}
+    {!props.hostPreview && <div style={{ margin: '1rem 0', textAlign: 'center' }}><ShareStay slug={props.slug} language={requested} /></div>}
     {!props.hostPreview && <ReviewNudge propertyName={props.propertyName} onContactHost={() => props.onSelect('host')} />}
   </section>;
 }

@@ -120,11 +120,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // Credential policy: Moche-AI never stores or shares door/entry codes. These
   // questions skip retrieval and the model entirely and go straight to the host
   // through the normal escalation path below. Wi-Fi password questions are
-  // handled inside the concierge by lib/guest/wifi-instructions.ts.
+  // handled inside the concierge by lib/guest/wifi-instructions.ts. The guest
+  // reply follows their chosen language (lib/guest/party-strings.ts).
   const doorRequest = classifyCredentialQuestion(question) === 'door_code' ? doorCodeEscalationQuestion(question) : null;
   if (doorRequest) {
     answer = {
-      text: doorCodeEscalationReply(), confidence: 1, intent: 'checkin',
+      text: doorCodeEscalationReply(guestLanguage?.code ?? settings?.language ?? null), confidence: 1, intent: 'checkin',
       model: 'policy', sources: [], shouldEscalate: true, isEmergency: false,
       suggestions: [], places: [],
       unknownNote: doorRequest.urgent
