@@ -10,6 +10,7 @@ import { getGuestMessagingReadiness } from '@/lib/guest/messaging-readiness';
 import { hostConversationLink, isMessageLocator } from '@/lib/notifications/links';
 import { hasRecentPhoneProof, recoveredConversationScope } from '@/lib/guest/conversation-recovery';
 import { recordMessageWorkflow } from '@/lib/notifications/message-workflow';
+import { EMERGENCY_GUEST_NOTICE, isUrgentGuestMessage } from '@/lib/notifications/urgency';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -240,6 +241,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     void (admin as any).from('stays').update({ guest_language: guestLanguage.code }).eq('id', session.stayId);
   }
 
+  // #195 launch: emergencies, hazards and lockouts page the host as P1 (skips the
+  // SMS caps, says URGENT, 5/10-minute ladder). The host translation is checked
+  // too, so a guest writing in another language is still recognised.
+  const urgent = isUrgentGuestMessage(parsed.data.message, hostTranslation);
+
   const now = new Date().toISOString();
   const { data: inserted, error } = await (admin as any)
     .from('messages')
@@ -306,14 +312,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const notification = await notify(admin, {
     hostAccountId: property.host_account_id,
     kind: 'host_message',
-    title: reopened ? `Escalation reopened at ${property.display_name}` : `New guest message at ${property.display_name}`,
+    title: urgent
+      ? `URGENT: a guest at ${property.display_name} may need help now`
+      : reopened ? `Escalation reopened at ${property.display_name}` : `New guest message at ${property.display_name}`,
     body: reopened
       ? `${session.guestDisplayName} replied in Host Chat — an escalation needs another look.`
       : `${session.guestDisplayName} sent a message in Host Chat.`,
     propertyId: property.id,
     // Deep link straight into the full-page conversation (Stays redesign).
     link: hostConversationLink(property.id, session.stayId, conversation.id, inserted.id),
+    urgency: urgent ? 'p1' : 'p2',
   }).catch(() => ({ inApp: 'failed', sms: 'unknown', smsAccepted: 0, emailAccepted: 0 }));
 
-  return NextResponse.json({ ok: true, messageStored: true, notification, workflowWarnings, reopened, conversationId: conversation.id, message: mapMessage(inserted) });
+  return NextResponse.json({
+    ok: true, messageStored: true, notification, workflowWarnings, reopened, conversationId: conversation.id,
+    message: mapMessage(inserted),
+    emergencyNotice: urgent ? EMERGENCY_GUEST_NOTICE : null,
+  });
 }
