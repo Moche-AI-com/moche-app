@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, UserRound, Users } from 'lucide-react';
+import { PartyInvitePanel } from './PartyInvitePanel';
 
 type StayGuest = {
   id: string;
@@ -17,9 +18,10 @@ type StayGuest = {
 };
 
 // Guests who have joined this stay. Under the one-code model there is nothing
-// to create here: every guest uses the same stay access code and adds their
-// name the first time they open the portal. Rows showing a code are legacy
-// per-guest IDs minted before the merge and keep working until they expire.
+// to create here: every guest uses the same stay access code (or a guest's
+// 'Invite your group' link) and adds their name the first time they open the
+// portal. Rows showing a code are legacy per-guest IDs minted before the merge
+// and keep working until they expire.
 export function StayGuestsManager({ propertyId, stayId }: { propertyId: string; stayId: string }) {
   const [guests, setGuests] = useState<StayGuest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,14 +53,14 @@ export function StayGuestsManager({ propertyId, stayId }: { propertyId: string; 
       </summary>
 
       <p className="faint" style={{ fontSize: '.78rem', margin: '.6rem 0 0' }}>
-        Everyone in the party uses the same stay access code. Guests add their name the first time they open the portal, and their session is remembered on that device.
+        Everyone in the party uses the same stay access code, or a guest’s group invite link. Guests add their name the first time they open the portal, and their session is remembered on that device.
       </p>
 
       <div style={{ marginTop: '.8rem', display: 'grid', gap: '.45rem' }}>
         {loading ? (
           <p className="muted"><Loader2 size={15} className="spin" aria-hidden /> Loading guests…</p>
         ) : guests.length === 0 ? (
-          <p className="muted">No guests have joined yet. Share the stay code to get them in.</p>
+          <p className="muted">No guests have joined yet. Share the stay code to get them in, or guests can invite each other from their portal.</p>
         ) : (
           guests.map((guest) => (
             <div key={guest.id} className="card-2" style={{ display: 'flex', justifyContent: 'space-between', gap: '.75rem', padding: '.65rem' }}>
@@ -78,6 +80,8 @@ export function StayGuestsManager({ propertyId, stayId }: { propertyId: string; 
         )}
         {error && <p role="alert" style={{ color: 'var(--coral)' }}>{error}</p>}
       </div>
+
+      {stayId ? <PartyInvitePanel propertyId={propertyId} stayId={stayId} /> : null}
     </details>
   );
 }

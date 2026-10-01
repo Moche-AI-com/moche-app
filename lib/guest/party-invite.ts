@@ -32,6 +32,19 @@ export function partyInviteExpiry(checkOutIso: string, graceHours: number | null
   return new Date(new Date(checkOutIso).getTime() + grace * 3_600_000);
 }
 
+/**
+ * Host 'Add spots' on a live or full link. The new cap never drops below the
+ * spots already used and never exceeds the hard ceiling; the link is full
+ * exactly when every spot is used.
+ */
+export function partyInviteCapUpdate(used: number, requested: number): { max: number; full: boolean } {
+  const usedSafe = Number.isFinite(used) ? Math.max(0, Math.round(used)) : 0;
+  const floor = Math.max(1, usedSafe);
+  const wanted = Number.isFinite(requested) ? Math.round(requested) : floor;
+  const max = Math.min(PARTY_INVITE_HARD_MAX_JOINS, Math.max(floor, wanted));
+  return { max, full: usedSafe >= max };
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   if (!Number.isFinite(n)) return lo;
   return Math.min(hi, Math.max(lo, Math.round(n)));
