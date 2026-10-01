@@ -9,6 +9,14 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const LINK_COLS = 'id, expires_at, consumed_at, max_redemptions, redemption_count';
+const NO_STORE = { 'Cache-Control': 'no-store' };
+
+// Every failure carries a stable `code` so the portal can show it in the
+// guest's language (lib/guest/party-strings.ts). `error` stays as English
+// fallback text for logs and older clients.
+function fail(status: number, code: string, error: string) {
+  return NextResponse.json({ code, error }, { status, headers: NO_STORE });
+}
 
 // 'Invite your group'. Returns the stay's single live party link, minting it on
 // first use. Sends nothing: the guest shares through the native share sheet,
@@ -17,12 +25,10 @@ const LINK_COLS = 'id, expires_at, consumed_at, max_redemptions, redemption_coun
 // /api/guest/[slug]/auth/redeem route (session, expiry, revoke, cap all reused).
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await getGuestSession();
-  if (!session) return NextResponse.json({ error: 'Session expired.' }, { status: 401 });
+  if (!session) return fail(401, 'session', 'Session expired.');
 
   const secret = process.env.GUEST_PARTY_INVITE_SECRET ?? '';
-  if (secret.length < 32) {
-    return NextResponse.json({ error: 'Group invites are not available right now.' }, { status: 503 });
-  }
+  if (secret.length < 32) return fail(503, 'unavailable', 'Group invites are not available right now.');
 
   const { slug } = await params;
   const admin = createAdminClient();
@@ -31,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const { data: property } = await db.from('properties')
     .select('id, slug, display_name, host_account_id').eq('id', session.propertyId).maybeSingle();
-  if (!property || property.slug !== slug) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+  if (!property || property.slug !== slug) return fail(404, 'not_found', 'Not found.');
 
   const [{ data: stay }, { data: settings }] = await Promise.all([
     db.from('stays').select('id, status, check_out, guest_count, deleted_at')
@@ -40,23 +46,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       .eq('property_id', property.id).maybeSingle(),
   ]);
   if (!stay || stay.deleted_at || !['upcoming', 'active'].includes(stay.status)) {
-    return NextResponse.json({ error: 'This stay can no longer be shared.' }, { status: 409 });
+    return fail(409, 'ended', 'This stay can no longer be shared.');
   }
   if (settings?.guest_share_enabled === false) {
-    return NextResponse.json({ error: 'Your host has turned off group invites.' }, { status: 403 });
+    return fail(403, 'disabled', 'Your host has turned off group invites.');
   }
   const expiresAt = partyInviteExpiry(stay.check_out, settings?.grace_period_hours);
-  if (expiresAt.getTime() <= Date.now()) {
-    return NextResponse.json({ error: 'This stay has ended.' }, { status: 409 });
-  }
+  if (expiresAt.getTime() <= Date.now()) return fail(409, 'ended', 'This stay has ended.');
 
   const { data: existing } = await db.from('guest_access_links').select(LINK_COLS)
     .eq('stay_id', stay.id).eq('source', 'guest_share').is('revoked_at', null)
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
-  // A full link stays full until the host revokes it or raises the cap; guests cannot mint around it.
+  // A full link stays full until the host revokes it or adds spots; guests cannot mint around it.
   if (existing?.consumed_at) {
-    return NextResponse.json({ error: 'Your group invite is full. Ask your host to add more spots.', full: true }, { status: 409 });
+    return fail(409, 'full', 'Your group invite is full. Ask your host to add more spots.');
   }
 
   let link = existing;
@@ -81,7 +85,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       const { data: raced } = await db.from('guest_access_links').select(LINK_COLS)
         .eq('stay_id', stay.id).eq('source', 'guest_share').is('revoked_at', null).is('consumed_at', null)
         .maybeSingle();
-      if (!raced) return NextResponse.json({ error: 'Could not create an invite. Please try again.' }, { status: 503 });
+      if (!raced) return fail(503, 'error', 'Could not create an invite. Please try again.');
       link = raced;
     } else {
       link = inserted;
@@ -103,5 +107,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     checkOut: stay.check_out,
     expiresAt: link.expires_at,
     spotsLeft: Math.max(0, link.max_redemptions - link.redemption_count),
-  }, { headers: { 'Cache-Control': 'no-store' } });
+  }, { headers: NO_STORE });
 }

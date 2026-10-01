@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { derivePartyInviteToken, partyInviteCap, partyInviteExpiry } from './party-invite';
+import { derivePartyInviteToken, partyInviteCap, partyInviteCapUpdate, partyInviteExpiry } from './party-invite';
 import { partyJoinUrl, readPartyTokenFromHash, smsShareHref } from './party-invite-url';
 
 const SECRET = 'x'.repeat(40);
@@ -36,6 +36,16 @@ describe('party invite limits', () => {
   it('expires at checkout plus grace', () => {
     expect(partyInviteExpiry('2026-10-05T15:00:00.000Z', 12).toISOString()).toBe('2026-10-06T03:00:00.000Z');
     expect(partyInviteExpiry('2026-10-05T15:00:00.000Z', null).toISOString()).toBe('2026-10-06T03:00:00.000Z');
+  });
+});
+
+describe('host add spots', () => {
+  it('never drops below spots already used and never exceeds 30', () => {
+    expect(partyInviteCapUpdate(4, 2)).toEqual({ max: 4, full: true });
+    expect(partyInviteCapUpdate(4, 8)).toEqual({ max: 8, full: false });
+    expect(partyInviteCapUpdate(0, 0)).toEqual({ max: 1, full: false });
+    expect(partyInviteCapUpdate(3, 99)).toEqual({ max: 30, full: false });
+    expect(partyInviteCapUpdate(10, 10)).toEqual({ max: 10, full: true });
   });
 });
 
