@@ -395,7 +395,9 @@ export async function notify(client: Client, p: NotifyParams): Promise<Notificat
         continue;
       }
       // No guest names, message bodies, access codes or bearer answer links.
-      const what = p.kind === 'host_message' ? 'You have a new guest message.'
+      // #195 launch: P1 (urgent guest message / emergency) says so up front.
+      const what = p.urgency === 'p1' ? 'URGENT: a guest may need help now.'
+        : p.kind === 'host_message' ? 'You have a new guest message.'
         : p.kind === 'escalation' ? 'A guest question needs your answer.'
         : 'You have a new notification.';
       const msg = `Moche-AI: ${what}${openUrl ? ` Open: ${openUrl}` : ''} Reply STOP to opt out.`;

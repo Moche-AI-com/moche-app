@@ -19,6 +19,7 @@ import { resolveLanguage, DEFAULT_HOST_LANGUAGE } from '@/lib/guest/languages';
 import { translateForHost, notificationBody } from '@/lib/guest/translate';
 import { behavioralEscalation } from '@/lib/guest/behavioral-triggers';
 import { classifyCredentialQuestion, doorCodeEscalationQuestion, doorCodeEscalationReply } from '@/lib/guest/credential-questions';
+import { isUrgentGuestMessage } from '@/lib/notifications/urgency';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -163,8 +164,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     void admin.from('stays').update({ guest_language: guestLanguage.code } as never).eq('id', session.stayId);
   }
 
+  // #195 launch: emergencies (concierge-detected or keyword), property hazards and
+  // urgent lockouts always reach the host as P1, even when the concierge answered.
+  const urgent = answer.isEmergency || doorRequest?.urgent === true || isUrgentGuestMessage(question);
+
   let escalationConfirmed = false;
-  if (answer.shouldEscalate || behavioral.escalate) {
+  if (answer.shouldEscalate || behavioral.escalate || urgent) {
     const hostLanguage = settings?.host_language ?? DEFAULT_HOST_LANGUAGE;
     const scopedQuestion = applianceName ? `${applianceName}: ${question}` : question;
     const asked = answer.unknownNote ? `${scopedQuestion}\n\n(Concierge could not answer: ${answer.unknownNote})` : scopedQuestion;
@@ -190,16 +195,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         try {
           await notify(admin, {
             hostAccountId: (prop as { host_account_id: string }).host_account_id, kind: 'escalation',
-            title: doorRequest?.urgent ? 'Urgent: a guest may be locked out' : 'A guest question needs your input',
+            title: doorRequest?.urgent ? 'Urgent: a guest may be locked out'
+              : urgent ? 'URGENT: a guest may need help now' : 'A guest question needs your input',
             body: notificationBody(translated, question),
             propertyId: session.propertyId, link: `/dashboard/escalations/${escId}`, actionUrl: answerUrl,
+            urgency: urgent ? 'p1' : 'p2',
           });
         } catch {
           log.warn('guest_escalation_notify_failed', { propertyId: session.propertyId, code: 'delivery_unavailable' });
         }
       }
       log.info('guest_escalation_created', { escalationId: escId, confidence: answer.confidence,
-        trigger: doorRequest ? 'entry_code_policy' : behavioral.trigger ?? 'low_confidence' });
+        trigger: doorRequest ? 'entry_code_policy' : urgent ? 'urgent' : behavioral.trigger ?? 'low_confidence' });
       try { await capture('escalation_created', session.propertyId, { property_id: session.propertyId }); } catch {
         log.warn('guest_escalation_analytics_failed', { propertyId: session.propertyId });
       }
