@@ -30,7 +30,7 @@ export function Hero() {
               src={frame.src}
               alt=""
               fill
-              sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 58vw"
+              sizes="(min-width: 1100px) 15vw, (min-width: 700px) 20vw, 72px"
               className={styles.heroFanImage}
               priority={frame.rank < 2}
             />

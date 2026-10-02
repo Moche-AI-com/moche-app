@@ -272,88 +272,152 @@
 }
 
 /* Under 700px the arc cannot hold seven legible frames side by side without
-   overlapping into an unreadable smear. The first mobile pass flattened it
-   into a static 3-up grid of square tiles: every destination crammed into the
-   same small box, nothing moving, and the most valuable real estate on the
-   page reading as a bento menu.
+   overlapping into an unreadable smear. Two earlier mobile passes both kept
+   the photographs as the hero: first a 3-up grid of square tiles, then a
+   swipeable strip of 58vw portrait cards. Both put ~300px of imagery above
+   the headline, so on a phone the first screen was a wall of cards and the
+   H1 and primary CTA sat below the fold.
 
-   It is now a swipeable snap-carousel. The strip runs edge to edge with the
-   scrollbar hidden and both ends fade-masked; every card is the same 58vw, so
-   the next one peeks in from the right edge -- the peek, not a scrollbar, is
-   what tells a thumb there is more. The CTA leads the strip at exactly the
-   same size: the teal ring and the arrow already mark it as the primary
-   action, and a larger first card read as misaligned against the rest of the
-   strip. Same seven frames, same DOM order, so keyboard tab order and the
-   sitemap are unchanged. */
+   The phone layout now leads with the message. The copy is ordered first and
+   the article links follow it as a compact "Explore" index: a two-column grid
+   of 44px pill links, each a small round thumbnail plus its label. Every
+   destination is visible at once (no hidden swipe), every target clears 44px,
+   and the photography survives as a recognisable thumbnail instead of being
+   dropped.
+
+   The signup frame is hidden here only: the hero's own "Start free today"
+   button now sits directly above the index, so a second signup tile would be
+   a duplicate CTA. It stays in the DOM and is unchanged at desktop widths.
+
+   Same DOM, same order, same accessible names -- the label is still the
+   link's name (the <Image> carries alt=""), so it is never display:none.
+   Nothing in this block reaches the arc: every rule is <=700px. */
 @media (max-width: 700px) {
-  .heroFan {
-    position: static;
-    height: auto;
+  .hero {
     display: flex;
-    gap: 0.6rem;
-    padding: 0 1rem 0.5rem;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: 1rem;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+    flex-direction: column;
   }
 
-  .heroFan::-webkit-scrollbar {
-    display: none;
+  .heroCopy {
+    order: 1;
+  }
+
+  .heroFan {
+    order: 2;
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 30rem;
+    height: auto;
+    margin: clamp(1.75rem, 6vw, 2.25rem) auto 0;
+    padding: 0 1rem;
+  }
+
+  /* Visual heading for the index. The nav already carries
+     aria-label="Explore Moche-AI", so this is presentational only. */
+  .heroFan::before {
+    content: 'Explore Moche-AI';
+    grid-column: 1 / -1;
+    margin-bottom: 0.15rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-align: center;
+    color: var(--text-faint);
   }
 
   /* `relative`, not `static`: next/image with `fill` renders an absolutely
-     positioned <img>, so a static frame would let it resolve against the
-     section instead and blow the photograph up to the full viewport. */
+     positioned <img>; the frame must stay its containing block. */
   .heroFanFrame {
     position: relative;
     top: auto;
     left: auto;
-    flex: 0 0 58vw;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
     width: auto;
-    max-width: 230px;
+    min-height: 44px;
+    aspect-ratio: auto;
+    padding: 4px 0.75rem 4px 4px;
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    background: var(--surface);
+    box-shadow: none;
+    color: var(--text);
     /* The arc's transform and animation are both keyed to translate(-50%) and
        would drag every frame a half-width off its slot. Both are scoped to
        min-width: 701px below; these resets are the belt to that braces. */
     transform: none;
     animation: none;
-    aspect-ratio: 3 / 4;
-    border-radius: 14px;
-    scroll-snap-align: center;
+    transition:
+      border-color 180ms var(--ease-out),
+      background-color 180ms var(--ease-out);
   }
 
-  /* The CTA leads the strip at exactly the same size as every other card:
-     the teal ring and the arrow already mark it as the primary action. */
+  .heroFanFrame:active {
+    border-color: var(--teal);
+    background: var(--surface-2);
+  }
+
   .heroFanFrame[data-cta] {
-    order: -1;
+    display: none;
+  }
+
+  /* next/image `fill` writes position/inset/width/height as inline styles, so
+     !important is the only way to turn the photograph into an inline
+     thumbnail without forking the component per breakpoint. Scoped to this
+     query, so the arc's full-bleed fill is untouched. */
+  .heroFanImage {
+    position: relative !important;
+    inset: auto !important;
+    width: 34px !important;
+    height: 34px !important;
+    flex: none;
+    border-radius: 50%;
+  }
+
+  .heroFanScrim {
+    display: none;
   }
 
   .heroFanLabel {
-    font-size: 0.78rem;
-    padding: 0.5rem 0.35rem 0.55rem;
+    position: static;
+    display: block;
+    min-width: 0;
+    padding: 0;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: left;
+    color: var(--text);
+    text-shadow: none;
+    /* Two columns at 320px leave ~85px for the label; let "Trust & safety"
+       wrap to two lines inside the pill rather than clip. */
+    white-space: normal;
   }
 }
 
 /* The mobile entrance plays from CSS with no JS involved, the same reasoning
-   as the [data-eager] reveals in globals.css: the hero is the first screen,
-   and gating it on hydration leaves the top of the page visibly empty for a
-   few hundred milliseconds. The strip cascades in from the right, following
-   the direction a thumb will swipe it. Declared after the <=700px reset block
-   so the animation wins over its `animation: none` at equal specificity. */
+   as the [data-eager] reveals in globals.css. The index now sits under the
+   hero copy, so it settles in just after the copy's own reveals (which run to
+   ~270ms) rather than competing with the headline. Declared after the <=700px
+   reset block so the animation wins over its `animation: none` at equal
+   specificity. */
 @media (prefers-reduced-motion: no-preference) and (max-width: 700px) {
   .heroFanFrame {
-    animation: fanCascadeIn 620ms var(--ease-out) backwards;
-    animation-delay: calc(50ms + var(--fan-i) * 65ms);
+    animation: fanChipIn 450ms var(--ease-out) backwards;
+    animation-delay: calc(240ms + var(--fan-i) * 40ms);
   }
 }
 
-@keyframes fanCascadeIn {
+@keyframes fanChipIn {
   from {
     opacity: 0;
-    transform: translate3d(26px, 10px, 0) scale(0.96);
+    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
@@ -368,7 +432,7 @@
 
    Scoped to the arc's own width: both keyframes below resolve to
    translate(-50%), which is the arc's horizontal centring, and under 701px the
-   frames are flex cards in the snap strip with no centring to undo. */
+   frames are pill links in the Explore index with no centring to undo. */
 @media (prefers-reduced-motion: no-preference) and (min-width: 701px) {
   .heroFanFrame {
     animation: fanIn 760ms var(--ease-out) backwards;
@@ -482,9 +546,8 @@
   text-align: center;
 }
 
-/* The upward tuck belongs to the arc only. Under 701px the frames are a
-   swipeable strip with no outer pair hanging below their box, so pulling the
-   copy up just runs the kicker underneath the cards. */
+/* The upward tuck belongs to the arc only. Under 701px the copy leads and the
+   Explore index follows it, so there is no arc to tuck into. */
 @media (min-width: 701px) {
   .heroCopy {
     margin-top: calc(-1 * clamp(0.5rem, 2vw, 2rem));
