@@ -126,6 +126,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test -c test/local-recs-ui/playwright.config.ts
       - run: npx playwright test -c test/messaging-ui/playwright.config.ts
+      - run: npx playwright test -c test/ai-workflows-ui/playwright.config.ts
 
   build:
     name: Production build

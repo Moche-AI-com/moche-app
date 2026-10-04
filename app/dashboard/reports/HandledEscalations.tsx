@@ -52,21 +52,25 @@ function fmtWhen(value: string | null) {
 function TrainingToggle({ message, escalationId }: { message: HandledThreadMessage; escalationId: string }) {
   const [state, submit] = useFormState<TrainingFlagState, FormData>(setMessageTrainingAction, {});
   const excluded = message.ai_training_excluded;
+  const retryIndexing = state.retryExcluded === false;
 
   return (
     <form action={submit} className="handled-train">
       <input type="hidden" name="messageId" value={message.id} />
       <input type="hidden" name="escalationId" value={escalationId} />
-      {/* Submitting the OPPOSITE of the current state — the button is a flip, not a save. */}
-      <input type="hidden" name="excluded" value={excluded ? 'false' : 'true'} />
-      <span className={`badge ${excluded ? 'badge-coral' : 'badge-teal'}`} data-testid={`training-state-${message.id}`}>
-        {excluded ? 'Excluded from AI training' : 'Used for AI training'}
+      {/* A partial save retries inclusion against the same server-resolved item. */}
+      <input type="hidden" name="excluded" value={retryIndexing || excluded ? 'false' : 'true'} />
+      <span className={`badge ${excluded || retryIndexing ? 'badge-coral' : 'badge-teal'}`} data-testid={`training-state-${message.id}`}>
+        {retryIndexing ? 'Indexing incomplete' : excluded ? 'Excluded from AI training' : 'Used for AI training'}
       </span>
       <SubmitButton className="btn btn-ghost btn-sm" testId={`training-toggle-${message.id}`}>
-        {excluded ? 'Use for training' : 'Exclude'}
+        {retryIndexing ? 'Retry indexing' : excluded ? 'Use for training' : 'Exclude'}
       </SubmitButton>
       {state.error ? (
         <span className="badge badge-coral" role="alert">{state.error}</span>
+      ) : null}
+      {state.warning ? (
+        <span className="badge badge-coral" role="alert">{state.warning}</span>
       ) : null}
     </form>
   );

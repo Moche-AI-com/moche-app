@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { guestServiceRequestStartSchema } from '@/lib/validation';
-import { runSafetyTriage, runInterviewTurn, type InterviewEntry } from '@/lib/guest/service-request-interview';
+import { runInterviewTurn, type InterviewEntry } from '@/lib/guest/service-request-interview';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { notify } from '@/lib/notify';
 import { log } from '@/lib/log';
@@ -48,7 +48,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: 'Too many reports submitted. Please try again in a bit.' }, { status: 429 });
   }
 
-  const safety = runSafetyTriage(message);
+  const turn = await runInterviewTurn(message, []);
+  const safety = turn.type === 'final' ? turn.safety : undefined;
+  const transcript: InterviewEntry[] = [{ role: 'guest', text: message }];
 
   if (safety) {
     const timeline = [{ at: new Date().toISOString(), type: 'created', source: 'guest_interview_safety', note: message.slice(0, 300) }];
@@ -61,6 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         urgency: 'critical',
         status: 'new',
         description: message.slice(0, 1000),
+        interview_transcript: transcript as unknown as Json,
         interview_status: 'safety_escalated',
         safety_flags: safety.flags as unknown as Json,
         summary: message.slice(0, 400),
@@ -70,8 +73,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       .single();
 
     if (error || !created) {
-      log.warn('service_request_safety_create_failed', { error: error?.message });
-      return NextResponse.json({ error: 'Could not submit your report. Please try again.' }, { status: 500 });
+      log.warn('service_request_safety_create_failed', { code: 'persistence_failed' });
+      return NextResponse.json({
+        error: 'This report was not saved. Your host was not notified. Contact your host directly.',
+        safetyMessage: safety.guestMessage,
+        reportSaved: false,
+        hostNotified: false,
+      }, { status: 500 });
     }
     const id = (created as { id: string }).id;
 
@@ -94,8 +102,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     });
   }
 
-  const turn = await runInterviewTurn(message, []);
-  const transcript: InterviewEntry[] = [{ role: 'guest', text: message }];
   if (turn.type === 'question') transcript.push({ role: 'assistant', text: turn.question, choices: turn.choices });
 
   const timeline = [{ at: new Date().toISOString(), type: 'created', source: 'guest_interview', note: message.slice(0, 300) }];
@@ -129,7 +135,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       .single();
 
     if (error || !created) {
-      log.warn('service_request_final_create_failed', { error: error?.message });
+      log.warn('service_request_final_create_failed', { code: 'persistence_failed' });
       return NextResponse.json({ error: 'Could not submit your report. Please try again.' }, { status: 500 });
     }
     const id = (created as { id: string }).id;
@@ -157,7 +163,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .single();
 
   if (error || !created) {
-    log.warn('service_request_interview_create_failed', { error: error?.message });
+    log.warn('service_request_interview_create_failed', { code: 'persistence_failed' });
     return NextResponse.json({ error: 'Could not submit your report. Please try again.' }, { status: 500 });
   }
   const id = (created as { id: string }).id;

@@ -10,13 +10,17 @@ import { log } from '@/lib/log';
 import { getAIProvider } from '@/lib/ai';
 import { chunkText } from '@/lib/ingest/chunk';
 import { bumpBrainVersion } from '@/lib/brain/cache';
-import { upsertNormalizedNode } from '@/lib/normalizer';
 import { isBrainSection, parseFeatureSectionId, storageCategoryFor } from '@/lib/brain/taxonomy';
 import { redactCredentials } from '@/lib/brain/redact';
 import { safeWifiInstructions, safeWifiLocation } from '@/lib/guest/wifi-instructions';
-import type { Database } from '@/lib/database.types';
 
-export interface BrainActionState { error?: string; ok?: boolean }
+export interface BrainActionState {
+  error?: string;
+  ok?: boolean;
+  /** The source was saved; retry indexing this same ID rather than inserting again. */
+  warning?: string;
+  itemId?: string;
+}
 
 function categoryFromForm(formData: FormData): string {
   const section = String(formData.get('section') ?? '');
@@ -86,13 +90,19 @@ export async function saveBrainItemAction(_prev: BrainActionState, formData: For
     savedId = created.id;
   }
 
-  const indexed = await reindexBrainItem(propertyId, savedId, d.title, d.body || '', d.visibility, d.category);
+  const indexing = await reindexBrainItem(propertyId, savedId, d.title, d.body || '', d.visibility, d.category)
+    .catch(() => ({ indexed: false }));
+
   await audit(supabase, {
     action: itemId ? 'brain.item.updated' : 'brain.item.created', actorProfileId: ctx.user.id,
     hostAccountId: access.property.host_account_id, propertyId, targetType: 'brain_item', targetId: savedId,
   });
   revalidatePath(`/dashboard/properties/${propertyId}/brain`);
-  return indexed ? { ok: true } : { error: 'The item was saved, but AI indexing failed. It is not ready for guest answers; retry after checking the embedding provider.' };
+  return indexing.indexed ? { ok: true } : {
+    ok: false, itemId: savedId,
+    error: 'The item was saved, but AI indexing failed. It is not ready for guest answers.',
+    warning: 'Saved, but indexing failed. Your text is preserved. Try saving again to retry indexing; it is not available to the concierge yet.',
+  };
 }
 
 export async function deleteBrainItemAction(formData: FormData): Promise<void> {
@@ -114,56 +124,52 @@ export async function deleteBrainItemAction(formData: FormData): Promise<void> {
   revalidatePath(`/dashboard/properties/${propertyId}/brain`);
 }
 
-// False means the host's content was saved but no valid guest-search index was built.
+// indexed:false means the source was saved but no valid guest-search index was built.
 // Existing callers may ignore the return value; the host save action must not.
 export async function reindexBrainItem(
-  propertyId: string, itemId: string, title: string, body: string,
-  visibility: 'guest' | 'internal', category: string,
-): Promise<boolean> {
+  propertyId: string,
+  itemId: string,
+  title: string,
+  body: string,
+  visibility: 'guest' | 'internal',
+  category: string,
+): Promise<{ indexed: boolean }> {
+  // Exported server actions are callable entry points, even when normally called
+  // by another guarded action. Authorize before creating a service-role client.
+  const access = await requirePropertyAccess(propertyId);
+  if (!access.can.editBrain) return { indexed: false };
   const supabase = createClient();
   const admin = createAdminClient();
-  const provider = getAIProvider();
-  // Fail closed: a changed item must not leave stale chunks available to guests.
-  const { error: deleteError } = await admin.from('document_chunks').delete()
-    .eq('brain_item_id', itemId).eq('property_id', propertyId);
-  if (deleteError) {
-    log.warn('chunk_delete_failed', { itemId, code: 'delete_failed' });
-    await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId).eq('property_id', propertyId);
-    return false;
-  }
-  await bumpBrainVersion(admin, propertyId);
-  const chunks = chunkText(`${title}\n\n${body}`.trim());
-  if (!chunks.length) {
-    await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId).eq('property_id', propertyId);
-    return false;
-  }
-  let embeddings: number[][];
+
+  // Clear existing chunks for this item. document_chunks writes go through the
+  // service-role client (no host-side RLS write policy); property_id is stamped on
+  // every row and callers are already property-access guarded.
   try {
-    embeddings = await provider.embed(chunks);
+    await bumpBrainVersion(admin, propertyId);
+    const cleared = await admin.from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', propertyId);
+    if (cleared.error) throw new Error('chunk_delete_failed');
+    const chunks = chunkText(`${title}\n\n${body}`.trim());
+    if (!chunks.length) throw new Error('empty_index');
+    // Provider configuration errors are indexing failures too, not failed saves.
+    const embeddings = await getAIProvider().embed(chunks);
+    if (embeddings.length !== chunks.length || embeddings.some((v) => !v?.length)) {
+      throw new Error('embedding_batch_mismatch');
+    }
+    const rows = chunks.map((content, i) => ({
+      property_id: propertyId, brain_item_id: itemId, document_id: null, content,
+      token_count: Math.ceil(content.length / 4), chunk_index: i,
+      embedding: JSON.stringify(embeddings[i]), category, visibility,
+    }));
+    const { error } = await admin.from('document_chunks').insert(rows as never);
+    if (error) throw new Error('chunk_insert_failed');
+    return { indexed: true };
   } catch {
-    log.warn('embed_failed', { itemId, code: 'unavailable' });
-    await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId).eq('property_id', propertyId);
-    return false;
+    log.warn('brain_index_failed', { itemId, code: 'indexing_unavailable' });
+    try {
+      await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId).eq('property_id', propertyId);
+    } catch {
+      log.warn('brain_index_status_failed', { itemId });
+    }
+    return { indexed: false };
   }
-  if (embeddings.length !== chunks.length) {
-    log.warn('embed_failed', { itemId, code: 'vector_count_mismatch' });
-    await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId).eq('property_id', propertyId);
-    return false;
-  }
-  const rows = chunks.map((content, i) => ({
-    property_id: propertyId, brain_item_id: itemId, document_id: null, content,
-    token_count: Math.ceil(content.length / 4), chunk_index: i,
-    embedding: JSON.stringify(embeddings[i]), category, visibility,
-  }));
-  const { error } = await admin.from('document_chunks').insert(rows as never);
-  if (error) {
-    log.warn('chunk_insert_failed', { itemId, code: 'insert_failed' });
-    await supabase.from('brain_items').update({ status: 'failed' }).eq('id', itemId).eq('property_id', propertyId);
-    return false;
-  }
-  await upsertNormalizedNode(admin, {
-    propertyId, brainItemId: itemId, category: category as Database['public']['Enums']['brain_category'],
-    title, body,
-  });
-  return true;
 }

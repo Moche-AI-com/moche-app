@@ -1,115 +1,92 @@
 import 'server-only';
-import type { AIProvider, ChatMessage, GenerateOptions, GenerateResult, EmbedResult, IntentType } from './provider';
+import type { AIProvider, AIMessage, GenerateOptions, GenerateResult, EmbedResult, IntentType } from './provider';
 import { EMBED_DIM } from './provider';
 import { serverEnv } from '@/lib/env';
-import { Constants } from '@/lib/database.types';
 import { fallbackClassifyIntent } from './fallback';
 import { redactPII, containsLikelyPII } from './redaction';
+import { AITransportError, asRecord, endpointIsOpenRouter, fetchAIJson, tokenCount } from '@/lib/router/transport';
+import { log } from '@/lib/log';
 
-// Chat and embeddings are independent. Never change chat routing when fixing embeddings.
-async function post(path: string, body: unknown): Promise<Response> {
-  return postTo(serverEnv.aiBaseUrl, serverEnv.aiApiKey, path, body);
-}
-
-async function postTo(baseUrl: string, apiKey: string, path: string, body: unknown): Promise<Response> {
-  const url = `${baseUrl.replace(/\/$/, '')}${path}`;
-  return fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
-  });
-}
-
-// Default remains the existing direct embedding provider. An explicit opt-in can
-// use the already-configured OpenRouter key when the direct embedding key is broken.
-// Never silently substitute a different embedding family or vector dimension.
-function embeddingConfig(): { baseUrl: string; apiKey: string; model: string; viaRouter: boolean } {
+// Explicit embedding-only override; never change chat routing or embedding family.
+function embeddingConfig() {
   if (process.env.AI_EMBED_USE_OPENROUTER === 'true') {
-    if (!serverEnv.openrouterApiKey) throw new Error('OpenRouter embedding route is not configured.');
-    return { baseUrl: 'https://openrouter.ai/api/v1', apiKey: serverEnv.openrouterApiKey,
-      model: 'openai/text-embedding-3-small', viaRouter: true };
+    return {
+      baseUrl: 'https://openrouter.ai/api/v1', apiKey: serverEnv.openrouterApiKey,
+      model: 'openai/text-embedding-3-small', viaRouter: true,
+    };
   }
-  return { baseUrl: serverEnv.aiEmbedBaseUrl, apiKey: serverEnv.aiEmbedApiKey,
-    model: serverEnv.aiEmbedModel, viaRouter: false };
+  return {
+    baseUrl: serverEnv.aiEmbedBaseUrl, apiKey: serverEnv.aiEmbedApiKey,
+    model: serverEnv.aiEmbedModel, viaRouter: false,
+  };
 }
 
 async function embedWithUsageImpl(texts: string[]): Promise<EmbedResult> {
   const route = embeddingConfig();
   if (texts.length === 0) return { vectors: [], model: route.model, totalTokens: 0 };
-  const input = route.viaRouter ? texts.map(redactPII) : texts;
-  if (route.viaRouter && input.some(containsLikelyPII)) {
-    throw new Error('Embedding input contains residual PII.');
-  }
-  const res = await postTo(route.baseUrl, route.apiKey, '/embeddings', {
-    model: route.model, input,
-    ...(route.viaRouter ? { provider: { zdr: true, data_collection: 'deny' } } : {}),
-  });
-  if (!res.ok) throw new Error(`Embedding request failed: ${res.status}`);
-  const json = (await res.json()) as {
-    data: Array<{ embedding: number[]; index: number }>;
-    usage?: { total_tokens?: number };
-  };
-  if (!Array.isArray(json.data) || json.data.length !== texts.length) {
-    throw new Error('Embedding response has an unexpected vector count.');
-  }
-  const sorted = json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
-  for (const v of sorted) {
-    if (!Array.isArray(v) || v.length !== EMBED_DIM || v.some((n) => !Number.isFinite(n))) {
-      throw new Error(`Expected ${EMBED_DIM}-dim finite embeddings.`);
+  const started = Date.now();
+  try {
+    if (!route.apiKey || !/^[a-zA-Z0-9][a-zA-Z0-9/_.:-]{0,149}$/.test(route.model)) {
+      throw new AITransportError('ai_not_configured');
     }
+    const viaRouter = endpointIsOpenRouter(route.baseUrl) || route.viaRouter;
+    // Query and indexed-document embeddings use the same outbound privacy boundary.
+    // Stored/approved source text is not mutated by this projection.
+    const input = texts.map(redactPII);
+    if (input.some(containsLikelyPII)) throw new AITransportError('ai_policy_refused');
+    const json = asRecord(await fetchAIJson(`${route.baseUrl.replace(/\/+$/, '')}/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', Authorization: `Bearer ${route.apiKey}`,
+        ...(viaRouter ? { 'X-OpenRouter-ZDR': 'true' } : {}),
+      },
+      body: JSON.stringify({
+        model: route.model, input,
+        ...(viaRouter ? { provider: { zdr: true, data_collection: 'deny' } } : {}),
+      }),
+    }));
+    if (!Array.isArray(json.data) || json.data.length !== texts.length) throw new AITransportError('ai_invalid_response');
+    const vectors: number[][] = Array(texts.length);
+    const seen = new Set<number>();
+    for (const raw of json.data) {
+      const row = asRecord(raw);
+      const index = row.index;
+      const values = row.embedding;
+      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= texts.length || seen.has(index)
+        || !Array.isArray(values) || values.length !== EMBED_DIM
+        || !values.every((value: unknown) => typeof value === 'number' && Number.isFinite(value))) {
+        throw new AITransportError('ai_invalid_response');
+      }
+      seen.add(index);
+      vectors[index] = values;
+    }
+    log.info('ai_embedding', { task: 'embedding', model: route.model, outcome: 'success', latencyMs: Date.now() - started });
+    return { vectors, model: route.model, totalTokens: tokenCount(asRecord(json.usage).total_tokens) };
+  } catch (error) {
+    const safe = error instanceof AITransportError ? error : new AITransportError('ai_unavailable');
+    // No input, raw response, URL, or exception text is propagated to logs/callers.
+    log.warn('ai_embedding', { task: 'embedding', outcome: 'failed', code: safe.code, latencyMs: Date.now() - started });
+    throw safe;
   }
-  return { vectors: sorted, model: route.model, totalTokens: json.usage?.total_tokens ?? 0 };
 }
 
 export const openaiProvider: AIProvider = {
   name: 'openai',
   chatModel: serverEnv.aiChatModel,
   embedModel: serverEnv.aiEmbedModel,
-
   async embed(texts: string[]): Promise<number[][]> {
     return (await embedWithUsageImpl(texts)).vectors;
   },
-
-  embedWithUsage(texts: string[]): Promise<EmbedResult> {
-    return embedWithUsageImpl(texts);
+  embedWithUsage: embedWithUsageImpl,
+  async generate(messages: AIMessage[], opts?: GenerateOptions): Promise<GenerateResult> {
+    // Dynamic import avoids the provider-selector/router import cycle. There is no raw
+    // chat HTTP path here: unclassified calls receive the conservative guest policy.
+    const { configuredCompletion } = await import('@/lib/router/modelRouter');
+    return configuredCompletion(messages, opts);
   },
-
-  async generate(messages: ChatMessage[], opts?: GenerateOptions): Promise<GenerateResult> {
-    const res = await post('/chat/completions', {
-      model: serverEnv.aiChatModel, messages,
-      temperature: opts?.temperature ?? 0.3, max_tokens: opts?.maxTokens ?? 600,
-    });
-    if (!res.ok) throw new Error(`Chat request failed: ${res.status}`);
-    const json = (await res.json()) as {
-      choices: Array<{ message: { content: string } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-    return {
-      text: json.choices[0]?.message?.content ?? '', model: serverEnv.aiChatModel,
-      usage: { promptTokens: json.usage?.prompt_tokens ?? 0,
-        completionTokens: json.usage?.completion_tokens ?? 0 },
-    };
-  },
-
   async classifyIntent(text: string): Promise<IntentType> {
-    const allowed = Constants.public.Enums.intent_type;
-    try {
-      const res = await post('/chat/completions', {
-        model: serverEnv.aiChatModel, temperature: 0, max_tokens: 12,
-        messages: [
-          { role: 'system', content: `Classify the guest message into exactly one intent from this list: ${allowed.join(', ')}. Respond with only the intent word.` },
-          { role: 'user', content: text },
-        ],
-      });
-      if (res.ok) {
-        const json = (await res.json()) as { choices: Array<{ message: { content: string } }> };
-        const raw = (json.choices[0]?.message?.content ?? '').trim().toLowerCase();
-        if ((allowed as readonly string[]).includes(raw)) return raw as IntentType;
-      }
-    } catch {
-      // fall through to heuristic
-    }
+    // The production concierge already uses this deterministic classifier. Keep this
+    // context-free compatibility method local rather than creating a policy bypass.
     return fallbackClassifyIntent(text);
   },
 };

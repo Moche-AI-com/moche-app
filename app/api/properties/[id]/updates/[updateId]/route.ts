@@ -30,6 +30,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!access.can.editBrain) {
     return NextResponse.json({ error: 'You cannot review suggestions for this property.' }, { status: 403 });
   }
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: 'Sign in again to review this suggestion.' }, { status: 401 });
 
   let payload: unknown;
   try {
@@ -74,17 +76,44 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     );
   }
 
-  const user = await getUser();
   const status = statusForDecision(decision);
+
+  // The old review UI edits `text`; learned proposals store `answer`. Support
+  // that payload without silently approving the original answer instead. Model,
+  // rationale and message references remain server-owned provenance on modify.
+  let candidate = decision === 'modify' ? parsed.data.value : row.proposed_value;
+  if (field.kind === 'guest_answer' && decision === 'modify'
+    && candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+    const edited = candidate as Record<string, unknown>;
+    const original = row.proposed_value && typeof row.proposed_value === 'object' && !Array.isArray(row.proposed_value)
+      ? row.proposed_value as Record<string, unknown> : {};
+    candidate = {
+      ...original,
+      ...edited,
+      ...(Object.prototype.hasOwnProperty.call(edited, 'text') ? { answer: edited.text } : {}),
+      model: original.model, rationale: original.rationale, sourceMessageIds: original.sourceMessageIds,
+    };
+  }
+  const normalized = decision === 'deny' ? null : normalizeProposedValue(field, candidate);
+  if (normalized && !normalized.ok) return NextResponse.json({ error: normalized.error }, { status: 400 });
+  const approvedValue = normalized?.ok ? normalized.value : null;
+
+  // Compare-and-set before side effects: simultaneous decisions cannot both
+  // create a Brain item. This records the human decision, not successful apply.
+  // Only known pre-write failures return to pending. Partial writes retain the
+  // decision so a retry cannot create duplicates; applied_at means completed.
+  const { data: claimed, error: claimError } = await admin.from('proposed_updates')
+    .update({
+      status, reviewed_by: user.id, resolution_note: note ?? null,
+      ...(decision !== 'deny' ? { applied_value: approvedValue as never } : {}),
+    })
+    .eq('id', row.id).eq('property_id', (await params).id).eq('status', 'pending')
+    .select('id').maybeSingle();
+  if (claimError) return NextResponse.json({ error: 'Could not save that decision.' }, { status: 500 });
+  if (!claimed) return NextResponse.json({ error: 'This suggestion has already been reviewed.' }, { status: 409 });
 
   // ---- deny: record the decision, write nothing anywhere else ----------------
   if (decision === 'deny') {
-    const { error } = await admin
-      .from('proposed_updates')
-      .update({ status, reviewed_by: user?.id ?? null, resolution_note: note ?? null })
-      .eq('id', row.id);
-    if (error) return NextResponse.json({ error: 'Could not save that decision.' }, { status: 500 });
-
     await audit(createClient(), {
       action: 'brain.proposal.deny',
       actorProfileId: user?.id,
@@ -97,24 +126,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true, status });
   }
 
-  // ---- approve / modify: validate, apply, then record -----------------------
-  const candidate = decision === 'modify' ? parsed.data.value : row.proposed_value;
-  const normalized = normalizeProposedValue(field, candidate);
-  if (!normalized.ok) return NextResponse.json({ error: normalized.error }, { status: 400 });
-
+  // ---- approve / modify: apply the reviewed value, then record completion ---
   const applied = await applyProposal(admin, {
     propertyId: (await params).id,
     fieldPath: row.field_path,
-    value: normalized.value,
-    actorProfileId: user?.id ?? null,
+    value: approvedValue,
+    actorProfileId: user.id,
     sourceRef: row.source_ref,
   });
 
   if (!applied.ok) {
-    // The decision is NOT recorded when the write fails. Leaving the row pending
-    // means the host sees it again and can retry, rather than the queue claiming
-    // "approved" for something that never landed.
-    return NextResponse.json({ error: applied.error }, { status: 502 });
+    await admin.from('proposed_updates').update({
+      ...(applied.partial ? {} : {
+        status: 'pending' as const, reviewed_by: null, reviewed_at: null,
+        resolution_note: null, applied_value: null,
+      }),
+      apply_error: applied.error,
+    }).eq('id', row.id).eq('property_id', (await params).id).eq('status', status).is('applied_at', null);
+    await audit(createClient(), {
+      action: 'brain.proposal.apply_failed', actorProfileId: user.id,
+      hostAccountId: access.property.host_account_id, propertyId: (await params).id,
+      targetType: 'proposed_update', targetId: row.id,
+      metadata: { fieldPath: row.field_path, partial: Boolean(applied.partial), targetId: applied.targetId ?? null },
+    });
+    return NextResponse.json({ error: applied.error, partial: Boolean(applied.partial) }, { status: 502 });
   }
 
   const { error } = await admin
@@ -123,11 +158,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       status,
       reviewed_by: user?.id ?? null,
       resolution_note: note ?? null,
-      applied_value: normalized.value as never,
+      applied_value: approvedValue as never,
       applied_at: new Date().toISOString(),
       apply_error: null,
     })
-    .eq('id', row.id);
+    .eq('id', row.id).eq('property_id', (await params).id).eq('status', status);
 
   if (error) {
     // The value is already live. Surfacing a 500 here would invite a retry that
@@ -139,7 +174,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       propertyId: (await params).id,
       targetType: 'proposed_update',
       targetId: row.id,
-      metadata: { fieldPath: row.field_path, error: error.message },
+      metadata: { fieldPath: row.field_path },
     });
   }
 

@@ -17,8 +17,13 @@ import {
   proposableField,
   normalizeProposedValue,
   type BrainItemProposal,
-  type GuestQaProposal,
+  type GuestAnswerProposal,
 } from '@/lib/brain/proposals';
+import { bumpBrainVersion } from '@/lib/brain/cache';
+// reindexBrainItem lives in the Brain page's action module today. It is an async
+// export (legal for a 'use server' file) and is imported here rather than
+// duplicated: a replace-apply must rebuild chunks + embeddings exactly the way a
+// manual save does, or the two paths drift.
 import { reindexBrainItem } from '@/app/dashboard/properties/[id]/brain/actions';
 import { log } from '@/lib/log';
 
@@ -37,7 +42,7 @@ export interface ApplyInput {
 
 export type ApplyResult =
   | { ok: true; targetType: string; targetId: string | null }
-  | { ok: false; error: string };
+  | { ok: false; error: string; partial?: true; targetId?: string | null };
 
 export async function applyProposal(admin: Admin, input: ApplyInput): Promise<ApplyResult> {
   const field = proposableField(input.fieldPath);
@@ -49,34 +54,21 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
   const normalized = normalizeProposedValue(field, input.value);
   if (!normalized.ok) return { ok: false, error: normalized.error };
 
+  // Once ingestion or a canonical write starts, an error may mean partial data,
+  // not a safe retry. The review queue must retain the decision in that case.
+  let partial = false;
+  let brainItemId: string | null = null;
   try {
-    if (field.kind === 'guest_qa') {
-      // Issue #133, item 6: learned guest Q&A files as a host_qa brain entry —
-      // the question as the entry title, the normalized answer as the body, and
-      // the escalation id as provenance.
-      const v = normalized.value as GuestQaProposal;
-      const result = await ingestText(admin, {
-        propertyId: input.propertyId,
-        title: v.question,
-        text: v.answer,
-        category: 'host_qa',
-        visibility: 'guest',
-        sourceType: 'url',
-        kind: 'url',
-        sourceUrl: input.sourceRef ?? null,
-        createdBy: input.actorProfileId,
-      });
-      const { error } = await admin
-        .from('brain_items')
-        .update({ section: v.section } as never)
-        .eq('id', result.brainItemId)
-        .eq('property_id', input.propertyId);
-      if (error) throw error;
-      return { ok: true, targetType: 'brain_item', targetId: result.brainItemId };
-    }
-
-    if (field.kind === 'brain_item') {
-      const v = normalized.value as BrainItemProposal;
+    if (field.kind === 'brain_item' || field.kind === 'guest_answer') {
+      const learned = field.kind === 'guest_answer' ? normalized.value as GuestAnswerProposal : null;
+      if (learned && !input.actorProfileId) return { ok: false, error: 'Sign in again to approve this answer.' };
+      // No normalization/generation here. The host reviewed these exact words,
+      // and the proposal retains the model/message provenance plus source_ref.
+      const v: BrainItemProposal = learned ? {
+        title: learned.question, text: learned.answer,
+        category: learned.category as BrainItemProposal['category'],
+        section: learned.section, visibility: learned.visibility,
+      } : normalized.value as BrainItemProposal;
 
       if (v.featureId) {
         const { data: featureRow } = await admin
@@ -99,6 +91,8 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
           .maybeSingle();
         if (!target) return { ok: false, error: 'The entry this update replaces no longer exists.' };
 
+        partial = true;
+        brainItemId = target.id;
         const { error } = await admin
           .from('brain_items')
           .update({
@@ -108,36 +102,54 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
             section: v.section,
             feature_id: v.featureId,
             visibility: v.visibility,
-            status: 'ready',
+            status: 'processing',
             updated_at: new Date().toISOString(),
           } as never)
           .eq('id', target.id)
           .eq('property_id', input.propertyId);
         if (error) throw error;
 
-        await reindexBrainItem(input.propertyId, target.id, v.title, v.text, v.visibility, v.category);
+        const indexing = await reindexBrainItem(input.propertyId, target.id, v.title, v.text, v.visibility, v.category);
+        if (indexing?.indexed !== true) throw new Error('indexing_incomplete');
+        const ready = await admin.from('brain_items').update({ status: 'ready' })
+          .eq('id', target.id).eq('property_id', input.propertyId);
+        if (ready.error) throw new Error('index_status_failed');
+        await bumpBrainVersion(admin, input.propertyId);
         return { ok: true, targetType: 'brain_item', targetId: target.id };
       }
 
+      // ADD path: ingest as a new entry, then stamp the routing decision on the
+      // row — ingestText predates the section/feature columns, so the precise
+      // destination is written here.
+      partial = true;
       const result = await ingestText(admin, {
         propertyId: input.propertyId,
         title: v.title,
-        text: v.text,
+        // A short answer such as "11 AM" needs its reviewed question in the
+        // retrieval chunk. Keep both verbatim; never generate padding on apply.
+        text: learned ? `${learned.question}\n\n${learned.answer}` : v.text,
         category: v.category,
         visibility: v.visibility,
-        sourceType: 'url',
+        sourceType: learned ? 'host_qa' : 'url',
         kind: 'url',
-        sourceUrl: v.sourceUrl ?? input.sourceRef ?? null,
+        // A learned source_ref is an escalation id, not an acquisition URL.
+        sourceUrl: learned ? null : v.sourceUrl ?? input.sourceRef ?? null,
         createdBy: input.actorProfileId,
       });
-      if (v.section || v.featureId) {
+      brainItemId = result.brainItemId;
+      if (v.section || v.featureId || learned) {
         const { error } = await admin
           .from('brain_items')
-          .update({ section: v.section, feature_id: v.featureId } as never)
+          .update({ section: v.section, feature_id: v.featureId,
+            // The legacy question contract allows 500 chars; ingestText's
+            // generic title limit must not silently truncate approved wording.
+            ...(learned ? { title: learned.question, body: learned.answer } : {}),
+          } as never)
           .eq('id', result.brainItemId)
           .eq('property_id', input.propertyId);
         if (error) throw error;
       }
+      await bumpBrainVersion(admin, input.propertyId);
       return { ok: true, targetType: 'brain_item', targetId: result.brainItemId };
     }
 
@@ -155,6 +167,7 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
       });
 
       if (error) throw error;
+      await bumpBrainVersion(admin, input.propertyId);
       return { ok: true, targetType: 'brain_value', targetId: (data as string | null) ?? null };
     }
 
@@ -164,6 +177,7 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
         .update({ [String(field.column)]: normalized.value } as PropertiesUpdate)
         .eq('id', input.propertyId);
       if (error) throw error;
+      await bumpBrainVersion(admin, input.propertyId);
       return { ok: true, targetType: 'property', targetId: input.propertyId };
     }
 
@@ -178,13 +192,31 @@ export async function applyProposal(admin: Admin, input: ApplyInput): Promise<Ap
         .update(patch as PropertySettingsUpdate)
         .eq('property_id', input.propertyId);
       if (error) throw error;
+      await bumpBrainVersion(admin, input.propertyId);
       return { ok: true, targetType: 'property_settings', targetId: input.propertyId };
     }
 
     return { ok: false, error: 'This suggestion cannot be applied automatically.' };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Could not save that change.';
-    log.warn('proposal_apply_failed', { fieldPath: input.fieldPath, propertyId: input.propertyId, error: msg });
-    return { ok: false, error: msg };
+  } catch {
+    if (partial) {
+      if (brainItemId) {
+        try {
+          await admin.from('brain_items').update({ status: 'failed' })
+            .eq('id', brainItemId).eq('property_id', input.propertyId);
+        } catch {
+          log.warn('proposal_apply_status_failed', { propertyId: input.propertyId, brainItemId });
+        }
+      }
+      await bumpBrainVersion(admin, input.propertyId);
+    }
+    // Database/provider messages can contain approved text or credentials.
+    log.warn('proposal_apply_failed', { fieldPath: input.fieldPath, propertyId: input.propertyId, partial, brainItemId });
+    return {
+      ok: false,
+      error: partial
+        ? 'Your review was saved, but indexing or filing is incomplete. Check the Brain entry before making another suggestion.'
+        : 'Could not save that change.',
+      ...(partial ? { partial: true as const, targetId: brainItemId } : {}),
+    };
   }
 }

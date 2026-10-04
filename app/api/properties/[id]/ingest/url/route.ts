@@ -6,7 +6,8 @@ import { getSessionContext } from '@/lib/auth/guards';
 import { ingestUrlSchema } from '@/lib/validation';
 import { acquire, AcquisitionError } from '@/lib/acquisition';
 import { acquisitionAuditContext, ensureIngestionSource } from '@/lib/acquisition/audit';
-import { standardizeListing } from '@/lib/ingest/standardize';
+import { standardizeKnowledge } from '@/lib/ingest/standardize';
+import { knowledgeSourcePolicy, knowledgeReviewMessage } from '@/lib/ingest/source-policy';
 import { createProposal } from '@/lib/brain/proposal-store';
 import { audit } from '@/lib/audit';
 import { log } from '@/lib/log';
@@ -31,12 +32,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input.' }, { status: 400 });
   }
   const { url, title, category, visibility } = parsed.data;
+  const sourcePolicy = knowledgeSourcePolicy(category);
 
   const ctx = await getSessionContext();
   const supabase = createClient();
   const admin = createAdminClient();
   const sourceId = await ensureIngestionSource(admin, {
-    propertyId: (await params).id, kind: 'listing', url, profile: 'listing_public_v1',
+    propertyId: (await params).id, ...sourcePolicy, url,
     label: title?.trim() || new URL(url).hostname, createdBy: ctx?.user.id ?? null,
   });
 
@@ -44,27 +46,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // recorded as untrusted reference data before any standardization occurs.
   let page;
   try {
-    page = await acquire(url, 'listing_public_v1', acquisitionAuditContext(admin, {
-      propertyId: (await params).id, sourceId, profile: 'listing_public_v1',
+    page = await acquire(url, sourcePolicy.profile, acquisitionAuditContext(admin, {
+      propertyId: (await params).id, sourceId, profile: sourcePolicy.profile,
     }));
   } catch (e) {
     if (e instanceof AcquisitionError && e.reason === 'unsafe_target') {
       log.warn('ingest_url_blocked', { propertyId: (await params).id, reason: e.reason });
       return NextResponse.json({ error: e.message }, { status: 400 });
     }
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not fetch that URL.' }, { status: 502 });
+    return NextResponse.json({ error: 'Could not fetch that URL. Try pasting the reference text instead.' }, { status: 502 });
   }
 
   // Standardize the raw page into clean, guest-useful markdown. Degrades to raw
   // text if the AI pass fails. This still becomes a host-reviewed proposal
   // rather than an unverified answer given to a guest.
-  const standardized = await standardizeListing(page.text, page.finalUrl);
+  const standardized = await standardizeKnowledge(page.text, category, page.finalUrl);
 
   const resolvedTitle = (title && title.trim()) || page.title || url;
   const proposal = await createProposal(admin, {
     propertyId: (await params).id,
     hostAccountId: access.property.host_account_id,
-    fieldPath: 'brain.listing_summary',
+    fieldPath: 'brain.document_summary',
     label: resolvedTitle.slice(0, 160),
     proposedValue: {
       title: resolvedTitle,
@@ -91,7 +93,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     propertyId: (await params).id,
     targetType: 'proposed_update',
     targetId: proposal.id,
-    metadata: { fieldPath: 'brain.listing_summary', sourceUrl: page.finalUrl, standardized: standardized.standardized },
+    metadata: { fieldPath: 'brain.document_summary', profile: sourcePolicy.profile, standardized: standardized.standardized, truncated: standardized.truncated },
   });
 
   return NextResponse.json({
@@ -99,6 +101,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     queued: true,
     proposalId: proposal.id,
     title: resolvedTitle,
-    message: 'Your imported details are ready for you to review.',
+    standardized: standardized.standardized,
+    truncated: standardized.truncated,
+    message: knowledgeReviewMessage(standardized),
   });
 }

@@ -32,7 +32,7 @@ describe('high-reliability routing cannot silently downgrade', () => {
   it('uses a dedicated strong tier for complex guests, not the routine allowlist', async () => {
     vi.stubEnv('OPENROUTER_MODEL_CONCIERGE_COMPLEX', 'openai/gpt-4o');
     const fetcher = vi.fn().mockResolvedValue({
-      ok: true, json: async () => ({ choices: [{ message: { content: 'Grounded answer' } }] }),
+      ok: true, json: async () => ({ model: 'openai/gpt-4o', choices: [{ message: { content: 'Grounded answer' } }] }),
     });
     vi.stubGlobal('fetch', fetcher);
     const { routedCompletion } = await import('./modelRouter');
@@ -49,7 +49,7 @@ describe('high-reliability routing cannot silently downgrade', () => {
     vi.stubEnv('AI_BRAIN_MODEL', 'gpt-4o');
     vi.stubEnv('AI_CHAT_MODEL', 'gpt-4o-mini');
     const fetcher = vi.fn().mockResolvedValue({
-      ok: true, json: async () => ({ choices: [{ message: { content: '{}' } }] }),
+      ok: true, json: async () => ({ model: 'gpt-4o', choices: [{ message: { content: '{}' } }] }),
     });
     vi.stubGlobal('fetch', fetcher);
     const { routedCompletion } = await import('./modelRouter');

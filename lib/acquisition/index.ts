@@ -6,6 +6,7 @@ import { AcquisitionError, type AcquisitionAttempt, type AcquisitionContext, typ
 import { staticHttpProvider } from './providers/static-http';
 import { firecrawlProvider } from './providers/firecrawl';
 import { crawl4aiProvider } from './providers/crawl4ai';
+import { SourceRetentionError } from './audit';
 
 const providers: AcquisitionProvider[] = [firecrawlProvider, crawl4aiProvider, staticHttpProvider];
 
@@ -65,6 +66,7 @@ export async function acquire(rawUrl: string, profileName: AcquisitionProfileNam
       void runShadow(url, profileName, provider.name, context);
       return result;
     } catch (error) {
+      if (error instanceof SourceRetentionError) throw error;
       lastReason = reasonFor(error);
       await record(context, { provider: provider.name, errorReason: lastReason, httpStatus: (error as { status?: number })?.status ?? null, latencyMs: Date.now() - started, isShadow: false });
       if (error instanceof SsrfError) throw new AcquisitionError('unsafe_target', messageFor('unsafe_target'));

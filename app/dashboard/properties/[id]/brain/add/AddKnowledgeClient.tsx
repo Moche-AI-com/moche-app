@@ -22,6 +22,7 @@ type IngestResponse = {
   error?: string;
   message?: string;
   title?: string;
+  truncated?: boolean;
 };
 
 const TABS: { id: Tab; label: string }[] = [
@@ -46,6 +47,7 @@ export function AddKnowledgeClient({
   // Write tab: controlled fields so the AI rewrite can land back in the draft.
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [savedItemId, setSavedItemId] = useState('');
   const [section, setSection] = useState(sections[0]?.value ?? 'space_details');
   const [visibility, setVisibility] = useState('guest');
   const [saveState, saveAction] = useActionState(saveBrainItemAction, {});
@@ -56,13 +58,15 @@ export function AddKnowledgeClient({
     if (improveState.ok && improveState.improved) setBody(improveState.improved);
   }, [improveState]);
 
-  const saved = saveState.ok === true;
+  const saved = saveState.ok === true && !saveState.warning;
   useEffect(() => {
-    if (!saved) return;
+    if (saveState.itemId) setSavedItemId(saveState.itemId);
+    if (!saveState.ok || saveState.warning) return;
     setTitle('');
     setBody('');
+    setSavedItemId('');
     router.refresh();
-  }, [saved, router]);
+  }, [saveState, router]);
 
   const currentSectionLabel =
     sections.find((s) => s.value === section)?.label ??
@@ -85,7 +89,7 @@ export function AddKnowledgeClient({
       const json = (await res.json()) as IngestResponse;
       if (!res.ok) throw new Error(json.error ?? 'Upload failed');
       setMsg({ kind: 'ok', text: json.message ?? `Imported "${json.title}".` });
-      form.reset();
+      if (!json.truncated) form.reset();
       router.refresh();
     } catch (err) {
       setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Upload failed' });
@@ -109,7 +113,7 @@ export function AddKnowledgeClient({
       const json = (await res.json()) as IngestResponse;
       if (!res.ok) throw new Error(json.error ?? 'Could not import that');
       setMsg({ kind: 'ok', text: json.message ?? 'Imported. It is in your review queue.' });
-      form.reset();
+      if (!json.truncated) form.reset();
       router.refresh();
     } catch (err) {
       setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Could not import that' });
@@ -145,14 +149,18 @@ export function AddKnowledgeClient({
       )}
 
       {tab === 'write' && (
-        <form action={saveAction}>
+        <form action={saveAction} onReset={(event) => event.preventDefault()}>
           <FormMessage error={saveState.error} />
-          {saveState.ok && (
+          {saveState.warning && <div className="alert" role="status" style={{ fontSize: '.8rem', marginBottom: '.75rem' }}>
+            {saveState.warning}
+          </div>}
+          {saved && (
             <div className="alert alert-success" style={{ fontSize: '.8rem', marginBottom: '.75rem' }}>
-              Saved. It is indexed and your concierge can use it right away.
+              Saved and indexed. {visibility === 'internal' ? 'This entry remains host-only.' : 'Your concierge can now retrieve it.'}
             </div>
           )}
           <input type="hidden" name="propertyId" value={propertyId} />
+          <input type="hidden" name="itemId" value={savedItemId} />
           <input type="hidden" name="sectionLabel" value={currentSectionLabel} />
           <div className="field">
             <label className="label" htmlFor="add-title">
@@ -280,7 +288,7 @@ export function AddKnowledgeClient({
             </select>
           </div>
           <button className="btn btn-primary btn-sm" disabled={busy}>
-            {busy ? 'Uploading…' : 'Upload & index'}
+            {busy ? 'Uploading…' : 'Upload for review'}
           </button>
           <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>
             PDF, TXT, MD, or DOCX. Max 25 MB. Imported documents become proposals you review before
@@ -351,7 +359,7 @@ export function AddKnowledgeClient({
             </select>
           </div>
           <button className="btn btn-primary btn-sm" disabled={busy}>
-            {busy ? 'Cleaning…' : 'Clean & index'}
+            {busy ? 'Cleaning…' : 'Clean for review'}
           </button>
           <p className="faint" style={{ fontSize: '.72rem', marginTop: '.5rem' }}>
             Best for blocked sites: open the listing, copy the details, paste here. We structure it

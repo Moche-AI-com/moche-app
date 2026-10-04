@@ -15,6 +15,7 @@ import { log } from '@/lib/log';
 import { routedCompletion } from '@/lib/router/modelRouter';
 import { logAiUsage } from '@/lib/ai/usage';
 import { FEATURE_CATALOG } from '@/lib/brain/taxonomy';
+import { bumpBrainVersion } from '@/lib/brain/cache';
 
 export interface FeatureActionState {
   error?: string;
@@ -53,14 +54,15 @@ export async function saveFeatureAction(
   const location = String(formData.get('location') ?? '').trim().slice(0, 240) || null;
   const notes = String(formData.get('notes') ?? '').trim().slice(0, 2000) || null;
   const accessRaw = String(formData.get('guestAccess') ?? 'yes');
-  const guestAccess = GUEST_ACCESS.has(accessRaw) ? accessRaw : 'yes';
+  if (!GUEST_ACCESS.has(accessRaw)) return { error: 'Choose a valid guest access option.' };
+  const guestAccess = accessRaw;
   if (!label) return { error: 'Give it a name — e.g. "Pool house".' };
 
   const ctx = await requireSession();
   const supabase = createClient();
 
   if (featureId) {
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('property_features')
       .update({
         label,
@@ -70,12 +72,13 @@ export async function saveFeatureAction(
         updated_at: new Date().toISOString(),
       } as never)
       .eq('id', featureId)
-      .eq('property_id', propertyId);
+      .eq('property_id', propertyId).is('archived_at', null).select('id').maybeSingle();
     if (error) {
       if (error.code === '23505') return { error: 'You already have a feature with that name.' };
       log.warn('feature_update_failed', { error: error.message });
       return { error: 'Could not save that feature.' };
     }
+    if (!updated) return { error: 'That feature is unavailable. Refresh and try again.' };
   } else {
     const { error } = await supabase
       .from('property_features')
@@ -98,6 +101,7 @@ export async function saveFeatureAction(
     }
   }
 
+  await bumpBrainVersion(createAdminClient(), propertyId);
   await audit(supabase, {
     action: featureId ? 'brain.feature.updated' : 'brain.feature.created',
     actorProfileId: ctx.user.id,
@@ -129,7 +133,8 @@ export async function addFeaturesFromChecklistAction(
 
   const ctx = await requireSession();
   const supabase = createClient();
-
+  let changed = false;
+  let failed = false;
   for (const entry of entries) {
     const { error } = await supabase
       .from('property_features')
@@ -141,9 +146,12 @@ export async function addFeaturesFromChecklistAction(
         created_via: 'host',
       } as never);
     if (error && error.code === '23505') continue;
-    if (error) log.warn('feature_checklist_insert_failed', { propertyId, key: entry.key, error: error.message });
+    if (error) {
+      failed = true;
+      log.warn('feature_checklist_insert_failed', { propertyId, key: entry.key });
+    } else changed = true;
   }
-
+  if (changed) await bumpBrainVersion(createAdminClient(), propertyId);
   await audit(supabase, {
     action: 'brain.features.checklist_added',
     actorProfileId: ctx.user.id,
@@ -154,12 +162,11 @@ export async function addFeaturesFromChecklistAction(
   });
 
   revalidatePath(`/dashboard/properties/${propertyId}/brain`);
-  return { ok: true };
+  return failed ? { error: 'Some features could not be added. Saved features are preserved; retry the checklist.' } : { ok: true };
 }
 
-// Archive, never delete: knowledge filed under the feature keeps its feature_id and
-// stays retrievable by the concierge; the feature disappears from pickers and the
-// routing guide until it is re-added.
+// Archive, never delete. Linked knowledge remains stored for hosts; the guest
+// reader excludes archived features and their linked chunks.
 export async function archiveFeatureAction(formData: FormData): Promise<void> {
   const propertyId = String(formData.get('propertyId') ?? '');
   const featureId = String(formData.get('featureId') ?? '');
@@ -170,12 +177,14 @@ export async function archiveFeatureAction(formData: FormData): Promise<void> {
   const supabase = createClient();
 
   const now = new Date().toISOString();
-  await supabase
+  const { data: archived, error } = await supabase
     .from('property_features')
     .update({ archived_at: now, updated_at: now } as never)
     .eq('id', featureId)
-    .eq('property_id', propertyId);
+    .eq('property_id', propertyId).is('archived_at', null).select('id').maybeSingle();
 
+  if (error || !archived) return;
+  await bumpBrainVersion(createAdminClient(), propertyId);
   await audit(supabase, {
     action: 'brain.feature.archived',
     actorProfileId: ctx.user.id,

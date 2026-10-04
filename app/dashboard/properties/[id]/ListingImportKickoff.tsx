@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { LoaderCircle, CheckCircle2, TriangleAlert } from 'lucide-react';
 import { BRAIN_CATEGORY_LABELS, type BrainCategory } from '@/lib/constants';
 
@@ -29,7 +28,6 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
   const [message, setMessage] = useState<string | null>(null);
   const [filed, setFiled] = useState<FiledItem[] | null>(null);
   const started = useRef(false);
-  const router = useRouter();
 
   useEffect(() => {
     if (started.current) return;
@@ -64,8 +62,13 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
         setMessage('We could not reach that listing page.');
       } finally {
         if (!cancelled) {
-          // Drop the ?import= parameter so a refresh does not re-run the import.
-          router.replace(`/dashboard/properties/${propertyId}`);
+          // A router transition re-renders the server parent, whose ?import
+          // condition would unmount this result (including partial-failure
+          // warnings). Clean only the URL so refresh cannot repeat the import,
+          // while this mounted result and unrelated query/hash state survive.
+          const url = new URL(window.location.href);
+          url.searchParams.delete('import');
+          window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
         }
       }
     })();
@@ -73,7 +76,7 @@ export function ListingImportKickoff({ propertyId, listingUrl }: { propertyId: s
     return () => {
       cancelled = true;
     };
-  }, [propertyId, listingUrl, router]);
+  }, [propertyId, listingUrl]);
 
   return (
     <div className={`card${filed ? ' alert alert-success' : ''}`} style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem' }} role="status">

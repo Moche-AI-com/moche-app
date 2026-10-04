@@ -1,17 +1,37 @@
 import 'server-only';
 import { getAIProvider } from '@/lib/ai';
 import type { AIMessage, GenerateOptions, GenerateResult } from '@/lib/ai/provider';
-import { serverEnv } from '@/lib/env';
+import { serverEnv, isProductionRuntime } from '@/lib/env';
+import { AITransportError, endpointIsOpenRouter, generatePlannedCompletion, modelMatchesPlan, type CompletionPlan } from './transport';
 import { log } from '@/lib/log';
-import { redactPII, redactMessages, contentContainsLikelyPII } from '@/lib/ai/redaction';
-import { providerBlock, routineGuestModelChain, ProviderIneligibleError } from '@/lib/router/providerAllowlist';
-import { GatewayUnavailableError, outageFallback, unavailableFromStatus } from '@/lib/router/outageFallback';
+import { GatewayUnavailableError, outageFallback, unavailableFromStatus } from './outageFallback';
+import { redactPII, contentContainsLikelyPII } from '@/lib/ai/redaction';
+import {
+  routineGuestModelChain,
+  ProviderIneligibleError,
+} from '@/lib/router/providerAllowlist';
 
+// PII redaction lives in lib/ai/redaction.ts (single source of truth). Re-exported
+// here so existing importers of `@/lib/router/modelRouter` keep working unchanged.
 export { redactPII };
+
+// Coarse task taxonomy used to decide how a completion should be routed. Each task
+// maps to a cost/quality-appropriate model tier (see modelForTask) and to whether the
+// external route is eligible at all (see shouldRouteExternally).
+//
+// `brain_ops` (2026-08-28) covers brain management: routing knowledge to the right
+// section, cleanup/normalization, and AI-update merge decisions. The owner directive
+// is that this work runs on the most reliable configured model, so like `extraction`
+// it has no cheaper in-router fallback.
 export type TaskType = 'extraction' | 'brain_ops' | 'concierge' | 'concierge_complex' | 'classification' | 'general';
 
+// Classify a unit of work from a short caller-supplied hint. Purely heuristic and
+// side-effect free; it never calls a model. Callers that already know the task type
+// can pass it straight through to routedCompletion instead.
 export function classifyTask(hint: string): TaskType {
   const h = hint.toLowerCase();
+  // Brain management first: hints like "normalize + route into the brain" must not be
+  // claimed by the cheaper extraction/classification patterns below.
   if (/\b(brain|knowledge base|proposal|section routing)\b/.test(h)) return 'brain_ops';
   if (/\b(normali[sz]e|extract|structur|json|schema)\b/.test(h)) return 'extraction';
   if (/\b(concierge|guest|answer|chat|reply)\b/.test(h)) {
@@ -21,53 +41,126 @@ export function classifyTask(hint: string): TaskType {
   return 'general';
 }
 
-export interface RouteOptions { task?: TaskType }
-export type RouterEnv = Pick<typeof serverEnv,
-  | 'openrouterApiKey' | 'openrouterModel' | 'openrouterBaseUrl'
-  | 'openrouterModelExtraction' | 'openrouterModelBrainOps'
-  | 'openrouterModelClassification' | 'openrouterModelConcierge'
-  | 'openrouterModelGeneral' | 'openrouterConciergeEnabled'
-  | 'openrouterGuestModelAllowlist' | 'openrouterProviderAllowlist'
+// Redaction of PII / secrets before content leaves our infrastructure for an
+// external router (OpenRouter) is implemented in lib/ai/redaction.ts and imported
+// above. Both configured completion destinations and embeddings enforce this boundary.
+
+export interface RouteOptions {
+  task?: TaskType;
+}
+
+// The slice of server env this router reads. Injectable so the pure routing helpers
+// (modelForTask / shouldRouteExternally) are unit-testable without touching real env.
+export type RouterEnv = Pick<
+  typeof serverEnv,
+  | 'openrouterApiKey'
+  | 'openrouterModel'
+  | 'openrouterBaseUrl'
+  | 'openrouterModelExtraction'
+  | 'openrouterModelBrainOps'
+  | 'openrouterModelClassification'
+  | 'openrouterModelConcierge'
+  | 'openrouterModelGeneral'
+  | 'openrouterConciergeEnabled'
+  | 'openrouterGuestModelAllowlist'
+  | 'openrouterProviderAllowlist'
 > & { openrouterModelConciergeComplex?: string };
 
+// Per-task model tier. Falls back to the legacy `openrouterModel` default only via the
+// per-tier env defaults (see lib/env.ts), so an unset tier still resolves to a slug.
 export function modelForTask(task: TaskType, env: RouterEnv = serverEnv): string {
   switch (task) {
-    case 'extraction': return env.openrouterModelExtraction;
-    case 'brain_ops': return env.openrouterModelBrainOps;
-    case 'classification': return env.openrouterModelClassification;
-    case 'concierge': return env.openrouterModelConcierge;
-    case 'concierge_complex': return env.openrouterModelConciergeComplex || env.openrouterModelBrainOps;
-    case 'general': default: return env.openrouterModelGeneral;
+    case 'extraction':
+      return env.openrouterModelExtraction;
+    case 'brain_ops':
+      return env.openrouterModelBrainOps;
+    case 'classification':
+      return env.openrouterModelClassification;
+    case 'concierge':
+      return env.openrouterModelConcierge;
+    case 'concierge_complex':
+      return env.openrouterModelConciergeComplex || env.openrouterModelBrainOps;
+    case 'general':
+    default:
+      return env.openrouterModelGeneral;
   }
 }
 
+// Secondary models per task, tried by OpenRouter itself (via the `models` array) if the
+// primary tier is unavailable, rate-limited, or errors. Separately opted-in,
+// non-guest routine tasks may use the independent protected outage fallback.
+// Every slug here has been verified to resolve under ZDR_PROVIDER_RESTRICTION.
+// Order matters: cheapest capable model first. An exhausted chain fails closed.
 const TASK_FALLBACKS: Record<TaskType, readonly string[]> = {
-  extraction: [], brain_ops: [], concierge_complex: [],
+  // Extraction has NO lower-tier in-router fallback on purpose. Its highest-stakes
+  // caller is property onboarding, where the output becomes canonical Brain content
+  // after host review. A silent downgrade to a cheaper model would turn weak output
+  // into guest-facing truth, so if the strong tier is unavailable the request fails
+  // and the caller surfaces a try-again / manual-entry path instead.
+  extraction: [],
+  // Brain ops shares extraction's no-downgrade rule, for the same reason: its output
+  // (section routing, normalized knowledge, update-merge decisions) becomes canonical
+  // Brain content after host review. A cheap-tier misroute misfiles knowledge the
+  // concierge then grounds on, degrading every future guest answer.
+  brain_ops: [],
+  concierge_complex: [],
   classification: ['openai/gpt-4o-mini'],
   concierge: ['openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
   general: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
 };
 
+// Full ordered model chain for a task.
+//
+// `concierge` is the routine-guest route and is governed by the reviewed allowlist
+// (directive §0.2 row 3) rather than by the per-tier env slug: only slugs a human
+// reviewed may answer a guest, and an empty allowlist throws ProviderIneligibleError
+// so the caller refuses remote generation instead of picking a default.
+//
+// Every other task keeps the configured primary tier plus its verified fallbacks,
+// de-duplicated so an override matching a fallback slug is not sent twice.
 export function modelChainForTask(task: TaskType, env: RouterEnv = serverEnv): string[] {
   if (task === 'concierge') return routineGuestModelChain(env);
   const primary = modelForTask(task, env);
-  return [primary, ...TASK_FALLBACKS[task].filter((model) => model !== primary)];
+  return [primary, ...TASK_FALLBACKS[task].filter((m) => m !== primary)];
 }
 
+// Whether a task selects the dedicated OpenRouter credential/model configuration.
+//   - No API key  → use the configured primary, subject to its actual destination.
+//   - concierge   → only when explicitly enabled; an OpenRouter primary alias
+//                   cannot bypass this opt-out.
+//   - other tasks → eligible as soon as a key is present. Brain-ops payloads are
+//                   host-authored knowledge, and the external path still gets PII
+//                   redaction + the ZDR provider restriction + the residual-PII check.
 export function shouldRouteExternally(task: TaskType, env: RouterEnv = serverEnv): boolean {
   if (!env.openrouterApiKey) return false;
   if (task === 'concierge' || task === 'concierge_complex') return env.openrouterConciergeEnabled;
   return true;
 }
 
+// Thrown when the external (OpenRouter) path is refused because redacted content
+// still appears to contain PII. A refusal must never trigger a raw remote retry.
 export class ExternalRouteRefused extends Error {
-  constructor(message: string) { super(message); this.name = 'ExternalRouteRefused'; }
+  constructor(message: string) {
+    super(message);
+    this.name = 'ExternalRouteRefused';
+  }
 }
+
+// The hardened provider restriction now lives in lib/router/providerAllowlist as
+// PROVIDER_ROUTING_POLICY, corrected to directive §1's exact field set (adds
+// `require_parameters` and the nested `sort: { by, partition }`; `partition: 'model'`
+// is what actually prevents routing from drifting off the reviewed model).
+//
+// Re-exported under the old name so existing importers and tests keep working.
 export { PROVIDER_ROUTING_POLICY as ZDR_PROVIDER_RESTRICTION } from '@/lib/router/providerAllowlist';
 export { ProviderIneligibleError } from '@/lib/router/providerAllowlist';
 
+// Defense-in-depth: after redaction, refuse the external route if any message content
+// still trips the PII detector. Multimodal messages are scanned on their text parts
+// only — image parts are CDN URLs, not guest text. Pure + exported so the guarantee
+// is directly testable.
 export function assertNoResidualPII(messages: AIMessage[]): void {
-  if (messages.some((message) => contentContainsLikelyPII(message.content))) {
+  if (messages.some((m) => contentContainsLikelyPII(m.content))) {
     throw new ExternalRouteRefused('redacted payload still contains likely PII');
   }
 }
@@ -76,131 +169,114 @@ function requiresStrongTier(task: TaskType): boolean {
   return task === 'brain_ops' || task === 'extraction' || task === 'concierge_complex';
 }
 
-async function openrouterGenerate(
-  messages: AIMessage[], opts: GenerateOptions | undefined, task: TaskType,
-  endpoint?: { baseUrl: string; apiKey: string; model: string },
+function assertStrongModel(model: string): void {
+  // Deny known lightweight tiers; an environment variable name is not a quality guarantee.
+  if (!model?.trim() || /(?:^|[-/_.])(?:mini|nano|flash|haiku|small|tiny|[1378]b)(?:$|[-/_.])|gpt-3\.5/i.test(model)) {
+    throw new AITransportError('ai_policy_refused');
+  }
+}
+
+function resolveCompletionPlan(task: TaskType, configuredOnly = false): CompletionPlan {
+  const dedicated = !configuredOnly && shouldRouteExternally(task, serverEnv);
+  const baseUrl = dedicated ? serverEnv.openrouterBaseUrl : serverEnv.aiBaseUrl;
+  const apiKey = dedicated ? serverEnv.openrouterApiKey : serverEnv.aiApiKey;
+  if (!apiKey) throw new AITransportError('ai_not_configured');
+  const openRouter = endpointIsOpenRouter(baseUrl) || dedicated;
+  if (openRouter && (task === 'concierge' || task === 'concierge_complex') && !serverEnv.openrouterConciergeEnabled) {
+    throw new AITransportError('ai_policy_refused');
+  }
+  const strong = requiresStrongTier(task);
+  const directModel = task === 'extraction' ? serverEnv.aiExtractionModel
+    : task === 'brain_ops' ? serverEnv.aiBrainModel
+      : task === 'concierge_complex' ? serverEnv.aiConciergeComplexModel : serverEnv.aiChatModel;
+  const models = dedicated ? modelChainForTask(task) : strong ? [directModel]
+    : openRouter ? modelChainForTask(task) : [directModel];
+  if (strong) {
+    const variable = dedicated
+      ? ({ extraction: 'OPENROUTER_MODEL_EXTRACTION', brain_ops: 'OPENROUTER_MODEL_BRAIN_OPS', concierge_complex: 'OPENROUTER_MODEL_CONCIERGE_COMPLEX' } as const)[task as 'extraction' | 'brain_ops' | 'concierge_complex']
+      : ({ extraction: 'AI_EXTRACTION_MODEL', brain_ops: 'AI_BRAIN_MODEL', concierge_complex: 'AI_CONCIERGE_COMPLEX_MODEL' } as const)[task as 'extraction' | 'brain_ops' | 'concierge_complex'];
+    // Env defaults historically use ||; do not let an explicitly empty override disappear.
+    if (process.env[variable] !== undefined && !process.env[variable]?.trim()) throw new AITransportError('ai_policy_refused');
+    models.forEach(assertStrongModel);
+  }
+  if (models.some((model) => !/^[a-zA-Z0-9][a-zA-Z0-9/_.:-]{0,149}$/.test(model))) {
+    throw new AITransportError('ai_not_configured');
+  }
+  return { baseUrl, apiKey, models, openRouter };
+}
+
+/** The same resolved endpoint/model contract used by the actual generation request. */
+export function assertResolvedTaskModel(task: TaskType, actual: string): void {
+  if (!modelMatchesPlan(actual, resolveCompletionPlan(task).models)) throw new AITransportError('ai_model_mismatch');
+}
+
+function safeFailure(error: unknown): Error {
+  if (error instanceof AITransportError) return error;
+  if (error instanceof ProviderIneligibleError) return new ProviderIneligibleError('provider policy refused');
+  return new AITransportError('ai_unavailable');
+}
+
+async function complete(
+  messages: AIMessage[], opts: GenerateOptions | undefined, task: TaskType, configuredOnly: boolean,
 ): Promise<GenerateResult> {
-  const url = `${(endpoint?.baseUrl ?? serverEnv.openrouterBaseUrl).replace(/\/$/, '')}/chat/completions`;
-  const chain = endpoint ? [endpoint.model] : modelChainForTask(task, serverEnv);
-  const model = chain[0];
-  const redacted = redactMessages(messages);
-  assertNoResidualPII(redacted);
-  const provider = providerBlock(serverEnv);
-  let res: Response;
+  const started = Date.now();
+  let plannedModel: string | undefined;
+  let plan: CompletionPlan | undefined;
   try {
-    res = await fetch(url, {
-      method: 'POST', redirect: 'error',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${endpoint?.apiKey ?? serverEnv.openrouterApiKey}`,
-        'X-OpenRouter-ZDR': 'true',
-      },
-      body: JSON.stringify({
-        model, models: chain, messages: redacted,
-        temperature: opts?.temperature ?? 0.3, max_tokens: opts?.maxTokens ?? 600, provider,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
+    plan = resolveCompletionPlan(task, configuredOnly);
+    plannedModel = plan.models[0];
+    const result = await generatePlannedCompletion(plan, messages, opts);
+    log.info('ai_completion', { task, model: result.model, outcome: 'success', latencyMs: Date.now() - started });
+    return result;
   } catch (error) {
-    if (!requiresStrongTier(task)) {
-      if (error instanceof TypeError) throw new GatewayUnavailableError('network');
-      if (error instanceof Error && error.name === 'TimeoutError') throw new GatewayUnavailableError('timeout');
+    let safe = safeFailure(error);
+    // Only recognized gateway outages may leave the primary plan. Auth/policy,
+    // parser, shape, model and unclassified errors never authorize a provider hop.
+    const outage = error instanceof AITransportError
+      ? error.outageReason ? new GatewayUnavailableError(error.outageReason)
+        : error.status !== undefined ? unavailableFromStatus(error.status) : null
+      : null;
+    if (plan?.openRouter && outage && process.env.AI_FAILOVER_ENABLED === 'true'
+      && (task === 'general' || task === 'classification')) {
+      try {
+        return await outageFallback(task, messages, opts, outage);
+      } catch (secondaryError) {
+        // Secondary adapters may throw native parser/network exceptions. Never
+        // let their response excerpts escape into caller logs.
+        safe = safeFailure(secondaryError);
+      }
     }
-    throw error;
+    log.warn('ai_completion', {
+      task, model: plannedModel, outcome: 'failed', latencyMs: Date.now() - started,
+      code: safe instanceof ProviderIneligibleError ? safe.code : (safe as AITransportError).code,
+    });
+    throw safe;
   }
-  if (!res.ok) {
-    // Strong tasks keep their existing visible failure and no-downgrade contract.
-    if (!requiresStrongTier(task)) {
-      const unavailable = unavailableFromStatus(res.status);
-      if (unavailable) throw unavailable;
-    }
-    throw new Error(`OpenRouter request failed: ${res.status}`);
-  }
-  const json = (await res.json()) as {
-    choices: Array<{ message: { content: string } }>; model?: string;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
-  if (!json.choices?.[0]?.message?.content?.trim()) throw new Error('Model returned an empty response.');
-  return {
-    text: json.choices[0].message.content, model: json.model ?? model,
-    usage: {
-      promptTokens: json.usage?.prompt_tokens ?? 0,
-      completionTokens: json.usage?.completion_tokens ?? 0,
-    },
-  };
 }
 
-async function configuredStrongCompletion(
-  messages: AIMessage[], opts: GenerateOptions | undefined, task: TaskType,
-): Promise<GenerateResult> {
-  if (!serverEnv.aiApiKey) throw new Error('High-reliability AI provider is not configured.');
-  const model = task === 'concierge_complex' ? serverEnv.aiConciergeComplexModel
-    : task === 'extraction' ? serverEnv.aiExtractionModel : serverEnv.aiBrainModel;
-  const endpoint = { baseUrl: serverEnv.aiBaseUrl, apiKey: serverEnv.aiApiKey, model };
-  if (new URL(endpoint.baseUrl).hostname === 'openrouter.ai') {
-    return openrouterGenerate(messages, opts, task, endpoint);
-  }
-  const redacted = redactMessages(messages);
-  assertNoResidualPII(redacted);
-  const response = await fetch(`${endpoint.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.apiKey}` },
-    body: JSON.stringify({
-      model, messages: redacted, temperature: opts?.temperature ?? 0.1,
-      max_tokens: opts?.maxTokens ?? 600,
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!response.ok) throw new Error(`High-reliability AI request failed (${response.status}).`);
-  const result = await response.json();
-  const text = result.choices?.[0]?.message?.content;
-  if (typeof text !== 'string' || !text.trim()) throw new Error('Model returned an empty response.');
-  return {
-    text, model: result.model ?? model,
-    usage: { promptTokens: result.usage?.prompt_tokens ?? 0, completionTokens: result.usage?.completion_tokens ?? 0 },
-  };
+/** Direct adapter calls have no data-origin context: conservatively use guest policy. */
+export function configuredCompletion(messages: AIMessage[], opts?: GenerateOptions): Promise<GenerateResult> {
+  return complete(messages, opts, 'concierge', true);
 }
 
-function hasIndependentLegacyProvider(): boolean {
-  if (!serverEnv.aiApiKey) {
-    return process.env.NODE_ENV !== 'production' && process.env.VERCEL_ENV !== 'production';
-  }
-  try { return new URL(serverEnv.aiBaseUrl).hostname !== 'openrouter.ai'; }
-  catch { return false; }
-}
-
+// All production completions use one resolved plan. Approved in-router model failover
+// is preserved, but outages/policy refusal NEVER trigger an unguarded second request.
 export async function routedCompletion(
   messages: AIMessage[], opts?: GenerateOptions, route?: RouteOptions,
 ): Promise<GenerateResult> {
-  const task: TaskType = route?.task ?? 'general';
-  if (!shouldRouteExternally(task, serverEnv)) {
-    if (requiresStrongTier(task)) return configuredStrongCompletion(messages, opts, task);
-    return getAIProvider().generate(messages, opts);
+  const task = route?.task ?? 'general';
+  if (!requiresStrongTier(task) && !isProductionRuntime() && !shouldRouteExternally(task)) {
+    const local = getAIProvider();
+    if (local.name !== 'openai') return local.generate(messages, opts);
   }
   try {
-    return await openrouterGenerate(messages, opts, task);
+    return await complete(messages, opts, task, false);
   } catch (error) {
-    if (requiresStrongTier(task)) {
-      log.warn('high_reliability_route_failed', {
-        task, code: error instanceof ProviderIneligibleError ? error.code : 'unavailable',
-      });
-      throw error;
+    // Preserve explicitly offline development behavior only; never a remote rescue.
+    if (!requiresStrongTier(task) && !isProductionRuntime()) {
+      const local = getAIProvider();
+      if (local.name === 'dev-fallback') return local.generate(messages, opts);
     }
-    if (error instanceof GatewayUnavailableError) {
-      if (process.env.AI_FAILOVER_ENABLED === 'true' &&
-          (task === 'general' || task === 'classification')) {
-        return outageFallback(task, messages, opts, error);
-      }
-      if (hasIndependentLegacyProvider()) return getAIProvider().generate(messages, opts);
-      throw error;
-    }
-    if (error instanceof ProviderIneligibleError || error instanceof ExternalRouteRefused) {
-      log.warn('openrouter_route_refused', {
-        task, code: error instanceof ProviderIneligibleError ? error.code : 'residual_pii',
-      });
-      if (hasIndependentLegacyProvider()) return getAIProvider().generate(messages, opts);
-    }
-    // Authentication, invalid input and provider policy errors are not outages.
     throw error;
   }
 }

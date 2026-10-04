@@ -2,10 +2,14 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
-import type { AcquisitionAttempt, AcquisitionContext, AcquisitionResult } from './types';
+import type { AcquisitionAttempt, AcquisitionContext } from './types';
 
 type Admin = SupabaseClient<Database>;
 type SourceKind = 'property_site' | 'listing' | 'manual_site' | 'local_source' | 'document';
+
+export class SourceRetentionError extends Error {
+  constructor() { super('source_retention_failed'); this.name = 'SourceRetentionError'; }
+}
 
 export async function ensureIngestionSource(admin: Admin, input: {
   propertyId: string; kind: SourceKind; url?: string | null; documentId?: string | null;
@@ -36,24 +40,35 @@ export function acquisitionAuditContext(admin: Admin, input: { propertyId: strin
   return {
     onAttempt: async (attempt: AcquisitionAttempt) => {
       const result = attempt.result;
-      const score = attempt.isShadow && result && primaryText ? similarity(primaryText, result.text) : null;
-      const { data: artifact } = await admin.from('ingestion_artifacts').insert({
-        property_id: input.propertyId, source_id: input.sourceId ?? null, provider: attempt.provider, profile: input.profile,
-        http_status: result?.httpStatus ?? attempt.httpStatus ?? null, byte_length: result?.byteLength ?? null,
-        text_length: result?.text.length ?? 0, content_sha256: result ? createHash('sha256').update(result.text).digest('hex') : null,
-        truncated: result?.truncated ?? false, is_shadow: attempt.isShadow, error_reason: attempt.errorReason ?? null,
-        latency_ms: attempt.latencyMs, similarity_score: score, agrees_with_primary: score === null ? null : score >= 0.65,
-      } as never).select('id').single();
-      if (result && artifact && !attempt.isShadow) {
-        primaryText = result.text;
-        await admin.from('ingestion_sources').update({ last_acquired_at: new Date().toISOString(), last_status: 'ready' } as never).eq('id', input.sourceId ?? '');
-        // Untrusted reference data only. It is deliberately separate from guest-facing Brain content.
-        await admin.from('source_documents').insert({
-          property_id: input.propertyId, artifact_id: (artifact as { id: string }).id, title: result.title.slice(0, 300),
-          text: result.text.slice(0, 200_000), text_sha256: createHash('sha256').update(result.text).digest('hex'), language: null,
-        } as never);
-      } else if (!result && input.sourceId) {
-        await admin.from('ingestion_sources').update({ last_status: attempt.errorReason ?? 'failed' } as never).eq('id', input.sourceId);
+      try {
+        if (result && !attempt.isShadow && result.text.length > 200_000) throw new SourceRetentionError();
+        const score = attempt.isShadow && result && primaryText ? similarity(primaryText, result.text) : null;
+        const { data: artifact, error: artifactError } = await admin.from('ingestion_artifacts').insert({
+          property_id: input.propertyId, source_id: input.sourceId ?? null, provider: attempt.provider, profile: input.profile,
+          http_status: result?.httpStatus ?? attempt.httpStatus ?? null, byte_length: result?.byteLength ?? null,
+          text_length: result?.text.length ?? 0, content_sha256: result ? createHash('sha256').update(result.text).digest('hex') : null,
+          truncated: result?.truncated ?? false, is_shadow: attempt.isShadow, error_reason: attempt.errorReason ?? null,
+          latency_ms: attempt.latencyMs, similarity_score: score, agrees_with_primary: score === null ? null : score >= 0.65,
+        } as never).select('id').single();
+        if (result && !attempt.isShadow && (artifactError || !artifact)) throw new SourceRetentionError();
+        if (result && artifact && !attempt.isShadow) {
+          // Untrusted reference data only. It is deliberately separate from guest-facing Brain content.
+          const { error: sourceError } = await admin.from('source_documents').insert({
+            property_id: input.propertyId, artifact_id: (artifact as { id: string }).id, title: result.title.slice(0, 300),
+            text: result.text, text_sha256: createHash('sha256').update(result.text).digest('hex'), language: null,
+          } as never);
+          if (sourceError) throw new SourceRetentionError();
+          primaryText = result.text;
+          if (input.sourceId) {
+            await admin.from('ingestion_sources').update({ last_acquired_at: new Date().toISOString(), last_status: 'ready' } as never).eq('id', input.sourceId);
+          }
+        } else if (!result && input.sourceId) {
+          await admin.from('ingestion_sources').update({ last_status: attempt.errorReason ?? 'failed' } as never).eq('id', input.sourceId);
+        }
+      } catch {
+        // Primary reference retention is mandatory; diagnostic/shadow writes are not.
+        // Do not expose database messages or accidentally retry another content provider.
+        if (result && !attempt.isShadow) throw new SourceRetentionError();
       }
     },
   };

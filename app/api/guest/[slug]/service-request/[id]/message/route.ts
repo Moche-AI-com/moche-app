@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
 import { guestServiceRequestMessageSchema } from '@/lib/validation';
-import { runInterviewTurn, type InterviewEntry } from '@/lib/guest/service-request-interview';
+import { runInterviewTurn, runSafetyTriage, type InterviewEntry } from '@/lib/guest/service-request-interview';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { notify } from '@/lib/notify';
 import { log } from '@/lib/log';
@@ -51,6 +51,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     media_urls?: Json;
   };
   if (row.interview_status !== 'in_progress') {
+    // A concurrent completion must not suppress immediate, locally authored
+    // instructions for this new answer. Do not reopen or notify for the ticket.
+    const safety = runSafetyTriage(message);
+    if (safety) return NextResponse.json({
+      error: 'This report is closed. Your update was not saved. Your host was not notified. Contact your host directly.',
+      safetyMessage: safety.guestMessage,
+      reportSaved: false,
+      hostNotified: false,
+    }, { status: 409 });
     return NextResponse.json({ error: 'This report is no longer accepting answers.', status: row.interview_status }, { status: 409 });
   }
 
@@ -80,12 +89,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const mergedMedia = validMediaKeys.length ? [...priorMedia, ...validMediaKeys] : priorMedia;
 
   if (turn.type === 'final') {
-    const { report } = turn;
-    const timelineEvent = { at: new Date().toISOString(), type: 'interview_completed' };
-    const { error } = await admin
+    const { report, safety } = turn;
+    const interviewStatus = safety ? 'safety_escalated' : 'completed';
+    const timelineEvent = { at: new Date().toISOString(), type: safety ? 'safety_escalated' : 'interview_completed' };
+    const { data: saved, error } = await admin
       .from('service_requests')
       .update({
-        interview_status: 'completed',
+        interview_status: interviewStatus,
+        ...(safety ? { safety_flags: safety.flags as unknown as Json } : {}),
         interview_transcript: transcript as unknown as Json,
         service_type: report.category,
         urgency: report.severity,
@@ -98,11 +109,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         timeline: [...priorTimeline, timelineEvent] as unknown as Json,
         media_urls: mergedMedia as unknown as Json,
       } as never)
-      .eq('id', row.id);
+      .eq('id', row.id)
+      .eq('property_id', session.propertyId)
+      .eq('stay_id', session.stayId)
+      .eq('interview_status', 'in_progress')
+      .select('id').maybeSingle();
 
-    if (error) {
-      log.warn('service_request_interview_finalize_failed', { error: error.message, serviceRequestId: row.id });
-      return NextResponse.json({ error: 'Could not save your report. Please try again.' }, { status: 500 });
+    if (error || !saved) {
+      log.warn('service_request_interview_finalize_failed', { code: 'persistence_failed', serviceRequestId: row.id });
+      return NextResponse.json({
+        error: safety
+          ? 'This update was not saved. Your host was not notified. Contact your host directly.'
+          : 'Could not save your report. Please try again.',
+        ...(safety ? { safetyMessage: safety.guestMessage, reportSaved: false, hostNotified: false } : {}),
+      }, { status: 500 });
     }
 
     const urgencyTag = report.severity === 'critical' || report.severity === 'high' ? `[${report.severity.toUpperCase()}] ` : '';
@@ -115,19 +135,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       link: '/dashboard/service-requests',
     });
 
-    log.info('service_request_completed', { serviceRequestId: row.id, category: report.category, severity: report.severity });
-    await capture('service_request_completed', session.propertyId, { property_id: session.propertyId });
+    const event = safety ? 'service_request_safety_escalated' : 'service_request_completed';
+    log.info(event, { serviceRequestId: row.id, category: report.category, severity: report.severity });
+    await capture(event, session.propertyId, { property_id: session.propertyId });
 
-    return NextResponse.json({ id: row.id, status: 'completed', report });
+    return NextResponse.json({ id: row.id, status: interviewStatus, report, ...(safety ? { guestMessage: safety.guestMessage } : {}) });
   }
 
-  const { error } = await admin
+  const { data: saved, error } = await admin
     .from('service_requests')
     .update({ interview_transcript: transcript as unknown as Json, media_urls: mergedMedia as unknown as Json } as never)
-    .eq('id', row.id);
+    .eq('id', row.id)
+    .eq('property_id', session.propertyId)
+    .eq('stay_id', session.stayId)
+    .eq('interview_status', 'in_progress')
+    .select('id').maybeSingle();
 
-  if (error) {
-    log.warn('service_request_interview_turn_save_failed', { error: error.message, serviceRequestId: row.id });
+  if (error || !saved) {
+    log.warn('service_request_interview_turn_save_failed', { code: 'persistence_failed', serviceRequestId: row.id });
     return NextResponse.json({ error: 'Could not save your answer. Please try again.' }, { status: 500 });
   }
 

@@ -474,7 +474,17 @@ function BrainItemForm({
   onDone: () => void;
 }) {
   const [state, formAction] = useFormState<BrainActionState, FormData>(saveBrainItemAction, {});
-  if (state.ok) queueMicrotask(onDone);
+  const [savedItemId, setSavedItemId] = useState(item?.id ?? '');
+  const completed = useRef(false);
+  useEffect(() => {
+    // A saved source can still fail indexing. Retain its ID even if a later
+    // retry fails before returning an ID, so retry updates rather than duplicates.
+    if (state.itemId) setSavedItemId(state.itemId);
+    if (state.ok && !state.warning && !state.error && !completed.current) {
+      completed.current = true;
+      onDone();
+    }
+  }, [state, onDone]);
 
   // Ids must be unique per form: several of these can be mounted at once now that the
   // editor is inline, and duplicate ids would send every label to the first field.
@@ -490,8 +500,9 @@ function BrainItemForm({
         </button>
       </div>
       <FormMessage error={state.error} />
+      {state.warning && <div className="alert" role="status">{state.warning}</div>}
       <input type="hidden" name="propertyId" value={propertyId} />
-      {item && <input type="hidden" name="itemId" value={item.id} />}
+      <input type="hidden" name="itemId" value={savedItemId} />
       <div className="field">
         <label className="label" htmlFor={fieldId('title')}>Title</label>
         <input
@@ -559,7 +570,7 @@ function BrainItemForm({
 
   if (inline) {
     return (
-      <form action={formAction} className="brain-item-inline-form">
+      <form action={formAction} onReset={(event) => event.preventDefault()} className="brain-item-inline-form">
         {body}
       </form>
     );
@@ -567,6 +578,9 @@ function BrainItemForm({
   return (
     <form
       action={formAction}
+      // React resets forms when an action resolves, including warning/error
+      // results. Keep the host's draft until this editor explicitly closes.
+      onReset={(event) => event.preventDefault()}
       id="brain-editor"
       className="card"
       style={{ padding: '1.5rem', marginBottom: '1rem', borderColor: 'var(--teal-deep)' }}
