@@ -95,7 +95,9 @@ describe('approved routine fast path and Wi-Fi containment', () => {
     expect(mocks.generate).not.toHaveBeenCalled();
   });
   it('uses the routine tier only when usable approved grounding is present', async () => {
-    const db = admin();
+    // Real retrieval has a current approved source. The former orphan fixture
+    // accidentally bypassed provenance; keep the routing expectation and supply it.
+    const db = admin([item({ id: 'approved', title: 'Departure guidance' })]);
     db.client.rpc = vi.fn().mockResolvedValue({ data: [{
       id: 'chunk', brain_item_id: 'approved', content: 'Checkout is at 11am.',
       category: 'checkin_checkout', similarity: 0.9,

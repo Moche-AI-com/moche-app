@@ -7,8 +7,7 @@ import { DEFAULT_MODULES } from '@/lib/constants';
 import { fetchUrlContent, isSsrfError } from '@/lib/ingest/firecrawl';
 import { slugWithSuffix } from '@/lib/slug';
 import { syncBillableQuantity } from '@/lib/billing/quantity-sync';
-import { routedCompletion } from '@/lib/router/modelRouter';
-import { serverEnv } from '@/lib/env';
+import { routedCompletion, assertResolvedTaskModel } from '@/lib/router/modelRouter';
 import { IMPORT_ATTESTATION_TEXT } from './attestation';
 import { buildPastedPage, PASTED_PROVIDER, PASTED_SOURCE_URL } from './pasted';
 import {
@@ -89,7 +88,7 @@ function safeError(error: unknown, source: 'link' | 'paste' = 'link'): { reason:
     return { reason: 'source_unusable', message: source === 'paste' ? UNUSABLE_PASTE_MESSAGE : UNUSABLE_SOURCE_MESSAGE };
   }
   const message = error instanceof Error ? error.message : 'Could not read that listing.';
-  if (/extraction_model_mismatch/.test(message)) {
+  if (/extraction_model_mismatch|ai_model_mismatch|ai_policy_refused|ai_not_configured/.test(message)) {
     return { reason: 'extraction_unavailable', message: 'Our high-reliability import service is temporarily unavailable. Please try again shortly, or set up the property manually.' };
   }
   if (/unusable output/i.test(message)) {
@@ -112,20 +111,8 @@ async function generateExtraction(messages: AIMessage[]): Promise<string> {
     { temperature: 0.1, maxTokens: 4000 },
     { task: 'extraction' },
   );
-  assertExtractionModel(result.model);
+  assertResolvedTaskModel('extraction', result.model);
   return result.text;
-}
-
-function assertExtractionModel(model: string): void {
-  // AI_DEV_FALLBACK is a dev-only stub provider and is never enabled in production
-  // (isProductionRuntime gates it in lib/ai). Skipping the check keeps local import
-  // development possible without a router key.
-  if (serverEnv.aiDevFallback) return;
-  const bare = (m: string) => m.trim().split(':')[0].split('/').pop() ?? '';
-  const expected = serverEnv.openrouterModelExtraction;
-  if (!model || (model !== expected && bare(model) !== bare(expected))) {
-    throw new Error('extraction_model_mismatch');
-  }
 }
 
 // An imported draft is a billable property like any other, so Stripe has to learn

@@ -13,11 +13,12 @@
 // reviewable in a diff, rather than a migration nobody reads.
 
 import type { Database } from '@/lib/database.types';
+import { z } from 'zod';
 import { TONE_PRESET_IDS, type TonePresetId } from '@/lib/constants';
 import { REGISTRY_FIELDS, type RegistryField } from '@/lib/brain/completeness';
-import { isBrainSection, storageCategoryFor } from '@/lib/brain/taxonomy';
+import { isBrainSection, resolveSection, storageCategoryFor } from '@/lib/brain/taxonomy';
 import { redactCredentials } from '@/lib/brain/redact';
-import { safeWifiInstructions, safeWifiLocation } from '@/lib/guest/wifi-instructions';
+import { safeWifiInstructions, safeWifiLocation, WIFI_CONTEXT } from '@/lib/guest/wifi-instructions';
 
 export type ProposedUpdateStatus = Database['public']['Enums']['proposed_update_status'];
 
@@ -51,7 +52,12 @@ export const PROPOSAL_SOURCE_LABEL: Record<ProposalSourceType, string> = {
 // Field allowlist
 // ---------------------------------------------------------------------------
 
-export type ProposableKind = 'brain_item' | 'text' | 'tone_preset' | 'brain_value' | 'guest_qa';
+/**
+ * `brain_item` fields become a new knowledge entry (title + body + category)
+ * on approval. `text` fields overwrite a single scalar column. `tone_preset` is
+ * a `text` field whose value must additionally be one of the five preset ids.
+ */
+export type ProposableKind = 'brain_item' | 'guest_answer' | 'text' | 'tone_preset' | 'brain_value';
 
 export const BRAIN_VALUE_PREFIX = 'brain_value.';
 
@@ -89,6 +95,14 @@ export interface ProposableField {
 }
 
 export const PROPOSABLE_FIELDS: Record<string, ProposableField> = {
+  // Keep the existing path and question/answer shape: already-pending replies
+  // from both host-chat and escalation writers must remain reviewable.
+  'host_qa.guest_reply': {
+    path: 'host_qa.guest_reply',
+    label: 'Reusable host answer',
+    kind: 'guest_answer',
+    target: 'brain_items',
+  },
   'brain.listing_summary': {
     path: 'brain.listing_summary',
     label: 'Property details read from a listing page',
@@ -99,15 +113,6 @@ export const PROPOSABLE_FIELDS: Record<string, ProposableField> = {
     path: 'brain.document_summary',
     label: 'Property details read from a document',
     kind: 'brain_item',
-    target: 'brain_items',
-  },
-  // Issue #133, item 6: learned guest Q&A from resolved escalations. Without
-  // this entry the decision route 422'd every learning proposal — they could be
-  // queued but never approved.
-  'host_qa.guest_reply': {
-    path: 'host_qa.guest_reply',
-    label: 'Learned from an answered guest question',
-    kind: 'guest_qa',
     target: 'brain_items',
   },
   'properties.city': {
@@ -162,17 +167,6 @@ export interface BrainItemProposal {
   replacesItemId?: string | null;
 }
 
-/** Learned guest Q&A from a resolved escalation (issue #133, item 6). */
-export interface GuestQaProposal {
-  question: string;
-  answer: string;
-  category: string;
-  section: string;
-  rationale?: string | null;
-  model?: string;
-  sourceMessageIds?: string[];
-}
-
 export type NormalizeResult =
   | { ok: true; value: unknown }
   | { ok: false; error: string };
@@ -192,35 +186,37 @@ function asBrainCategory(v: unknown): BrainCategoryValue {
 
 const MAX_BRAIN_TEXT = 20000;
 
+const guestAnswerProposalSchema = z.object({
+  question: z.string().trim().min(8).max(500),
+  answer: z.string().trim().min(1).max(4000),
+  category: z.string().refine((v) => (BRAIN_CATEGORIES as readonly string[]).includes(v)),
+  section: z.string().refine(isBrainSection).nullish(),
+  visibility: z.enum(['guest', 'internal']).default('guest'),
+  rationale: z.string().max(1000).nullish(),
+  model: z.string().max(200).optional(),
+  sourceMessageIds: z.array(z.string().uuid()).max(100).optional(),
+});
+export type GuestAnswerProposal = z.infer<typeof guestAnswerProposalSchema>;
+
+// Feature and replacement targets are uuid references carried through a jsonb
+// value — shape-check them here; ownership is verified at apply time.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function normalizeProposedValue(field: ProposableField, raw: unknown): NormalizeResult {
-  if (field.kind === 'guest_qa') {
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-      return { ok: false, error: 'That entry is missing its content.' };
+  if (field.kind === 'guest_answer') {
+    const parsed = guestAnswerProposalSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: 'Review the question, answer, category and section before saving.' };
+    const v = parsed.data;
+    if (v.category === 'internal_notes' && v.visibility !== 'internal') {
+      return { ok: false, error: 'Internal notes must remain internal.' };
     }
-    const v = raw as Record<string, unknown>;
-    const question = typeof v.question === 'string' ? v.question.trim() : '';
-    const answer = typeof v.answer === 'string' ? v.answer.trim() : '';
-    if (question.length < 8) return { ok: false, error: 'The question is too short to file.' };
-    if (question.length > 500) return { ok: false, error: 'Questions are limited to 500 characters.' };
-    if (answer.length < 10) return { ok: false, error: 'There is not enough content here to save.' };
-    if (answer.length > MAX_BRAIN_TEXT) return { ok: false, error: 'That entry is too long to save.' };
-    const section = typeof v.section === 'string' && isBrainSection(v.section.trim()) ? v.section.trim() : 'policies';
-    return {
-      ok: true,
-      value: {
-        question,
-        answer,
-        category: 'host_qa',
-        section,
-        rationale: typeof v.rationale === 'string' ? v.rationale : null,
-        model: typeof v.model === 'string' ? v.model : undefined,
-        sourceMessageIds: Array.isArray(v.sourceMessageIds)
-          ? (v.sourceMessageIds as unknown[]).filter((id): id is string => typeof id === 'string' && UUID_RE.test(id))
-          : [],
-      } satisfies GuestQaProposal,
-    };
+    if (redactCredentials(`${v.question}\n${v.answer}`).redactions.length
+      || (WIFI_CONTEXT.test(`${v.question}\n${v.answer}`) && !safeWifiInstructions(v.answer))) {
+      return { ok: false, error: 'Remove the credential. Save password location and connection instructions only.' };
+    }
+    // A legacy bucket does not uniquely imply a section. Preserve both reviewed
+    // choices; derive a display section only when the older draft omitted one.
+    return { ok: true, value: { ...v, section: v.section ?? resolveSection({ category: v.category }) } };
   }
 
   if (field.kind === 'brain_item') {
@@ -388,6 +384,7 @@ export function summarizeValue(value: unknown, max = 180): string {
   if (typeof value === 'object' && !Array.isArray(value)) {
     const v = value as Record<string, unknown>;
     if (typeof v.text === 'string') return truncate(v.text, max);
+    if (typeof v.answer === 'string') return truncate(v.answer, max);
   }
   try {
     return truncate(JSON.stringify(value), max);

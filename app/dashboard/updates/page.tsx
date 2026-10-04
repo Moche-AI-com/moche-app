@@ -61,7 +61,7 @@ export default async function UpdatesPage({
 
   if (propIds.length) {
     const select =
-      'id, property_id, field_path, label, status, proposed_value, original_value, applied_value, source_type, source_ref, confidence, resolution_note, reviewed_at, created_at';
+      'id, property_id, field_path, label, status, proposed_value, original_value, applied_value, source_type, source_ref, confidence, resolution_note, reviewed_at, applied_at, apply_error, created_at';
 
     const [{ data }, pendingRes, reviewedRes] = await Promise.all([
       view === 'pending'

@@ -2,7 +2,6 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import type { ChatMessage, GenerateOptions, GenerateResult } from '@/lib/ai/provider';
-import { getAIProvider, assertEmbedDim } from '@/lib/ai';
 import { routedCompletion } from '@/lib/router/modelRouter';
 import { log } from '@/lib/log';
 import { type NodeType, schemaFor, renderContent } from './schemas';
@@ -59,10 +58,8 @@ function extractJsonObject(raw: string): unknown | null {
 
 type GenerateFn = (messages: ChatMessage[], opts?: GenerateOptions) => Promise<GenerateResult>;
 
-// Node normalization is brain management (2026-08-28 directive): its output becomes a
-// canonical knowledge node, so it declares the brain_ops tier — the strong model with
-// no silent downgrade. Missing/unavailable strong-tier configuration skips the
-// derived node; it must never fall back to a general or development model.
+// Normalization produces a draft, never canonical publication. It declares the
+// strong brain_ops tier with no silent downgrade.
 const brainOpsCompletion: GenerateFn = (messages, opts) =>
   routedCompletion(messages, opts, { task: 'brain_ops' });
 
@@ -110,48 +107,14 @@ export async function normalizeToNode(
   return attempt('Reminder: respond with ONLY a single valid JSON object using the exact keys. No explanation.');
 }
 
-// Best-effort UPSERT of a normalized node for a saved brain item. NON-BLOCKING and
-// NON-THROWING: any failure (detection miss, normalizer null, embed/db error) is
-// logged and swallowed so it can never break the normal ingest/reindex path.
+// Compatibility boundary for old callers. This table has no approval/visibility/
+// lifecycle contract, so publishing generated text here would bypass human review.
+// Keep approved source chunks; explicit proposals must precede any future derivative
+// publication. Existing graph rows are also excluded by the guest reader.
 export async function upsertNormalizedNode(
   admin: Admin,
   input: { propertyId: string; brainItemId: string | null; category: BrainCategory; title: string; body: string },
 ): Promise<void> {
-  try {
-    const nodeType = detectNodeType(input.category, input.title, input.body);
-    if (!nodeType) return;
-
-    const node = await normalizeToNode({ nodeType, title: input.title, body: input.body });
-    if (!node) {
-      log.info('normalizer_no_node', { propertyId: input.propertyId, nodeType });
-      return;
-    }
-
-    const provider = getAIProvider();
-    const [embedding] = await provider.embed([node.content]);
-    assertEmbedDim(embedding.length);
-
-    const { error } = await admin
-      .from('property_knowledge_nodes')
-      .upsert(
-        {
-          property_id: input.propertyId,
-          node_type: node.nodeType,
-          title: node.title,
-          data: node.data as never,
-          content: node.content,
-          embedding: JSON.stringify(embedding),
-          source_brain_item_id: input.brainItemId,
-          updated_at: new Date().toISOString(),
-        } as never,
-        { onConflict: 'property_id,node_type,title' },
-      );
-    if (error) {
-      log.warn('knowledge_node_upsert_failed', { propertyId: input.propertyId, nodeType, error: error.message });
-      return;
-    }
-    log.info('knowledge_node_upserted', { propertyId: input.propertyId, nodeType });
-  } catch (e) {
-    log.warn('knowledge_node_upsert_threw', { propertyId: input.propertyId, error: String(e) });
-  }
+  void admin;
+  void input;
 }

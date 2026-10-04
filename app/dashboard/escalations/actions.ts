@@ -14,6 +14,7 @@ import { capture } from '@/lib/posthog-server';
 import type { BrainCategory } from '@/lib/brain/classify';
 import { normalizeGuestAnswerForBrain } from '@/lib/brain/guest-answer-learning';
 import { detectOneOffAnswer, oneOffReason } from '@/lib/brain/one-off';
+import { resolveSection, storageCategoryFor } from '@/lib/brain/taxonomy';
 import { hostConversationLink } from '@/lib/notifications/links';
 
 type Client = SupabaseClient<Database>;
@@ -42,6 +43,10 @@ export async function answerEscalationCore(
   const ctx = await requireSession();
   if (actorProfileId !== ctx.user.id) return { error: 'Sign in as the replying host.' };
   if (!answerText.trim() || answerText.length > 4000) return { error: 'Write a reply of up to 4000 characters.' };
+  if (opts.brainCategory !== undefined
+    && !escalationRespondSchema.shape.brainCategory.safeParse(opts.brainCategory).success) {
+    return { error: 'Pick one of the available Brain categories.' };
+  }
 
   const { data: esc } = await admin
     .from('escalations')
@@ -116,9 +121,8 @@ export async function answerEscalationCore(
   let learningQueued = false;
   let warning = updateError ? 'Reply saved, but escalation status could not be updated.' : undefined;
   if (convertToBrain) {
-    // Issue #133, item 6: teach the Brain only from reusable policy. A stay-scoped
-    // answer ("fine this once") is delivered to the guest but never queued as a
-    // proposal — and the host sees why, on the answer form.
+    // Issue #133, item 6: deliver stay-scoped exceptions without teaching them
+    // as permanent policy, even when the host selected a category.
     const oneOff = detectOneOffAnswer(answerText);
     if (oneOff.oneOff) {
       warning = oneOffReason(oneOff.marker ?? 'stay-scoped');
@@ -131,11 +135,15 @@ export async function answerEscalationCore(
           question: esc.question, hostAnswer: answerText,
           threadMessages: [...(context ?? [])].reverse().map((m: any) => ({ role: m.role, content: m.content, createdAt: m.created_at })),
         });
+        const category = opts.brainCategory ?? normalized.category;
+        const section = opts.brainCategory && storageCategoryFor(normalized.section) !== opts.brainCategory
+          ? resolveSection({ category }) : normalized.section;
         const { error } = await db.from('proposed_updates').insert({
           property_id: esc.property_id, host_account_id: prop.host_account_id, status: 'pending',
           field_path: 'host_qa.guest_reply', label: normalized.question.slice(0, 160),
-          proposed_value: { question: normalized.question, answer: normalized.answer, category: normalized.category,
-            section: normalized.section, rationale: normalized.rationale, model: normalized.model, sourceMessageIds: (context ?? []).map((m: any) => m.id) },
+          proposed_value: { question: normalized.question, answer: normalized.answer, category,
+            section, visibility: category === 'internal_notes' ? 'internal' : 'guest',
+            rationale: normalized.rationale, model: normalized.model, sourceMessageIds: (context ?? []).map((m: any) => m.id) },
           source_type: 'ai_suggestion', source_ref: escalationId, confidence: normalized.confidence,
         });
         if (error) throw error;
@@ -170,7 +178,7 @@ export async function answerEscalationAction(
   const parsed = escalationRespondSchema.safeParse({
     response: formData.get('response'),
     convertToBrain: formData.get('convertToBrain') === 'on' || formData.get('convertToBrain') === 'true',
-    brainCategory: rawCategory && rawCategory !== '' ? rawCategory : undefined,
+    brainCategory: rawCategory && rawCategory !== '' && rawCategory !== 'auto' ? rawCategory : undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Please write an answer.' };

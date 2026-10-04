@@ -155,7 +155,7 @@ describe('ZDR_PROVIDER_RESTRICTION', () => {
 
 type FetchResponse = { ok: boolean; status: number; json: () => Promise<unknown> };
 
-function okResponse(model = 'router/echo', content = 'external-answer'): FetchResponse {
+function okResponse(model: string, content = 'external-answer'): FetchResponse {
   return {
     ok: true,
     status: 200,
@@ -240,7 +240,7 @@ describe('routedCompletion', () => {
   // cheaper model in-router. If the strong tier is down, the caller surfaces a
   // try-again / manual-entry path rather than saving weak output to the Brain.
   it('sends no lower-tier fallback chain for extraction', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -252,7 +252,7 @@ describe('routedCompletion', () => {
   // routing and merge decisions become canonical Brain content after host review, so
   // a cheap in-router fallback would silently misfile knowledge.
   it('routes brain_ops to the strong tier with no lower-tier fallback chain', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -263,7 +263,7 @@ describe('routedCompletion', () => {
   });
 
   it('with key + classification: routes to the llama tier', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -272,7 +272,7 @@ describe('routedCompletion', () => {
   });
 
   it('with key + general (default task): routes to gpt-4o-mini', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -281,7 +281,7 @@ describe('routedCompletion', () => {
   });
 
   it('with key + concierge (default): stays in-house, no fetch', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -304,7 +304,7 @@ describe('routedCompletion', () => {
   });
 
   it('sends an ordered models[] chain so OpenRouter can fail over in-router', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
@@ -323,7 +323,7 @@ describe('routedCompletion', () => {
   // The routine-guest chain comes from the reviewed allowlist, in the operator's order,
   // and ignores OPENROUTER_MODEL_CONCIERGE entirely — a per-tier slug is not a review.
   it('builds the concierge chain from the reviewed allowlist, in order, without duplicates', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
@@ -342,7 +342,7 @@ describe('routedCompletion', () => {
   // Directive §0.2 row 3 fail-closed path: an empty allowlist must never reach
   // OpenRouter at all, and must not degrade the answer — the in-house provider serves.
   it('refuses the external guest route when the allowlist is empty', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
@@ -360,7 +360,7 @@ describe('routedCompletion', () => {
   // still send the request, letting OpenRouter pick any endpoint its own ZDR
   // classification accepted. No request may leave at all in that state.
   it.each(['extraction', 'brain_ops', 'concierge_complex'] as const)('%s issues no request or weak fallback when no provider is reviewed', async (task) => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
@@ -376,7 +376,7 @@ describe('routedCompletion', () => {
   });
 
   it('always pins `only` on the outbound request', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -390,7 +390,7 @@ describe('routedCompletion', () => {
   // still carry primary-plus-fallbacks, and a duplicate slug wastes a retry on a
   // model that already failed.
   it('never sends a duplicate slug when a per-tier override equals a fallback', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
@@ -406,7 +406,7 @@ describe('routedCompletion', () => {
   });
 
   it('honors a per-tier env override', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({
       OPENROUTER_API_KEY: 'test-key',
@@ -418,7 +418,7 @@ describe('routedCompletion', () => {
   });
 
   it('redacts message content before it leaves our infra', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse());
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okResponse(JSON.parse(_init.body as string).model));
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key' });
 
@@ -448,13 +448,13 @@ describe('routedCompletion', () => {
 
   it.each(['extraction', 'brain_ops', 'concierge_complex'] as const)('%s fails closed on a network error', async (task) => {
     const fetchMock = vi.fn(async () => {
-      throw new Error('network down');
+      throw new Error('network down: synthetic.person@example.test Door code: 4321');
     });
     vi.stubGlobal('fetch', fetchMock);
     const { routedCompletion } = await loadRouter({ OPENROUTER_API_KEY: 'test-key', OPENROUTER_CONCIERGE_ENABLED: 'true' });
 
     const provider = vi.spyOn(await import('@/lib/ai'), 'getAIProvider');
-    await expect(routedCompletion(MESSAGES, undefined, { task })).rejects.toThrow('network down');
+    await expect(routedCompletion(MESSAGES, undefined, { task })).rejects.toThrow('ai_unavailable');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(lastBody(fetchMock).models).toEqual(['openai/gpt-4o']);
     expect(provider).not.toHaveBeenCalled();

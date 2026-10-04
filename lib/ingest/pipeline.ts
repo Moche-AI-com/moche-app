@@ -133,19 +133,31 @@ export async function ingestText(client: Client, input: IngestInput): Promise<In
     const { error: chunkErr } = await admin.from('document_chunks').insert(rows as never);
     if (chunkErr) throw new Error(chunkErr.message);
 
-    // 5. Mark ready.
-    await client.from('brain_items').update({ status: 'ready' } as never).eq('id', brainItemId);
+    // 5. Publish only after the property-scoped transition actually persisted.
+    // A denied/no-match update is not success: guest retrieval rejects an item
+    // left processing, and approval must retain its incomplete-application state.
+    const ready = await client.from('brain_items').update({ status: 'ready' } as never)
+      .eq('id', brainItemId).eq('property_id', input.propertyId)
+      .select('id').maybeSingle()
+      .then((result) => result, () => null);
+    if (ready?.error || !ready?.data) {
+      // Neither returned nor thrown database details enter logs/persisted errors.
+      throw new Error('Could not mark the knowledge item ready.');
+    }
     if (jobId) {
-      await client.from('ingestion_jobs').update({ status: 'ready', result: { chunks: chunks.length } as never } as never).eq('id', jobId);
+      await client.from('ingestion_jobs').update({ status: 'ready', result: { chunks: chunks.length } as never } as never)
+        .eq('id', jobId).eq('property_id', input.propertyId);
     }
 
     return { brainItemId, chunks: chunks.length, title: input.title };
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Ingestion failed.';
     log.warn('ingest_failed', { propertyId: input.propertyId, brainItemId, error: msg });
-    await client.from('brain_items').update({ status: 'failed', ingestion_error: msg.slice(0, 500) } as never).eq('id', brainItemId);
+    await client.from('brain_items').update({ status: 'failed', ingestion_error: msg.slice(0, 500) } as never)
+      .eq('id', brainItemId).eq('property_id', input.propertyId);
     if (jobId) {
-      await client.from('ingestion_jobs').update({ status: 'failed', last_error: msg.slice(0, 500) } as never).eq('id', jobId);
+      await client.from('ingestion_jobs').update({ status: 'failed', last_error: msg.slice(0, 500) } as never)
+        .eq('id', jobId).eq('property_id', input.propertyId);
     }
     throw new Error(msg);
   }

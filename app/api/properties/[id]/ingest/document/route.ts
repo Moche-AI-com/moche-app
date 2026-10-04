@@ -97,10 +97,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const title = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 200) || 'Document';
 
-  const sourceId = await ensureIngestionSource(admin, {
-    propertyId: (await params).id, kind: 'document', documentId, profile: 'document_url_v1', label: title, createdBy: ctx?.user.id ?? null,
-  });
-  await recordManualSource(admin, { propertyId: (await params).id, sourceId, profile: 'document_url_v1', title, text, provider: 'uploaded-document' });
+  try {
+    const sourceId = await ensureIngestionSource(admin, {
+      propertyId: (await params).id, kind: 'document', documentId, profile: 'document_url_v1', label: title, createdBy: ctx?.user.id ?? null,
+    });
+    await recordManualSource(admin, { propertyId: (await params).id, sourceId, profile: 'document_url_v1', title, text, provider: 'uploaded-document' });
+  } catch {
+    await supabase.from('documents').update({ status: 'failed', error_detail: 'source_retention_failed' } as never).eq('id', documentId);
+    return NextResponse.json({ error: 'Could not retain the extracted source for review. Keep your file and try again.' }, { status: 500 });
+  }
 
   // Imported document content always remains a host-reviewed proposal.
   try {

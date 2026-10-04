@@ -11,6 +11,9 @@ import { bumpBrainVersion } from '@/lib/brain/cache';
 export interface TrainingFlagState {
   error?: string;
   ok?: boolean;
+  warning?: string;
+  itemId?: string;
+  retryExcluded?: boolean;
 }
 
 /**
@@ -77,9 +80,9 @@ export async function setMessageTrainingAction(
     .eq('id', messageId);
   if (error) return { error: 'Could not save that. Please try again.' };
 
-  if (escalationId) {
-    await applyToBrain(admin, { escalationId, propertyId: msg.property_id, excluded });
-  }
+  const brainOutcome = escalationId
+    ? await applyToBrain(admin, { escalationId, propertyId: msg.property_id, excluded })
+    : {};
 
   await audit(admin, {
     action: excluded ? 'message.training_excluded' : 'message.training_included',
@@ -92,7 +95,8 @@ export async function setMessageTrainingAction(
 
   revalidatePath('/dashboard/reports');
   revalidatePath(`/dashboard/properties/${msg.property_id}/brain`);
-  return { ok: true };
+  // `ok` records the saved preference, not successful retrieval indexing.
+  return { ok: true, ...brainOutcome };
 }
 
 // Makes the exclusion real in retrieval. Only touches the Brain item this escalation
@@ -101,7 +105,7 @@ export async function setMessageTrainingAction(
 async function applyToBrain(
   admin: ReturnType<typeof createAdminClient>,
   p: { escalationId: string; propertyId: string; excluded: boolean },
-): Promise<void> {
+): Promise<TrainingFlagState> {
   const { data: esc } = await admin
     .from('escalations')
     .select('converted_brain_item_id')
@@ -109,7 +113,7 @@ async function applyToBrain(
     .eq('property_id', p.propertyId)
     .maybeSingle();
   const itemId = (esc as { converted_brain_item_id: string | null } | null)?.converted_brain_item_id;
-  if (!itemId) return;
+  if (!itemId) return {};
 
   const { data: item } = await admin
     .from('brain_items')
@@ -117,7 +121,7 @@ async function applyToBrain(
     .eq('id', itemId)
     .eq('property_id', p.propertyId)
     .maybeSingle();
-  if (!item) return;
+  if (!item) return {};
 
   if (p.excluded) {
     // Soft-delete the item and hard-delete its chunks so retrieval drops it now,
@@ -130,22 +134,38 @@ async function applyToBrain(
     await admin.from('document_chunks').delete().eq('brain_item_id', itemId).eq('property_id', p.propertyId);
     await bumpBrainVersion(admin, p.propertyId);
   } else {
-    await admin
+    const incomplete: TrainingFlagState = {
+      itemId,
+      retryExcluded: false,
+      warning: 'Preference saved, but indexing is incomplete. Your source text is preserved. Retry indexing to make it available to the concierge.',
+    };
+    const restored = await admin
       .from('brain_items')
-      .update({ deleted_at: null, status: 'ready' } as never)
+      .update({ deleted_at: null, status: item.body ? 'processing' : 'ready' } as never)
       .eq('id', itemId)
-      .eq('property_id', p.propertyId);
+      .eq('property_id', p.propertyId)
+      .select('id')
+      .maybeSingle();
+    if (restored.error || !restored.data) return incomplete;
     // Re-embed: the chunks were removed on exclusion, so restoring the row alone
     // would leave a Brain item that is visible in the list but never retrieved.
     // A body-less item has nothing to embed, so restoring the row is the whole job.
-    if (!item.body) return;
-    await reindexBrainItem(
+    if (!item.body) return {};
+    const indexing = await reindexBrainItem(
       p.propertyId,
       itemId,
       item.title,
       item.body,
       item.visibility as 'guest' | 'internal',
       item.category,
-    );
+    ).catch(() => ({ indexed: false }));
+    const status = await admin.from('brain_items')
+      .update({ status: indexing.indexed ? 'ready' : 'failed' } as never)
+      .eq('id', itemId)
+      .eq('property_id', p.propertyId)
+      .select('id')
+      .maybeSingle();
+    if (!indexing.indexed || status.error || !status.data) return incomplete;
   }
+  return {};
 }

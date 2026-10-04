@@ -69,20 +69,23 @@ export async function translateForHost(
         { role: 'user', content: `<source>\n${source}\n</source>` },
       ],
       { temperature: 0, maxTokens: 600 },
-      { task: 'general' },
+      // Guest-authored text must share the guest external-routing opt-out.
+      // Translation can carry urgent instructions, so never use a cheap/general
+      // fallback that could be mistaken for a literal translation.
+      { task: 'concierge_complex' },
     );
 
-    const translated = result.text?.trim();
+    const translated = typeof result?.text === 'string' ? result.text.trim() : '';
     if (!translated || translated === source) return unchanged;
 
     return {
-      text: `${trimmed}\n\n— ${toLabel} translation (guest wrote in ${fromLabel}) —\n${translated}`,
+      text: `${text}\n\n— ${toLabel} translation (guest wrote in ${fromLabel}) —\n${translated}`,
       translated,
       targetLabel: toLabel,
     };
-  } catch (e) {
+  } catch {
     // Non-blocking by design: the host still gets the guest's own words.
-    log.warn('escalation_translation_failed', { from: fromLabel, to: toLabel, error: String(e) });
+    log.warn('escalation_translation_failed', { from: fromLabel, to: toLabel, code: 'unavailable' });
     return unchanged;
   }
 }

@@ -8,8 +8,9 @@ import { EMBED_DIM } from './provider';
 
 // Selects the active provider.
 //   production → NEVER the dev fallback, NEVER Ollama (M3/M5). If no AI key is
-//                configured, throw so routes fail loudly instead of serving stubbed
-//                answers. AI_DEV_FALLBACK and AI_DEV_PROVIDER are both ignored in
+//                configured, the requested operation fails rather than serving stubbed
+//                answers. Chat and embedding credentials are validated independently.
+//                AI_DEV_FALLBACK and AI_DEV_PROVIDER are both ignored in
 //                production — this check runs first and returns unconditionally, so
 //                no later branch can ever select a dev-only provider on a real deploy.
 //   dev/preview → Ollama when AI_DEV_PROVIDER='ollama' (PR #5, production-inert);
@@ -17,17 +18,12 @@ import { EMBED_DIM } from './provider';
 //                offline); else OpenAI.
 export function getAIProvider(): AIProvider {
   if (isProductionRuntime()) {
-    if (!serverEnv.aiApiKey) {
-      throw new Error(
-        'AI provider is not configured: AI_API_KEY is missing and the dev fallback is disabled in production.',
-      );
-    }
     return openaiProvider;
   }
   if (serverEnv.aiDevProvider === 'ollama') {
     return ollamaProvider;
   }
-  if (serverEnv.aiDevFallback || !serverEnv.aiApiKey) {
+  if (serverEnv.aiDevFallback || (!serverEnv.aiApiKey && !serverEnv.aiEmbedApiKey)) {
     return fallbackProvider;
   }
   return openaiProvider;

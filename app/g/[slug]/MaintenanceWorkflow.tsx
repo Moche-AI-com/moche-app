@@ -45,6 +45,8 @@ export function MaintenanceWorkflow(props: {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  const [safetyMessage, setSafetyMessage] = useState<string | null>(null);
+  const [unsavedSafety, setUnsavedSafety] = useState(false);
   const [resumable, setResumable] = useState<SrListRow | null>(null);
   const [checked, setChecked] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -92,15 +94,18 @@ export function MaintenanceWorkflow(props: {
     reference?: string;
     report?: { summary?: string };
   }) => {
+    setUnsavedSafety(false);
     if (json.id) setTicketId(json.id);
     if (typeof json.reference === 'string') setServerRef(json.reference);
     if (json.status === 'safety_escalated') {
       setTurns((current) => [...current, { role: 'assistant', text: json.guestMessage ?? t('mSafetySub') }]);
+      setSafetyMessage(typeof json.guestMessage === 'string' ? json.guestMessage : null);
       setSummary(null);
       setPhase('safety_escalated');
       setChoices([]);
       return;
     }
+    setSafetyMessage(null);
     if (json.status === 'completed') {
       setSummary(json.report?.summary ?? null);
       setPhase('completed');
@@ -141,6 +146,14 @@ export function MaintenanceWorkflow(props: {
       });
       if (res.status === 401 && !hostPreview) { props.onSessionExpired(); return; }
       const json = await res.json().catch(() => ({}));
+      if (!res.ok && typeof json.safetyMessage === 'string' && json.safetyMessage.trim()) {
+        // Guidance is independent of persistence. Keep the current form and text
+        // for retry; never enter the success/host-alerted completion screen.
+        setSafetyMessage(json.safetyMessage);
+        setUnsavedSafety(true);
+        setInput(trimmed);
+        return;
+      }
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'sr_failed');
       handleTurn(json);
     } catch {
@@ -169,6 +182,8 @@ export function MaintenanceWorkflow(props: {
     setTurns([]);
     setChoices([]);
     setSummary(null);
+    setSafetyMessage(null);
+    setUnsavedSafety(false);
     setResumable(null);
   }
 
@@ -184,6 +199,13 @@ export function MaintenanceWorkflow(props: {
         </button>
         <span className="gp-wf-title">{t('mTitle')}</span>
       </div>
+
+      {unsavedSafety && safetyMessage ? (
+        <div role="alert" className="gp-card" style={{ marginBottom: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          <p style={{ fontWeight: 600 }}>{safetyMessage}</p>
+          <p>This update was not saved. Your host was not notified. Contact your host directly.</p>
+        </div>
+      ) : null}
 
       {phase === 'idle' && (
         <>
@@ -272,6 +294,11 @@ export function MaintenanceWorkflow(props: {
             </>
           ) : null}
           {summary ? <p className="gp-step-sub" style={{ marginBottom: 8 }}>{summary}</p> : null}
+          {phase === 'safety_escalated' && safetyMessage ? (
+            <p role="alert" className="gp-step-sub" style={{ marginBottom: 8, fontWeight: 600, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+              {safetyMessage}
+            </p>
+          ) : null}
           <p className="gp-step-sub" style={{ marginBottom: 18 }}>
             {phase === 'safety_escalated' ? t('mSafetySub') : t('mDoneSub')}
           </p>

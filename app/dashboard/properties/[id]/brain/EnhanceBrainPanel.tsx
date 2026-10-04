@@ -16,7 +16,7 @@
 // Boundary 4 exists to stop AI-generated content entering the Brain unreviewed; a host
 // typing their own check-out time is the reviewer.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { Sparkles } from 'lucide-react';
 import { saveBrainItemAction, type BrainActionState } from './actions';
@@ -132,21 +132,27 @@ function EnhanceQuestionForm({
   onClose: () => void;
 }) {
   const [state, formAction] = useFormState<BrainActionState, FormData>(saveBrainItemAction, {});
+  const [savedItemId, setSavedItemId] = useState('');
+  const completed = useRef(false);
 
-  // Advance only after a confirmed save. Doing this during render would fire on every
-  // re-render of a successful form, marking later questions answered.
-  const saved = state.ok === true;
+  // Indexing warnings leave this question open for retry against the same source.
+  // Advance once, only when both saving and indexing completed successfully.
   useEffect(() => {
-    if (saved) onSaved();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saved]);
+    if (state.itemId) setSavedItemId(state.itemId);
+    if (state.ok && !state.warning && !state.error && !completed.current) {
+      completed.current = true;
+      onSaved();
+    }
+  }, [state, onSaved]);
 
   const uid = question.fieldId;
 
   return (
-    <form action={formAction} className="enhance-form">
+    <form action={formAction} onReset={(event) => event.preventDefault()} className="enhance-form">
       <FormMessage error={state.error} />
+      {state.warning && <div className="alert" role="status">{state.warning}</div>}
       <input type="hidden" name="propertyId" value={propertyId} />
+      <input type="hidden" name="itemId" value={savedItemId} />
       {/* The registry label is the item title, so the saved row reads the same as the
           field it answers and the next scan can match it. */}
       <input type="hidden" name="title" value={question.label} />

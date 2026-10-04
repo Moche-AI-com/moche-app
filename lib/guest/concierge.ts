@@ -6,8 +6,8 @@ import { routedCompletion } from '@/lib/router/modelRouter';
 import { DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_MASTER_CONCIERGE_PROMPT, DEFAULT_CONCIERGE_NAME } from '@/lib/constants';
 import { log } from '@/lib/log';
 import { logAiUsage } from '@/lib/ai/usage';
-import { normalizeQuestion, getBrainVersion, lookupCachedAnswer, cacheAnswer } from '@/lib/brain/cache';
-import { NODE_TYPES, type NodeType } from '@/lib/normalizer';
+import { normalizeQuestion } from '@/lib/brain/cache';
+import { loadApprovedContext, isApprovedGuestValue, isCurrentGuestChunk } from './approved-context';
 import { buildRestrictedTopicsClause, resolveTonePrompt } from '@/lib/concierge/tone';
 import { formatDistanceApprox } from '@/lib/local/distance';
 import { AUTO_LANGUAGE, resolveLanguage } from '@/lib/guest/languages';
@@ -180,21 +180,7 @@ export function splitSuggestions(raw: string): { answer: string; suggestions: st
 
 const RETRIEVAL_COUNT = 8;
 const MIN_USABLE_SIMILARITY = 0.2;
-// Knowledge-graph nodes are structured & authoritative, so require a stronger match
-// before we let one override the chunk-only path. Below this we behave exactly as before.
-const KNOWLEDGE_NODE_COUNT = 4;
 const MIN_KNOWLEDGE_SIMILARITY = 0.35;
-
-// Map a guest question to the POC node types it could be answered by. Empty result =>
-// skip the graph query entirely (pure chunk path, unchanged behavior).
-function matchNodeTypes(question: string): NodeType[] {
-  const q = question.toLowerCase();
-  const types: NodeType[] = [];
-  if (/\b(wi[\s-]?fi|wireless|internet|network|ssid|password|hotspot|online)\b/.test(q)) types.push('wifi');
-  if (/\b(check[\s-]?in|checkin|arrival|arrive|get in|door code|access code|lockbox|key ?box|entry)\b/.test(q)) types.push('checkin');
-  if (/\b(check[\s-]?out|checkout|departure|depart|leave|leaving)\b/.test(q)) types.push('checkout');
-  return types.filter((t) => (NODE_TYPES as readonly string[]).includes(t));
-}
 
 // Host-configurable concierge overlay applied on top of the server-side master
 // prompt. Everything here is optional and additive: an unset field changes nothing,
@@ -311,10 +297,9 @@ ${context || '(no knowledge available for this property yet)'}
 </property_knowledge>${toneLineFor(cfg)}`;
 }
 
-// Graph-aware variant: used only when at least one knowledge node matched. Structured
-// nodes are the AUTHORITATIVE SOURCE OF TRUTH; retrieved chunks are SUPPORTING CONTEXT
-// used only to fill gaps. Same master prompt + overlays so guardrails/tone still hold.
-function buildSystemPromptWithGraph(
+// Only explicitly host-approved current registry/feature values enter this block.
+// AI-generated property_knowledge_nodes have no approval/lifecycle contract.
+function buildSystemPromptWithApprovedFacts(
   propertyName: string,
   graphContext: string,
   chunkContext: string,
@@ -352,15 +337,15 @@ export function isRoutineGuestQuestion(question: string, history: ChatMessage[])
 }
 
 type ApprovedNote = Pick<Database['public']['Tables']['brain_items']['Row'],
-  'id' | 'property_id' | 'title' | 'body' | 'category' | 'section' | 'source_type' | 'created_by' | 'status' | 'visibility' | 'deleted_at'>;
+  'id' | 'property_id' | 'title' | 'body' | 'category' | 'section' | 'source_type' | 'created_by' | 'status' | 'visibility' | 'deleted_at' | 'feature_id'>;
 
 async function loadApprovedGuestNotes(admin: Admin, propertyId: string): Promise<ApprovedNote[]> {
   const { data, error } = await admin.from('brain_items')
-    .select('id, property_id, title, body, category, section, source_type, created_by, status, visibility, deleted_at')
+    .select('id, property_id, title, body, category, section, source_type, created_by, status, visibility, deleted_at, feature_id')
     .eq('property_id', propertyId).eq('visibility', 'guest').eq('status', 'ready')
     .in('source_type', ['manual_entry', 'host_qa']).is('deleted_at', null).not('created_by', 'is', null)
     .limit(250);
-  if (error) return [];
+  if (error) throw new Error('approved_notes_unavailable');
   // Defense in depth for service-role reads and testable proof of provenance.
   return (data ?? []).filter((r) => r.property_id === propertyId && r.visibility === 'guest'
     && r.status === 'ready' && r.deleted_at === null && !!r.created_by
@@ -372,20 +357,19 @@ async function loadApprovedWifi(admin: Admin, propertyId: string, notes: Approve
   // New typed fields can roll out after the code: missing registry rows are a
   // harmless empty result. Never select the secret envelope or wifi_password.
   const { data, error } = await admin.from('brain_values')
-    .select('field_id, property_id, value, source, status, audience, sensitivity_tier, verified_at, verified_by, ttl_expires_at')
-    .eq('property_id', propertyId).eq('status', 'active').eq('source', 'host_verified')
+    .select('field_id, property_id, value, source, status, audience, sensitivity_tier, verified_at, verified_by, ttl_expires_at, superseded_by')
+    .eq('property_id', propertyId)
     .in('field_id', ['wifi_password_location', 'wifi_connection_instructions', 'wifi_network_name']);
-  if (error) return facts;
-  const valid = (data ?? []).filter((r) => r.property_id === propertyId && r.status === 'active'
-    && r.source === 'host_verified' && !!r.verified_by && !!r.verified_at
-    && ['guest_public', 'guest_prearrival', 'guest_instay'].includes(r.audience)
-    && ['public_guest', 'guest_after_verification'].includes(r.sensitivity_tier)
-    && (!r.ttl_expires_at || Date.parse(r.ttl_expires_at) > Date.now()));
+  if (error) throw new Error('approved_wifi_unavailable');
+  const valid = (data ?? []).filter((r) => isApprovedGuestValue(r, propertyId));
   for (const [field, key] of [
     ['wifi_password_location', 'location'], ['wifi_connection_instructions', 'instructions'], ['wifi_network_name', 'network'],
   ] as const) {
     const values = valid.filter((r) => r.field_id === field);
-    if (values.length === 0) continue;
+    if (values.length === 0) {
+      if ((data ?? []).some((r) => r.property_id === propertyId && r.field_id === field)) facts[key] = null;
+      continue;
+    }
     if (values.length !== 1) { facts[key] = null; continue; }
     const value = values[0].value;
     facts[key] = key === 'location' ? safeWifiLocation(value)
@@ -597,8 +581,7 @@ export async function retrieveGuestChunks(
     p_guest_only: true,
   });
   if (error) {
-    log.warn('retrieval_failed', { propertyId, error: error.message });
-    return [];
+    throw new Error('guest_retrieval_unavailable');
   }
   return (data ?? []).map((r) => ({
     id: r.id,
@@ -607,36 +590,6 @@ export async function retrieveGuestChunks(
     category: r.category,
     similarity: r.similarity,
   }));
-}
-
-// Retrieve authoritative structured knowledge nodes for the matched node types.
-// Property isolation is enforced IN THE DATABASE by match_property_knowledge
-// (SECURITY DEFINER, filters on p_property_id) — exactly like match_property_chunks.
-async function retrieveKnowledgeNodes(
-  admin: Admin,
-  propertyId: string,
-  embedding: number[],
-  nodeTypes: NodeType[],
-): Promise<KnowledgeNode[]> {
-  const { data, error } = await admin.rpc('match_property_knowledge', {
-    p_property_id: propertyId,
-    p_query_embedding: JSON.stringify(embedding),
-    p_node_types: nodeTypes,
-    p_match_count: KNOWLEDGE_NODE_COUNT,
-  });
-  if (error) {
-    log.warn('knowledge_retrieval_failed', { propertyId, error: error.message });
-    return [];
-  }
-  return (data ?? [])
-    .filter((n) => n.similarity >= MIN_KNOWLEDGE_SIMILARITY)
-    .map((n) => ({
-      id: n.id,
-      nodeType: n.node_type,
-      title: n.title,
-      content: n.content,
-      similarity: n.similarity,
-    }));
 }
 
 // Compute a confidence score from retrieval quality + whether the model hedged.
@@ -658,6 +611,25 @@ export async function answerGuestQuestion(
   admin: Admin,
   opts: { propertyId: string; propertyName: string; question: string; history: ChatMessage[]; confidenceThreshold?: number; conciergeTone?: string; aiTemperature?: number; source?: string; concierge?: ConciergeConfig; persist?: boolean },
 ): Promise<ConciergeAnswer> {
+  try {
+    return await answerWithApprovedContext(admin, opts);
+  } catch {
+    // Covers provider selection, embedding, source revalidation and RPC failures,
+    // not just the final completion. Do not log provider response text or queries.
+    log.warn('concierge_unavailable', { code: 'grounding_unavailable' });
+    return {
+      text: "I'm having trouble confirming this detail right now. Please check with your host.",
+      confidence: 0, intent: fallbackClassifyIntent(opts.question), model: 'error',
+      sources: [], shouldEscalate: true, isEmergency: EMERGENCY_PATTERNS.test(opts.question),
+      suggestions: [], places: [],
+    };
+  }
+}
+
+async function answerWithApprovedContext(
+  admin: Admin,
+  opts: Parameters<typeof answerGuestQuestion>[1],
+): Promise<ConciergeAnswer> {
   const threshold = opts.confidenceThreshold ?? DEFAULT_CONFIDENCE_THRESHOLD;
   const isEmergency = EMERGENCY_PATTERNS.test(opts.question);
   const startedAt = Date.now();
@@ -672,6 +644,7 @@ export async function answerGuestQuestion(
     || (wifiHistory && /\b(it|that|them|those|this)\b/i.test(opts.question));
   const notes = routine || wifi ? await loadApprovedGuestNotes(admin, opts.propertyId) : [];
   const wifiFacts = wifi ? await loadApprovedWifi(admin, opts.propertyId, notes) : null;
+  const approved = await loadApprovedContext(admin, opts.propertyId);
   const lang = resolveLanguage(opts.concierge?.language)?.code ?? AUTO_LANGUAGE;
   const directAllowed = routine && ['en', AUTO_LANGUAGE].includes(lang)
     && (!opts.concierge?.masterPrompt || opts.concierge.masterPrompt === DEFAULT_MASTER_CONCIERGE_PROMPT)
@@ -681,8 +654,10 @@ export async function answerGuestQuestion(
     const text = wifiAnswer(opts.question, wifiFacts!);
     return staticAnswer(text ?? "I don't have the approved Wi-Fi access instructions for this property yet. I'm checking with your host.", 'wifi', !!text);
   }
-  if (directAllowed) {
-    const exact = notes.filter((n) => normalizeQuestion(n.title) === normalizeQuestion(opts.question));
+  if (directAllowed && !approved.overrides(opts.question)) {
+    const exact = notes.filter((n) => normalizeQuestion(n.title) === normalizeQuestion(opts.question)
+      && !approved.overrides(`${n.title}\n${n.body ?? ''}`)
+      && (!n.feature_id || approved.accessibleFeatureIds.has(n.feature_id)));
     const answers = [...new Set(exact.map((n) => n.body?.trim()).filter(Boolean))];
     if (answers.length === 1 && answers[0] && answers[0].length <= 1500
       && !WIFI_CONTEXT.test(answers[0])
@@ -692,76 +667,33 @@ export async function answerGuestQuestion(
     }
   }
 
-  const provider = getAIProvider();
-  const usageSink = { embedModel: provider.embedModel, embedTokens: 0 };
-
-  // Exact-match answer cache: on a repeat of a previously high-confidence question
-  // (same property, same normalized text, same Brain version) return instantly and
-  // skip the embed + LLM calls entirely. Emergencies always take the live path.
-  // The cache key is namespaced by the response language. Without this, the first
-  // guest to ask "what is the wifi password" in Spanish would poison the entry for
-  // every English guest that follows (and vice versa) — same normalized question,
-  // completely wrong answer language.
-  const cacheLang = resolveLanguage(opts.concierge?.language)?.code ?? AUTO_LANGUAGE;
-  const baseNorm = normalizeQuestion(opts.question);
-  // Version the policy, not just the Brain. Legacy cache answers were generated
-  // before Wi-Fi containment and cannot be trusted even if their text is unlabelled.
-  const questionNorm = baseNorm.length > 0 ? `grounded-v2::${cacheLang}::${baseNorm}` : baseNorm;
-  const brainVersion = await getBrainVersion(admin, opts.propertyId);
-  if (directAllowed && !wifi && questionNorm.length > 0) {
-    const cached = await lookupCachedAnswer(admin, opts.propertyId, questionNorm, brainVersion);
-    if (cached && !WIFI_CONTEXT.test(cached.answer) && !redactCredentials(cached.answer).redactions.length
-      && !/\[(?:redacted|stored securely)/i.test(cached.answer)) {
-      if (persist) void logAiUsage(admin, {
-        propertyId: opts.propertyId,
-        kind: 'chat',
-        model: 'cache',
-        cacheHit: true,
-        latencyMs: Date.now() - startedAt,
-        source: opts.source ?? 'guest_chat',
-      });
-      // Redact on read, not only on write. Entries cached before the guard
-      // existed can still hold a credential the legacy free-text path leaked,
-      // and the cache outlives a deploy. Redacting here means the fix applies
-      // retroactively without a cache purge.
-      return {
-        text: redactCredentials(cached.answer).text,
-        confidence: cached.confidence,
-        intent: 'information',
-        model: 'cache',
-        sources: [],
-        shouldEscalate: false,
-        isEmergency,
-        suggestions: [],
-        places: [],
-      };
-    }
-  }
-
-  // Embed the query once, then dual-query: knowledge nodes FIRST (authoritative),
-  // chunks second (supporting). Both share the single embedding.
+  // Generated caches do not retain source IDs/TTL/approval provenance. Bypass
+  // them until reads can revalidate that provenance; exact approved notes above
+  // still avoid model work. A version bump alone cannot handle TTL expiry.
+  const usageSink = { embedModel: '', embedTokens: 0 };
   const embedding = await embedQuery(opts.question, usageSink);
-
-  const nodeTypes = matchNodeTypes(opts.question);
-  const retrievedNodes = nodeTypes.length > 0
-    ? await retrieveKnowledgeNodes(admin, opts.propertyId, embedding, nodeTypes)
-    : [];
-
+  // Charge query embedding exactly once, under the actual embedding model, even
+  // if a later retrieval/completion fails.
+  if (persist) void logAiUsage(admin, {
+    propertyId: opts.propertyId, kind: 'embed', model: usageSink.embedModel,
+    embedTokens: usageSink.embedTokens, latencyMs: Date.now() - startedAt,
+    source: opts.source ?? 'guest_chat',
+  });
   const retrievedChunks = await retrieveGuestChunks(admin, opts.propertyId, opts.question, usageSink, embedding);
-  // Legacy Wi-Fi graph/chunk content may contain passwords without labels. Do
-  // not promote it into current truth or rely on a regex to recognize the value.
-  const nodes = retrievedNodes.filter((n) => ['checkin', 'checkout'].includes(n.nodeType)
-    && !WIFI_CONTEXT.test(`${n.title}\n${n.content}`));
   // A split chunk can be just the secret, with its label only in the source
   // title. Re-read those titles within this property before constructing context.
   const sourceIds = [...new Set(retrievedChunks.flatMap((c) => c.brainItemId ? [c.brainItemId] : []))];
-  const { data: sourceItems } = sourceIds.length ? await admin.from('brain_items')
-    .select('id, title, body').eq('property_id', opts.propertyId).in('id', sourceIds)
-    : { data: [] };
-  const wifiSourceIds = new Set((sourceItems ?? [])
-    .filter((s) => WIFI_CONTEXT.test(`${s.title}\n${s.body ?? ''}`)).map((s) => s.id));
-  const chunks = retrievedChunks.filter((c) => !WIFI_CONTEXT.test(c.content)
-    && !wifiSourceIds.has(c.brainItemId ?? '') && c.content.trim().split(/\s+/).length > 1);
+  const { data: sourceItems, error: sourceError } = sourceIds.length ? await admin.from('brain_items')
+    .select('id, property_id, title, body, category, visibility, status, deleted_at, created_by, source_type, feature_id')
+    .eq('property_id', opts.propertyId).in('id', sourceIds)
+    : { data: [], error: null };
+  if (sourceError) throw new Error('guest_sources_unavailable');
+  const chunks = retrievedChunks.filter((c) => {
+    const source = (sourceItems ?? []).find((s) => s.id === c.brainItemId);
+    return isCurrentGuestChunk(source, opts.propertyId, c.content)
+      && !approved.overrides(`${source?.title}\n${c.content}`)
+      && (!source?.feature_id || approved.accessibleFeatureIds.has(source.feature_id));
+  });
 
   // Credential containment (Directive §0.2). The registry types wifi_password and
   // door_code_or_entry_method as stay_scoped_secret and brain_values refuses to
@@ -769,11 +701,9 @@ export async function answerGuestQuestion(
   // whatever the host typed. Everything below is redacted BEFORE it can reach a
   // model prompt, so a legacy plaintext credential is contained at the retrieval
   // boundary rather than depending on the storage being clean.
-  const nodeRedaction = redactBlocks(nodes.map((n) => `${n.title}\n${n.content}`));
   const chunkRedaction = redactBlocks(chunks.map((c) => c.content));
-  const redactedNodes = nodes.map((n, i) => ({ ...n, content: nodeRedaction.blocks[i] }));
   const redactedChunks = chunks.map((c, i) => ({ ...c, content: chunkRedaction.blocks[i] }));
-  const redactions = [...new Set([...nodeRedaction.redactions, ...chunkRedaction.redactions])];
+  const redactions = [...new Set(chunkRedaction.redactions)];
   if (redactions.length > 0) {
     // Labels only — never the matched value.
     log.info('concierge.credential_redacted', { propertyId: opts.propertyId, rules: redactions });
@@ -806,13 +736,10 @@ export async function answerGuestQuestion(
     tone: opts.concierge?.tone ?? opts.conciergeTone,
   };
 
-  // When a knowledge node matched, synthesize with graph nodes as the source of truth
-  // and chunks as supporting context. Otherwise the prompt/path is the chunks-only
-  // behavior — now layered on the master prompt + host overrides.
-  const systemPrompt = nodes.length > 0
-    ? buildSystemPromptWithGraph(
+  const systemPrompt = approved.text
+    ? buildSystemPromptWithApprovedFacts(
         opts.propertyName,
-        redactedNodes.map((n, i) => `[${i + 1}] (${n.nodeType}) ${n.title}\n${n.content}`).join('\n\n'),
+        approved.text,
         context,
         cfg,
       )
@@ -854,7 +781,7 @@ export async function answerGuestQuestion(
         maxTokens: 500,
       },
       { task: routine && (chunks.some((c) => c.similarity >= MIN_USABLE_SIMILARITY)
-        || nodes.length > 0 || !!approvedWifiContext) ? 'concierge' : 'concierge_complex' },
+        || approved.answersTopic(opts.question) || !!approvedWifiContext) ? 'concierge' : 'concierge_complex' },
     );
     text = result.text.trim();
     model = result.model;
@@ -862,15 +789,6 @@ export async function answerGuestQuestion(
     completionTokens = result.usage?.completionTokens ?? 0;
   } catch (e) {
     log.warn('generate_failed', { code: 'completion_unavailable' });
-    // Still record the embed cost we already incurred for this turn.
-    if (persist) void logAiUsage(admin, {
-      propertyId: opts.propertyId,
-      kind: 'embed',
-      model: usageSink.embedModel,
-      embedTokens: usageSink.embedTokens,
-      latencyMs: Date.now() - startedAt,
-      source: opts.source ?? 'guest_chat',
-    });
     return {
       text: "I'm having trouble answering right now. I've flagged this for your host.",
       confidence: 0, intent, model: 'error',
@@ -918,7 +836,8 @@ export async function answerGuestQuestion(
   }
   const places = resolvePlaceRefs(placeIds, nearbyPlaces);
 
-  const rawConfidence = scoreConfidence(chunks, text, nodes[0]?.similarity ?? 0);
+  const rawConfidence = scoreConfidence(chunks, text,
+    approved.answersTopic(opts.question) ? 1 : 0);
   // A declared UNKNOWN is authoritative: the model told us it cannot answer, so the
   // retrieval-derived score is irrelevant and a permissive host threshold must not be
   // able to suppress the hand-off. Confidence is pinned to 0 so the answer is never
@@ -933,30 +852,16 @@ export async function answerGuestQuestion(
     text = "I don't have that detail for this property yet — I've passed your question straight to your host, and they'll come back to you here.";
   }
 
-  // Fire-and-forget cost telemetry: one row for the chat turn (prompt+completion) plus
-  // the embed tokens spent on retrieval. Never awaited — logging must not slow the guest.
+  // Embedding usage was recorded separately under its actual model above.
   if (persist) void logAiUsage(admin, {
     propertyId: opts.propertyId,
     kind: 'chat',
     model,
     promptTokens,
     completionTokens,
-    embedTokens: usageSink.embedTokens,
     latencyMs: Date.now() - startedAt,
     source: opts.source ?? 'guest_chat',
   });
-
-  // Cache write: only confident, non-emergency, non-escalated answers, keyed to the
-  // current Brain version so a later bump silently invalidates it. Fire-and-forget.
-  if (persist && directAllowed && !wifi && !WIFI_CONTEXT.test(text) && !isEmergency && !shouldEscalate && !outputLeaked && confidence >= threshold && questionNorm.length > 0) {
-    void cacheAnswer(admin, {
-      propertyId: opts.propertyId,
-      questionNorm,
-      answer: text,
-      confidence,
-      brainVersion,
-    });
-  }
 
   return {
     text,

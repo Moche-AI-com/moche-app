@@ -26,6 +26,8 @@ export type ProposalRow = {
   confidence: number | null;
   resolution_note: string | null;
   reviewed_at: string | null;
+  applied_at?: string | null;
+  apply_error?: string | null;
   created_at: string;
 };
 
@@ -38,6 +40,8 @@ function fmt(value: string | null) {
 function editableText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const answer = (value as { question?: unknown; answer?: unknown });
+    if (typeof answer.question === 'string' && typeof answer.answer === 'string') return answer.answer;
     const t = (value as { text?: unknown }).text;
     if (typeof t === 'string') return t;
   }
@@ -47,7 +51,13 @@ function editableText(value: unknown): string {
 /** Put edited text back into the shape the field expects. */
 function withText(original: unknown, text: string): unknown {
   if (original && typeof original === 'object' && !Array.isArray(original)) {
-    return { ...(original as Record<string, unknown>), text };
+    const value = original as Record<string, unknown>;
+    if (typeof value.question === 'string' && typeof value.answer === 'string') {
+      const edited: Record<string, unknown> = { ...value, answer: text };
+      delete edited.text;
+      return edited;
+    }
+    return { ...value, text };
   }
   return text;
 }
@@ -84,6 +94,10 @@ export function UpdateQueueClient({
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body?.error ?? 'Could not save that decision.');
+        if (body?.partial) {
+          setEditing(null);
+          router.refresh();
+        }
         return;
       }
       setEditing(null);
@@ -123,6 +137,9 @@ export function UpdateQueueClient({
           const isEditing = editing === row.id;
           const field = proposableField(row.field_path);
           const shown = row.status === 'pending' ? row.proposed_value : (row.applied_value ?? row.proposed_value);
+          const learned = field?.kind === 'guest_answer' && shown && typeof shown === 'object' && !Array.isArray(shown)
+            ? shown as Record<string, unknown> : null;
+          const incomplete = (row.status === 'approved' || row.status === 'modified') && (!row.applied_at || Boolean(row.apply_error));
           const sourceLabel =
             PROPOSAL_SOURCE_LABEL[row.source_type as ProposalSourceType] ?? 'Suggested by the assistant';
 
@@ -137,10 +154,15 @@ export function UpdateQueueClient({
                   </p>
                   {row.status !== 'pending' && (
                     <p className="report-list-meta" style={{ margin: '.15rem 0 0' }}>
-                      <span className={`badge ${row.status === 'denied' ? 'badge-coral' : 'badge-teal'}`}>
+                      <span className={`badge ${row.status === 'denied' || incomplete ? 'badge-coral' : 'badge-teal'}`}>
                         {PROPOSAL_STATUS_LABEL[row.status]}
                       </span>{' '}
                       {row.reviewed_at && <span className="faint">on {fmt(row.reviewed_at)}</span>}
+                    </p>
+                  )}
+                  {incomplete && (
+                    <p className="report-list-meta" role="status" style={{ margin: '.35rem 0 0' }}>
+                      Application incomplete. Your review is saved; check the Brain entry before making another suggestion.
                     </p>
                   )}
                 </div>
@@ -174,8 +196,19 @@ export function UpdateQueueClient({
                   )}
 
                   <p className="faint" style={{ margin: '0 0 .2rem', fontSize: '.72rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                    {row.status === 'pending' ? 'Suggested' : 'What was saved'}
+                    {row.status === 'pending' ? 'Suggested' : row.status === 'denied' ? 'Declined suggestion' : incomplete ? 'Reviewed content' : 'What was saved'}
                   </p>
+
+                  {learned && (
+                    <div style={{ marginBottom: '.5rem' }}>
+                      {typeof learned.question === 'string' && <p style={{ margin: '0 0 .3rem' }}><strong>Question:</strong> {learned.question}</p>}
+                      <p className="faint" style={{ margin: 0, fontSize: '.8rem' }}>
+                        Category: {typeof learned.category === 'string' ? learned.category : 'Not set'} &middot;{' '}
+                        Section: {typeof learned.section === 'string' ? learned.section : 'From category'} &middot;{' '}
+                        Visibility: {learned.visibility === 'internal' ? 'Host only' : 'Guest'}
+                      </p>
+                    </div>
+                  )}
 
                   {isEditing ? (
                     <div className="field" style={{ marginTop: '.3rem' }}>
@@ -186,6 +219,7 @@ export function UpdateQueueClient({
                         id={`edit-${row.id}`}
                         className="textarea"
                         rows={12}
+                        maxLength={field?.kind === 'guest_answer' ? 4000 : undefined}
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         style={{ resize: 'vertical', fontFamily: 'inherit' }}
@@ -227,7 +261,7 @@ export function UpdateQueueClient({
                     <>
                       <button
                         className="btn btn-primary btn-sm"
-                        disabled={busy !== null || draft.trim().length < 20}
+                        disabled={busy !== null || draft.trim().length < (field?.kind === 'guest_answer' ? 1 : 20)}
                         onClick={() => decide(row, 'modify', withText(row.proposed_value, draft))}
                       >
                         <Check size={14} aria-hidden /> Save my version
