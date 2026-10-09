@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, ExternalLink, MessageSquare, X } from 'lucide-react';
 import { canShowAutomaticPrompt, REVIEW_NUDGE_CHECK_LIMIT, REVIEW_NUDGE_IDLE_MS, safeReviewUrl } from '@/lib/guest/review-nudge-policy';
+import { ReviewNudgeLegacy } from './ReviewNudgeLegacy';
 
-type Eligibility = { eligible?: boolean; automatic?: boolean; shouldPrompt?: boolean; reviewUrl?: string | null; stayKey?: string };
+type Eligibility = { eligible?: boolean; automatic?: boolean; shouldPrompt?: boolean; reviewUrl?: string | null; stayKey?: string; flowVersion?: 'legacy' | 'v2'; demoReview?: boolean };
 async function post(body: Record<string, unknown>) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 10_000);
@@ -16,6 +17,8 @@ async function post(body: Record<string, unknown>) {
   } finally { window.clearTimeout(timer); }
 }
 export function ReviewNudge({ propertyName, onContactHost }: { propertyName: string; onContactHost: () => void }) {
+  const [legacy, setLegacy] = useState(false);
+  const [demoReview, setDemoReview] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -30,7 +33,6 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
   const storageKey = useRef<string | null>(null);
   const automatic = useRef(false);
   const title = useRef<HTMLHeadingElement>(null);
-
   useEffect(() => {
     mounted.current = true;
     const controller = new AbortController();
@@ -50,8 +52,11 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
         const response = await fetch('/api/guest/review-nudge', { cache: 'no-store', signal: controller.signal });
         if (!response.ok) return;
         const data = await response.json() as Eligibility;
-        if (controller.signal.aborted || !data.eligible || !data.stayKey) return;
+        if (controller.signal.aborted) return;
+        if (data.flowVersion === 'legacy') { stopped.current = true; setLegacy(true); return; }
+        if (!data.eligible || !data.stayKey) return;
         setEnabled(true);
+        setDemoReview(data.demoReview === true);
         setReviewUrl(safeReviewUrl(data.reviewUrl));
         storageKey.current = `moche:review-nudge:v2:${data.stayKey}`;
         try { if (window.sessionStorage.getItem(storageKey.current) === '1') stopped.current = true; } catch { /* The server remains authoritative. */ }
@@ -80,7 +85,6 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
       document.removeEventListener('visibilitychange', resetIdle);
     };
   }, []);
-
   function stop() {
     stopped.current = true;
     try { if (storageKey.current) window.sessionStorage.setItem(storageKey.current, '1'); } catch { /* Best effort. */ }
@@ -103,8 +107,9 @@ export function ReviewNudge({ propertyName, onContactHost }: { propertyName: str
     } catch (failure) { if (mounted.current) setError(failure instanceof Error && failure.name !== 'AbortError' ? failure.message : 'Could not save. Your feedback is still here; please try again.'); }
     finally { if (mounted.current) setBusy(false); }
   }
+  if (legacy) return <ReviewNudgeLegacy propertyName={propertyName} onContactHost={onContactHost} />;
   if (!enabled) return null;
-  const review = reviewUrl ? <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="gp-msg-link" onClick={() => { stop(); void post({ action: 'click' }).catch(() => undefined); }}>Leave an honest property review <ExternalLink size={14} aria-hidden /></a> : null;
+  const review = reviewUrl ? <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="gp-msg-link" onClick={() => { stop(); void post({ action: 'click' }).catch(() => undefined); }}>{demoReview ? 'Test property review link' : 'Leave an honest property review'} <ExternalLink size={14} aria-hidden /></a> : null;
   return <aside className="gp-card" style={{ marginTop: '1rem' }} data-testid="review-nudge">
     {!open ? <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}><button type="button" className="gp-msg-link" onClick={launch} data-testid="review-nudge-launcher"><MessageSquare size={14} aria-hidden /> Share feedback</button>{review}</div> : <>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}><h2 className="gp-wf-title" ref={title} tabIndex={-1}>{saved ? 'Thank you' : 'How is your stay?'}</h2><button type="button" className="gp-icon-btn" onClick={dismiss} aria-label="Close feedback"><X size={16} aria-hidden /></button></div>
