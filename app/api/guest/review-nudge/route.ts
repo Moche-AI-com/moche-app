@@ -2,81 +2,87 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGuestSession } from '@/lib/guest/session';
+import { getEntitlements, isGuestAiEnabled } from '@/lib/billing/entitlements';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { capture } from '@/lib/posthog-server';
+import { safeReviewUrl } from '@/lib/guest/review-nudge-policy';
+import { readReviewNudgePilot, type ReviewNudgePilot } from '@/lib/guest/review-nudge-rollout';
 import { log } from '@/lib/log';
+import { GET as legacyGET, POST as legacyPOST } from './legacy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-const LEGACY_TERMINAL_PAGES = ['guest_portal_review_nudge', 'guest_portal_review_nudge_dismiss', 'guest_portal_review_nudge_click'];
-const TERMINAL_ACTIONS = ['guest.review_nudge.response', 'guest.review_nudge.dismissed', 'guest.review_nudge.clicked'];
-const feedbackSchema = z.object({ action: z.enum(['impression', 'response', 'dismiss', 'click']), mood: z.enum(['great', 'okay', 'needs_attention']).optional(), category: z.enum(['hard_to_find', 'unhelpful_answer', 'technical_problem', 'other']).optional(), comment: z.string().trim().max(800).optional() }).strict();
-
-function safeReviewUrl(value: unknown): string | null { if (typeof value !== 'string' || !value.trim()) return null; try { const url = new URL(value.trim()); return url.protocol === 'https:' ? url.toString() : null; } catch { return null; } }
-function ratingForMood(mood: 'great' | 'okay' | 'needs_attention' | undefined) { if (mood === 'great') return 5; if (mood === 'okay') return 3; if (mood === 'needs_attention') return 2; return null; }
-
-async function relatedSessionIds(admin: ReturnType<typeof createAdminClient>, session: NonNullable<Awaited<ReturnType<typeof getGuestSession>>>) {
-  const { data: current } = await (admin as any).from('guest_access_sessions').select('guest_identity_id').eq('id', session.sessionId).maybeSingle();
-  if (!current?.guest_identity_id) return [session.sessionId];
-  const { data: rows } = await (admin as any).from('guest_access_sessions').select('id').eq('property_id', session.propertyId).eq('stay_id', session.stayId).eq('guest_identity_id', current.guest_identity_id);
-  const ids = (rows ?? []).map((row: { id: string }) => row.id);
-  return ids.length > 0 ? ids : [session.sessionId];
+type LiveContext = { admin: ReturnType<typeof createAdminClient>; session: NonNullable<Awaited<ReturnType<typeof getGuestSession>>>; pilot: ReviewNudgePilot };
+type Context = { error: NextResponse } | { legacy: true } | LiveContext;
+const schema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('impression'), automatic: z.boolean() }).strict(),
+  z.object({ action: z.literal('response'), rating: z.number().int().min(1).max(5), helpfulness: z.enum(['yes', 'somewhat', 'not_yet']).optional(), comment: z.string().trim().max(800).optional() }).strict(),
+  z.object({ action: z.literal('dismiss') }).strict(),
+  z.object({ action: z.literal('click') }).strict(),
+]);
+function reply(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
 }
-
+async function context(): Promise<Context> {
+  const session = await getGuestSession();
+  if (!session) return { error: reply({ error: 'Session expired.' }, 401) };
+  const admin = createAdminClient();
+  const rollout = await admin.from('app_settings').select('value').eq('key', `review_nudge_v2:${session.propertyId}`).maybeSingle();
+  if (rollout.error) throw new Error('rollout_read_failed');
+  const pilot = readReviewNudgePilot(rollout.data?.value, process.env.REVIEW_NUDGE_V2_ENABLED);
+  if (!pilot.enabled) return { legacy: true };
+  const property = await admin.from('properties').select('host_account_id, status, deleted_at').eq('id', session.propertyId).maybeSingle();
+  if (property.error) throw new Error('property_read_failed');
+  if (!property.data || property.data.deleted_at || property.data.status !== 'live') return { error: reply({ eligible: false }, 404) };
+  const ent = await getEntitlements(admin, property.data.host_account_id);
+  const permittedDemo = !ent.reviewNudge && pilot.allowDemo && await isGuestAiEnabled(admin, property.data.host_account_id);
+  if (!ent.reviewNudge && !permittedDemo) return { error: reply({ eligible: false }, 404) };
+  return { admin, session, pilot };
+}
+async function invoke(ctx: LiveContext, action: string, automatic = false, rating: number | null = null, helpfulness: string | null = null, comment: string | null = null) {
+  const result = await (ctx.admin as any).rpc('guest_review_nudge_v2', { p_session_id: ctx.session.sessionId, p_action: action, p_automatic: automatic, p_rating: rating, p_helpfulness: helpfulness, p_comment: comment });
+  if (result.error || !result.data) throw new Error('review_nudge_rpc_failed');
+  return result.data as { eligible?: boolean; automatic?: boolean; shouldPrompt?: boolean; allowed?: boolean; ok?: boolean; reviewUrl?: string | null };
+}
 export async function GET() {
-  const session = await getGuestSession();
-  if (!session) return NextResponse.json({ eligible: false }, { status: 401 });
-  const admin = createAdminClient();
-  const sessionIds = await relatedSessionIds(admin, session);
-  const { data: settings } = await admin.from('property_settings').select('review_nudge_enabled, review_nudge_auto, review_url, confidence_threshold').eq('property_id', session.propertyId).maybeSingle();
-  const reviewUrl = safeReviewUrl(settings?.review_url);
-  if (settings?.review_nudge_enabled !== true || !reviewUrl) return NextResponse.json({ eligible: false });
-  const [{ data: priorFeedback }, { data: priorEvent }] = await Promise.all([
-    (admin as any).from('product_feedback').select('id').eq('source', 'guest').eq('property_id', session.propertyId).in('guest_session_id', sessionIds).in('page', LEGACY_TERMINAL_PAGES).limit(1),
-    (admin as any).from('audit_logs').select('id').eq('property_id', session.propertyId).eq('target_type', 'guest_session').in('target_id', sessionIds).in('action', TERMINAL_ACTIONS).limit(1),
-  ]);
-  if (priorFeedback?.length || priorEvent?.length) return NextResponse.json({ eligible: false });
-  const automatic = settings.review_nudge_auto === true;
-  if (!automatic) return NextResponse.json({ eligible: true, automatic: false, shouldPrompt: false, reviewUrl });
-  const [{ data: conversations }, { data: extraSuccess }, { data: resolvedService }, { data: activeEscalation }, { data: activeService }] = await Promise.all([
-    (admin as any).from('conversations').select('id').eq('property_id', session.propertyId).eq('stay_id', session.stayId).eq('channel', 'ai_concierge').in('guest_session_id', sessionIds),
-    (admin as any).from('extras_orders').select('id').eq('property_id', session.propertyId).eq('stay_id', session.stayId).in('guest_session_id', sessionIds).in('fulfillment_status', ['accepted', 'scheduled', 'fulfilled']).limit(1),
-    (admin as any).from('service_requests').select('id').eq('property_id', session.propertyId).eq('stay_id', session.stayId).in('status', ['resolved', 'closed']).limit(1),
-    (admin as any).from('escalations').select('id').eq('property_id', session.propertyId).eq('stay_id', session.stayId).in('status', ['open', 'answered']).limit(1),
-    (admin as any).from('service_requests').select('id').eq('property_id', session.propertyId).eq('stay_id', session.stayId).in('status', ['new', 'acknowledged', 'in_progress', 'waiting_on_guest']).limit(1),
-  ]);
-  const conversationIds = (conversations ?? []).map((row: { id: string }) => row.id);
-  let helpfulAnswer = false;
-  if (conversationIds.length > 0) { const { data } = await (admin as any).from('messages').select('id').eq('property_id', session.propertyId).eq('role', 'assistant').in('conversation_id', conversationIds).gte('confidence', Number(settings.confidence_threshold ?? 0.55)).limit(1); helpfulAnswer = Boolean(data?.length); }
-  const hasSuccessfulMoment = helpfulAnswer || Boolean(extraSuccess?.length) || Boolean(resolvedService?.length);
-  const hasActiveProblem = Boolean(activeEscalation?.length) || Boolean(activeService?.length);
-  return NextResponse.json({ eligible: true, automatic: true, shouldPrompt: hasSuccessfulMoment && !hasActiveProblem, reviewUrl });
-}
-
-export async function POST(req: Request) {
-  const session = await getGuestSession();
-  if (!session) return NextResponse.json({ error: 'Session expired.' }, { status: 401 });
-  const parsed = feedbackSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success || (parsed.data.action === 'response' && !parsed.data.mood)) return NextResponse.json({ error: 'Invalid feedback.' }, { status: 400 });
-  const admin = createAdminClient();
-  const rate = await checkRateLimit(admin, { key: `review_nudge:${session.sessionId}`, action: 'guest.review_nudge', limit: 12, windowSeconds: 3600 });
-  if (!rate.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
-  const [{ data: property }, { data: settings }] = await Promise.all([
-    admin.from('properties').select('host_account_id').eq('id', session.propertyId).maybeSingle(),
-    admin.from('property_settings').select('review_nudge_enabled, review_url').eq('property_id', session.propertyId).maybeSingle(),
-  ]);
-  if (!property || settings?.review_nudge_enabled !== true || !safeReviewUrl(settings.review_url)) return NextResponse.json({ error: 'Review feedback is not enabled.' }, { status: 404 });
-  const { action, mood, category, comment } = parsed.data;
-  const eventName = action === 'impression' ? 'review_nudge_impression' : action === 'dismiss' ? 'review_nudge_dismissed' : action === 'click' ? 'review_nudge_review_clicked' : 'review_nudge_response';
-  const auditAction = action === 'impression' ? 'guest.review_nudge.impression' : action === 'dismiss' ? 'guest.review_nudge.dismissed' : action === 'click' ? 'guest.review_nudge.clicked' : 'guest.review_nudge.response';
-  if (action === 'response') {
-    const detail = [mood ? `Mood: ${mood}` : '', category ? `Category: ${category}` : '', comment ?? ''].filter(Boolean).join(' — ') || null;
-    const { data: existing } = await admin.from('product_feedback').select('id').eq('source', 'guest').eq('property_id', session.propertyId).eq('guest_session_id', session.sessionId).eq('page', 'guest_portal_review_nudge').limit(1).maybeSingle();
-    const write = existing ? admin.from('product_feedback').update({ rating: ratingForMood(mood), comment: detail } as never).eq('id', existing.id) : admin.from('product_feedback').insert({ source: 'guest', rating: ratingForMood(mood), comment: detail, property_id: session.propertyId, guest_session_id: session.sessionId, page: 'guest_portal_review_nudge' } as never);
-    const { error } = await write;
-    if (error) { log.warn('guest_review_nudge_feedback_failed', { propertyId: session.propertyId }); return NextResponse.json({ error: 'Could not save feedback.' }, { status: 500 }); }
+  try {
+    const ctx = await context();
+    if ('error' in ctx) return ctx.error;
+    if ('legacy' in ctx) {
+      const response = await legacyGET();
+      return reply({ ...await response.json(), flowVersion: 'legacy' }, response.status);
+    }
+    const data = await invoke(ctx, 'status');
+    const reviewUrl = safeReviewUrl(data.reviewUrl);
+    return reply({ ...data, flowVersion: 'v2', reviewUrl, stayKey: ctx.session.stayId, demoReview: ctx.pilot.demoReview && reviewUrl === 'https://www.moche-ai.com/review-demo' });
+  } catch {
+    log.warn('guest_review_nudge_read_failed');
+    return reply({ eligible: false, error: 'Feedback is temporarily unavailable.' }, 503);
   }
-  if (action !== 'impression') await admin.from('audit_logs').insert({ host_account_id: property.host_account_id, property_id: session.propertyId, actor_type: 'guest', action: auditAction, target_type: 'guest_session', target_id: session.sessionId, metadata: { stay_id: session.stayId, mood: mood ?? null, category: category ?? null } } as never);
-  try { await capture(eventName, session.sessionId, { property_id: session.propertyId, stay_id: session.stayId, mood: mood ?? null, category: category ?? null }); } catch { /* Analytics never blocks the flow. */ }
-  return NextResponse.json({ ok: true });
+}
+export async function POST(req: Request) {
+  try {
+    const ctx = await context();
+    if ('error' in ctx) return ctx.error;
+    if ('legacy' in ctx) return await legacyPOST(req);
+    const origin = req.headers.get('origin');
+    if ((origin && origin !== new URL(req.url).origin) || req.headers.get('sec-fetch-site') === 'cross-site') return reply({ error: 'Request not allowed.' }, 403);
+    if (!req.headers.get('content-type')?.toLowerCase().startsWith('application/json')) return reply({ error: 'JSON required.' }, 415);
+    const raw = await req.text();
+    if (raw.length > 4096) return reply({ error: 'Feedback is too long.' }, 413);
+    let value: unknown;
+    try { value = JSON.parse(raw); } catch { return reply({ error: 'Invalid feedback.' }, 400); }
+    const parsed = schema.safeParse(value);
+    if (!parsed.success) return reply({ error: 'Invalid feedback.' }, 400);
+    const rate = await checkRateLimit(ctx.admin, { key: `review_nudge:${ctx.session.sessionId}`, action: 'guest.review_nudge', limit: 12, windowSeconds: 3600 });
+    if (!rate.allowed) return reply({ error: 'Please wait before trying again.' }, 429);
+    const d = parsed.data;
+    const result = d.action === 'response'
+      ? await invoke(ctx, d.action, false, d.rating, d.helpfulness ?? null, d.comment || null)
+      : await invoke(ctx, d.action, d.action === 'impression' && d.automatic);
+    if (result.eligible === false) return reply({ error: 'Feedback is not enabled.' }, 404);
+    return reply(result);
+  } catch {
+    log.warn('guest_review_nudge_write_failed');
+    return reply({ error: 'Could not save. Your feedback is still here; please try again.' }, 503);
+  }
 }

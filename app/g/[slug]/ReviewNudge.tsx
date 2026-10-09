@@ -1,102 +1,128 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Check, ExternalLink, MessageSquare, Star, X } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Check, ExternalLink, MessageSquare, X } from 'lucide-react';
+import { canShowAutomaticPrompt, REVIEW_NUDGE_CHECK_LIMIT, REVIEW_NUDGE_IDLE_MS, safeReviewUrl } from '@/lib/guest/review-nudge-policy';
+import { ReviewNudgeLegacy } from './ReviewNudgeLegacy';
 
-type Stage = 'hidden' | 'launcher' | 'question' | 'outcome' | 'feedback' | 'thanks';
-type Mood = 'great' | 'okay' | 'needs_attention';
-
-type EligibilityResponse = { eligible?: boolean; automatic?: boolean; shouldPrompt?: boolean; reviewUrl?: string };
-
-function dismissedKey() { return `moche:review-nudge:dismissed:${window.location.pathname}`; }
-
-function postEvent(action: 'impression' | 'response' | 'dismiss' | 'click', details?: { mood?: Mood; category?: string; comment?: string }) {
-  return fetch('/api/guest/review-nudge', { method: 'POST', headers: { 'content-type': 'application/json' }, keepalive: action === 'click', body: JSON.stringify({ action, ...details }) }).then(() => undefined).catch(() => undefined);
+type Eligibility = { eligible?: boolean; automatic?: boolean; shouldPrompt?: boolean; reviewUrl?: string | null; stayKey?: string; flowVersion?: 'legacy' | 'v2'; demoReview?: boolean };
+async function post(body: Record<string, unknown>) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch('/api/guest/review-nudge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal, keepalive: body.action === 'click' || body.action === 'dismiss' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Could not save. Please try again.');
+    return data as { ok?: boolean; allowed?: boolean };
+  } finally { window.clearTimeout(timer); }
 }
-
-function ReviewLink({ reviewUrl, mood, onClick }: { reviewUrl: string | null; mood: Mood | null; onClick: (mood?: Mood) => void }) {
-  if (!reviewUrl) return null;
-  return <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="gp-btn gp-btn-primary" style={{ width: 'auto', textDecoration: 'none' }} onClick={() => onClick(mood ?? undefined)}><Star size={16} aria-hidden /> Leave a property review <ExternalLink size={14} aria-hidden /></a>;
-}
-
 export function ReviewNudge({ propertyName, onContactHost }: { propertyName: string; onContactHost: () => void }) {
-  const [stage, setStage] = useState<Stage>('hidden');
-  const [mood, setMood] = useState<Mood | null>(null);
-  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
-  const [category, setCategory] = useState('');
+  const [legacy, setLegacy] = useState(false);
+  const [demoReview, setDemoReview] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rating, setRating] = useState<number | null>(null);
+  const [helpfulness, setHelpfulness] = useState('');
   const [comment, setComment] = useState('');
+  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const impressionSent = useRef(false);
-
-  function showQuestion() {
-    setStage('question');
-    if (!impressionSent.current) { impressionSent.current = true; void postEvent('impression'); }
-  }
-
+  const [error, setError] = useState('');
+  const stopped = useRef(false);
+  const mounted = useRef(false);
+  const storageKey = useRef<string | null>(null);
+  const automatic = useRef(false);
+  const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-    try {
-      if (window.sessionStorage.getItem(dismissedKey()) === '1') return;
-      timer = window.setTimeout(async () => {
-        try {
-          const response = await fetch('/api/guest/review-nudge', { cache: 'no-store' });
-          if (!response.ok) return;
-          const payload = (await response.json()) as EligibilityResponse;
-          if (cancelled || !payload.eligible || !payload.reviewUrl) return;
-          setReviewUrl(payload.reviewUrl);
-          if (payload.automatic && payload.shouldPrompt) { setStage('question'); impressionSent.current = true; void postEvent('impression'); }
-          else if (!payload.automatic) setStage('launcher');
-        } catch { /* Feedback never interrupts the portal. */ }
-      }, 1400);
-    } catch { return; }
-    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+    mounted.current = true;
+    const controller = new AbortController();
+    let attempts = 0;
+    let started = Date.now();
+    let inFlight = false;
+    const quiet = () => {
+      const editing = !!document.activeElement?.matches('input, textarea, select, [contenteditable="true"]');
+      return canShowAutomaticPrompt({ visible: document.visibilityState === 'visible', focused: document.hasFocus(), editing, elapsedMs: Date.now() - started, claimed: stopped.current });
+    };
+    const resetIdle = () => { started = Date.now(); };
+    const read = async (tryPrompt: boolean) => {
+      if (inFlight || (tryPrompt && (attempts >= REVIEW_NUDGE_CHECK_LIMIT || !quiet()))) return;
+      inFlight = true;
+      if (tryPrompt) attempts++;
+      try {
+        const response = await fetch('/api/guest/review-nudge', { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) return;
+        const data = await response.json() as Eligibility;
+        if (controller.signal.aborted) return;
+        if (data.flowVersion === 'legacy') { stopped.current = true; setLegacy(true); return; }
+        if (!data.eligible || !data.stayKey) return;
+        setEnabled(true);
+        setDemoReview(data.demoReview === true);
+        setReviewUrl(safeReviewUrl(data.reviewUrl));
+        storageKey.current = `moche:review-nudge:v2:${data.stayKey}`;
+        try { if (window.sessionStorage.getItem(storageKey.current) === '1') stopped.current = true; } catch { /* The server remains authoritative. */ }
+        if (!tryPrompt || !data.automatic || !data.shouldPrompt || !quiet()) return;
+        stopped.current = true;
+        const claim = await post({ action: 'impression', automatic: true });
+        if (claim.allowed && mounted.current) {
+          automatic.current = true;
+          try { window.sessionStorage.setItem(storageKey.current, '1'); } catch { /* Best effort. */ }
+          if (document.visibilityState === 'visible' && document.hasFocus() && !document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) setOpen(true);
+        }
+      } catch { /* Eligibility failures never interrupt a guest task or trigger retries without a bound. */ }
+      finally { inFlight = false; }
+    };
+    void read(false);
+    const timer = window.setInterval(() => void read(true), REVIEW_NUDGE_IDLE_MS);
+    document.addEventListener('pointerdown', resetIdle, { passive: true });
+    document.addEventListener('keydown', resetIdle);
+    document.addEventListener('visibilitychange', resetIdle);
+    return () => {
+      mounted.current = false;
+      controller.abort();
+      window.clearInterval(timer);
+      document.removeEventListener('pointerdown', resetIdle);
+      document.removeEventListener('keydown', resetIdle);
+      document.removeEventListener('visibilitychange', resetIdle);
+    };
   }, []);
-
-  function rememberDismissal() { try { window.sessionStorage.setItem(dismissedKey(), '1'); } catch { /* Best effort. */ } }
-  function dismiss() { rememberDismissal(); setStage('hidden'); if (!mood) void postEvent('dismiss'); }
-  function chooseMood(value: Mood) { setMood(value); rememberDismissal(); setStage('outcome'); void postEvent('response', { mood: value }); }
-  async function submitFeedback() { if (!mood || busy) return; setBusy(true); await postEvent('response', { mood, category: category || undefined, comment: comment.trim() || undefined }); setBusy(false); setStage('thanks'); }
-  function openHostChat() { setStage('hidden'); onContactHost(); }
-  const recordClick = (value?: Mood) => { void postEvent('click', { mood: value }); };
-
-  if (stage === 'hidden') return null;
-  if (stage === 'launcher') return <div style={{ textAlign: 'center', marginTop: '1rem' }}><button type="button" className="gp-msg-link" onClick={showQuestion} data-testid="review-nudge-launcher"><MessageSquare size={14} aria-hidden style={{ verticalAlign: '-2px', marginRight: 5 }} /> Share feedback</button></div>;
-
-  return (
-    <aside className="gp-card" style={{ marginTop: '1rem', position: 'relative' }} aria-live="polite" data-testid="review-nudge">
-      {stage !== 'thanks' && <button type="button" className="gp-icon-btn" onClick={dismiss} aria-label="Dismiss" style={{ position: 'absolute', right: 10, top: 10 }}><X size={16} aria-hidden /></button>}
-      {stage === 'question' && <>
-        <div className="gp-kicker"><MessageSquare size={14} aria-hidden /> Quick feedback</div>
-        <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>Did this portal help with your stay?</h2>
-        <p className="gp-muted" style={{ margin: '0 0 .9rem' }}>A quick answer helps improve the guest experience.</p>
-        <div style={{ display: 'flex', gap: '.55rem', flexWrap: 'wrap' }}>
-          <button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={() => chooseMood('great')}>Yes</button>
-          <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => chooseMood('okay')}>Somewhat</button>
-          <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => chooseMood('needs_attention')}>Not yet</button>
-          <button type="button" className="gp-msg-link" onClick={dismiss}>Not now</button>
-        </div>
-      </>}
-      {stage === 'outcome' && mood && <>
-        <div className="gp-kicker">{mood === 'great' ? <Star size={14} aria-hidden /> : <MessageSquare size={14} aria-hidden />}{mood === 'great' ? 'Thank you' : 'We are listening'}</div>
-        <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>{mood === 'great' ? 'Glad it helped.' : mood === 'okay' ? 'Thanks for letting us know.' : 'Let’s help make it right.'}</h2>
-        <p className="gp-muted" style={{ margin: '0 0 .9rem' }}>Share an honest review of {propertyName}, send private portal feedback, or contact your host if you need help.</p>
-        <div style={{ display: 'flex', gap: '.55rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <ReviewLink reviewUrl={reviewUrl} mood={mood} onClick={recordClick} />
-          {mood === 'needs_attention' && <button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={openHostChat}>Contact your host</button>}
-          <button type="button" className="gp-btn gp-btn-ghost" style={{ width: 'auto' }} onClick={() => setStage('feedback')}>Send private feedback</button>
-          <button type="button" className="gp-msg-link" onClick={dismiss}>Done</button>
-        </div>
-      </>}
-      {stage === 'feedback' && mood && <>
-        <div className="gp-kicker"><MessageSquare size={14} aria-hidden /> Private feedback</div>
-        <h2 className="gp-wf-title" style={{ margin: '0 2.25rem .35rem 0' }}>What could be better?</h2>
-        <p className="gp-muted" style={{ margin: '0 0 .8rem' }}>This goes privately to Moche and does not affect your ability to leave a property review.</p>
-        <div className="gp-field"><label className="gp-label" htmlFor="review-feedback-category">Choose one (optional)</label><select id="review-feedback-category" className="gp-input" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">Select a reason</option><option value="hard_to_find">Hard to find information</option><option value="unhelpful_answer">An answer was not helpful</option><option value="technical_problem">Something did not work</option><option value="other">Other</option></select></div>
-        <div className="gp-field"><label className="gp-label" htmlFor="review-feedback-comment">Anything else? (optional)</label><textarea id="review-feedback-comment" className="gp-textarea" maxLength={800} value={comment} onChange={(event) => setComment(event.target.value)} /></div>
-        <div style={{ display: 'flex', gap: '.55rem', flexWrap: 'wrap' }}><button type="button" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} onClick={() => void submitFeedback()} disabled={busy}>{busy ? 'Sending…' : 'Send feedback'}</button><ReviewLink reviewUrl={reviewUrl} mood={mood} onClick={recordClick} /></div>
-      </>}
-      {stage === 'thanks' && <><div style={{ display: 'flex', gap: '.55rem', alignItems: 'center', marginBottom: '.8rem' }} role="status"><Check size={18} aria-hidden style={{ color: 'var(--gp-primary)' }} /><span>Thank you. Your feedback helps us improve the portal.</span></div><ReviewLink reviewUrl={reviewUrl} mood={mood} onClick={recordClick} /></>}
-    </aside>
-  );
+  function stop() {
+    stopped.current = true;
+    try { if (storageKey.current) window.sessionStorage.setItem(storageKey.current, '1'); } catch { /* Best effort. */ }
+  }
+  function dismiss() { stop(); setOpen(false); void post({ action: 'dismiss' }).catch(() => undefined); }
+  function launch() {
+    stop(); automatic.current = false; setSaved(false); setError(''); setOpen(true);
+    void post({ action: 'impression', automatic: false }).catch(() => undefined);
+    window.setTimeout(() => title.current?.focus(), 0);
+  }
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || rating === null) return;
+    setBusy(true); setError('');
+    try {
+      const result = await post({ action: 'response', rating, ...(helpfulness ? { helpfulness } : {}), ...(comment.trim() ? { comment: comment.trim() } : {}) });
+      if (!result.ok) throw new Error('Could not save. Please try again.');
+      stop();
+      if (mounted.current) { setSaved(true); setComment(''); }
+    } catch (failure) { if (mounted.current) setError(failure instanceof Error && failure.name !== 'AbortError' ? failure.message : 'Could not save. Your feedback is still here; please try again.'); }
+    finally { if (mounted.current) setBusy(false); }
+  }
+  if (legacy) return <ReviewNudgeLegacy propertyName={propertyName} onContactHost={onContactHost} />;
+  if (!enabled) return null;
+  const review = reviewUrl ? <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="gp-msg-link" onClick={() => { stop(); void post({ action: 'click' }).catch(() => undefined); }}>{demoReview ? 'Test property review link' : 'Leave an honest property review'} <ExternalLink size={14} aria-hidden /></a> : null;
+  return <aside className="gp-card" style={{ marginTop: '1rem' }} data-testid="review-nudge">
+    {!open ? <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}><button type="button" className="gp-msg-link" onClick={launch} data-testid="review-nudge-launcher"><MessageSquare size={14} aria-hidden /> Share feedback</button>{review}</div> : <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}><h2 className="gp-wf-title" ref={title} tabIndex={-1}>{saved ? 'Thank you' : 'How is your stay?'}</h2><button type="button" className="gp-icon-btn" onClick={dismiss} aria-label="Close feedback"><X size={16} aria-hidden /></button></div>
+      {automatic.current && !saved && <p className="gp-muted" role="status">Optional feedback — we will not automatically ask again during this stay.</p>}
+      {saved ? <p role="status"><Check size={18} aria-hidden /> Your private feedback was saved.</p> : <form onSubmit={submit} aria-busy={busy}>
+        <fieldset style={{ border: 0, padding: 0, margin: '0 0 1rem' }} disabled={busy}><legend className="gp-label">Rate your stay at {propertyName}</legend><div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>{[1, 2, 3, 4, 5].map((value) => <label key={value} style={{ display: 'flex', alignItems: 'center', gap: '.25rem', minHeight: 44, padding: '.35rem' }}><input type="radio" name="stay-rating" value={value} required checked={rating === value} onChange={() => setRating(value)} aria-label={`${value} ${value === 1 ? 'star' : 'stars'}`} /><span aria-hidden>{value} ★</span></label>)}</div></fieldset>
+        <div className="gp-field"><label className="gp-label" htmlFor="review-helpfulness">Has this portal been helpful? (optional)</label><select id="review-helpfulness" className="gp-input" value={helpfulness} onChange={(e) => setHelpfulness(e.target.value)} disabled={busy}><option value="">Choose an answer</option><option value="yes">Yes</option><option value="somewhat">Somewhat</option><option value="not_yet">Not yet</option></select></div>
+        <div className="gp-field"><label className="gp-label" htmlFor="review-comment">Anything you would like to share? (optional)</label><textarea id="review-comment" className="gp-textarea" maxLength={800} value={comment} onChange={(e) => setComment(e.target.value)} disabled={busy} /></div>
+        <p className="gp-muted">Private feedback goes to Moche. It is not published to a booking platform. For help with your stay, contact your host.</p>
+        {error && <p role="alert">{error}</p>}
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}><button type="submit" className="gp-btn gp-btn-primary" style={{ width: 'auto' }} disabled={busy || rating === null}>{busy ? 'Saving…' : error ? 'Try saving again' : 'Send private feedback'}</button><button type="button" className="gp-msg-link" onClick={dismiss}>Not now</button></div>
+      </form>}
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>{review}<button type="button" className="gp-msg-link" onClick={() => { dismiss(); onContactHost(); }}>Contact your host</button></div>
+    </>}
+  </aside>;
 }

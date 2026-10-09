@@ -4,7 +4,7 @@ import path from 'node:path';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['lib/**/*.test.ts', 'test/**/*.test.ts', 'trigger/**/*.test.ts'],
+    include: ['lib/**/*.test.ts', 'test/**/*.test.ts', 'trigger/**/*.test.ts', 'app/api/guest/review-nudge/route.test.ts'],
   },
   resolve: {
     alias: {
