@@ -41,7 +41,7 @@ async function context(): Promise<Context> {
 async function invoke(ctx: LiveContext, action: string, automatic = false, rating: number | null = null, helpfulness: string | null = null, comment: string | null = null) {
   const result = await (ctx.admin as any).rpc('guest_review_nudge_v2', { p_session_id: ctx.session.sessionId, p_action: action, p_automatic: automatic, p_rating: rating, p_helpfulness: helpfulness, p_comment: comment });
   if (result.error || !result.data) throw new Error('review_nudge_rpc_failed');
-  return result.data as { eligible?: boolean; automatic?: boolean; shouldPrompt?: boolean; allowed?: boolean; ok?: boolean; ok?: boolean; reviewUrl?: string | null };
+  return result.data as { eligible?: boolean; automatic?: boolean; shouldPrompt?: boolean; allowed?: boolean; ok?: boolean; reviewUrl?: string | null };
 }
 export async function GET() {
   try {
