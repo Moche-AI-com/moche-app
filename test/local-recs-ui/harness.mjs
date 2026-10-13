@@ -58,23 +58,43 @@ async function save(prev,fd){
 export const addManualLocalPlaceAction=save,updateLocalPlaceAction=save;
 export async function refreshLocalPlacesAction(){return {ok:true,found:0}}
 `;
-const result = await build({
-  stdin: { contents: entry, resolveDir: root, loader: 'jsx' },
+const shared = {
   write: false, bundle: true, platform: 'browser', jsx: 'automatic',
   define: { 'process.env.NODE_ENV': '"development"', 'process.env.NEXT_PUBLIC_MAPBOX_TOKEN': '"pk.fixture-not-a-credential"' },
   alias: { '@': root, react: resolve(root, 'node_modules/next/dist/compiled/react'), 'react-dom': resolve(root, 'node_modules/next/dist/compiled/react-dom') },
+};
+const result = await build({
+  ...shared, stdin: { contents: entry, resolveDir: root, loader: 'jsx' },
   plugins: [{ name: 'fake-actions', setup(builder) {
     builder.onResolve({ filter: /^\.\/actions$/ }, (args) => args.importer.includes('/local/') ? { path: 'actions', namespace: 'fixture' } : undefined);
     builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: actions, resolveDir: root }));
   } }],
 });
 const js = result.outputFiles[0].contents;
+const guestEntry = `
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {LocalGuide} from './app/g/[slug]/local/LocalGuide';
+const picks=[{id:'host-1',name:'Host Cafe',category:'cafe',address:'1 Main Street',website:null,phone:null,lat:42.38,lng:-71.24,distanceMiles:0.5,distanceNote:null,hostNote:'Try the pastries',isFavorite:true,rating:null,detail:null}];
+createRoot(document.getElementById('root')).render(<LocalGuide fontClassName="" slug="house" propertyName="Test house" location="Waltham" brandPrimary={null} brandAccent={null} logoUrl={null} places={new URLSearchParams(location.search).has('empty')?[]:picks} liveNearbyEnabled={!new URLSearchParams(location.search).has('disabled')} />);
+`;
+const guestBuild = await build({
+  ...shared, stdin: { contents: guestEntry, resolveDir: root, loader: 'jsx' },
+  plugins: [{ name: 'fake-next-link', setup(builder) {
+    builder.onResolve({ filter: /^next\/link$/ }, () => ({ path: 'link', namespace: 'guest-fixture' }));
+    builder.onLoad({ filter: /.*/, namespace: 'guest-fixture' }, () => ({
+      contents: "import React from 'react'; export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}", loader: 'jsx', resolveDir: root,
+    }));
+  } }],
+});
+const guestJs = guestBuild.outputFiles[0].contents;
 createServer((request, response) => {
   response.setHeader('Cache-Control', 'no-store');
-  if (request.url === '/app.js') {
-    response.setHeader('Content-Type', 'text/javascript'); response.end(js);
+  if (request.url === '/app.js' || request.url === '/guest.js') {
+    response.setHeader('Content-Type', 'text/javascript'); response.end(request.url === '/app.js' ? js : guestJs);
   } else {
+    const guest = request.url?.startsWith('/guest');
     response.setHeader('Content-Type', 'text/html');
-    response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Local Recs test</title><style>body{font-family:system-ui;margin:20px;max-width:900px}input,select,textarea{box-sizing:border-box;max-width:100%}.label{display:block}.input{width:100%}button{min-height:44px}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>');
+    response.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Local Recs test</title><style>body{font-family:system-ui;margin:20px;max-width:900px}input,select,textarea{box-sizing:border-box;max-width:100%}.label{display:block}.input{width:100%}button{min-height:44px}</style></head><body><div id="root"></div><script src="/${guest ? 'guest' : 'app'}.js"></script></body></html>`);
   }
 }).listen(3219, '127.0.0.1');

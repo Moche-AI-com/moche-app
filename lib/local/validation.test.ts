@@ -18,6 +18,15 @@ describe('local place input boundaries', () => {
   it('accepts zero coordinates and clearable optional details', () => {
     expect(localPlaceSchema.parse({ ...place, lat: '0', lng: '0', website: '' })).toMatchObject({ lat: 0, lng: 0, website: null });
   });
+  it('requires a usable location before publishing, but allows name-only drafts', () => {
+    const nameOnly = { name: 'Hidden gem', category: 'cafe', address: '' };
+    const result = localPlaceSchema.safeParse(nameOnly);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].message).toBe('Add an address or map pin before sharing with guests.');
+    expect(localPlaceSchema.safeParse({ ...nameOnly, status: 'suggested' }).success).toBe(true);
+    expect(localPlaceSchema.safeParse({ ...nameOnly, status: 'hidden' }).success).toBe(true);
+    expect(localPlaceSchema.safeParse({ ...nameOnly, lat: '0', lng: '0' }).success).toBe(true);
+  });
   it('normalizes and bounds tags', () => {
     expect(localPlaceSchema.parse({ ...place, tags: 'Family, family, Rainy-day' }).tags).toEqual(['family', 'rainy-day']);
     expect(localPlaceSchema.safeParse({ ...place, tags: Array.from({ length: 13 }, (_, i) => `tag${i}`).join(',') }).success).toBe(false);

@@ -1,122 +1,55 @@
-import { MapPin, Star } from 'lucide-react';
+import Link from 'next/link';
+import { MapPin } from 'lucide-react';
 import { requirePropertyAccess } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { LocalWorkspace } from './LocalWorkspace';
 import { loadCanonicalPlaces } from '@/lib/local/canonical';
-import { localCategoryLabel } from '@/lib/local/merge';
 import { validCoordinates } from '@/lib/local/validation';
+import { LocalWorkspace } from './LocalWorkspace';
 
 export const dynamic = 'force-dynamic';
 
 export default async function LocalOverviewPage({ params }: { params: Promise<{ id: string }> }) {
-  const access = await requirePropertyAccess((await params).id);
+  const { id } = await params;
+  const access = await requirePropertyAccess(id);
   const supabase = createClient();
-  const places = await loadCanonicalPlaces(supabase, (await params).id, [], { includeHidden: true });
-
-  const guestVisible = places.filter((place) => place.status === 'approved');
-  const favorites = guestVisible.filter((place) => place.isFavorite);
-  const pendingApproval = places.filter((place) => place.status === 'suggested').length;
-  const hiddenCount = places.filter((place) => place.status === 'hidden').length;
-  const rest = guestVisible.filter((place) => !place.isFavorite);
-  const byCategory = new Map<string, typeof rest>();
-  for (const place of rest) {
-    const list = byCategory.get(place.category) ?? [];
-    list.push(place);
-    byCategory.set(place.category, list);
-  }
-  const categories = [...byCategory.entries()].sort(([a], [b]) =>
-    localCategoryLabel(a).localeCompare(localCategoryLabel(b)),
-  );
-
-  // Property coordinates for the interactive map (2026-08-28).
+  const places = await loadCanonicalPlaces(supabase, id, [], { includeHidden: true });
+  const visible = places.filter((place) => place.status === 'approved');
+  const favorites = visible.filter((place) => place.isFavorite);
+  const suggestions = places.filter((place) => place.status === 'suggested');
+  const hidden = places.filter((place) => place.status === 'hidden');
   const coords = access.property as { lat?: number | null; lng?: number | null };
   const hasCoords = validCoordinates(coords.lat, coords.lng);
 
-  const row = (place: (typeof guestVisible)[number]) => (
-    <li key={place.recommendationId} className="report-list-row">
-      <div className="report-list-title" style={{ display: 'flex', alignItems: 'center', gap: '.4rem', flexWrap: 'wrap' }}>
-        {place.isFavorite && <Star size={14} aria-hidden style={{ flexShrink: 0 }} />}
-        <span>{place.name}</span>
-        <span
-          className="faint"
-          style={{
-            fontSize: '.7rem', textTransform: 'uppercase', letterSpacing: '.04em',
-            border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '.1rem .35rem',
-          }}
-        >
-          {place.provider}
-        </span>
-      </div>
-      <div className="report-list-meta">
-        {localCategoryLabel(place.category)}
-        {place.distanceMiles != null ? ` · ${place.distanceMiles.toFixed(1)} mi` : ''}
-      </div>
-      {place.hostNote && (
-        <div className="faint" style={{ fontSize: '.8rem', marginTop: '.25rem' }}>
-          Your note: {place.hostNote}
-        </div>
-      )}
-    </li>
-  );
-
   return (
     <div>
-      <h1 style={{ marginTop: '.5rem' }}>Local</h1>
-      <p className="muted" style={{ maxWidth: 640 }}>
-        Curate the places your guests can discover. Manage your local knowledge,
-        host notes, tags, favorites, and guest visibility in one place.
-      </p>
-
-      <div className="card" style={{ margin: '1.25rem 0' }}>
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-          <div>
-            <div className="faint" style={{ fontSize: '.75rem' }}>Guests can see</div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{guestVisible.length}</div>
-          </div>
-          <div>
-            <div className="faint" style={{ fontSize: '.75rem' }}>Favorites</div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{favorites.length}</div>
-          </div>
-          <div>
-            <div className="faint" style={{ fontSize: '.75rem' }}>Awaiting your approval</div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{pendingApproval}</div>
-          </div>
-          <div>
-            <div className="faint" style={{ fontSize: '.75rem' }}>Hidden</div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{hiddenCount}</div>
-          </div>
-        </div>
-      </div>
-
-      <LocalWorkspace propertyId={(await params).id} places={places} canEdit={access.can.editBrain} center={hasCoords ? { lat: coords.lat as number, lng: coords.lng as number } : null} />
-
-      {guestVisible.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-          <MapPin size={24} aria-hidden style={{ opacity: 0.5 }} />
-          <h2 style={{ fontSize: '1rem', margin: '.75rem 0 .25rem' }}>Nothing local yet</h2>
-          <p className="muted" style={{ fontSize: '.9rem', maxWidth: 420, margin: '0 auto' }}>
-            Add or approve the spots you send every guest to with the manager above.
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
+        <div>
+          <h1 style={{ margin: 0 }}>Local recommendations</h1>
+          <p className="muted" style={{ maxWidth: 640, margin: '.5rem 0 0' }}>
+            Give guests a useful local guide. Review new places, add your own tips, and choose what guests can see.
           </p>
         </div>
-      ) : (
-        <>
-          {favorites.length > 0 && (
-            <section style={{ marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1rem', marginBottom: '.5rem' }}>
-                Favorites <span className="faint" style={{ fontWeight: 400 }}>· recommended first</span>
-              </h2>
-              <ul className="report-list">{favorites.map(row)}</ul>
-            </section>
-          )}
-          {categories.map(([category, categoryPlaces]) => (
-            <section key={category} style={{ marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1rem', marginBottom: '.5rem' }}>{localCategoryLabel(category)}</h2>
-              <ul className="report-list">{categoryPlaces.map(row)}</ul>
-            </section>
-          ))}
-        </>
-      )}
+        <Link className="btn btn-sm" href={`/g/${access.property.slug}/local`} style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center' }}>
+          Preview guest guide
+        </Link>
+      </div>
 
+      <div className="card" style={{ margin: '1.25rem 0', display: 'flex', flexWrap: 'wrap', gap: '1rem 2rem' }}>
+        <div><div className="faint" style={{ fontSize: '.75rem' }}>Visible to guests</div><div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{visible.length}</div></div>
+        <div><div className="faint" style={{ fontSize: '.75rem' }}>Host favorites</div><div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{favorites.length}</div></div>
+        <div><div className="faint" style={{ fontSize: '.75rem' }}>Needs review</div><div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{suggestions.length}</div></div>
+        <div><div className="faint" style={{ fontSize: '.75rem' }}>Hidden</div><div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{hidden.length}</div></div>
+      </div>
+
+      {!hasCoords && (
+        <p className="muted" role="status" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+          <MapPin size={16} aria-hidden /> Set the property address in Configuration to enable the map. You can still add places manually.
+        </p>
+      )}
+      {visible.length === 0 && suggestions.length > 0 && (
+        <p className="muted" role="status">Review a few nearby suggestions below to start your guest guide. Suggestions are not visible to guests until approved.</p>
+      )}
+      <LocalWorkspace propertyId={id} places={places} canEdit={access.can.editBrain} center={hasCoords ? { lat: coords.lat as number, lng: coords.lng as number } : null} />
     </div>
   );
 }
