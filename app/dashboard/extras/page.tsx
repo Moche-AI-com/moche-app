@@ -11,8 +11,10 @@ export const dynamic = 'force-dynamic';
 // /dashboard/service-requests rather than a tab inside it: an extras order is a
 // revenue event with its own lifecycle, and folding it into the maintenance
 // queue would bury paid requests underneath broken air conditioners.
-export default async function ExtrasPage({ searchParams }: { searchParams?: { view?: string | string[]; property?: string | string[] } }) {
-  const view = parseLifecycleView(searchParams?.view);
+export default async function ExtrasPage({ searchParams }: { searchParams?: Promise<{ view?: string | string[]; property?: string | string[] }> }) {
+  // Next.js 16: searchParams is a Promise and must be awaited.
+  const sp = (await searchParams) ?? {};
+  const view = parseLifecycleView(sp.view);
   const ctx = await requireSession();
   const supabase = createClient();
   const isOwner = ctx.account.owner_id === ctx.user.id;
@@ -28,7 +30,7 @@ export default async function ExtrasPage({ searchParams }: { searchParams?: { vi
 
   // Property scope dropdown — the same control the overview and Escalations pages
   // use. Only ever honored when it names a property this account actually owns.
-  const requested = Array.isArray(searchParams?.property) ? searchParams?.property[0] : searchParams?.property;
+  const requested = Array.isArray(sp.property) ? sp.property[0] : sp.property;
   const activeProperty = requested && propMap.has(requested) ? requested : null;
   const scopeIds = activeProperty ? [activeProperty] : propIds;
 
