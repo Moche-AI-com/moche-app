@@ -10,10 +10,12 @@ export const dynamic = 'force-dynamic';
 export default async function ServiceRequestsPage({
   searchParams,
 }: {
-  searchParams?: { view?: string | string[]; property?: string | string[] };
+  searchParams?: Promise<{ view?: string | string[]; property?: string | string[] }>;
 }) {
-  const view = parseLifecycleView(searchParams?.view);
-  const requestedProperty = typeof searchParams?.property === 'string' ? searchParams.property : null;
+  // Next.js 16: searchParams is a Promise and must be awaited.
+  const sp = (await searchParams) ?? {};
+  const view = parseLifecycleView(sp.view);
+  const requestedProperty = (Array.isArray(sp.property) ? sp.property[0] : sp.property) ?? null;
   const ctx = await requireSession();
   const supabase = createClient();
   const isOwner = ctx.account.owner_id === ctx.user.id;

@@ -15,8 +15,12 @@ type StatusFilter = (typeof STATUS_FILTERS)[number];
 export default async function EscalationsPage({
   searchParams,
 }: {
-  searchParams: { property?: string; status?: string };
+  searchParams?: Promise<{ property?: string | string[]; status?: string | string[] }>;
 }) {
+  // Next.js 16: searchParams is a Promise and must be awaited.
+  const sp = (await searchParams) ?? {};
+  const requestedProperty = Array.isArray(sp.property) ? sp.property[0] : sp.property;
+  const requestedStatus = Array.isArray(sp.status) ? sp.status[0] : sp.status;
   const ctx = await requireSession();
   const supabase = createClient();
 
@@ -33,9 +37,9 @@ export default async function EscalationsPage({
   const propMap = new Map<string, string>(propList.map((p) => [p.id, p.display_name as string]));
   const propertyIds = propList.map((p) => p.id);
 
-  const activeFilter = searchParams.property && propMap.has(searchParams.property) ? searchParams.property : null;
-  const activeStatus = (STATUS_FILTERS as readonly string[]).includes(searchParams.status ?? '')
-    ? (searchParams.status as StatusFilter)
+  const activeFilter = requestedProperty && propMap.has(requestedProperty) ? requestedProperty : null;
+  const activeStatus = (STATUS_FILTERS as readonly string[]).includes(requestedStatus ?? '')
+    ? (requestedStatus as StatusFilter)
     : null;
 
   let rows: EscalationRowData[] = [];

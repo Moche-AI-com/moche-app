@@ -24,8 +24,11 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardHome({
   searchParams,
 }: {
-  searchParams: { property?: string };
+  searchParams?: Promise<{ property?: string | string[] }>;
 }) {
+  // Next.js 16 delivers searchParams as a Promise; reading it synchronously
+  // yields undefined and silently resets the property filter to "All".
+  const sp = (await searchParams) ?? {};
   const ctx = await requireSession();
   const supabase = createClient();
   const accountId = ctx.account.id;
@@ -51,7 +54,7 @@ export default async function DashboardHome({
   // refresh and is shareable. Only ever honored when it names a property this
   // query already returned — i.e. one RLS actually allowed — so the filter can
   // narrow the view but never widen it beyond what the user can see.
-  const requestedFilter = searchParams.property ?? null;
+  const requestedFilter = (Array.isArray(sp.property) ? sp.property[0] : sp.property) ?? null;
   const activeFilter = resolveScope(requestedFilter, allPropertyIds);
 
   const properties = activeFilter ? (allProperties ?? []).filter((p) => p.id === activeFilter) : allProperties;
