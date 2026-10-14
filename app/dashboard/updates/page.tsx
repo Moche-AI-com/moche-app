@@ -118,7 +118,7 @@ export default async function UpdatesPage({
         </p>
         {scopedPropertyId && (
           <p style={{ margin: '.55rem 0 0', fontSize: '.85rem' }} data-testid="queue-scope-note">
-            Showing <strong>{propertyNames[scopedPropertyId]}</strong> only. Switch to "All properties" above to see the rest.
+            Showing <strong>{propertyNames[scopedPropertyId]}</strong> only. Switch to &ldquo;All properties&rdquo; above to see the rest.
           </p>
         )}
         {scopeMismatch && (
