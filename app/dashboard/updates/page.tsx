@@ -1,6 +1,7 @@
 import { requireSession } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
-import { knowledgeQueueHref } from '@/lib/dashboard/knowledge-queue-link';
+import { PropertyFilter } from '@/components/dashboard/PropertyFilter';
+import { KNOWLEDGE_QUEUE_PATH, knowledgeQueueHref } from '@/lib/dashboard/knowledge-queue-link';
 import { resolveScope } from '@/lib/dashboard/scope';
 import { UpdateQueueClient, type ProposalRow } from './UpdateQueueClient';
 
@@ -23,13 +24,13 @@ export const dynamic = 'force-dynamic';
 export default async function UpdatesPage({
   searchParams,
 }: {
-  searchParams?: { view?: string | string[]; property?: string | string[] };
+  searchParams?: Promise<{ view?: string | string[]; property?: string | string[] }>;
 }) {
-  const raw = Array.isArray(searchParams?.view) ? searchParams?.view[0] : searchParams?.view;
+  // Next.js 16 passes searchParams as a Promise; it must be awaited.
+  const sp = (await searchParams) ?? {};
+  const raw = Array.isArray(sp.view) ? sp.view[0] : sp.view;
   const view: 'pending' | 'reviewed' = raw === 'reviewed' ? 'reviewed' : 'pending';
-  const requestedProperty = Array.isArray(searchParams?.property)
-    ? searchParams?.property[0]
-    : searchParams?.property;
+  const requestedProperty = Array.isArray(sp.property) ? sp.property[0] : sp.property;
 
   const ctx = await requireSession();
   const supabase = createClient();
@@ -117,8 +118,7 @@ export default async function UpdatesPage({
         </p>
         {scopedPropertyId && (
           <p style={{ margin: '.55rem 0 0', fontSize: '.85rem' }} data-testid="queue-scope-note">
-            Showing <strong>{propertyNames[scopedPropertyId]}</strong> only.{' '}
-            <a href={knowledgeQueueHref({ view })}>Show all properties</a>
+            Showing <strong>{propertyNames[scopedPropertyId]}</strong> only. Switch to "All properties" above to see the rest.
           </p>
         )}
         {scopeMismatch && (
@@ -131,8 +131,13 @@ export default async function UpdatesPage({
       <div
         role="group"
         aria-label="Filter suggestions"
-        style={{ display: 'flex', gap: '.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}
+        style={{ display: 'flex', gap: '.4rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}
       >
+        <PropertyFilter
+          properties={Object.entries(propertyNames).map(([id, name]) => ({ id, name }))}
+          activeId={scopedPropertyId}
+          basePath={KNOWLEDGE_QUEUE_PATH}
+        />
         <a
           href={knowledgeQueueHref({ propertyId: scopedPropertyId })}
           className={`btn btn-sm ${view === 'pending' ? 'btn-primary' : 'btn-ghost'}`}

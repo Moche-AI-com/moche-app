@@ -11,6 +11,7 @@ const PAGES = [
   'app/dashboard/escalations/page.tsx',
   'app/dashboard/service-requests/page.tsx',
   'app/dashboard/extras/page.tsx',
+  'app/dashboard/updates/page.tsx',
 ];
 
 describe('property filter pages await searchParams', () => {
