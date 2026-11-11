@@ -10,14 +10,17 @@
 // their Brain section; gap dots (missing/partial/blocking) also open the add-knowledge
 // form for that section, so a click always lands on an action.
 //
-// Motion lives in CSS classes (.coverage-*) rather than inline styles so the
-// prefers-reduced-motion block in globals.css can switch it off; an inline animation
-// cannot be overridden by a media query. The spin itself is pure CSS: the cluster layer
-// rotates around the view-box centre, hub labels counter-rotate around their own
-// centres so text stays upright while orbiting, and :hover/:focus-within on the canvas
-// pauses both — which is also what makes a moving map inspectable and clickable.
+// Motion (2026-11-11): the spin used to be a CSS animation relying on
+// `transform-box: view-box` + `transform-origin: center`. Mobile Safari resolves that
+// pivot inconsistently, so on phones the cluster layer orbited a corner of the SVG and
+// swung out of the card and off the page. The spin is now driven by useCoverageSpin,
+// which writes an SVG `transform="rotate(angle cx cy)"` attribute with an explicit
+// pivot — identical in every engine. Hub text counter-rotates around its hub's
+// centre the same way, so it stays upright and the label stays under its hub. The loop pauses on hover, focus, touch,
+// when the map is scrolled off-screen, and never runs under prefers-reduced-motion.
+// The canvas also clips (overflow: hidden) as a belt-and-braces guarantee.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CoverageMapView, CoverageState } from '@/lib/brain/coverage';
 import { BRAIN_GOTO_EVENT, type BrainGotoDetail } from './BrainManager';
 
@@ -58,9 +61,98 @@ function goToSection(section: string, openAdd: boolean) {
   window.dispatchEvent(new CustomEvent(BRAIN_GOTO_EVENT, { detail }));
 }
 
+/** Seconds per full revolution — unchanged from the original CSS animation. */
+const SPIN_PERIOD_MS = 90_000;
+
+/**
+ * Drives the idle rotation by writing transform attributes directly (no React
+ * re-render per frame). Returns refs for the canvas (pause target) and the spin layer.
+ * Counter-rotating labels are found by [data-spin-rev] and pivot on data-cx/data-cy.
+ */
+function useCoverageSpin(active: boolean) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const layerRef = useRef<SVGGElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const layer = layerRef.current;
+    if (!active || !canvas || !layer) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    const labels = Array.from(layer.querySelectorAll<SVGTextElement>('[data-spin-rev]')).map((el) => ({
+      el,
+      cx: Number(el.dataset.cx),
+      cy: Number(el.dataset.cy),
+    }));
+
+    let angle = 0;
+    let last: number | null = null;
+    let raf = 0;
+    let hovered = false;
+    let focused = false;
+    let visible = true;
+
+    const paint = () => {
+      layer.setAttribute('transform', `rotate(${angle.toFixed(3)} ${CENTER} ${CENTER})`);
+      for (const l of labels) l.el.setAttribute('transform', `rotate(${(-angle).toFixed(3)} ${l.cx} ${l.cy})`);
+    };
+    const tick = (now: number) => {
+      if (last !== null) angle = (angle + ((now - last) / SPIN_PERIOD_MS) * 360) % 360;
+      last = now;
+      paint();
+      raf = requestAnimationFrame(tick);
+    };
+    const sync = () => {
+      const run = visible && !hovered && !focused;
+      if (run && !raf) {
+        last = null;
+        raf = requestAnimationFrame(tick);
+      } else if (!run && raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    };
+
+    // Pointer events cover mouse, pen, and touch: a finger on the map holds it still
+    // so a hub can be tapped; it resumes when the finger lifts or leaves.
+    const onEnter = () => { hovered = true; sync(); };
+    const onLeave = () => { hovered = false; sync(); };
+    const onFocusIn = () => { focused = true; sync(); };
+    const onFocusOut = (e: FocusEvent) => {
+      if (!canvas.contains(e.relatedTarget as Node | null)) { focused = false; sync(); }
+    };
+    canvas.addEventListener('pointerenter', onEnter);
+    canvas.addEventListener('pointerleave', onLeave);
+    canvas.addEventListener('pointercancel', onLeave);
+    canvas.addEventListener('focusin', onFocusIn);
+    canvas.addEventListener('focusout', onFocusOut);
+
+    let io: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== 'undefined') {
+      io = new IntersectionObserver(([entry]) => { visible = !!entry?.isIntersecting; sync(); });
+      io.observe(canvas);
+    }
+
+    paint();
+    sync();
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      io?.disconnect();
+      canvas.removeEventListener('pointerenter', onEnter);
+      canvas.removeEventListener('pointerleave', onLeave);
+      canvas.removeEventListener('pointercancel', onLeave);
+      canvas.removeEventListener('focusin', onFocusIn);
+      canvas.removeEventListener('focusout', onFocusOut);
+    };
+  }, [active]);
+
+  return { canvasRef, layerRef };
+}
+
 export function CoverageMap({ view }: { view: CoverageMapView }) {
   const [open, setOpen] = useState(true);
   const [hover, setHover] = useState<HoverTarget | null>(null);
+  const { canvasRef, layerRef } = useCoverageSpin(open);
 
   const openCount = view.totals.blocking + view.totals.missing + view.totals.partial;
 
@@ -89,7 +181,7 @@ export function CoverageMap({ view }: { view: CoverageMapView }) {
             form that closes it.
           </p>
 
-          <div className="coverage-map-canvas">
+          <div className="coverage-map-canvas" ref={canvasRef}>
             {/* role="group" rather than "img": the hubs are interactive buttons, and a
                 role="img" ancestor would flatten them out of the accessibility tree. */}
             <svg
@@ -98,7 +190,7 @@ export function CoverageMap({ view }: { view: CoverageMapView }) {
               aria-label={`Coverage map: ${view.totals.satisfied} answered, ${view.totals.blocking} blocking launch, ${view.totals.partial} partial, ${view.totals.missing} not answered, ${view.notApplicableCount} not applicable. Activate a section to jump to it.`}
               className="coverage-map-svg"
             >
-              <g className="coverage-spin">
+              <g className="coverage-spin" ref={layerRef}>
                 {view.domains.map((d) => {
                   const hx = CENTER + d.x * HUB_RADIUS;
                   const hy = CENTER + d.y * HUB_RADIUS;
@@ -173,12 +265,13 @@ export function CoverageMap({ view }: { view: CoverageMapView }) {
                           }
                         }}
                       />
-                      {/* Hub text counter-rotates around its own centre (fill-box) so it
-                          stays upright while the cluster layer orbits. */}
-                      <text x={hx} y={hy + 3.5} textAnchor="middle" aria-hidden="true" className="coverage-hub-pct coverage-spin-rev">
+                      {/* Hub text counter-rotates around the hub centre (data-cx/cy), so the
+                          number and label stay upright and the label stays directly
+                          beneath its hub at every angle instead of drifting onto it. */}
+                      <text x={hx} y={hy + 3.5} textAnchor="middle" aria-hidden="true" className="coverage-hub-pct" data-spin-rev="" data-cx={hx} data-cy={hy}>
                         {Math.round(d.pct)}
                       </text>
-                      <text x={hx} y={hy + 26} textAnchor="middle" aria-hidden="true" className="coverage-hub-label coverage-spin-rev">
+                      <text x={hx} y={hy + 26} textAnchor="middle" aria-hidden="true" className="coverage-hub-label" data-spin-rev="" data-cx={hx} data-cy={hy}>
                         {d.label.length > 18 ? `${d.label.slice(0, 17)}…` : d.label}
                       </text>
                     </g>
