@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 export const CONSENT_KEY = 'moche_analytics_consent';
@@ -39,9 +39,33 @@ function writeConsent(value: Consent) {
 export function CookieConsent({ onDecision }: { onDecision: (consent: Consent) => void }) {
   const [visible, setVisible] = useState(false);
 
+  const bannerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setVisible(readConsent() === null);
   }, []);
+
+  // The banner is fixed to the bottom of the viewport. On a phone it is ~240px tall,
+  // which is enough to sit permanently on top of whatever is last on the page (the
+  // signup page's "Create account" button, for one) with no way to scroll it clear.
+  // While the banner shows, reserve its height as bottom padding so every control can
+  // be scrolled above it; the padding is removed the moment a decision is made.
+  useEffect(() => {
+    const el = bannerRef.current;
+    if (!visible || !el) return;
+    const body = document.body;
+    const previous = body.style.paddingBottom;
+    const apply = () => {
+      body.style.paddingBottom = `${Math.ceil(el.getBoundingClientRect().height)}px`;
+    };
+    apply();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(apply) : null;
+    ro?.observe(el);
+    return () => {
+      ro?.disconnect();
+      body.style.paddingBottom = previous;
+    };
+  }, [visible]);
 
   function decide(value: Consent) {
     writeConsent(value);
@@ -53,6 +77,7 @@ export function CookieConsent({ onDecision }: { onDecision: (consent: Consent) =
 
   return (
     <div
+      ref={bannerRef}
       role="dialog"
       aria-modal="false"
       aria-labelledby="cookie-consent-heading"
